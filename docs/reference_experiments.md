@@ -16564,7 +16564,432 @@ far"), Halden Refuge picked instead at 501, nothing at 730 with the
 station gone; the first-`l` "too far" spec now presses at 300 px. No
 schema change.
 
+### Wormholes, wave 35: the entry window is trunc(1.75 x W), strict, like the planets' cleared window (the 104 px wormhole: through at 180 / 181, "too far" at 182 / 183); `l` selects a wormhole only inside the gates' CIRCLE of 498-500 px (selected at 400 and 498, nothing at 500, 600 and on the (400, 400) diagonal) (2026-11-25)
+
+**Questions** (brief item 1; wave-34 leftovers): the wormhole's entry
+window edge (is it trunc(1.75 x W) too?) and its `l` selection range from
+a stopped ship (wave 34: selected at 300, nothing at about 730).
+
+**Rig** (`wave35Resources` "W"). Wave 34's Kit Worm rigs: the Kit Ring
+Lancer at rest on a decoration stellar at (0, 0), the stock Wormhole (spöb
+465's art and flags, 0x21 / 0x2200, its 104 px frame) at (d, 0), linked to
+wave 34's Kit Worm Dest. Two `l` 1.5 s apart, a window shot 1.2 s after
+each (`tools/wormq35.sh`, wave 30's `gatefar.sh`). Window: Kit Worm 180 /
+181 / 182 / 183 (1.7 W = 176.8, NovaJS's 1.74 W = 180.96, trunc(1.75 W) =
+182); the bracket read from the shot (`restsum.mjs`) put the wormhole at d
++ 0.5 exactly, side 134 (= 104 + 30). Selection: Kit Worm Far 400 / 498 /
+500 / 600 and Kit Worm Far Diag 400 (the wormhole at (400, 400): max 400,
+distance 566).
+
+| run | d | first `l` | second `l` | nav panel |
+|---|---|---|---|---|
+| worm_180 | 180 | **"Passing through a wormhole into the Kit Worm Dest system on June 23rd, 1177 NC."** | (in Kit Worm Dest) | |
+| worm_181 | 181 | **through** (the same line) | | |
+| worm_182 | 182 | "You're too far away to enter this wormhole." | the same | Kit Worm 182 |
+| worm_183 | 183 | "too far" | "too far" | Kit Worm 183 |
+| worm_far400 | 400 | "too far" | "too far" | **Kit Worm Far 400** |
+| worm_far498 | 498 | "too far" | "too far" | **Kit Worm Far 498** |
+| worm_far500 | 500 | nothing | nothing | **Nav System Off** |
+| worm_far600 | 600 | nothing | nothing | Nav System Off |
+| worm_fardiag400 | (400, 400) | nothing | nothing | Nav System Off |
+
+**Findings.**
+1. **The window is trunc(1.75 x W), strict**: through at 181, too far at
+   182 = trunc(1.75 x 104), as wave 34's planets and stations (P40 69 / 70,
+   P72 125 / 126, S17 28 / 29, S100 174 / 175); NovaJS's old 1.74 W (180.96)
+   would have refused 181. No 212 px cap shows (the window is below it at
+   this art), and nothing else differs from a cleared port's window: a
+   wormhole is the same window without the clearance step (wave 34).
+2. **The `l` selection is the gates' circle**: a stopped ship's `l`
+   selects the wormhole at 400 and 498 px ("too far", the nav panel names
+   it) and nothing at 500 and 600 px ("Nav System Off", no line), as wave
+   29-30's hypergates (498 selected, 500 not); the (400, 400) diagonal,
+   inside a 500 px square but 566 px away, selected nothing, so it is a
+   circle, not a square.
+
+**NovaJS (main 08092a02, which applied wave 34's landing and wormhole
+proposals).** `N/nova_plugin/travel/planet_plugin.ts`:
+`LAND_RANGE_PER_FRAME_WIDTH = 1.75` (`:580`), `landingRange` =
+`Math.trunc(1.75 x W)` (`:617-620`), `inLandingZone` strict `<`
+(`:634-637`); `stellarLandingRange` still caps a wormhole at
+`WORMHOLE_LAND_RANGE_CAP` 212 (`:593`, `:665-672`), whose comment calls the
+104 px wormhole's edge unmeasured (`:589-592`); the nearest-port pick skips
+a hypergate or a WORMHOLE at `distance >= HYPERGATE_SELECT_RANGE` (500,
+`:363`, GUESS for the wormhole in its comment `:354-358`; the test
+`:1069-1074`). 1: **matches** (182 for the 104 px art, strict: in at 181,
+out at 182, as here). 2: **matches** (498 selected, 500 / 600 / the
+diagonal not).
+**Proposed:** comments only: mark the wormhole's 500 px circle MEASURED in
+`HYPERGATE_SELECT_RANGE`'s comment (selected at 400 / 498, not at 500 /
+600 or the (400, 400) diagonal: "Wormholes, wave 35") and the 104 px
+wormhole's window edge measured in `WORMHOLE_LAND_RANGE_CAP`'s comment
+(181 / 182). The 212 cap itself is still unmeasured (it binds only a
+wormhole art wider than 121 px; none is stock): GUESS, keep it or drop it
+with the planets' cap, Matthew's call.
+
+Confidence: high (each edge read on both sides to the pixel with an exact
+start, the circle by the diagonal; one run each).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w35/worm_180` ..
+`worm_183`, `worm_far400`, `worm_far498`, `worm_far500`, `worm_far600`,
+`worm_fardiag400` (`*-l1.png`, `*-l2.png`, `recording.mp4`),
+`lines_w180.png`, `lines_w183_far400.png`, `lines_far498_500.png`,
+`lines_far600_diag.png`, `navs_far.png`.
+
+### R19 in NPC fights, wave 35: the threshold is about HALF, not 1.0: a lone Strength-10 hunter called against one Strength-6 or Strength-8 prey and never against a Strength-4 one (three runs), one Strength-15 prey called against two hunters (0.75) and not against three (0.5); the friends are summed with the victim (one prey of 11 or 15 against three hunters never called) and NOT shield-weighted (not even with all three at 0% shield); one NPC-caused call per visit: with the first fleet gone, four more minutes of fighting called nothing (2026-11-25, twelfth pass)
+
+**Questions** (brief item 2; wave-34 leftovers): how the fleet side's
+FRIENDS are counted in an NPC fight (the victim alone, or every fleet-side
+NPC, shield-weighted: wave 34's S12many_2 called at 24 against a nominal
+30 with one hunter at 20% shield), the threshold between 1.0 and 1.2, and
+whether an NPC-caused call is limited per day (a second fight the same
+visit, after the first fleet is gone).
+
+**Rig** (`wave35Resources` "R19" .. "R19f"). Wave 34's Kit Reinf Hunt
+rigs (gövt 297 hunters, MaxOdds 100, against armed AI 3 preys of gövt 296,
+ReinfFleet 317, the Kit Ring Lancer watching from the port at the centre,
+`tools/hunt.sh`: a six-Tab census at about 15 s, one after four 12 s
+waits, one at the end), with hulls that KEEP their shield: Kit RH Hunter
+Full (Strength 10, 30000 shield recharging 30 points a frame: 100% through
+any fight), Kit RH Hunter Weak (Strength 10, a 10-point shield, "Shields
+Down" after the first hit, 30000 armor), and armed preys of Strength 4 / 6
+/ 8 / 10 / 11 / 12 / 15 recharging like the Full hunter. New this wave:
+the recording starts BEFORE Enter Ship (`scenarios/w35_space_early.json`),
+so an early call's line is caught with its time; SMALL traffic (avgShips
+2, one hunter and one prey about half the time: Kit Reinf Pair 0.4 / 0.6
+/ 0.8 / 1.0 / 1.1, Pair Weak 0.8; avgShips 3 for Kit Reinf Friends 15);
+the hunters as a FLEET of exactly three placed by the system (sÿst
+DudeTypes -319 / -320, Kit Hunter Pack Full / Weak) against one prey; and
+for the day, Kit Reinf Day (Full hunters against wave 33's Strength-500
+armed preys, ReinfFleet 318: three Strength-1, 60-armor Kit RF Fragile
+that the preys destroy) watched with back-to-back censuses
+(`tools/huntcen.sh`, one every 20 s for 5 minutes). AI 3 traffic comes and
+goes, so only a call in the first seconds (or a composition that held
+through a no-call watch) is read; later calls are listed apart.
+
+| run | composition (preys : hunters, from the census) | Strength sums, preys : hunters | ratio | fleet |
+|---|---|---|---|---|
+| friends15_b | 2 S15 : 1 Full | 30 : 10 | 3.0 | **called** 9.1 s |
+| friends_full #1 | 3 S12 : 2 Full | 36 : 20 | 1.8 | **called** 9.2 s |
+| friends15_d | 1 S15 : 1 Full | 15 : 10 | 1.5 | **called** 7.9 s |
+| friends_full #2 | 1 S12 : 1 Full | 12 : 10 | 1.2 | **called** 8.8 s |
+| odds11 #2 | 2 S11 : 2 Full | 22 : 20 | 1.1 | **called** 8.0 s |
+| pair11_a | 1 S11 : 1 Full | 11 : 10 | 1.1 | **called** 8.8 s |
+| pair10_b | 1 S10 : 1 Full | 10 : 10 | 1.0 | **called** 8.8 s |
+| pairfull08_b, _c | 1 S8 : 1 Full | 8 : 10 | **0.8** | **called** 10.0 s, 12.2 s |
+| pairweak08_a, _b | 1 S8 : 1 Weak | 8 : 10 (8 : 3 shield-weighted) | 0.8 | **called** 8.7 s, 8.8 s |
+| friends15_c | 1 S15 : 2 Full | 15 : 20 | **0.75** | **called** 8.8 s |
+| pair06_b | 1 S6 : 1 Full | 6 : 10 | **0.6** | **called** 9.3 s |
+| packfull_a | 1 S15 : 3 Full (the pack) | 15 : 30 | 0.5 | none (the pack in from about 50 s to the end) |
+| packweak_a, _b | 1 S15 : 3 Weak (the pack), all "Shields Down" | 15 : 30 (15 : 9 shield-weighted) | 0.5 | **none** in either run |
+| pair04_a, _b, _c | 1 S4 : 1 Full (pair04_a fighting by the port) | 4 : 10 | **0.4** | **none** in any |
+| odds11 #1 | 1 S11 : 3 Full | 11 : 30 | 0.37 | none |
+| late calls, composition uncertain | friends_weak #1 / #2 (Weak hunters first, preys later), friends15_a, pair11_b, pair10_a, pairfull08_a, pairweak08_c, pair06_a, day_a | | | called at 134 / 73 / 67 / 86 / 66 / 128 / 98 / 135 / 65 s |
+| day_b (Kit Reinf Day) | 1 S500 : 1 Full at the call, then 2-3 Full hunters against S500 preys to the end | | | ONE call at 16.5 s; the Fragile fleet in censuses 1-2, GONE from census 3 (about 55 s); **no second line** in the 240 s after, the fight going on (prey shields 99 -> 77%) |
+| day_a | preys first, a Full hunter later | | | one call at 64.7 s; the fleet in census B (93-109 s), gone by census C (273 s); no second line to 293 s |
+
+**Findings.**
+1. **The threshold is about half**: every early fight at a ratio of 0.6
+   or more called (0.6, 0.75, 0.8 four times, 1.0, 1.1 twice, 1.2, 1.5,
+   1.8, 3.0), every one at 0.5 or less did not (0.5 three times, all
+   packs; 0.4 three times; 0.37; wave 34's 8 : 30). A lone Strength-10
+   hunter at full shield calls against one Strength-6 prey and never
+   against a Strength-4 one. The edge is between 0.4 and 0.6 (between 0.5
+   and 0.6 if the packs count): "the attackers' sum over HALF the
+   defenders'" fits every reading. Wave 34's "between 1.0 and 1.2" only
+   meant that nothing between 0.27 and 1.0 had been tried.
+2. **The friends are summed, the victim among them**: one Strength-11 or
+   Strength-15 prey against three hunters never called (11 : 30; 15 : 30
+   twice as a pack), where the victim alone (11 or 15 against 10) would
+   have; one Strength-15 prey against two did (15 : 20); a lone victim's
+   Strength-4 prey did not (4 : 10), so a lone victim is not "no friends".
+3. **The shield does not weigh the friends**: three Weak hunters, all
+   "Shields Down" (hit, fighting), never called against one Strength-15
+   prey in two runs (15 : 30 unweighted, 15 : 9 at the Bible's 30%); the
+   Weak lone hunter's calls (pairweak08) are the 0.8 calls the Full hunter
+   made too. Caveat: the three were a fleet (the pack), and a fleet member
+   might never call (packfull is explained either way).
+4. **A player's call has a higher bar**: wave 20's 300 against S400 (0.75
+   unweighted, 0.81 at the victim's 90% shield) and 100 against S150 (0.67
+   / 0.72, two runs of three) and S200 (0.5 / 0.54) did NOT call, where
+   NPC fights called at 0.6 and 0.75. So the player's call (main's rule,
+   over 1.0, fits ten of wave 20's eleven points) and an NPC-caused call
+   differ; why (the attacker's govt's own MaxOdds, the prey's 1000 here?
+   GUESS) is open.
+5. **One NPC-caused call per visit**: in day_b the first fleet was gone
+   within about 55 s, and the Strength-500 preys went on fighting the
+   hunters for 240 s more (odds over 30 to 1) with no second line; day_a
+   the same over a shorter gap. ReinfIntrval 0 is "available every day",
+   and a visit is a day (a landing or jump moves the date: wave 34), so an
+   NPC-caused call is once a day like a player's.
+
+**NovaJS (main 08092a02).** `N/nova_plugin/spawn/reinforcements.ts`:
+`considerCall` (`:538-629`) still needs a player or his flock as the
+opponent (`:562`; the module comment `:166-168`), so no NPC fight calls at
+all (wave 33's mismatch, unchanged). Its odds: the caller's ship and flock
+against every fleet-side NPC (`:599-612`), each at `effectiveStrength`
+(`N/nova_plugin/reputation/govt_disposition.ts:131`: Strength x (0.3 + 0.7
+x shield)), `reinforcementOddsCall` (`:329-338`) `enemies / friends x 100
+> MaxOdds`; one pending call per system (`:557`), the day stamped on the
+calling PLAYER only (`:619-627`, `reinforcementAvailable` `:314-321`).
+1: **mismatch** (NovaJS needs over 1.0; the original called from 0.6 in
+NPC fights). 2: matches (the sum, the victim counted). 3: **mismatch** at
+GUESS level (NovaJS weighs every ship by its shield). 4: NovaJS's player
+rule matches wave 20 and stays. 5: NovaJS has no
+NPC-caused call to limit.
+**Proposed:** (a) wave 33's NPC-caused call (an NPC's hit on, or attack
+of, an NPC of the fleet's side), with the attacker's govt side summed as
+the enemies (MEASURED: summed, wave 34) and the fleet side's NPCs as the
+friends (MEASURED: summed, the victim counted); (b) for an NPC-caused
+call, the test `enemies x 100 > 0.5 x MaxOdds x friends` (MEASURED for
+MaxOdds 100: 0.6 calls, 0.4 and the packs' 0.5 do not; GUESS: the edge
+at exactly half and strict, and that it scales with the fleet govt's
+MaxOdds rather than the attacker's); keep the player's call as it is
+(finding 4); (c) plain Strength on both sides of an
+NPC-caused call's odds (GUESS from packweak); (d) an NPC-caused call
+stamps the SYSTEM's day (MEASURED: no second call in the same visit with
+the first fleet gone; `needs/maintainer` for the multiplayer reading, as
+wave 34 proposed).
+
+Confidence: high for "about half, not 1.0" (clean lone-hunter calls at 0.6
+and 0.8, three clean 0.4 refusals, one 0.75 call) and for
+once-a-visit (two runs, one with 240 s of fighting after the fleet was
+gone); medium for "summed with the victim" (three no-call watches, two of
+them packs); medium-low for "no shield weighting" (the pack caveat); the
+exact edge and any MaxOdds scaling are GUESSES.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w35/hunt_*`
+(`recording.mp4`, `*-tab*.png`; the first round ran friends_full,
+friends_weak and odds11 twice under one subdir, two attempt dirs each),
+`hunt_*_tabs.png` / `hunt_*_lines.png` per run (`_1_` / `_2_` for those
+three), `hunt_friends_weak_1_frames.png`, `hunt_friends15_a_radar.png`,
+`hunt_pair10_a_radar.png`, `pair08_c_tabs.png`, `hunt_day_b_tabs.png`
+(fourteen censuses, one per row).
+
+### Capture, wave 35: ratio 6.5 reads 70-75 (mean 73.0 over six boards), on the straight line from ratio 6's 70 to the 75% cap at 7; one board read 70, a point below NovaJS's narrowed 71-75; the rolls went against the odds (one capture in six at 70-75%, about 0.7% likely) (2026-11-25)
+
+**Question** (brief item 3; wave-34 leftover): ratio 6.5, between ratio
+6's mean 70 (wave 34) and the 75% cap at 7 (wave 33).
+
+**Rig** (`wave35Resources` "C"). Wave 33's `scenarios/w33_capture.json`
+(seven turret taps disable wave 8's crew-10 live hulk, the board loop
+boards, the odds are read from the shot before the Capture Ship click, the
+outcome from the status line and the "Use As My Ship" prompt;
+`tools/capq34.sh`, `capsum.sh`, `capwon.sh`), the boarder shïp 568 Kit Ring
+Crawler Crew 65 (wave 32's Tough boarder with crew 65: ratio 6.5), six
+boards.
+
+| board | shown odds | outcome |
+|---|---|---|
+| c65_h10_1 | 73 | F |
+| c65_h10_2 | 70 | **C** |
+| c65_h10_3 | 75 | F |
+| c65_h10_4 | 73 | F |
+| c65_h10_5 | 73 | F |
+| c65_h10_6 | 74 | F |
+
+(C captured, F "Your attempt to capture this ship was unsuccessful.")
+
+**Findings.**
+1. **Ratio 6.5 reads 73, 70, 75, 73, 73, 74** (mean 73.0): the straight
+   line from ratio 6's 70 (wave 34) to the cap at 7 (72.5), not the cap
+   itself (five boards under 75), and like every ratio so far within 5
+   points of its mean.
+2. **The rolls ran against the odds**: one capture in six where the shown
+   odds sum to 4.4 (about 0.7% to get one or none); with waves 33-34's
+   boards at 68-75% (6 of 7, 4 of 6, 2 of 2) that is 13 captures in 21
+   (about 15.2 expected). Nothing in the rig changed but the crew; read it
+   as a bad run, but it is the first set to stray from the shown odds.
+
+**NovaJS (main 08092a02, which applied wave 34's `[6, 0.70]`).**
+`N/nova_plugin/ship/boarding_component.ts`: `CAPTURE_ODDS_BY_CREW_RATIO`
+(`:729-743`) [6, 0.70], [7, 0.75], interpolated (`captureChance`,
+`:750-769`): ratio 6.5 is 72.5, rounded to 73; `boardCaptureOdds`
+(`:803-814`) narrows the +-5 draw to the gap below the cap (w = 2: 71-75).
+1: the mean **matches** (73 against 73.0); one board (70) **falls a point
+outside** NovaJS's 71-75 (wave 34's ratio 6 had read 75 at the top of
+NovaJS's 65-75, so the original's draw near the cap is not narrowed the
+same way: it reached 75 from a mean of 70 and 70 from a mean of 73).
+2: nothing to change (the roll uses the shown odds in NovaJS; the pooled
+reading still fits that).
+**Proposed** (GUESS, low priority): one model fits ratios 5, 6, 6.5 and
+7 together: an UNCAPPED mean rising 10 points per ratio from 5 (60, 70,
+80 at 7), the +-5 draw, and THEN the 75 cap. Ratio 6: 65-75, mean 70 (wave
+34: 68-75, mean 70); ratio 6.5: 70-80 capped, so 70-75 with 75 half the
+time, mean about 73.6 (here 70-75, mean 73.0); ratio 7: 75-85 capped,
+always 75 (wave 33's every board); ratio 10 and the crew-1 hulk: always 75
+(waves 8, 25, 30). In code: the table's [7, 0.75] becomes [7, 0.80] (and
+[10, 1.10] for the line on), `boardCaptureOdds` draws +-5 around the
+uncapped mean and caps after the draw (the floor narrowing kept), so the
+cap no longer narrows the draw from above. Mark 6.5 MEASURED in the
+table's comment either way.
+
+Confidence: medium for the mean (six boards); low for the draw's shape
+near the cap (one board outside NovaJS's range, the model fitted to four
+ratios after the fact).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w35/c65_h10_1` ..
+`_6` (`*-dialog-capture-*.png` and the shot before it, `*-after2.png`,
+`recording.mp4`), `capture_c65.png` (odds and outcome lines, boards 1-6).
+
+### R7 Accept on a raised ask, wave 35: Accept Price on a warship's third plea (22,000 after 20,000 and 21,000) answered "A pleasure to do business with you." and the credits read 100.00M -> 99.97M, so more than the first ask was charged; the plea after an unanswered counter cannot be put (the price popup is modal); in one run the record-hostile warship was not hostile for 2.5 minutes, then asked 4,000 with no bad-mood line (2026-11-25)
+
+**Questions** (brief item 3; wave-34 leftovers): Accept on a raised ask
+(charged as shown?), a plea after an unanswered counter, whether the
+per-hail first ask follows the mood line.
+
+**Rig.** Wave 33's warship rig (`w22_bribe_plain_100m`: the Kit Lancer at
+Kit Bribe Plain's port, gövt 304 0x0200 warships hostile by record -50,
+100M credits) with `tools/r7_35.sh`: **r7_accept** (one hail; Beg For
+Mercy, Lower Price until the popup is gone, twice; the third Beg's ask
+ACCEPTED (Accept Price, 415, 336); then `l l` and Return to land, take off
+and pull the pilot) and **r7_after** (per hail, Beg; if the Lower Price
+answer is a COUNTER, click Beg For Mercy's visible left part (300, 361)
+with the counter unanswered).
+
+| run | lines and asks in order | after |
+|---|---|---|
+| r7_accept | "What do you want?" / "Only if you pay me first." 20,000 (Lower Price: COUNTER 15,000; Lower Price: "Die, cheapskate!"), 21,000 (Lower Price: "Die, cheapskate!"), **22,000: Accept Price -> "A pleasure to do business with you."** | credits panel 100.00M before, **99.97M** after; "Landing request denied." (record -50), so no pilot was written |
+| r7_after | hails 1-7 (about 2.5 minutes): "What is it?" / "Not a chance." with Greetings / Request Assistance / Close Channel: the warship was NOT hostile (no Beg For Mercy); hail 8: hostile, "You'll have to pay me first." **4,000** (at 100M), Lower Price: "What? How dare you! Prepare to die!" (withdrawn) | no counter reached |
+
+**Findings.**
+1. **Accept takes the raised ask**: after two pleas the third ask (22,000)
+   was accepted with "A pleasure to do business with you." and the panel
+   went from 100.00M to 99.97M. 100M less the first ask (20,000) is
+   exactly 99.98M; 99.97M needs more than 20,000, so the raised ask was
+   charged (22,000 shows as 99.97M if the panel truncates to 10,000s,
+   GUESS; a 21,000 charge would too). The exact amount needs a pilot
+   written after it (the port refused the landing at record -50: land on
+   another port or pull after a jump).
+2. **A plea after an unanswered counter cannot be made**: the price popup
+   (Lower Price / Accept Price) is modal over the hail dialog; the only
+   ways off a counter are its two buttons, so the "plea after a counter"
+   is always after a Lower Price (a withdrawal) or an Accept. (r7_after
+   never reached a counter, below; this is read from the popup's layout in
+   every wave-33 counter shot.)
+3. **Hostility by record is not certain at Enter Ship**: in r7_after (21:47, just before r7_accept on the same pilot) the
+   targeted warship was not hostile for seven hails (about 2.5 minutes:
+   "What is it?", "Not a chance.") and was on the eighth, where r7_accept's
+   and every wave-33 run's were firing at Enter Ship. Its first hostile
+   ask, 4,000 at 100M under the plain "You'll have to pay me first.", is
+   one more low first ask without a bad-mood line (wave 33: 9,000 and 3,000
+   on the hails run), so a low ask does not need the "bad mood" line.
+   See the reliability note.
+
+**NovaJS (main 08092a02).** `N/nova_plugin/encounters/hail_plugin.ts`:
+the Beg For Mercy Accept charges `mercyPrice(shipBribePrice(...), haggle)`
+(`:742-755`), the channel's raised ask on the table: 1 **matches** (as far
+as the panel shows). 2: not checked in NovaJS (whether its plea button stays live under the price popup). 3: nothing to compare.
+**Proposed:** nothing (mark the raised-ask charge MEASURED to the panel's
+resolution).
+
+Confidence: medium for 1 (one accept, read on a 10,000-credit display);
+high for 2.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w35/r7_accept`
+(`*-p1beg.png` .. `*-accepted.png`, `*-landed.png`, `*-tookoff.png`,
+`recording.mp4`, `pilot-after`), `r7_accept_sheet.png` (the hail and
+popup text in order), `r7_accept_land.png` (99.97M, "Landing request
+denied."), `r7_after` (`*-c1hail.png` .. `*-c8closed.png`),
+`r7_after_c1.png`, `r7_after_c3.png`, `w33_plea_war_c1.png` (wave 33's
+first hail for comparison).
+
+### Landing clearance lapse, wave 35: TWO clocks: the 250 px planet's clearance holds to about 24.62-24.65 s (landed at 24.617 and 24.649, lapsed at 24.645 and 24.673), the 315 x 200 station's lapses sooner (every interval from 24.52 to 24.80 s gave a fresh clearance, twice), and docked at 24.396 s: its edge is 24.40-24.44 s (with wave 33's 24.44 lapse), about 0.2 s (six frames) before the planet's (2026-11-25)
+
+**Question** (brief item 4; wave-33 / 34 leftover, "the one-clock
+question"): wave 33's station lapsed at 24.44 s where wave 32's planet
+held at 24.51: one clock with scatter, or two?
+
+**Rig.** Wave 32-33's lapse rigs at rest inside the clearance square:
+`w31_land_p250_230` (the Kit Lancer 230 px from the 250 px planet, window
+437) and `w31_land_s315_230` (230 px from the 315 x 200 station, window
+551). `tools/lapse35.sh`: ONE keys step, `l` (clears), then `l` presses at
+falling intervals; a press inside the clearance's life lands or docks and
+ends the cascade, one after it gets a fresh clearance (the status line),
+which restarts the clock. Requested 24.65 down to 24.38 s in 0.03 s steps;
+the presses came about 0.15 s later than requested (24.80 .. 24.53 s; the
+intervals below are the `press` events' `video_t` differences,
+`tools/lapsesum.sh`, landing read from the spaceport in the frame 25
+frames after each press). A third station cascade (lapse_s315_c) asked for 24.25 down to 24.00 s (24.40 .. 24.15 actual).
+
+| run | intervals that got a FRESH clearance (s) | landed / docked at |
+|---|---|---|
+| lapse_p250_a | 24.803, 24.769, 24.735, 24.706, 24.679, **24.645** | **24.617** |
+| lapse_p250_b | 24.804, 24.768, 24.734, 24.709, **24.673** | **24.649** |
+| lapse_s315_a | 24.801, 24.770, 24.735, 24.705, 24.678, 24.648, 24.617, 24.586, 24.556, **24.526** | none |
+| lapse_s315_b | 24.800, 24.764, 24.736, 24.706, 24.681, 24.647, 24.615, 24.586, 24.565, **24.532** | none |
+| lapse_s315_c | (none) | **24.396** (the first press; the later ones fell in the spaceport) |
+
+**Findings.**
+1. **The planet's clearance holds about 24.62-24.65 s**: one run landed at
+   24.617 and lapsed at 24.645, the other landed at 24.649 and lapsed at
+   24.673: the edge is within a frame (33 ms) of 24.65, about 739-740 game
+   frames at 30 a second. Wave 32's "landed 24.51, lapsed 24.61" sits a
+   frame lower; with the frame stamps' jitter the planet edge is 24.61-24.67.
+2. **The station's lapses about 0.2 s sooner**: twenty presses from 24.526
+   to 24.80 s all met a lapsed clearance (two cascades, a fresh "Cleared to
+   dock" line each time), and a press at 24.396 s docked; with wave 33's
+   station (docked at 23.55-24.15, lapsed at 24.44 and 24.95) the station
+   edge is 24.40-24.44 s, about 732 frames, against the planet's 739-740.
+3. So there are two clocks (or a per-port one): the brief's one-clock
+   question is answered no.
+
+**NovaJS (main 08092a02).** `N/nova_plugin/travel/planet_plugin.ts`:
+`STELLAR_CLEARANCE_MS = 24_550` (`:400`), one clock for ports, stations
+and gates (`clearanceLapsed` `:146-152`, `holdsClearance` `:122-129`). 1:
+**mismatch by about 0.1 s** (24.617 and 24.649 land on the original,
+lapse in NovaJS). 2: **mismatch by about 0.1 s** the other way (24.44 and
+24.53 lapse on the original, hold in NovaJS).
+**Proposed:** two clocks, MEASURED: a planet's clearance 24.63 s (the middle
+of 24.617-24.649 landed and 24.645-24.673 lapsed; GUESS inside that frame)
+and a STATION's 24.42 s (the middle of 24.396 docked and 24.44 lapsed),
+by the stellar's station flag (spöb Flags 0x0010: the S315 rig is 0x11,
+the P250 rig 0x43; GUESS that the flag, not the art, picks the clock); a GATE keeps the
+planet clock until measured (wave 32: held 23.5, lapsed 25.5 s). The
+lapse stays silent and leaves nothing standing (wave 32).
+
+Confidence: high for the planet's edge (two cascades, each bracketed
+within 30 ms) and for "the station lapses before 24.52 s" (twenty fresh
+clearances at 24.52-24.80 s); medium for the station's edge (one docking at 24.396, one lapse at
+24.44 from wave 33); GUESS for what picks the clock (one planet, one
+station art).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w35/lapse_p250_a`,
+`lapse_p250_b`, `lapse_s315_a`, `lapse_s315_b`, `lapse_s315_c` (`recording.mp4`,
+`recording.events.json`), `lapse_*_sheet.png` (the window 25 frames after
+each press, in order).
+
 ### Reliability notes (for anyone running the reference)
+
+- **A press interval inside one keys step is the wait plus about 150 ms
+  (wave 35 `lapse_*`):** "l wait 24650 l" put the presses 24.80 s apart,
+  "wait 24380" 24.53 s; read the intervals from `recording.events.json`
+  (the `press` events' `video_t`, `tools/lapsesum.sh`) and request
+  about 0.15 s less than the interval wanted.
+- **A record-hostile warship need not be hostile at Enter Ship (wave 35
+  `r7_after`):** on `w22_bribe_plain_100m` (record -50) the targeted Kit
+  Bribe Warship answered seven hails over 2.5 minutes with "What is it?" /
+  Greetings / Request Assistance (no Beg For Mercy) and was hostile on the
+  eighth; the next run on the same pilot was fired on at once, as every
+  wave-33 run. Check the first hail for Beg For Mercy and re-hail (or wait)
+  before counting pleas.
+- **NPC-fight compositions drift (wave 35 R19):** AI 3 traffic leaves and
+  arrives within a minute or two, so a call 60-130 s into a watch cannot
+  be tied to the first census's ships. Record from before Enter Ship
+  (`scenarios/w35_space_early.json`) and read only calls in the first
+  seconds; small traffic (avgShips 2) gives one ship of each side about
+  half the time.
+- **A shield that recharges 30 points a frame hides the fight (wave 35):**
+  the Full hunters and preys read 100% throughout, so a no-call watch
+  cannot show that they fought; the Weak twin (a 10-point shield, "Shields
+  Down" once hit) can.
+- **A system-placed fleet (DudeTypes -id) gives a fixed side but may change
+  the call (wave 35 packs):** three hunters as a flët never called, which
+  fits the summed odds but also "a fleet member does not call"; use single
+  ships when the caller matters.
+- **One subdir per run (wave 35 round 1):** `r19q35.sh` run twice without
+  a SUFFIX put two attempt dirs in each subdir and overwrote the first
+  run's `.ask.log` / `.drive.log`; the sheets take the LAST attempt dir.
 
 - **Copy the interactive SCENARIO with the tools, not only the tools
   (wave 34):** `w33_space_interactive.json` names its own inbox
@@ -17373,7 +17798,8 @@ schema change.
 | Wave 31 leftovers | Landing: the clearance lapse's exact time (13.4-25.1 s; does a gate CLEARANCE lapse too? wave 29's gate REQUEST did not in 41 s), whether a clearance survives a ship that leaves the 1.7 W window and comes back, the cleared window's edge past 425 (one landing at 425.4 for 250 px: a 430-440 press), the cleared-line form odds (#97 / #98 / #99 8 : 5 : 3, tails 9 : 7 so far), whether a wormhole clears a standing request on entry. Capture: the shown odds' spread at ratio 1+ (crew 10 / 5 hulks: is the draw additive or a share?), whether the capture roll uses the SHOWN odds, the boarder's strength or marines. Ammo: more IR boards for the trip rate, and whether a tripped Ammo take still delivers (land again before the pull). R7: one more provoked freighter ask above 20M (one 16,000 so far), whether a FRESH planet refusal ends with a jump out and back, the refusal odds (6 in 26). Still open from wave 30: R19 an NPC of the fleet's side attacking another NPC and the arrival distance inside the radar; from wave 26: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, the escort-cap capture, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first). | **Wave 32** answered ("... wave 32" sections; compared with main 1d398457, which applied the wave-31 fixes): Landing: a port's clearance lapses 24.5-24.6 s after it is given (held at 24.32 / 24.51 s, lapsed at 24.61 s and above; main's 20 s GUESS: mismatch), silently, the selection kept (main matches), a hypergate CLEARANCE lapses too on the same clock (held 23.5 s, lapsed 25.5 and 46.1 s; main never lapses a gate: mismatch), and a ship that let it lapse outside the zone is NOT re-cleared coming back in (main matches). Capture: ratio 1 18-22% (10 v 10 and 20 v 20 alike), ratio 2 29-34% (10 v 5 and 20 v 10 alike), ratio 5 55-64%, ratio 10 75% every board; the ratio is what counts; every board within 5 points of its ratio's mean (main's +-5 matches; its interpolated 49% at ratio 5: mismatch, propose [5, 0.60] and [2, 0.32]). Ammo: 4 more trips in 5 (11 in 13; main 0.85 matches) and a TRIPPED take delivers all its rounds (main matches). R7: a provoked freighter's Lower Price COUNTERED once in five fresh asks (3/4 of 22,000), a Lower Price on the counter withdrew, and each repeated plea on one channel asked 1,000 more (20,000 / 21,000 / 22,000: above the 20,000 cap; main withdraws always and repeats the price: mismatch); a FRESH planet refusal ended with a jump out and back (3,000 asked; main's per-visit draw matches; refusals 7 in 27). Not reached: R19's NPC-vs-NPC attack (the kit's mutually-Enemies govts never fought in three runs), the arrival inside the radar; not run: the cleared window's edge past 425, the cleared-line odds, a wormhole on entry, the capture roll against the shown odds, marines, the wave-26 and older carry-overs. Left: see Wave 32 leftovers. **Applied 2026-11-25 (eef62b07, 0db1ba27, c7622547)**: a clearance lapses 24.55 s after it is given, a hypergate's too; capture odds [2, 0.32] and [5, 0.60]; a ship's Lower Price on Beg For Mercy counters (3/4) or withdraws, and each further plea on the channel (one opening of the comm dialog) asks 1,000 more, past 20,000; the withdrawal line drawn per hail. |
 | Wave 32 leftovers | Landing: the lapse's exact frame count inside 24.51-24.61 s; a STATION's lapse (planets and gates measured); whether a gate whose clearance lapsed closes its sprite; the cleared window's edge past 425 (a 430-440 press), the cleared-line form odds (#97 / #98 / #99 8 : 5 : 3, tails 9 : 7), whether a wormhole clears a standing request on entry. Capture: whether the capture roll uses the SHOWN odds, the boarder's strength or marines (ModType 25), ratios between 2 and 5 and 5-10 (the curve's shape up to the cap), the draw's shape (18 / 22 only at ratio 1). R7: the ship counter's odds (1 in 6 so far), the +1,000 per plea (does it keep climbing; does the first ask ever pass 20,000), whether a second channel's ask is fresh or carries the climb (19,000 after 22,000). R19: an NPC of the fleet's side in a fight with another NPC (a rig whose NPCs do fight: a xenophobic 0x0001 govt, or a stock border system) and the arrival distance inside the radar. From wave 26: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, the escort-cap capture, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first); next free sÿst 1302, spöb 1802, shïp 552, düde 480, gövt 295, flët 318. | **Wave 33** answered ("... wave 33" sections; compared with main 0478c197, which applied the wave-32 fixes): R19: the fleet's side ATTACKED by another NPC with the odds against it CALLS the fleet with no player in the fight (Strength-10 hunters vs armed Strength-500 preys: "Sensors detect ...", the fleet fought the preys; main never calls without a player: mismatch); ATTACKING with the odds for it does not (3 minutes, a prey worn to 13%); the fleet came in about 1,740 px from the centre, 1.5 s after the line (main 1,800: matches); wave 32's no-fight was gövt MaxOdds (Strength 10 vs 500), not Enemies. R7: the +1,000 per plea never stops (to 31,000 twice, 27,000), a counter one first press in three (19 in 59 with wave 32; main's one in four fits), 3/4 rounded down to 100, a Lower Price on a counter withdraws; 0x0200 warships haggle like the provoked freighter and the 0x8000 flat 20,000 is each hail's first ask (main matches all of it); every new hail draws its own mood and first ask (one warship 3,000-20,000 over seven hails; main fixed per ship and pilot: mismatch). Capture: the roll fits the shown odds (8 captures in 25 rolls, 10.1 expected; one 75% failed); ratio 7 already reads the 75% cap (main 66%: mismatch), ratio 3 38-45% (main 41%: matches); marines count (ModVal 10 = ten crew, ModVal -20 = about +20 points; main ignores ModType 25: mismatch); a Capture Ship click tripped the self-destruct 2 in 27 (main never); at the escort cap "Capture Odds: 0%", a grey button and no line (main greys it but drops the odds and adds the #123 note). Landing: a station lapses on the planets' clock (docked at 23.55-24.15 s, lapsed at 24.44; main 24.55: within a frame or two); a lapsed gate plays its closing animation at the lapse, silently (main matches); the 250 px planet's cleared window reaches 432.4 px but not 439.4 (main 1.7 W = 425: mismatch); the cleared-line pieces pool to 16 : 9 : 7, Commence 18 : Welcome 14 (main's 8 : 5 : 3, 9 : 7 fits). Not run: the lapse's exact frame count, a wormhole and a standing request, the counter's "first ask over 20,000" question (every first ask stayed at or under 20,000), and the wave-26 carry-overs (see Wave 33 leftovers). **Applied 2026-11-25 (b814e5bd, a3f6b1a2, d4393b70)**: each hail draws a ship's mood line and first ask (the channel seeds both), the plea's counter one in three (GUESS); capture odds `[7, 0.75]`, marines count (a positive ModVal as crew, a negative one as points), a capture attempt draws the self-destruct first (0.1, GUESS); the cleared landing window 1.74 W (not the proposed 1.75, which would land U9 wave 6's 80 px "too far" at 140). Not applied: R19's NPC-caused call (waiting on Forgejo #382); the escort-cap readout (main keeps its greyed button, no odds row and the #123 note, per rulings #161 / #250; the original reads "Capture Odds: 0%" with no line). |
 | Wave 33 leftovers | Landing: a wormhole and a standing request (does entering a wormhole after a far `l` act by itself?); the cleared window's rule (1.75 W, 1.7 W + the ship's half-size, or a wider true frame: a second art between 432 and 439 px, e.g. the 315 px station or the 325 px gate's 552); the lapse's one-clock question (stations lapsed at 24.44 where a planet held at 24.51: more presses at 24.4-24.6 on both). Capture: the self-destruct's rate on a capture (2 in 27) and whether a trip comes before the roll; where between ratios 5 and 7 the cap is reached (a crew-60 boarder); marines at another ratio (does -20 add 20 points at ratio 3? does +10 crew read exactly ratio 2's band?); more rolls at low odds for the shown-odds test (2 of 18 at 15-45%). R7: whether the per-hail first ask follows the mood line (bad 4,000 vs good 20,000 at 100M), whether Lower Price is needed for the +1,000 (a plea after a counter that is never answered), Accept on a raised ask (charged as shown?). R19: the call's odds threshold in an NPC fight (raise the hunters' Strength until it stops), whether the day stamp is per system for an NPC-caused call (a second fight the same day), the fleet's targets (the attackers only?), an NPC-vs-NPC fight where the fleet's side attacks and LOSES. From wave 26 and older: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first); next free sÿst 1304, spöb 1804, shïp 557, düde 483, oütf 470, gövt 295, flët 318. | **Wave 34** answered ("... wave 34" sections; compared with main 6aaad1c4, which applied the wave-33 fixes): Landing: a cleared ship lands when max(|dx|, |dy|) < trunc(1.75 W), strictly, measured to the pixel on four arts at rest (40 px planet 69 / 70, 72 px planet 125 / 126, 17 x 31 station 28 / 29, 100 x 70 station 174 / 175) and a walk-out from the 315 x 200 station (docked from 545.4); the ship's size does not count (96 and 160 px hulls too far at 150 from the 72 px planet); stations by their width like planets (main's 1.74 W inclusive matches every edge but the 17 px station's 29, which lands in NovaJS: propose trunc(1.75 W) with a strict test). A wormhole has no clearance and no standing request: "too far" at 230 px inside the 249 square, and a ship coasting (or flying unpressed) over it is not taken through (matches); a far `l` about 730 px out selects nothing (main picks a wormhole at any distance: small mismatch). Capture: ratio 6 reads 68-75 (mean 70 over six boards, main 68), marines +10 on crew 30 read ratio 4's band, -20 on crew 30 adds about 18 points to ratio 3, the cap holds over the bonus (crew 70 + -20: 75 x 3), the capture click's self-destruct 1 in 12 (3 in 39 pooled; main's 0.1 fits); main matches all but ratio 6. R19: the attackers' Strengths are summed (three Strength-8 preys on one Strength-10 hunter called, one against three did not), every fight with the preys' sum over the hunters' called, and one at 24 against a nominal 30 with a hunter at 20% shield (GUESS: both sides summed, shield-weighted); main still never calls without a player (wave 33's proposal). A landing moves the date on (June 23rd to 24th), so the same-day question cannot be put by landing (the next day's fight called 8 s after take-off). Not run: the lapse's one-clock question, low-odds shown-odds rolls, R7's per-hail ask vs mood / plea after a counter / Accept on a raised ask, R19's fleet targets and a losing attack by the fleet's side, and the wave-26 and older carry-overs. Left: see Wave 34 leftovers. **Applied 2026-11-25 (a2025369, d76630fe, b093c0e6)**: the cleared landing window trunc(1.75 W), strict (the 249 px clearance square keeps its inclusive edge); a wormhole is selected by `l` only inside the gates' 500 px circle (GUESS on the radius); capture odds `[6, 0.70]`, the marines and the cap over the bonus marked measured, the self-destruct citing 3 in 39. Not applied: R19's NPC-caused call (waiting on Forgejo #382). |
-| Wave 34 leftovers | Landing: a wormhole's window edge (104 px art: 1.75 W = 182; presses at 175-190 px) and its `l` selection range (selected at 300, nothing at about 730: is it the gates' 500 px circle?); whether the strict trunc(1.75 W) holds for a fractional ship position (a coasting press near a 17 px art's 28.75-29 px); a cleared press past 551 at the 315 px station (the walk-out decoration leaves the screen: a ruler stellar); the lapse's one-clock question (stations 24.44 vs planets 24.51). Capture: ratio 6.5 (ratio 6 reads a mean of 70 over six boards); the self-destruct's rate (3 in 39) and whether a trip comes before the roll; more rolls at low odds. R7: whether the per-hail first ask follows the mood line, a plea after an unanswered counter, Accept on a raised ask. R19: how the FRIENDS are counted in an NPC fight (the victim alone, or every fleet-side NPC shield-weighted: S12 Many again with full-shield hunters, 24 against 30), the threshold between 1.0 and 1.2, whether an NPC-caused call stamps a day (only the same visit is "the same day": a second fight after the first fleet leaves), the fleet's targets, a losing attack by the fleet's side. From wave 26 and older: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first); next free sÿst 1339, spöb 1873, shïp 563, düde 488, oütf 470, gövt 295, flët 318. | open |
+| Wave 34 leftovers | Landing: a wormhole's window edge (104 px art: 1.75 W = 182; presses at 175-190 px) and its `l` selection range (selected at 300, nothing at about 730: is it the gates' 500 px circle?); whether the strict trunc(1.75 W) holds for a fractional ship position (a coasting press near a 17 px art's 28.75-29 px); a cleared press past 551 at the 315 px station (the walk-out decoration leaves the screen: a ruler stellar); the lapse's one-clock question (stations 24.44 vs planets 24.51). Capture: ratio 6.5 (ratio 6 reads a mean of 70 over six boards); the self-destruct's rate (3 in 39) and whether a trip comes before the roll; more rolls at low odds. R7: whether the per-hail first ask follows the mood line, a plea after an unanswered counter, Accept on a raised ask. R19: how the FRIENDS are counted in an NPC fight (the victim alone, or every fleet-side NPC shield-weighted: S12 Many again with full-shield hunters, 24 against 30), the threshold between 1.0 and 1.2, whether an NPC-caused call stamps a day (only the same visit is "the same day": a second fight after the first fleet leaves), the fleet's targets, a losing attack by the fleet's side. From wave 26 and older: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first); next free sÿst 1339, spöb 1873, shïp 563, düde 488, oütf 470, gövt 295, flët 318. | **Wave 35** answered ("... wave 35" sections; compared with main 08092a02, which applied the wave-34 fixes): Wormholes: the 104 px wormhole's window is trunc(1.75 W) = 182, strict (through at 180 / 181, "too far" at 182 / 183), and a stopped ship's `l` selects it only inside the gates' 498-500 px CIRCLE (400 / 498 selected; 500, 600 and the (400, 400) diagonal nothing): main matches both (comments to mark measured). R19 in NPC fights: the call's threshold is about HALF, not 1.0: every early fight at 0.6 or more called (a lone Strength-10 hunter against one Strength-6 or Strength-8 prey; 15 against two hunters), every one at 0.5 or less did not (a lone hunter against Strength 4, three runs; one prey of 11 / 15 against three hunters); the friends are summed with the victim; no shield weighting (three hunters at 0% shield never called against 15 : 30, a pack caveat); one NPC-caused call per visit (no second line in 240 s of fighting after the first fleet was gone). Wave 20's player points (0.75 and 0.67 refused) leave the player's edge apart. Main still never calls without a player (wave 33's proposal; now with a call over half of MaxOdds for NPC calls, plain Strength, a per-system day). Capture: ratio 6.5 reads 70-75 (mean 73.0; main 73, but its narrowed draw is 71-75, one board read 70; GUESS model: an uncapped mean 10 points a ratio from 5, the +-5 draw, then the 75 cap); one capture in six at 70-75%. R7: Accept on a raised 22,000 ask took more than the first ask (100.00M -> 99.97M; main charges the raised ask: matches to the panel's resolution); the price popup is modal, so no plea can follow an unanswered counter; one record-hostile warship was not hostile for 2.5 minutes and then asked 4,000 with a neutral line. Lapse: TWO clocks: the 250 px planet holds to 24.62-24.65 s (landed 24.617 / 24.649, lapsed 24.645 / 24.673), the 315 x 200 station to 24.40-24.44 s (docked 24.396, lapsed at every interval 24.53-24.80 twice); main's single 24.55 s misses both by about 0.1 s. Not run: the cleared window for a fractional position at a 17 px art, a press past 551 at the 315 px station, low-odds capture rolls, the self-destruct before or after the roll, R7's per-hail first ask against the mood line (one more point), R19's fleet targets and a losing attack, the wave-26 and older carry-overs. Left: see Wave 35 leftovers. |
+| Wave 35 leftovers | R19: the NPC-caused call's exact edge between 0.4 and 0.6 (a Strength-5 prey against a lone Strength-10 hunter: exactly half), whether it scales with the fleet govt's MaxOdds or the attacker's (a MaxOdds-200 hunter govt), whether a fleet member (flët escort) calls at all (the pack caveat: single Weak hunters, three at once, against one Strength-15 prey), why a player's call needs more (wave 20 refused 0.67-0.75: a player point between 0.75 and 1.0), the fleet's targets, a losing attack by the fleet's side. Landing: what picks the station clock (the station flag or the art: a station flag on a planet art, a planet flag on a station art), a gate's clock against the planet's 24.63 s, the cleared window for a fractional position at a 17 px art, a press past 551 at the 315 px station, the wormhole cap above a 121 px wormhole art. Capture: the draw near the cap (ratio 6.5 read 70 below main's 71-75; the uncapped-mean model predicts 75 half the time), more rolls at 70-75% (one capture in six), low-odds rolls, the self-destruct before or after the roll. R7: the exact charge on a raised ask (a pilot written after the Accept: land elsewhere or jump), the per-hail first ask against the mood line (wait for a hostile warship before hailing), why a record-hostile warship was not hostile for 2.5 minutes. From wave 26 and older: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first); next free sÿst 1365, spöb 1912, shïp 574, düde 497, oütf 470, gövt 295, flët 321. | open |
 
 ## Catalogue
 
