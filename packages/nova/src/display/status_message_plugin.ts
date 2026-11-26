@@ -30,8 +30,9 @@ import {
 import { MissionShipComponent } from '../nova_plugin/player/index.js';
 import {
     PersComponent, REINFORCEMENT_STRING_TABLE, ReinforcementArrivalEvent,
-    reinforcementArrivalMessage,
+    reinforcementArrivalMessage, StellarDominatedEvent,
 } from '../nova_plugin/spawn/index.js';
+import { tributeResponseText } from '../nova_plugin/encounters/index.js';
 import { loadPilotProfile } from '../title/client_prefs.js';
 import { targetIdentity } from './target_identity.js';
 import { ResizeEvent, ScreenSize } from "./screen_size_plugin.js";
@@ -461,6 +462,25 @@ export const ShowShipRepairedMessage = new System({
     },
 });
 
+// The defence fleet the LOCAL player was fighting is beaten and the
+// stellar is his (spawn/defense_fleet_system.ts's StellarDominatedEvent,
+// emitted at each demander; #353, Matthew's ruling: every demander
+// dominates at the defeat): the stellar's own acceptance, "All right, all
+// right already!  The planet agrees to pay you tribute." (STR# 3002 25; a
+// station's 26), on his status line. The original says it in the comm
+// channel to the demand after the fleet; here no second demand is needed.
+// The stock line (the fallback): a plug-in's STR# 3002 is not read here.
+export const ShowStellarDominatedMessage = new System({
+    name: 'ShowStellarDominatedMessage',
+    events: [StellarDominatedEvent],
+    args: [StellarDominatedEvent, StatusLineResource, TimeResource,
+        PlayerShipSelector] as const,
+    step({ station }, statusLine, { time }) {
+        statusLine.setMessage(
+            tributeResponseText(undefined, 'dominate', station), time);
+    },
+});
+
 // A rescue board took the mission cargo (rescue_board.ts): no dialog
 // opens, so this line is all the original shows. Same targeting as the
 // other boarding messages, and a success, so no cant-do beep.
@@ -617,6 +637,7 @@ export const StatusMessagePlugin: Plugin = {
         world.addSystem(ShowEscortRepairedMessage);
         world.addSystem(ShowShipDisabledMessage);
         world.addSystem(ShowShipRepairedMessage);
+        world.addSystem(ShowStellarDominatedMessage);
         world.addSystem(ShowBayCaptureMessage);
         world.addSystem(ShowCargoRetrievedMessage);
         world.resources.set(SeenPlayerHailsResource, new Map());

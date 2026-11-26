@@ -1737,9 +1737,10 @@ export function planetTakesBribes(govt: GovtData | undefined): boolean {
  *           offer after a withdrawal (wave 28: all five lines, eleven
  *           offers).
  *
- * Group [25-26] is tribute accepted and [35-36] tribute released — the
- * domination seam, not modelled. Chosen deterministically by `seed` (a hash of
- * the stellar's uuid), like every other line here.
+ * The tribute groups ([5-9] laughed off, [10-14] the defence fleet, 25 /
+ * 26 accepted by a planet / station, 35 / 36 released) are
+ * encounters/tribute.ts's (#353). Chosen deterministically by `seed` (a
+ * hash of the stellar's uuid), like every other line here.
  */
 export const STELLAR_RESPONSE_TABLE = 'nova:3002';
 
@@ -1821,6 +1822,8 @@ export const CLEARED_TO_DOCK_INDEX = 95;
 export const CLEARED_TO_LAND_INDEX = 98;
 export const STELLAR_STATUS_FORBIDDEN_INDEX = 172;
 export const STELLAR_STATUS_HOSTILE_INDEX = 173;
+/** STR# 2002 171, "Dominated": a dominated stellar's status (#353). */
+export const STELLAR_STATUS_DOMINATED_INDEX = 171;
 
 /** One STR# 2002 line, falling back to its pinned literal. */
 export function miscString(strings: readonly string[] | undefined,

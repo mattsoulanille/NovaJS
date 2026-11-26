@@ -196,6 +196,13 @@ export interface HailContext {
     /** Escort-management dialog (escort variant only): what this escort
      * costs, what it is worth, and which functions are on offer. */
     escort?: EscortManagement;
+    /**
+     * A STELLAR's tribute row (#353; planet variant only): 'demand' draws
+     * a live Demand Tribute in the middle row, 'release' (a stellar the
+     * pilot has dominated) draws Release there. Absent: Demand Tribute
+     * greyed.
+     */
+    tribute?: { kind: 'demand' | 'release' };
 }
 
 /**
@@ -418,7 +425,27 @@ export interface HailCallbacks {
      * by the dialog's own page machine, and a release closes the channel.
      */
     escortAction(action: EscortPressAction): void;
+    /**
+     * Demand Tribute (`kind` 'demand') or Release ('release') at a stellar
+     * (#353): routes to the deterministic input path, and returns what the
+     * stellar answers and how the channel reads after it (see
+     * {@link TributePressAnswer}). Optional so a dialog for ships alone
+     * need not supply it; without it the row does nothing.
+     */
+    tribute?(kind: 'demand' | 'release'): TributePressAnswer;
     playSound(id: string): void;
+}
+
+/**
+ * What a Demand Tribute or Release press got: the stellar's line (a laugh,
+ * the fleet, its surrender, the release; STR# 3002), the identity block
+ * after it (its "Status: Hostile" / "Status: Dominated" line) and which
+ * the tribute row reads next ('release' once the stellar gave in).
+ */
+export interface TributePressAnswer {
+    answer: string;
+    heading: string;
+    next: 'demand' | 'release';
 }
 
 /**
@@ -473,6 +500,14 @@ export function escortPressAction(escort: EscortManagement,
 export const COMM_LABEL_COLOR = 0x808080;
 export const COMM_VALUE_COLOR = 0xffffff;
 export const COMM_HOSTILE_COLOR = 0xdd0806;
+/**
+ * A DOMINATED stellar's status value (#353; reference "Tribute (R18), wave
+ * 38": "Status: Dominated (green)"). GUESS: the classic Mac palette's
+ * green; the capture's exact pixel was not sampled.
+ */
+export const COMM_DOMINATED_COLOR = 0x1fb714;
+/** STR# 2002 index 171, "Dominated" (the stellar status word). */
+export const STELLAR_STATUS_DOMINATED_WORD = 'Dominated';
 
 /**
  * The escort readout's QUEUED-DEAL lines are their own shade — 0xc0c0c0,
@@ -518,8 +553,8 @@ export interface CommTextRun {
  *    next shipyard"        -> 0xc0c0c0, whole (a queued-deal status line)
  *
  * Pure and total, and it never alters the text: concatenating the runs back
- * together reproduces the block exactly. Only the Status line is red, and
- * "Hostile" is the only status the block ever carries.
+ * together reproduces the block exactly. Only the Status line is coloured:
+ * red, or green for a dominated stellar's "Status: Dominated" (#353).
  */
 export function identityRuns(block: string): CommTextRun[][] {
     return block.split('\n').map(line => {
@@ -550,12 +585,15 @@ export function identityRuns(block: string): CommTextRun[][] {
         }
         const split = colon + 1 + valueStart.index;
         const label = line.slice(0, split);
+        const value = line.slice(split);
+        const status = label.trimEnd() === 'Status:';
         return [
             { text: label, color: COMM_LABEL_COLOR },
             {
-                text: line.slice(split),
-                color: label.trimEnd() === 'Status:'
-                    ? COMM_HOSTILE_COLOR : COMM_VALUE_COLOR,
+                text: value,
+                color: !status ? COMM_VALUE_COLOR
+                    : value === STELLAR_STATUS_DOMINATED_WORD
+                        ? COMM_DOMINATED_COLOR : COMM_HOSTILE_COLOR,
             },
         ];
     });
@@ -734,7 +772,12 @@ export type HailPress =
      */
     | { kind: 'upgradeEscort' }
     | { kind: 'sellEscort' }
-    | { kind: 'releaseEscort' };
+    | { kind: 'releaseEscort' }
+    /**
+     * Demand Tribute / Release at a stellar (#353), carrying what the
+     * stellar answered (TributePressAnswer).
+     */
+    | { kind: 'tribute', answer: TributePressAnswer };
 
 /**
  * The escort context after a toggle press, with the readout re-rendered
@@ -949,6 +992,20 @@ export function hailPress(state: HailPage, press: HailPress,
             // It needs nothing but an escort — live on both reference
             // captures, hired and captured alike, queued deal or not.
             return context.escort ? 'close' : state;
+        case 'tribute':
+            // The stellar's answer in the well and its new Status in the
+            // identity block, the CHANNEL STAYING OPEN (reference "Tribute
+            // (R18), wave 38": the reply, then Close Channel); a stellar
+            // that gave in reads Release in the same row, and a released
+            // one Demand Tribute again.
+            if (phase !== 'main' || !context.tribute) {
+                return state;
+            }
+            return { phase, context: {
+                ...context, body: press.answer.answer,
+                heading: press.answer.heading,
+                tribute: { kind: press.answer.next },
+            } };
     }
 }
 
@@ -972,6 +1029,12 @@ export class HailDialog {
      *
      * `bribe` is the offer slot again, set only while it is drawn as Offer
      * Bribe: 'o' presses it then and does nothing otherwise.
+     *
+     * `tribute` is a stellar's Demand Tribute row (#353), set whenever it
+     * is drawn (greyed or not): reference "Hail dialog keys (K5), wave 39"
+     * has 't' AND 'd' press Demand Tribute. It is never the `offer` ('r'
+     * does nothing at a stellar, K5), and never the Release a dominated
+     * stellar shows in its place (renderCommButtons).
      */
     private keyedButtons: {
         greetings?: Button, offer?: Button, bribe?: Button, tribute?: Button,
@@ -1026,9 +1089,9 @@ export class HailDialog {
             outfitter: () => this.keyedButtons.bribe?.activate(),
             // `t` and `d` both press Demand Tribute (K5 wave 39): the
             // 'tradeCenter' action (KeyT) and 'defend' (KeyD; its other
-            // binding, 'depart', has no handler here). Tribute is still a
-            // seam (#353), so the row is greyed and the keys do nothing
-            // until it is live.
+            // binding, 'depart', has no handler here). The button's action
+            // is pressTribute (#353), so a key does exactly what a click
+            // does, and nothing while the row is greyed.
             tradeCenter: () => this.keyedButtons.tribute?.activate(),
             defend: () => this.keyedButtons.tribute?.activate(),
         });
@@ -1100,6 +1163,25 @@ export class HailDialog {
             return;
         }
         this.apply({ kind: 'beg' });
+    }
+
+    /**
+     * THE DEMAND TRIBUTE / RELEASE BUTTON'S ACTION (#353), the one entry
+     * point for the button and for the keys that press it (reference "Hail
+     * dialog keys (K5), wave 39": 't' and 'd'). Asks the plugin, which
+     * dispatches the record and says what the stellar answered, and shows
+     * that answer (hailPress 'tribute'). Does nothing unless the open page
+     * draws a live tribute row; a key should go through
+     * `keyedButtons.tribute` (which honours a greyed row) or here.
+     */
+    pressTribute(): void {
+        const kind = this.context?.tribute?.kind;
+        if (this.phase !== 'main' || kind === undefined
+            || !this.callbacks.tribute) {
+            return;
+        }
+        this.beep();
+        this.apply({ kind: 'tribute', answer: this.callbacks.tribute(kind) });
     }
 
     /**
@@ -1471,11 +1553,18 @@ export class HailDialog {
                     onPress = () => this.pressBeg();
                     break;
                 case 'tribute':
-                    // A seam: planet tribute isn't modeled. Greyed rather
-                    // than omitted, so Close Channel stays on the
+                    // STR# 150 index 44. Live when the stellar takes a
+                    // demand (#353; `context.tribute`); greyed rather than
+                    // omitted otherwise, so Close Channel stays on the
                     // reference's third row.
                     label = 'Demand Tribute';
-                    onPress = undefined;
+                    onPress = context.tribute
+                        ? () => this.pressTribute() : undefined;
+                    break;
+                case 'release':
+                    // STR# 150 index 31: a dominated stellar's row.
+                    label = 'Release';
+                    onPress = () => this.pressTribute();
                     break;
                 default:
                     label = 'Close Channel';
@@ -1495,8 +1584,13 @@ export class HailDialog {
                 this.keyedButtons.greetings = button;
             } else if (slot === 'tribute') {
                 // `t` / `d`; not `r`, which does nothing at a port whose
-                // row reads Demand Tribute (K5 wave 39).
+                // row reads Demand Tribute (K5 wave 39). Release (#353),
+                // in the same row once the stellar is dominated, is NOT
+                // keyed: K5 measured the keys on Demand Tribute only, and
+                // a stray `d` must not give a stellar up (GUESS).
                 this.keyedButtons.tribute = button;
+            } else if (slot === 'release') {
+                // Click only (see above).
             } else if (slot === 'close') {
                 this.defaultPress = () => button.activate();
             } else {

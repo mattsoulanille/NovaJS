@@ -28,6 +28,7 @@ import {
     shipHailResponse, shipIsFighting, shipTakesBribes, stellarBribeOfferText,
     stellarBribeRefusedText, stellarChannelOpenText, STELLAR_RESPONSE_TABLE,
     STELLAR_STATUS_FORBIDDEN_INDEX, STELLAR_STATUS_HOSTILE_INDEX, planetDisposition,
+    STELLAR_STATUS_DOMINATED_INDEX, CombatRatingComponent,
     alliedEitherWay,
     shipDisposition, LegalRecordsComponent, loadLocalLaw, underFireRefusalText,
     MERCY_REFUSED_FALLBACK, assistNeed, disabledRefusalText, fuelSaleMoodText,
@@ -42,8 +43,12 @@ import {
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
     HailAction, hailTargetBelongsToAnotherPlayer, isSomeoneElsesEscort,
-    PlayerHailMessage,
+    PlayerHailMessage, tributeDemandOutcome, tributeReleasedText,
+    tributeResponseText,
 } from '../nova_plugin/encounters/index.js';
+import {
+    stellarHostileTo, stellarTakesDemands,
+} from '../nova_plugin/travel/index.js';
 import { afterSimulationFrames, SimulationTimeResource } from './simulation_time.js';
 import { isIffHostile } from '../nova_plugin/combat/index.js';
 import {
@@ -54,7 +59,7 @@ import { PersComponent } from '../nova_plugin/spawn/index.js';
 import {
     MissionShipComponent, PlayerShipSelector, CreditsComponent, MissionsComponent,
     ControlledByComponent, GameDateComponent,
-    escortDealOf, escortProvenance,
+    escortDealOf, escortProvenance, hasDominated,
 } from '../nova_plugin/player/index.js';
 import { targetIdentity } from './target_identity.js';
 import {
@@ -69,6 +74,7 @@ import { MenuControls } from '../spaceport/menu_controls.js';
 import {
     EscortManagement, EscortPressAction, escortReadout, HailContext,
     HailDialog, HOSTILE_STATUS_LINE, queuedDealKind,
+    STELLAR_STATUS_DOMINATED_WORD, TributePressAnswer,
 } from '../spaceport/hail_dialog.js';
 import {
     escortDailyFee, escortSellValue, escortUpgradeCost,
@@ -393,6 +399,12 @@ export interface AssistReplies {
      */
     planetBribe?: PlanetBribeLines;
     /**
+     * A stellar's Demand Tribute / Release row (#353): what the press
+     * answers from. Present on every channel to a stellar that takes a
+     * demand.
+     */
+    tribute?: TributeLines;
+    /**
      * A hostile ship's Beg For Mercy price (reference "R7 a provoked
      * freighter's Lower Price, wave 32"): what Lower Price needs to counter
      * or withdraw and the next plea to ask 1,000 more. Present only on a
@@ -433,6 +445,79 @@ export function mercyOffer(lines: MercyLines, haggle: MercyHaggleState,
         demand: payMeText(lines.miscStrings, amount),
         accepted: lines.accepted,
         withdrawn: lines.withdrawn,
+    };
+}
+
+/**
+ * What a stellar's Demand Tribute / Release press needs, resolved when the
+ * channel opens (the press handler is synchronous).
+ */
+export interface TributeLines {
+    /** The stellar's uuid (the record's target) and NOVA id. */
+    planetUuid: string;
+    planetId: string;
+    isStation: boolean;
+    /** Whether it has a defence fleet (PlanetData.defense). */
+    hasFleet: boolean;
+    /** STR# 3002, the stellar's lines. */
+    stellarStrings: readonly string[] | undefined;
+    /** The identity block's lines above its Status line. */
+    identity: readonly string[];
+    /** The landing clearance's own Status line, when it has one. */
+    clearanceStatus?: string;
+    /** STR# 2002 173 / 171: "Hostile" / "Dominated". */
+    hostileWord: string;
+    dominatedWord: string;
+}
+
+/**
+ * The identity block of a stellar's channel: its name and class caption,
+ * then ONE Status line: "Dominated" for a stellar the pilot has dominated
+ * (reference "Tribute (R18), wave 38": "Status: Dominated", green), else
+ * the landing clearance's own ("Hostile" / "Forbidden"), else "Hostile"
+ * while the stellar is against him over tribute (its laugh in this
+ * channel, or its fleet up against him: waves 38 / 39).
+ */
+export function tributeHeading(lines: TributeLines,
+    status: 'dominated' | 'hostile' | undefined): string {
+    const statusLine = status === 'dominated'
+        ? `Status: ${lines.dominatedWord}`
+        : lines.clearanceStatus
+            ?? (status === 'hostile' ? `Status: ${lines.hostileWord}`
+                : undefined);
+    return [...lines.identity, ...(statusLine ? [statusLine] : [])]
+        .join('\n');
+}
+
+/**
+ * The answer to a Demand Tribute / Release press (#353), from the same
+ * pure verdict the simulation applies (encounters/tribute.ts's
+ * tributeDemandOutcome over the pilot's synced combat rating), and the
+ * record to send, if any: a laugh changes nothing in the simulation and
+ * sends nothing. `seed` picks the laugh or fleet line.
+ *
+ * GUESS (display only): "has a fleet" is PlanetData.defense here; the
+ * simulation also needs the fleet's düde to name a ship class, which every
+ * stock düde does.
+ */
+export function tributePressAnswer(lines: TributeLines,
+    kind: 'demand' | 'release', rating: number, seed: number):
+    TributePressAnswer & { record?: 'demandTribute' | 'releaseTribute' } {
+    if (kind === 'release') {
+        return {
+            answer: tributeReleasedText(lines.stellarStrings, lines.isStation),
+            heading: tributeHeading(lines, undefined),
+            next: 'demand', record: 'releaseTribute',
+        };
+    }
+    const outcome = tributeDemandOutcome(rating, lines.hasFleet);
+    return {
+        answer: tributeResponseText(lines.stellarStrings, outcome,
+            lines.isStation, seed),
+        heading: tributeHeading(lines,
+            outcome === 'dominate' ? 'dominated' : 'hostile'),
+        next: outcome === 'dominate' ? 'release' : 'demand',
+        ...(outcome !== 'laugh' ? { record: 'demandTribute' as const } : {}),
     };
 }
 
@@ -1395,25 +1480,58 @@ export async function computeContext(world: World,
         const status = planetDisposition(clearance, isLandable);
         const identity = [name, planetData?.typeDescription ?? '']
             .filter(line => line !== '');
-        if (status !== 'neutral' && status !== 'unlandable') {
-            identity.push(`Status: ${miscString(miscStrings,
+        const clearanceStatus = status !== 'neutral' && status !== 'unlandable'
+            ? `Status: ${miscString(miscStrings,
                 status === 'hostile'
                     ? STELLAR_STATUS_HOSTILE_INDEX
                     : STELLAR_STATUS_FORBIDDEN_INDEX,
-                status === 'hostile' ? 'Hostile' : 'Forbidden')}`);
-        }
-        const heading = identity.join('\n');
+                status === 'hostile' ? 'Hostile' : 'Forbidden')}`
+            : undefined;
+        // DEMAND TRIBUTE (#353): every stellar that opens a channel takes a
+        // demand (Matthew's ruling: "Any planet that can be hailed and
+        // responds to hails ... can be dominated"). One the pilot
+        // dominates reads Release instead, and "Status: Dominated"; one
+        // whose defence fleet is up against him, "Status: Hostile".
+        const tributeLines: TributeLines | undefined =
+            planetData && planetId !== undefined
+                && stellarTakesDemands(planetData)
+                ? {
+                    planetUuid: planetTargetUuid, planetId, isStation,
+                    hasFleet: planetData.defense !== null,
+                    stellarStrings, identity,
+                    ...(clearanceStatus !== undefined
+                        ? { clearanceStatus } : {}),
+                    hostileWord: miscString(miscStrings,
+                        STELLAR_STATUS_HOSTILE_INDEX, 'Hostile'),
+                    dominatedWord: miscString(miscStrings,
+                        STELLAR_STATUS_DOMINATED_INDEX,
+                        STELLAR_STATUS_DOMINATED_WORD),
+                }
+                : undefined;
+        const dominated = planetId !== undefined
+            && hasDominated(player.entity, planetId);
+        const heading = tributeLines
+            ? tributeHeading(tributeLines, dominated ? 'dominated'
+                : stellarHostileTo(planetTarget, player.uuid)
+                    ? 'hostile' : undefined)
+            : [...identity, ...(clearanceStatus ? [clearanceStatus] : [])]
+                .join('\n');
 
         return {
             context: {
                 variant: 'planet', heading, image: null, stellarSprite,
                 body: `${opening}\n${answer}`, bribe,
                 ...(mercyRefused !== undefined ? { mercyRefused } : {}),
+                ...(tributeLines ? {
+                    tribute: { kind: dominated ? 'release' : 'demand' },
+                } : {}),
             },
             target: planetTargetUuid, isEscort: false,
-            replies: planetBribe
-                ? { ...ASSIST_REPLIES_FALLBACK, planetBribe }
-                : ASSIST_REPLIES_FALLBACK,
+            replies: planetBribe || tributeLines ? {
+                ...ASSIST_REPLIES_FALLBACK,
+                ...(planetBribe ? { planetBribe } : {}),
+                ...(tributeLines ? { tribute: tributeLines } : {}),
+            } : ASSIST_REPLIES_FALLBACK,
         };
     }
 
@@ -1664,6 +1782,28 @@ export const HailDialogPlugin: Plugin = {
                 if (record) {
                     world.emit(EscortActionEvent, { action: record });
                 }
+            },
+            // Demand Tribute / Release at a stellar (#353): the stellar's
+            // answer from the same pure verdict the simulation applies
+            // (tributePressAnswer), and the record, when there is one to
+            // send. A laugh sends nothing.
+            tribute: (kind: 'demand' | 'release') => {
+                const lines = currentReplies.tribute;
+                if (!lines) {
+                    return { answer: '', heading: '', next: kind };
+                }
+                const rating = getPlayerShip(world)?.entity.components
+                    .get(CombatRatingComponent)?.kills ?? 0;
+                const seed = hashString(`${lines.planetUuid}:${world.resources
+                    .get(SimulationTimeResource)?.time ?? 0}`);
+                const { record, ...answer } = tributePressAnswer(lines, kind,
+                    rating, seed);
+                if (record) {
+                    world.emit(HailRequestEvent, {
+                        action: { kind: record, target: lines.planetUuid },
+                    });
+                }
+                return answer;
             },
             // Local client UI beep through the shared display audio path
             // (SoundEvent → SoundSystem); no simulation involvement.
