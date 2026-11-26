@@ -68,7 +68,7 @@ import {
 import { MenuControls } from '../spaceport/menu_controls.js';
 import {
     EscortManagement, EscortPressAction, escortReadout, HailContext,
-    HailDialog, queuedDealKind,
+    HailDialog, HOSTILE_STATUS_LINE, queuedDealKind,
 } from '../spaceport/hail_dialog.js';
 import {
     escortDailyFee, escortSellValue, escortUpgradeCost,
@@ -134,6 +134,9 @@ export const HailDialogResource = new Resource<HailDialog>('HailDialog');
  * player's ship (#332). NovaJS's own wording: the original is single-player.
  */
 export const PLAYER_HAIL_SENT_TEXT = 'Message sent.';
+/** How many two-frame waits a paid mercy price's channel refresh makes for
+ * the simulation to show the ship bought off (about 10 frames). */
+const BOUGHT_OFF_REFRESH_TRIES = 5;
 const HailControlsSubscription =
     new Resource<Subscription>('HailControlsSubscription');
 
@@ -701,7 +704,7 @@ export function shipIdentityBlock({ persName, shipClass, govtName, hostile }: {
         lines.push(`(${govtName})`);
     }
     if (hostile) {
-        lines.push('Status: Hostile');
+        lines.push(HOSTILE_STATUS_LINE);
     }
     return lines.join('\n');
 }
@@ -1516,6 +1519,17 @@ export const HailDialogPlugin: Plugin = {
                 if (currentBribePurpose === 'landing' && paidPlanet) {
                     localStellarHaggle.delete(paidPlanet.planetId);
                 }
+                // A paid MERCY price makes the ship non-hostile in the open
+                // channel at once (reference "A paid ship bribe (A8), wave
+                // 37": the Status line gone, Request Assistance in Beg For
+                // Mercy's slot). The page itself already shows it
+                // (hail_dialog's boughtOffContext); once the payment has
+                // reached the simulation, the channel is re-derived from it.
+                if (currentBribePurpose === 'mercy'
+                    && currentReplies.mercy !== undefined) {
+                    void refreshBoughtOffChannel(currentTarget,
+                        currentChannel);
+                }
                 world.emit(HailRequestEvent, {
                     action: currentBribePurpose === 'assist'
                         || currentBribePurpose === 'fuel'
@@ -1754,6 +1768,41 @@ export const HailDialogPlugin: Plugin = {
                 await dialog.show(computed.context);
             } finally {
                 opening = false;
+            }
+        };
+
+        /**
+         * Re-derives an open ship channel after its mercy price was paid,
+         * once the simulation shows the ship bought off (applyHail's
+         * pacifiedFrom, mirrored back; the IFF the identity block reads
+         * then says neutral). Up to BOUGHT_OFF_REFRESH_TRIES waits of two
+         * simulation frames; if the channel was closed or retargeted, or
+         * the payment was refused, the page stays as the press left it.
+         */
+        const refreshBoughtOffChannel = async (target: string | undefined,
+            channel: number): Promise<void> => {
+            for (let i = 0; i < BOUGHT_OFF_REFRESH_TRIES; i++) {
+                await afterSimulationFrames(world);
+                if (!dialog.container.visible || currentTarget !== target
+                    || currentChannel !== channel) {
+                    return;
+                }
+                const computed = await computeContext(world, simulationData,
+                    displayAssets, localStellarHaggle, channel);
+                if (!computed || computed.target !== target
+                    || !dialog.container.visible
+                    || currentTarget !== target
+                    || currentChannel !== channel) {
+                    return;
+                }
+                if (computed.context.bribe?.purpose === 'mercy'
+                    || computed.context.mercyRefused !== undefined) {
+                    continue; // Still hostile here: not mirrored yet.
+                }
+                currentReplies = computed.replies;
+                currentBribePurpose = computed.context.bribe?.purpose;
+                dialog.replaceContext(computed.context);
+                return;
             }
         };
 

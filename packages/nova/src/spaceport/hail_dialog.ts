@@ -658,6 +658,33 @@ export interface LowerPriceAnswer {
     next?: HailContext['bribe'];
 }
 
+/** The identity block's hostility line (hail_dialog_plugin's
+ * shipIdentityBlock, hail/hail_hostile.png). */
+export const HOSTILE_STATUS_LINE = 'Status: Hostile';
+
+/**
+ * The ship comm right after its Beg For Mercy price is PAID: reference "A
+ * paid ship bribe (A8), wave 37" — "Thank you very much." in the well, the
+ * identity block loses its "Status: Hostile" line and Beg For Mercy becomes
+ * Request Assistance, in the open channel, at once. So: the ship's answer
+ * in the well, the Status line dropped, the mercy offer (and any refusal)
+ * gone, and the offer slot Request Assistance. The plugin then re-derives
+ * the whole channel from the simulation once the bribe has reached it
+ * (HailDialog.replaceContext), which brings the ship's own assistance
+ * answers; until then a press is answered from the live state as always.
+ */
+export function boughtOffContext(context: HailContext,
+    accepted: string): HailContext {
+    const { bribe: _bribe, mercyRefused: _refused, ...rest } = context;
+    return {
+        ...rest,
+        heading: context.heading.split('\n')
+            .filter(line => line !== HOSTILE_STATUS_LINE).join('\n'),
+        body: accepted,
+        assist: context.assist ?? { free: false },
+    };
+}
+
 /** Which page of the comm dialog is showing, and with what contents. */
 export interface HailPage {
     phase: 'main' | 'haggle';
@@ -862,9 +889,13 @@ export function hailPress(state: HailPage, press: HailPress,
             }
             // A SHIP takes the money and says so ("Okay, I'll leave you
             // alone." — STR# 3000 135-139): back to the main page with its
-            // answer, Beg For Mercy still in its slot. A second press costs
-            // nothing — applyHail refuses to charge for a reprieve it has
-            // already granted this player.
+            // answer. A bought-off MERCY price makes the ship non-hostile
+            // there and then (boughtOffContext); a price for help or fuel
+            // leaves the column as it was.
+            if (context.bribe?.purpose === 'mercy') {
+                return { phase: 'main',
+                    context: boughtOffContext(context, accepted) };
+            }
             return { phase: 'main', context: { ...context, body: accepted } };
         }
         // THE TWO DEAL ROWS TOGGLE AND THE CHANNEL STAYS OPEN. That is the
@@ -981,6 +1012,22 @@ export class HailDialog {
             // focused dialog keeps the press out of the simulation anyway.
             outfitter: () => this.keyedButtons.bribe?.activate(),
         });
+    }
+
+    /**
+     * Re-derives the OPEN channel in place — the simulation has moved under
+     * it (a paid bribe has made the ship non-hostile) — keeping what the
+     * well says now. Only on the main page of a visible dialog; Greetings
+     * restores from the new context from now on.
+     */
+    replaceContext(context: HailContext) {
+        if (!this.container.visible || this.phase !== 'main'
+            || !this.context) {
+            return;
+        }
+        this.opening = context;
+        this.context = { ...context, body: this.context.body };
+        void this.render();
     }
 
     /** Shows the dialog for a computed context; resolves when dismissed. */

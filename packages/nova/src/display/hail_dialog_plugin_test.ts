@@ -41,7 +41,7 @@ import {
     fuelSaleMoodText, hashString,
 } from '../nova_plugin/reputation/index.js';
 import {
-    CANNOT_UPGRADE_TEXT, escortReadout, HailContext, HailPage, HailPress, haggleText,
+    boughtOffContext, CANNOT_UPGRADE_TEXT, escortReadout, HailContext, HailPage, HailPress, haggleText,
     hailPress, playerChannelMessage, SALE_QUEUED_TEXT, UPGRADE_QUEUED_TEXT,
 } from '../spaceport/hail_dialog.js';
 import {
@@ -1267,8 +1267,10 @@ describe('the comm dialog\'s button column survives its own presses', () => {
             expect(after.context.body).toBe('Greetings.');
         });
 
-    it('KEEPS Beg For Mercy after the bribe is paid, and reports the deal '
-        + 'instead of slamming the channel shut', () => {
+    it('a paid MERCY price turns the open channel non-hostile at once: the '
+        + 'Status line gone, Request Assistance in Beg For Mercy\'s slot, '
+        + 'the deal reported, the channel still open (reference "A paid '
+        + 'ship bribe (A8), wave 37")', () => {
             const haggling = pressAll(open(HOSTILE), [{ kind: 'beg' }],
                 HOSTILE);
             expect(haggling.phase).toBe('haggle');
@@ -1276,9 +1278,31 @@ describe('the comm dialog\'s button column survives its own presses', () => {
             const paid = pressAll(haggling, [{ kind: 'pay' }], HOSTILE);
             expect(paid.phase).toBe('main');
             expect(paid.context.body).toBe("Okay, I'll leave you alone.");
-            expect(paid.context.bribe?.amount).toBe(3000);
-            expect(slots(paid)).toEqual(['greetings', 'beg', 'close']);
+            expect(paid.context.heading).toBe('Class: Fed Destroyer');
+            expect(paid.context.bribe).toBeUndefined();
+            expect(paid.context.mercyRefused).toBeUndefined();
+            expect(slots(paid)).toEqual(['greetings', 'assist', 'close']);
+            expect(boughtOffContext(HOSTILE, 'Thank you very much.'))
+                .toEqual({
+                    variant: 'ship', heading: 'Class: Fed Destroyer',
+                    image: null, body: 'Thank you very much.',
+                    assist: { free: false },
+                });
         });
+
+    it('keeps the column after a price for HELP is paid', () => {
+        const ASSIST_PRICE: HailContext = {
+            variant: 'ship', heading: 'Class: Fed Destroyer', image: null,
+            body: 'Channel open.', assist: { free: false },
+            bribe: { amount: 2000, canAfford: true, purpose: 'assist',
+                accepted: "Okay, I'm on my way." },
+        };
+        const paid = hailPress({ phase: 'haggle', context: ASSIST_PRICE },
+            { kind: 'pay' }, ASSIST_PRICE) as HailPage;
+        expect(paid.context.body).toBe("Okay, I'm on my way.");
+        expect(paid.context.bribe?.amount).toBe(2000);
+        expect(slots(paid)).toEqual(['greetings', 'assist', 'close']);
+    });
 
     it('Lower Price on a MERCY price withdraws it with the ship\'s line, '
         + 'Beg For Mercy stays, and the next plea asks 1,000 more '
