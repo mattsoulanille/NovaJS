@@ -868,6 +868,24 @@ export const STATE_HASH_INTERVAL = 60;
 //    derived wire schema fingerprint changes (2b73837b144ad4ac ->
 //    c2400d1f6cb2ce64), and the join gate keeps older and newer builds
 //    apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-39 jump clock (reference "Jump phases
+//    on a slow hull (U8), wave 39"). JumpState (travel/jump_state.ts)
+//    gains an OPTIONAL `departAt` (the fixed clock's departure time, set
+//    on a player's or a follower's jump, cleared at departure). No input
+//    kind or message kind changes. Sim-rule changes alongside: a player's
+//    or follower's jump departs 4.8 s after the ship is at rest whatever
+//    its turn rate (a moving ship first brakes, from its top speed in
+//    0.9 s), burning from 3.4 s before the departure or, for a hull
+//    still turning, from 0.5 s before it; NPC departures unchanged. Also
+//    in wave 39, without schema changes: ionization stops the turn and
+//    cuts acceleration to a third at a full charge (top speed kept), the
+//    afterburner is 1.5 x with a coast-down at half the acceleration, a
+//    zero gövt penalty field charges nothing, a pirate takes 17-35 steps
+//    of 0.3% of the cash, and the Auto-recharger refuels on landing
+//    instead of in flight. The derived wire schema fingerprint changes
+//    (c2400d1f6cb2ce64 -> cf33a842962aab5c), and the join gate keeps
+//    older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 
