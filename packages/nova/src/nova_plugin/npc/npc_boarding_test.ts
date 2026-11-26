@@ -407,16 +407,28 @@ describe('pirates plundering a disabled player', () => {
             controlled: true, governed: false, xenophobicPirate: true,
             credits: 20_000, ...extra,
         });
-    /** What a 20,000 purse can lose: 25-28 steps of 0.3%. */
-    const TAKES_OF_20K = [1_500, 1_560, 1_620, 1_680];
+    /** What a 20,000 purse can lose: 17-35 steps of 0.3% (60 a step). */
+    const TAKES_OF_20K = Array.from({ length: 19 }, (_, i) => (17 + i) * 60);
 
-    it('takes 25-28 steps of 0.3% of the purse: 3,750-4,200 of 50,000, '
-        + 'the five readings', () => {
-            const takes = [0, 0.2499, 0.25, 0.5, 0.75, 0.9999]
+    it('takes 17-35 steps of 0.3% of the purse (reference "Pirate plunder '
+        + 'share (A9), wave 39")', () => {
+            // Rolls at the edges and the middle of the 19-step span.
+            const takes = [0, 1 / 19 - 1e-9, 1 / 19, 0.5, 0.9999]
                 .map(roll => npcPlunderCredits(50_000, roll));
-            expect(takes).toEqual([3_750, 3_750, 3_900, 4_050, 4_200, 4_200]);
-            expect(TAKES_OF_20K).toEqual([0, 0.25, 0.5, 0.75]
-                .map(roll => npcPlunderCredits(20_000, roll)));
+            expect(takes).toEqual([2_550, 2_550, 2_700, 3_900, 5_250]);
+            // Every one of the eighteen measured takes is reachable: n
+            // steps of 0.3% of its purse.
+            for (const [purse, taken] of [[10_000, 1_020], [10_000, 570],
+                [50_000, 3_750], [50_000, 4_200], [100_000, 10_500],
+                [200_000, 10_200], [1_000_000, 63_000],
+                [1_000_000, 105_000], [5_000_000, 345_000]]) {
+                const n = Math.round(taken / (purse * 0.003));
+                expect(npcPlunderCredits(purse, (n - 17 + 0.5) / 19))
+                    .toBe(taken);
+            }
+            expect(TAKES_OF_20K).toEqual(
+                Array.from({ length: 19 }, (_, i) => (i + 0.5) / 19)
+                    .map(roll => npcPlunderCredits(20_000, roll)));
         });
 
     it('never takes more than the player has', () => {

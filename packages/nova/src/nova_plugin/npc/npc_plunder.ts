@@ -90,18 +90,18 @@ export const NPC_PLUNDER_TAKES_FROM_PLAYERS = true;
  * The credit share, in steps of NPC_PLUNDER_CREDIT_STEP of the purse: a
  * uniform integer draw in [MIN_STEPS, MAX_STEPS].
  *
- * Every reading is a whole number of 0.3% steps of the purse: of 50,000,
- * 3,750 / 3,900 / 4,050 (twice) / 4,200 — 25 to 28 steps of 150, five
- * draws all on the step, which rounding to tens would almost never give —
- * and 570 of 10,000 (19 steps), 105,000 of 1,000,000 (35 steps). GUESS on
- * the shape: the draw spans the five 50,000 readings, 25-28 steps (7.5% to
- * 8.4%); the two single readings of other purses (5.7%, 10.5%) say the
- * share may grow with the purse, which wants more purses to pin (the
- * "Wave 38 leftovers" row).
+ * MEASURED (reference "Pirate plunder share (A9), wave 39", with wave 38's
+ * five draws): every take is a whole number of 0.3% steps of the purse,
+ * eighteen of eighteen at purses from 10,000 to 5,000,000, and the number
+ * of steps ran 17 to 35 (sorted: 17, 19, 21, 22, 22, 23, 25, 25, 26, 27,
+ * 27, 27, 28, 30, 33, 34, 35, 35) with no dependence on the purse (17 at
+ * 200,000, 34 at 10,000, 35 at 1,000,000). GUESS on the shape: uniform on
+ * 17-35 (the edges from eighteen draws; 15-35 or 17-36 is not ruled out).
+ * Wave 38's five 50,000 readings, all in 25-28, were a narrow sample.
  */
 export const NPC_PLUNDER_CREDIT_STEP = 0.003;
-export const NPC_PLUNDER_CREDIT_MIN_STEPS = 25;
-export const NPC_PLUNDER_CREDIT_MAX_STEPS = 28;
+export const NPC_PLUNDER_CREDIT_MIN_STEPS = 17;
+export const NPC_PLUNDER_CREDIT_MAX_STEPS = 35;
 
 /**
  * The credits pirates take off a disabled player with `playerCredits`,
@@ -116,7 +116,7 @@ export function npcPlunderCredits(playerCredits: number,
     const steps = NPC_PLUNDER_CREDIT_MIN_STEPS
         + Math.min(span - 1, Math.floor(roll * span));
     // Integer arithmetic: steps x 3 / 1000 of the purse, so a 50,000 purse
-    // gives exactly 3,750 / 3,900 / 4,050 / 4,200 on every peer.
+    // gives exactly 150 x steps (2,550 .. 5,250) on every peer.
     return Math.min(purse, Math.floor(purse * steps * 3 / 1000));
 }
 
