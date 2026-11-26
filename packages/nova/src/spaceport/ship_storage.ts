@@ -20,7 +20,7 @@ import {
 } from '../nova_plugin/ship/index.js';
 import { makeNpcShip } from '../nova_plugin/spawn/index.js';
 import {
-    buildShipEntity, cargoForNewShip, deployedUnitCount, isPersistent,
+    buildShipEntity, deployedUnitCount, isPersistent,
     newShipCargoCapacity, outfitsForNewShip, partitionOutfits,
     ShipPurchaseContext, ShipyardCheck, shipListPrice,
 } from './shipyard_rules.js';
@@ -54,9 +54,9 @@ import {
  *
  * THE HOLD: each hull has its own, and a swap destroys nothing. The pilot's
  * hold and the incoming hull's are pooled; the incoming hull takes every ton
- * of mission cargo and the commodities by cargoForNewShip's rule (each
- * scaled by the same fraction of the room and floored, when they do not
- * all fit); the rest stays aboard the hull being put away.
+ * of mission cargo and as many commodities as it has room for, the
+ * highest key given up first (fillHold; not the trade-in's proportional
+ * cut); the rest stays aboard the hull being put away.
  * That is usually at most what the hull held already, but not always: mission
  * cargo the incoming hull must take can push commodities out past what the
  * outgoing hull can hold (a 10 t hull carrying 20 t of mission cargo swapped
@@ -211,6 +211,35 @@ export function incomingOutfits(record: StoredShip,
 }
 
 /**
+ * What of `pooled` goes aboard a `capacity` hold on a swap: every ton of
+ * mission cargo, then commodities until the hold is full, the highest key
+ * given up first (so the result does not depend on Map order). Not the
+ * trade-in's proportional cut (shipyard_rules' cargoForNewShip, R11): on
+ * a swap nothing is destroyed, so the incoming hull is filled to the
+ * brim and the rest stays on the hull put away.
+ */
+function fillHold(pooled: Cargo, capacity: number): Cargo {
+    const result = new Map(pooled);
+    const droppable = [...result.keys()]
+        .filter(key => !key.startsWith('mission:'))
+        .sort()
+        .reverse();
+    for (const key of droppable) {
+        const over = cargoUsed(result) - capacity;
+        if (over <= 0) {
+            break;
+        }
+        const held = result.get(key) ?? 0;
+        if (held <= over) {
+            result.delete(key);
+        } else {
+            result.set(key, held - over);
+        }
+    }
+    return result;
+}
+
+/**
  * THE HOLD EXCHANGE of a swap (see the module comment): what the incoming
  * hull carries away, and what stays aboard the hull being put away.
  */
@@ -220,7 +249,7 @@ export function exchangeHolds(pilot: Cargo, incoming: Iterable<[string, number]>
     for (const [key, tons] of incoming) {
         pooled.set(key, (pooled.get(key) ?? 0) + tons);
     }
-    const aboard = cargoForNewShip(pooled, capacity);
+    const aboard = fillHold(pooled, capacity);
     const leftBehind: Cargo = new Map();
     for (const [key, tons] of pooled) {
         const left = tons - (aboard.get(key) ?? 0);

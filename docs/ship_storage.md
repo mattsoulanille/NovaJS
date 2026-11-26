@@ -53,10 +53,10 @@ check would destroy plot items.
 **Cargo: each hull has its own hold, and nothing is destroyed.** On a swap the
 pilot's hold and the incoming hull's hold are pooled. The incoming hold takes
 all mission cargo (it never leaves the pilot, even over capacity, as in a
-trade-in) and the commodities by `cargoForNewShip`'s rule: when they do not
-all fit, each is scaled by the same fraction of the room left and floored (the
-original's trade-in rule, reference_experiments R11 wave 40). Whatever does not
-go aboard stays on the hull being put away. So swapping into a smaller ship
+trade-in) and as many commodities as fit. Commodities are dropped in
+descending key order (not the trade-in's proportional cut, `cargoForNewShip`:
+a swap destroys nothing, so the incoming hold is filled to the brim). Whatever
+does not fit stays aboard the hull being put away. So swapping into a smaller ship
 leaves the overflow in the bigger one instead of jettisoning it.
 
 Usually that overflow is at most what the outgoing hull was already carrying,
