@@ -851,6 +851,23 @@ export const STATE_HASH_INTERVAL = 60;
 //    departing one back. The derived wire schema fingerprint changes
 //    (3c78611777d52ae3 -> 2b73837b144ad4ac), and the join gate keeps older
 //    and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-38 pirate plunder and Repair Droids
+//    (reference "Pirates and a disabled player (A9), wave 38" and "Wave-37
+//    leftovers, wave 38" A10). NpcState (npc/npc_component.ts) gains an
+//    OPTIONAL `boardUntil` (a plunder boarder's dock, set only while it
+//    sits on its prize); PlayerPlunderedEvent's payload gains `tons`; one
+//    new serializer-registered event, ShipRepairedEvent
+//    (encounters/disabled_plugin.ts, display only). No input kind or
+//    message kind changes. Sim-rule changes alongside: a plunder boarder
+//    docks 5 s before its take; from a disabled player it takes cargo
+//    into its free hold, dearest first, and 25-28 steps of 0.3% of the
+//    cash (one RandomResource draw, was half the cash with no draw), then
+//    lets him go (pacifiedFrom and the ordinary jump-out, npc/let_go.ts);
+//    a self-repair restores armor to the threshold + 1% (was + 10%). The
+//    derived wire schema fingerprint changes (2b73837b144ad4ac ->
+//    c2400d1f6cb2ce64), and the join gate keeps older and newer builds
+//    apart.
 
 export const PROTOCOL_VERSION = 8;
 
