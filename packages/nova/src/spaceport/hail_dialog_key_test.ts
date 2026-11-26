@@ -122,6 +122,18 @@ describe('the hail dialog\'s letter keys (g greets, r assists / begs, ' +
         await settle();
     }
 
+    /** Return, through the relay's raw-key path. */
+    async function pressReturn() {
+        expect(MenuControls.pressDefaultButton({ key: 'Enter' })).toBeTrue();
+        await settle();
+    }
+
+    /** Escape, through the relay's raw-key path. */
+    async function pressEscape() {
+        expect(MenuControls.pressCancelButton({ key: 'Escape' })).toBeTrue();
+        await settle();
+    }
+
     function buttonBeeps() {
         return callbacks.playSound.calls.allArgs()
             .filter(([id]) => id === HAIL_SND_BUTTON).length;
@@ -220,7 +232,7 @@ describe('the hail dialog\'s letter keys (g greets, r assists / begs, ' +
             const before = drawnText(dialog);
             await press('outfitter');
             expect(drawnText(dialog)).toEqual(before);
-            await press('depart');
+            await pressReturn();
         }
         expect(buttonBeeps()).toBe(0);
         expect(callbacks.requestAssistance).not.toHaveBeenCalled();
@@ -258,13 +270,142 @@ describe('the hail dialog\'s letter keys (g greets, r assists / begs, ' +
                 await press('recharge');
                 expect(below.controls.gamble).not.toHaveBeenCalled();
                 expect(below.controls.recharge).not.toHaveBeenCalled();
-                await press('depart');
+                await pressEscape();
                 expect(dialog.container.visible).toBeFalse();
                 expect(MenuControls.focused).toBe(below);
             } finally {
                 below.unbind();
             }
         });
+});
+
+/**
+ * Reference "Hail dialog keys and Flags2 0x0001 (K5), wave 39": `t` AND `d`
+ * press Demand Tribute, Return closes the channel (and ACCEPTS a price
+ * popup), `a`, `b`, `c`, `y` and Space do nothing. Escape (untested on the
+ * original) still backs out.
+ */
+describe('the hail dialog\'s other keys (K5, wave 39)', () => {
+    let controls: Subject<ControlEvent>;
+    let callbacks: jasmine.SpyObj<HailCallbacks>;
+    let dialog: HailDialog;
+
+    beforeAll(() => installHeadlessPixi());
+
+    beforeEach(() => {
+        controls = new Subject<ControlEvent>();
+        callbacks = jasmine.createSpyObj<HailCallbacks>('callbacks', [
+            'requestAssistance', 'bribe', 'messagePlayer', 'escortAction',
+            'playSound', 'lowerPrice',
+        ]);
+        dialog = new HailDialog(DISPLAY_ASSETS, controls, callbacks);
+    });
+
+    afterEach(() => dialog.dismiss());
+
+    async function open(context: HailContext) {
+        void dialog.show(context);
+        await settle();
+        expect(dialog.container.visible).toBeTrue();
+    }
+
+    /** Every action a physical key is bound to, as the relay emits them. */
+    async function key(...actions: ControlAction[]) {
+        for (const action of actions) {
+            controls.next({ action, state: 'start' });
+        }
+        await settle();
+    }
+
+    /** The port's Demand Tribute made live, as #353 will draw it. */
+    function liveTribute() {
+        const tribute = dialog['keyedButtons'].tribute;
+        expect(tribute).toBeDefined();
+        tribute!.state = 'normal';
+        const pressed = jasmine.createSpy('Demand Tribute');
+        tribute!.click.subscribe(pressed);
+        return pressed;
+    }
+
+    it('t (KeyT) and d (KeyD: \'defend\' and \'depart\') press Demand '
+        + 'Tribute, and d does not close the channel', async () => {
+            await open(PORT_TRIBUTE);
+            const pressed = liveTribute();
+            await key('tradeCenter');
+            expect(pressed).toHaveBeenCalledTimes(1);
+            await key('defend', 'depart');
+            expect(pressed).toHaveBeenCalledTimes(2);
+            await key('depart', 'defend');
+            expect(pressed).toHaveBeenCalledTimes(3);
+            expect(dialog.container.visible).toBeTrue();
+        });
+
+    it('t and d do nothing while Demand Tribute is greyed (tribute is a '
+        + 'seam), and r never presses it', async () => {
+            await open(PORT_TRIBUTE);
+            const before = drawnText(dialog);
+            await key('tradeCenter');
+            await key('defend', 'depart');
+            expect(drawnText(dialog)).toEqual(before);
+            expect(dialog.container.visible).toBeTrue();
+            const pressed = liveTribute();
+            await key('recharge');
+            expect(pressed).not.toHaveBeenCalled();
+        });
+
+    it('y, a, b, c and Space do nothing', async () => {
+        for (const context of [SHIP, HOSTILE, PORT_BRIBE, PORT_TRIBUTE]) {
+            await open(context);
+            const before = drawnText(dialog);
+            await key('hail');
+            await key('pointTo', 'accept');
+            await key('board', 'bar', 'buy');
+            await key('formation');
+            await key('firePrimary');
+            expect(dialog.container.visible).toBeTrue();
+            expect(drawnText(dialog)).toEqual(before);
+            dialog['close']();
+            await settle();
+        }
+        expect(callbacks.bribe).not.toHaveBeenCalled();
+        expect(callbacks.requestAssistance).not.toHaveBeenCalled();
+    });
+
+    it('Return closes the channel', async () => {
+        for (const context of [SHIP, HOSTILE, PORT_TRIBUTE]) {
+            await open(context);
+            expect(MenuControls.pressDefaultButton({ key: 'Enter' }))
+                .toBeTrue();
+            await settle();
+            expect(dialog.container.visible).toBeFalse();
+        }
+    });
+
+    it('Return on a price popup ACCEPTS the price', async () => {
+        await open(HOSTILE);
+        await key('recharge');
+        expect(drawnText(dialog)).toContain('Accept Price');
+        expect(MenuControls.pressDefaultButton({ key: 'Enter' })).toBeTrue();
+        await settle();
+        expect(callbacks.bribe).toHaveBeenCalledTimes(1);
+    });
+
+    it('Return on a port\'s bribe popup accepts it too', async () => {
+        await open(PORT_BRIBE);
+        await key('outfitter');
+        expect(MenuControls.pressDefaultButton({ key: 'Enter' })).toBeTrue();
+        await settle();
+        expect(callbacks.bribe).toHaveBeenCalledTimes(1);
+    });
+
+    it('Escape still backs out (a NovaJS convenience)', async () => {
+        await open(SHIP);
+        expect(MenuControls.pressCancelButton({ key: 'Escape' })).toBeTrue();
+        await settle();
+        expect(dialog.container.visible).toBeFalse();
+        // With no surface claiming it, Escape is left to 'depart'.
+        expect(MenuControls.pressCancelButton({ key: 'Escape' })).toBeFalse();
+    });
 });
 
 describe('Button.activate (a keyboard press of a button)', () => {

@@ -52,6 +52,18 @@ export class MenuControls {
      */
     defaultButton?: () => void;
 
+    /**
+     * What Escape does on this surface, when it must be told apart from
+     * the other keys bound to 'depart'. A surface that sets it takes
+     * Escape off the 'depart' action: the relay hands the raw key to
+     * {@link pressCancelButton} first. The hail dialog needs it because
+     * its `d` presses Demand Tribute while Escape still backs out
+     * (reference "Hail dialog keys and Flags2 0x0001 (K5), wave 39"), and
+     * both keys are 'depart' in settings/controls.json. A surface without
+     * one keeps Escape as 'depart'.
+     */
+    cancelButton?: () => void;
+
     private controlsSubscription: Subscription | undefined;
     /** Set by {@link release}: this surface is dead and must never take
      * the keyboard again. */
@@ -76,6 +88,26 @@ export class MenuControls {
             return false;
         }
         const press = MenuControls.focused?.defaultButton;
+        if (!press) {
+            return false;
+        }
+        press();
+        return true;
+    }
+
+    /**
+     * Escape on the landed UI: presses the focused surface's
+     * {@link cancelButton} when it has one. Never a key repeat, never
+     * while a text field owns the keyboard. Returns whether it was
+     * pressed, so the relay can consume the key; otherwise Escape goes on
+     * as the 'depart' action.
+     */
+    static pressCancelButton(event: { key: string, repeat?: boolean }):
+        boolean {
+        if (event.key !== 'Escape' || event.repeat || isTextEntryActive()) {
+            return false;
+        }
+        const press = MenuControls.focused?.cancelButton;
         if (!press) {
             return false;
         }

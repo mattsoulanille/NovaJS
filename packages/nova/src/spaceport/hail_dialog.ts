@@ -974,8 +974,16 @@ export class HailDialog {
      * Bribe: 'o' presses it then and does nothing otherwise.
      */
     private keyedButtons: {
-        greetings?: Button, offer?: Button, bribe?: Button,
+        greetings?: Button, offer?: Button, bribe?: Button, tribute?: Button,
     } = {};
+    /**
+     * What Return presses on the page as drawn (MenuControls.defaultButton):
+     * Close Channel on the comm and the escort box, Accept Price (or
+     * NovaJS's own Pay) on a price popup, else its Never Mind. Reference
+     * "Hail dialog keys and Flags2 0x0001 (K5), wave 39": Return closes
+     * the channel, and with the price popup up it ACCEPTS the price.
+     */
+    private defaultPress?: () => void;
 
     constructor(private displayAssets: DisplayAssetDataInterface,
         private controlEvents: Observable<ControlEvent>,
@@ -992,10 +1000,15 @@ export class HailDialog {
         this.container.addChild(shield);
         this.container.addChild(this.content);
 
+        // THE KEYS, as the original's comm dialog takes them (reference
+        // "Hail dialog keys and Flags2 0x0001 (K5), wave 39"): g, r, o, t
+        // and d below, Return (defaultPress) closes the channel or accepts
+        // a price; `y`, `a`, `b`, `c` and Space do nothing, so 'hail' (y)
+        // and 'depart' (d, and Escape) have no handler here. Escape still
+        // backs out, a NovaJS convenience (untested on the original), as
+        // the cancel button (MenuControls.cancelButton) so that `d` can
+        // demand tribute instead.
         this.controls = new MenuControls(controlEvents, {
-            // 'y' toggles the dialog closed again; 'd'/Escape backs out.
-            hail: () => this.closed.next(),
-            depart: () => this.close(),
             // The comm column's letter keys (Matthew's ruling): 'g' (the
             // 'gamble' action, KeyG) presses Greetings and 'r' ('recharge',
             // KeyR) presses the offer slot — Request Assistance, or Beg
@@ -1011,7 +1024,16 @@ export class HailDialog {
             // nothing. 'outfitter' has no in-flight handler, and the
             // focused dialog keeps the press out of the simulation anyway.
             outfitter: () => this.keyedButtons.bribe?.activate(),
+            // `t` and `d` both press Demand Tribute (K5 wave 39): the
+            // 'tradeCenter' action (KeyT) and 'defend' (KeyD; its other
+            // binding, 'depart', has no handler here). Tribute is still a
+            // seam (#353), so the row is greyed and the keys do nothing
+            // until it is live.
+            tradeCenter: () => this.keyedButtons.tribute?.activate(),
+            defend: () => this.keyedButtons.tribute?.activate(),
         });
+        this.controls.defaultButton = () => this.defaultPress?.();
+        this.controls.cancelButton = () => this.close();
     }
 
     /**
@@ -1184,6 +1206,7 @@ export class HailDialog {
     private async render() {
         this.content.removeChildren().forEach(child => child.destroy());
         this.keyedButtons = {};
+        this.defaultPress = undefined;
         const context = this.context;
         if (!context) {
             return;
@@ -1470,7 +1493,13 @@ export class HailDialog {
                 // Under the popup: the letter keys belong to nothing.
             } else if (slot === 'greetings') {
                 this.keyedButtons.greetings = button;
-            } else if (slot !== 'close') {
+            } else if (slot === 'tribute') {
+                // `t` / `d`; not `r`, which does nothing at a port whose
+                // row reads Demand Tribute (K5 wave 39).
+                this.keyedButtons.tribute = button;
+            } else if (slot === 'close') {
+                this.defaultPress = () => button.activate();
+            } else {
                 this.keyedButtons.offer = button;
                 if (slot === 'bribe') {
                     this.keyedButtons.bribe = button;
@@ -1530,6 +1559,9 @@ export class HailDialog {
                 button.click.subscribe(onPress);
             } else {
                 button.state = 'grey';
+            }
+            if (slot === 'close') {
+                this.defaultPress = () => button.activate();
             }
             this.content.addChild(button.container);
         });
@@ -1624,6 +1656,7 @@ export class HailDialog {
                 this.apply({ kind: 'pay' });
             });
             this.content.addChild(accept.container);
+            this.defaultPress = () => accept.activate();
             return;
         }
 
@@ -1643,6 +1676,7 @@ export class HailDialog {
                 this.apply({ kind: 'pay' });
             });
             this.content.addChild(pay.container);
+            this.defaultPress = () => pay.activate();
         }
         const cancel =
             this.placeButton('Never Mind', frame, originX, originY, 1);
@@ -1651,5 +1685,6 @@ export class HailDialog {
             this.apply({ kind: 'cancel' });
         });
         this.content.addChild(cancel.container);
+        this.defaultPress ??= () => cancel.activate();
     }
 }

@@ -528,6 +528,14 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
             event.preventDefault();
             return;
         }
+        // Escape, on a surface that tells it apart from its other 'depart'
+        // keys (MenuControls.cancelButton: the hail dialog, whose `d`
+        // demands tribute).
+        if (event.type === 'keydown'
+            && MenuControls.pressCancelButton(event)) {
+            event.preventDefault();
+            return;
+        }
         // A key-up releases what its press pressed, whatever the
         // modifiers are now (Alt let go before C: key_actions.ts).
         const actions = keyActions.resolve(controls, event);
