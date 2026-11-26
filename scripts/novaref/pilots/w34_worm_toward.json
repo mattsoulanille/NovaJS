@@ -1,0 +1,20 @@
+{
+  "name": "novaref-w34-worm-toward",
+  "edits": {
+    "ship": 497,
+    "stellar": 1839,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1323": 2,
+      "1324": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w34-worm-toward"
+  }
+}

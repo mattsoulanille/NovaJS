@@ -1,0 +1,19 @@
+{
+  "name": "novaref-w34-walk-s315",
+  "edits": {
+    "ship": 528,
+    "stellar": 1760,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1286": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w34-walk-s315"
+  }
+}

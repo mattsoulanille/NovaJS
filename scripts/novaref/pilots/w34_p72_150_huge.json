@@ -1,0 +1,19 @@
+{
+  "name": "novaref-w34-p72-150-huge",
+  "edits": {
+    "ship": 747,
+    "stellar": 1820,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1312": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w34-p72-150-huge"
+  }
+}

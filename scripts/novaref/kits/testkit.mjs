@@ -305,8 +305,128 @@ export default {
         ...wave31Resources(),
         ...wave32Resources(),
         ...wave33Resources(),
+        ...wave34Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-34 experiments (docs/reference_experiments.md, "... wave 34").
+ * Nothing retired (no mïsn needed). sÿst 1304-1337, spöb 1804-1871, shïp
+ * 557-562, düde 483-487. Map row y = -2340 (x -800 .. 520). The next free
+ * ids: sÿst 1338+, spöb 1872+ (spares 1495, 1496, 1499), shïp 563+, düde
+ * 488+, ränk 205+, mïsn NONE (retire an old kit mission to add one), gövt
+ * 295 and below, flët 318+, wëap 295+, oütf 470+, bits 9250+.
+ *
+ *  L   The cleared landing window's rule at small art (where 1.75 W and
+ *      1.7 W + a constant part): the pilot at rest on a decoration stellar
+ *      at (0, 0), ONE landable port at (d, 0), as wave 31's Kit Land rigs
+ *      (the first `l` inside the 249 square clears, the second lands or
+ *      says "too far"). Kit Land P40 69 / 73 / 77 / 81 (stock spöb 143
+ *      Hargen's 40 x 40 art), Kit Land P72 125 / 129 / 133 / 137 / 150 (spöb
+ *      138's 72 x 72), Kit Land S17 29 / 33 / 37 / 41 (Holpa Station's 17 x
+ *      31 station art, spöb 299). Added during the wave: Kit Land P72 126 /
+ *      127, P40 70 / 71, S17 30 (sÿst 1325-1329, spöb 1848-1857: the edges at
+ *      1.75 W) and Kit Land S100 168 / 172 / 176 (sÿst 1330-1332, spöb
+ *      1858-1863: stock spöb 136 Spacedock III's 100 x 70 STATION art), Kit
+ *      Land S100 174 / 175 and S17 28 (sÿst 1333-1335, spöb 1864-1869).
+ *  R19 The call's odds threshold in an NPC-vs-NPC fight: wave 32's
+ *      Strength-10 hunters (düde 478, gövt 297, MaxOdds 100) against ARMED
+ *      AI 3 preys (gövt 296) of Strength 15 / 25 / 40 (shïp 558-560, düde
+ *      483-485; wave 33's Hunt B had 500): sÿst 1317-1319 Kit Reinf Hunt
+ *      S15 / S25 / S40 (ReinfFleet 317, ports at the centre). Added during
+ *      the wave (all three called): preys of Strength 8 / 12 (shïp 561-562,
+ *      düde 486-487), sÿst 1336-1337 Kit Reinf Hunt S8 / S12 (spöb 1870-1871).
+ *  C   Capture: shïp 557 Kit Ring Crawler Crew 60 (ratio 6 against wave 8's
+ *      crew-10 hulk); the marines (oütf 468 / 469) go on wave 33's crew-30
+ *      and crew-70 boarders.
+ *  W   A wormhole and a standing request: stock Wormhole art and flags
+ *      (spöb 465: Flags 0x21, Flags2 0x2200), linked to a kit wormhole in
+ *      sÿst 1324 Kit Worm Dest (spöb 1847). At rest: Kit Worm 150 / 230 / 300 (the
+ *      wormhole at (d, 0) from the start decoration); coasting: Kit Worm
+ *      Toward (decoration at (0, 0), moon rulers at (300 .. 800, 60), the
+ *      wormhole at (1100, 0)), as wave 31's Kit Land Toward.
+ */
+function wave34Resources() {
+    const out = [];
+    const Y = -2340;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const decoration = (id, name, x = 0, y = 0) => spob(id, name, x, y, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] });
+    const artPort = (id, name, x, clone, flags) => spob(id, name, x, 0, clone, { flags, govt: -1, minStatus: -32767 });
+    let sid = 1304, pid = 1804;
+    const rig = (label, d, make) => {
+        out.push(system(sid, label, nextX(), Y, 363, [pid, pid + 1]), decoration(pid, `${label} Start`), make(pid + 1, label, d));
+        sid++;
+        pid += 2;
+    };
+    // --- L: sÿst 1304-1316, spöb 1804-1829.
+    const ART = { P40: [143, 0x43], P72: [138, 0x43], S17: [299, 0x11] };
+    for (const [art, ds] of [["P40", [69, 73, 77, 81]], ["P72", [125, 129, 133, 137, 150]], ["S17", [29, 33, 37, 41]]]) {
+        for (const d of ds) rig(`Kit Land ${art} ${d}`, d, (id, name, x) => artPort(id, name, x, ...ART[art]));
+    }
+    // --- R19: sÿst 1317-1319, spöb 1830-1832.
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const mobile = { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10, crew: 10, flags: 0, flags2: 0 };
+    const escortGun = { weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] };
+    [15, 25, 40].forEach((s, i) => {
+        out.push(...shareRled(558 + i, `Kit RH Prey S${s}`, 1972, 24, { ...mobile, ai: 3, armor: 30000, shield: 30000, shieldRecharge: 0,
+            strength: s, ...escortGun }));
+        out.push(dude(483 + i, `Kit RH Prey S${s}`, 3, 296, 558 + i));
+        const sys = system(sid, `Kit Reinf Hunt S${s}`, nextX(), Y, 297, [pid]);
+        sys.set = { ...sys.set, avgShips: 4, dudes: [478, 483 + i, ...none8].slice(0, 8), dudeProbs: [50, 50, ...zero8].slice(0, 8),
+            reinfFleet: 317, reinfTime: 150, reinfInterval: 0 };
+        out.push(sys, spob(pid, `Kit Reinf Hunt S${s} Port`, 0, 0, 138, { flags: 0x43 }));
+        sid++;
+        pid++;
+    });
+    // --- C: shïp 557, the crew-60 boarder (wave 32's Tough boarder otherwise).
+    const tough = { accel: 2000, speed: 100, turn: 30, armor: 3000, shield: 100, shieldRecharge: 0, mass: 50, freeMass: 1000, cargo: 50,
+        maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0x00C8 };
+    out.push(...shareRled(557, "Kit Ring Crawler Crew 60", 1955, 24, { ...tough, crew: 60 }));
+    // --- W: sÿst 1320-1324, spöb 1833-1847. The destination's wormhole (1847) links back to Kit Worm Toward's (1846).
+    const DEST = 1847;
+    const worm = (id, name, x, y, link) => spob(id, name, x, y, 465, { flags: 0x21, flags2: 0x2200, govt: -1, minStatus: -32767,
+        techLevel: 0, specialTech: [-1, -1, -1], hyperlinks: [link, ...none8].slice(0, 8) });
+    for (const d of [150, 230, 300]) rig(`Kit Worm ${d}`, d, (id, name, x) => worm(id, name, x, 0, DEST));
+    {
+        const name = "Kit Worm Toward";
+        const rulers = [300, 400, 500, 600, 700, 800];
+        const ids = [pid, ...rulers.map((_, i) => pid + 1 + i), pid + 7];
+        out.push(system(sid, name, nextX(), Y, 363, ids), decoration(pid, `${name} Start`),
+            ...rulers.map((x, i) => decoration(pid + 1 + i, `${name} Ruler ${x}`, x, 60)), worm(pid + 7, name, 1100, 0, DEST));
+        sid++;
+        pid += 8;
+    }
+    if (pid !== DEST) throw new Error(`wave34: the destination wormhole is ${pid}, not ${DEST}`);
+    out.push(system(sid, "Kit Worm Dest", nextX(), Y, 363, [DEST]), worm(DEST, "Kit Worm Dest", 0, 0, DEST - 1));
+    // --- L2 (added during the wave): the edges at 1.75 W exactly: sÿst 1325-1329, spöb 1848-1857.
+    sid = 1325;
+    pid = 1848;
+    for (const [art, ds] of [["P72", [126, 127]], ["P40", [70, 71]], ["S17", [30]]]) {
+        for (const d of ds) rig(`Kit Land ${art} ${d}`, d, (id, name, x) => artPort(id, name, x, ...ART[art]));
+    }
+    // --- L3 (added during the wave): a second STATION art, stock spöb 136 Spacedock III's 100 x 70 (1.7 W = 170, 1.75 W =
+    // 175): Kit Land S100 168 / 172 / 176, sÿst 1330-1332, spöb 1858-1863.
+    for (const d of [168, 172, 176]) rig(`Kit Land S100 ${d}`, d, (id, name, x) => artPort(id, name, x, 136, 0x11));
+    // --- L4 (added during the wave): the S100 edge (174 / 175) and S17 28, sÿst 1333-1335, spöb 1864-1869.
+    for (const d of [174, 175]) rig(`Kit Land S100 ${d}`, d, (id, name, x) => artPort(id, name, x, 136, 0x11));
+    rig("Kit Land S17 28", 28, (id, name, x) => artPort(id, name, x, ...ART.S17));
+    // --- R19b (added during the wave: Strength 15 / 25 / 40 all called): armed preys of Strength 8 and 12 (shïp
+    // 561-562, düde 486-487), sÿst 1336-1337 Kit Reinf Hunt S8 / S12 (ports spöb 1870-1871).
+    [8, 12].forEach((s, i) => {
+        out.push(...shareRled(561 + i, `Kit RH Prey S${s}`, 1972, 24, { ...mobile, ai: 3, armor: 30000, shield: 30000, shieldRecharge: 0,
+            strength: s, ...escortGun }));
+        out.push(dude(486 + i, `Kit RH Prey S${s}`, 3, 296, 561 + i));
+        const sys = system(1336 + i, `Kit Reinf Hunt S${s}`, nextX(), Y, 297, [1870 + i]);
+        sys.set = { ...sys.set, avgShips: 4, dudes: [478, 486 + i, ...none8].slice(0, 8), dudeProbs: [50, 50, ...zero8].slice(0, 8),
+            reinfFleet: 317, reinfTime: 150, reinfInterval: 0 };
+        out.push(sys, spob(1870 + i, `Kit Reinf Hunt S${s} Port`, 0, 0, 138, { flags: 0x43 }));
+    });
+    return out;
+}
 
 /**
  * Wave-33 experiments (docs/reference_experiments.md, "... wave 33").

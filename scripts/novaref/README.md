@@ -530,6 +530,11 @@ and oütf 468-469 (no mïsn); next free: sÿst 1304, spöb 1804 (spares 1495 /
 470, gövt 295 and below, flët 318, bits 9250. gövt MaxOdds also gates
 NPC-vs-NPC fights: a side whose Strength sum is far below its enemies'
 never starts one (wave 32's hunters).
+Wave 34 used sÿst 1304-1337, spöb 1804-1871, shïp 557-562 and düde 483-487
+(no mïsn); next free: sÿst 1338, spöb 1872 (spares 1495 / 1496 / 1499),
+shïp 563, düde 488, ränk 205, mïsn **none**, wëap 295, oütf 470, gövt 295
+and below, flët 318, bits 9250. Wormhole rigs: clone stock spöb 465 (Flags
+0x21, Flags2 0x2200) and give HyperLinks the destination WORMHOLE's spöb id.
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they
