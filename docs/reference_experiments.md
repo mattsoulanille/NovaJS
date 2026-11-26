@@ -17491,8 +17491,432 @@ strict half (two clean fights at 0.5); high for "MaxOdds scales it" (three clean
 (`recording.mp4`, `*-tab*.png`), `hunt_*_tabs.png` / `hunt_*_lines.png`
 per run, `*_both.png` (lines over censuses).
 
+### A paid ship bribe (A8), wave 37: the bribed warship turns non-hostile at once and a MOBILE one LEAVES the system within about 13-23 s (three of three); one that cannot leave stayed non-hostile for the 4.5 minutes watched; only that ship is bought off; after a landing the system's new warships are hostile again (2026-11-26)
+
+**Question** (catalogue A8): how long does a paid SHIP bribe last (the
+visit, a day, until provoked)? NovaJS: two minutes.
+
+**Rig.** Wave 22's Kit Bribe Plain (gövt 304: 0x0200 warships take
+bribes, CrimeTol 10; sÿst 1169, AI 3 Kit Bribe Warships, avgShips 3) with
+pilot `w37_a8` (the Kit Lancer at its port, record -50 there: the
+warships hostile; the Kit Tickler); and, added during the wave, sÿst 1384
+Kit Bribe Anchored (`wave37Resources` "A8": the same warship with Speed /
+Accel 0, shïp 589, avgShips 2; its port spöb 1937 takes the player at any
+record) with pilot `w37_a8b`. `tools/a8.sh`: Tab to a warship, hail (y):
+"Status: Hostile", Beg For Mercy; the price; **Accept Price**; Close
+Channel; then a re-hail of the SAME ship (no Tab) every 12-15 s; a census
+hail of the others (Tab, y).
+
+| run | the ask | after Accept | re-hails of the bribed ship | the others |
+|---|---|---|---|---|
+| a8_a (mobile) | "Lucky you - I'm in a good mood today." 1,000 | "Thank you very much."; the dialog loses its Status line, Beg For Mercy becomes Request Assistance, the target brackets turn yellow; 1.00M -> 999,000 | it flew off the screen at once and the first re-hail, 23 s after the channel closed, said **"Unable to send hail - target ship is entering hyperspace."** | three census hails: all "Status: Hostile" with Beg For Mercy, one firing at the player |
+| a8_c (mobile) | 3,000 ("Only if you pay me first.") | "A pleasure to do business with you." | **entering hyperspace** at the first re-hail, about 13 s after | |
+| a8_d (mobile) | 1,000 (good mood) | "Thank you very much." | **entering hyperspace** at the first re-hail, about 13 s after | |
+| a8_b (anchored) | "I'm in a mean mood today, so it's going to cost you extra." 4,000 | "Thank you very much."; 996,000 | **14 re-hails over 4.5 minutes: every one non-hostile** ("What is it?", Request Assistance, no Status line) | after a landing at the port and the take-off a day later (June 24th) both warships sat at NEW places and both read "Status: Hostile", one firing |
+| a8_e (anchored) | 1,000 (good mood) | "Good doing business with you."; 999,000 | two re-hails non-hostile (Request Assistance); then ONE Kit Tickler burst (1 damage, the ship 100% -> 99%): its brackets turned red at once and the hail read **"Status: Hostile"** with Beg For Mercy, and again 10 s later | the other warship: Hostile |
+
+**Findings.**
+1. **Accept makes the bribed ship non-hostile at once** (no Status line,
+   Request Assistance in place of Beg For Mercy, yellow brackets) and it
+   stops attacking.
+2. **A bribed ship that can leave, leaves**: all three mobile AI 3
+   warships flew away and were entering hyperspace 13-23 s after the
+   bribe (A8's "reprieve" is in practice "it goes away").
+3. **A bribed ship that cannot leave stayed bought** for all 4.5 minutes
+   watched (well past NovaJS's two minutes); no lapse was seen.
+4. **The bribe buys off only that ship**: the system's other warships of
+   the same govt stayed hostile (a8_a's census) and kept firing.
+5. A landing and take-off a day later met NEW warships (the system's
+   traffic is rebuilt on take-off), hostile again: the bribe does not
+   carry to them; whether the same ship would have stayed bought across
+   the day cannot be asked this way.
+6. **A provocation ends it at once**: one 1-damage hit on the bought ship
+   made it hostile again (a8_e).
+
+**NovaJS (main 01292b54).** `N/nova_plugin/encounters/hail_plugin.ts:278-283`
+(`BRIBE_PACIFY_MS` = 120,000) and `:755-778` (Accept: `pacifiedUntil =
+now + 2 min`, drop the attack): 1 matches; 2 **missing** (a bribed ship
+stays and goes back to hunting after two minutes); 3 **mismatch** (a
+lapse at 2 minutes); 4 matches (per ship); 5 matches in effect (new
+ships). **Proposed:** on Accept, set the bribed NPC's goal to LEAVE the
+system (the AI's normal jump-out, as a ship that has finished its visit),
+and drop the 2-minute lapse (keep it pacified until it leaves, or for
+the visit when it cannot leave); a hit from the player ends it at once (NovaJS's
+`N/nova_plugin/npc/npc_targeting.ts:240` already clears `pacifiedUntil` on
+provocation: 6 matches).
+
+Confidence: high for 1, 2 (three of three), 4 and 6; medium for 3 (one
+anchored ship, 4.5 minutes).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w37/a8_a/*/`,
+`a8_b/*/`, `a8_c/*/`, `a8_d/*/`, `a8_e/*/` (`*-beg1.png`,
+`*-accepted.png`, `*-h*.png`, `*-hcen*.png`, `recording.mp4`),
+`a8_a_sheet.png`.
+
+### A disabled player (A10), wave 37: no recovery unaided: nearly five minutes disabled with nobody in the system, the armor bar never moved, not even on a hull with ArmorRech 300; "Ship disabled." on the status line (2026-11-26)
+
+**Question** (catalogue A10, partly seen in wave 16): does a disabled
+PLAYER ever recover unaided?
+
+**Rig** (`wave37Resources` "A10"). shïp 576 Kit Self Disable (a Kit
+Lancer-like player hull: shield 0, armor 2500, ArmorRech 0) and 577 Kit
+Self Disable Rech (the same with ArmorRech 300, 9 armor points a second),
+each with the Kit Big Blast (oütf 610: 2000 damage, a 300 px blast at the
+muzzle; B1: the player's own blast hurts the player). Pilots `w37_a10` /
+`w37_a10r` (and `w37_a10c`, the control) at Kit Port in quiet Kit Range (no traffic, nobody else in the
+system). `tools/a10.sh`: ONE Space tap, a 1 s thrust, then a shot every
+15 s for 4 minutes, another thrust and `l` twice; the armor bar's lit
+length read off every shot (`tools/bars.mjs`, 151 px when full).
+
+| run | after the tap | 15 s .. 290 s later (16 shots) | thrust / `l` at the end |
+|---|---|---|---|
+| a10_a (ArmorRech 0) | "Ship disabled.", armor bar 151 -> 31 px (20%: 500 of 2500) | 31 px every time | the ship did not move; `l` selected Kit Port with no status line |
+| a10_r (ArmorRech 300) | the same | **31 px every time** (a running recharge adds about 135 points, 8 px, every 15 s, and would have crossed the one-third line in about 37 s) | the same |
+| a10_c (control: ArmorRech 300, NOT disabled; five taps of the 50-damage Kit Blast Bomb, wëap 370) | armor bar 151 -> 140 px | 143, 145, 147, 149, 151 px at 4 s intervals, then full: about 9 points a second | (not disabled) |
+
+**Findings.**
+1. **A disabled player does NOT recover unaided**: nearly five minutes
+   (290 s) disabled with nobody in the system, both hulls stayed at 20%
+   armor, could not thrust, and `l` only selected the port (no landing,
+   no line).
+2. **The armor recharge is suspended while disabled**: ArmorRech 300
+   (9 points a second) did not move the bar in 290 s, while the same
+   hull, NOT disabled, refilled 11 px (about 180 points) in about 20 s
+   (`a10_c`).
+3. The game prints **"Ship disabled."** on the status line at the
+   moment of the disable.
+
+**NovaJS (main 01292b54).** `N/nova_plugin/ship/disabled_component.ts:130-131`
+gives every player-controlled ship an inherent repair 20-45 s after the
+disable (`rollRepairTime`, `:155-166`, called from
+`N/nova_plugin/encounters/disabled_plugin.ts:103`): 1 **mismatch** (the
+original leaves the player disabled). The recharge suspension
+(`disabled_component.ts:14-16`): 2 **matches**. No "Ship disabled."
+line exists in NovaJS: 3 **missing**.
+**Proposed:** drop the inherent player repair (`rollRepairTime` returns
+null for a player without a ModType-49 repair outfit), so a disabled
+player waits for help (a hail's Request Assistance, an escort, a
+Roadside Assistance govt, or destruction) as in the original; keep the
+outfit path (its delay is unmeasured). Print "Ship disabled." when the
+player's ship is disabled. Matthew may want the soft-lock guard as an
+enhancement toggle (default on, per the enhancements-toggles rule); that is
+his ruling, not a measurement.
+
+Confidence: high (two hulls, 290 s each, unchanged bars, nobody around; a clean control).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w37/a10_a/*/`,
+`a10_r/*/`, `a10_c/*/` (`03-blast.png`, `05-w1.png` .. `20-w16.png`, `recording.mp4`).
+
+### Kill credit for an escort's or a bay fighter's kill (R6), wave 37: the PLAYER gets it in full: the same record change and the same combat rating as his own kill; launched bay fighters attack only when ordered; and a kill adds a FIFTH of the victim's Strength to the combat rating (2026-11-26)
+
+**Question** (catalogue R6): who gets the kill credit / record change for
+a kill made by the player's escort or bay fighter?
+
+**Rig** (`wave37Resources` "R6"). gövt 291 Kit EK Victim (Disab 100,
+Kill 1000, CrimeTol 30000: never hostile, the port always open), shïp 580
+Kit EK Victim (yellow disc, AI 1, armor 25, no shield, Strength 200: one
+30-damage Kit Escort Gun bolt destroys it outright), the only traffic of
+sÿst 1378 Kit Escort Kill Range (owner 291, avgShips 3, port spöb 1931).
+Pilots at the port, record 0, combat rating 0: `w37_r6_esc` (the unarmed
+Kit Lancer with one hired Kit Escort), `w37_r6_bay` (the unarmed Kit Lancer
+with the Kit Fighter Bay and two Kit Fighters), `w37_r6_self` (the Kit
+Lancer with the Kit Escort Gun turret). `tools/r6.sh`: Tab until the bracketed target
+is yellow, then `f` (escort order: attack my target), `w` and two
+Control taps (launch; `bayf`: then `f`), or Space held 1.5 s;
+40 s of shots; land, Leave (the game writes the pilot), the pilot pulled.
+
+| run | the kill | sÿst 1378 record | combat rating | credits |
+|---|---|---|---|---|
+| r6_esc | `f`: "New escort orders assigned: All ships attacking target."; the escort's first bolt destroyed the victim within 0.5 s (explosion at 47.9 s); the player never fired | **-1100** | **0 -> 40** | 1,000,000 -> 999,990 (the escort's wage, R12) |
+| r6_bay2 | both fighters launched ("Kit Fighter Bay - 0") and flew formation by the player for 40 s; the victim was left alone | 0 | 0 | unchanged |
+| r6_bayf | launched, then `f` ("New escort orders assigned: All ships attacking target."): the fighters destroyed the victim ("No Target" in the next shot); the player never fired | **-1100** | **0 -> 40** | unchanged |
+| r6_self | the player's turret destroyed it in the first burst | **-1100** | **0 -> 40** | unchanged |
+
+**Findings.**
+1. **An escort's or a bay fighter's kill is the player's kill**: the
+   same -1100 (Disab 100 + Kill 1000, as every A14 kill) in the system
+   and the same combat rating as the player's own kill.
+2. **A kill adds Strength / 5 to the combat rating**: Strength 200 gave
+   +40 here, and the older readings fit the same fifth (wave 5's
+   Strength-50 kill +10, wave 10's Strength-20 Kit Trader +4). The Bible's
+   Appendix I says "the sum of the strengths ... times some internal
+   multiplier": the multiplier is 0.2.
+3. **Launched bay fighters do not attack the player's (non-hostile)
+   target on their own**: they flew formation until ordered with `f`
+   (r6_bay2 against r6_bayf). (The first bay run's `ctrl@120` taps
+   launched nothing: reliability notes.)
+
+**NovaJS (main 01292b54).** `N/nova_plugin/reputation/reputation_plugin.ts:44-52`
+credits the FiringGroup root (the player for his escorts and bay
+fighters), and `KillCreditSystem` (`:265-306`) charges Disab + Kill to the
+root: 1 **matches**. The rating grows by the FULL Strength
+(`rating.kills += Math.max(0, shipData.strength)`, `:298`): 2
+**mismatch** (five times too fast; a pilot's stored rating is the
+original's kill points, so an imported pilot's tier and a NovaJS-earned
+tier disagree). **Proposed:** add `Math.floor(strength / 5)` (GUESS for
+the rounding: every Strength seen so far is a multiple of 5); the tier
+table (`N/nova_plugin/reputation/reputation.ts:184-195`) stays.
+
+Confidence: high for 1 (the same numbers three ways, one kill each, a
+clean one-hit kill); medium for 3 (one run each way); high for the fifth (three Strengths, three waves).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w37/r6_esc/*/`,
+`r6_bay*/*/`, `r6_self/*/` (`*-tab*.png`, `*-order.png`, `*-launched.png`, `pilot-after/`,
+`recording.mp4`).
+
+### Escort wages (R12), wave 37: 1% of the hull's Cost a day (crew, Strength and mass play no part; the stock Terrapin draws 1,500), charged when the player LEAVES the spaceport; an escort the player cannot pay DEFECTS with "Due to lack of pay, one of your escorts has defected." (2026-11-26)
+
+**Question** (catalogue R12): the escort daily wage: how much, when it is
+charged, and what happens when the player can't pay.
+
+**Rig** (`wave37Resources` "R12"). Kit Wage hulls: the Kit Escort with
+mass 100, crew 20, Strength 100 and Cost 100,000, each changing ONE field:
+shïp 581 Cost 10,000, 582 (the base), 583 Cost 150,000, 584 Cost
+1,000,000, 585 crew 80, 586 Strength 400, 587 mass 400, 588 Cost 1,000.
+Pilots at Kit Port (quiet Kit Range), all escorts hired: `w37_r12a`
+(581-586, 200,000 credits), `w37_r12b` (587, 588, the stock Terrapin shïp
+136, 582; 200,000), `w37_r12c` (582 and 581, 500 credits). `tools/r12.sh`:
+the HUD credits in space, then twice: land (`l l`), Leave, the credits
+after the take-off. (The Tab hails meant to read each escort's "Pay:" line
+got nothing: Tab does not target the player's hired escorts.)
+
+| run | escorts' 1% of Cost | credits: start / after day 1 / after day 2 | a day |
+|---|---|---|---|
+| r12_a | 100 + 1,000 + 1,500 + 10,000 + 1,000 (crew 80) + 1,000 (Strength 400) = 14,600 | 200,000 / 185,400 / 170,800 | **14,600** |
+| r12_b | 1,000 (mass 400) + 10 + 1,500 (Terrapin, Cost 150,000) + 1,000 = 3,510 | 200,000 / 196,490 / 192,980 | **3,510** |
+| r12_c | 1,000 + 100, with 500 credits | 500 / 400 | 100, and **"Due to lack of pay, one of your escorts has defected."** |
+
+In every run the spaceport showed the credits UNCHANGED after the landing
+(r12_a: 200,000 in the landed shot); the wage came off at the Leave press
+(r12_c's message came up in the spaceport, over the buttons, at Leave, with
+an Okay button), so the day's wage is charged with the date advance on
+departure ("Launching from Kit Port on June 24th").
+
+**Findings.**
+1. **The daily wage is 1% of the hull's Cost**, exactly, for Costs from
+   1,000 to 1,000,000; crew (20 / 80), Strength (100 / 400) and mass (100
+   / 400) change nothing. The stock **Terrapin draws 1,500** (Cost
+   150,000).
+2. **It is charged when the player leaves a spaceport** (with the day's
+   date advance), not on landing.
+3. **An escort the player cannot pay defects**: with 500 credits against
+   1,000 + 100, the 1,000-a-day escort left ("Due to lack of pay, one of
+   your escorts has defected.", one Okay) and the 100-a-day one was paid
+   (500 -> 400) and stayed (the pulled pilot holds only shïp 581, still
+   hired). GUESS: the escorts are paid in turn and each one the remaining
+   credits cannot cover defects; which one goes first when both are
+   unaffordable was not tested.
+
+**NovaJS (main 01292b54).** `N/spaceport/escort_fees.ts:122` and
+`:179-181`: the wage is 10% of the hire fee, i.e. 1% of the price: 1
+**matches**. Its comment (`:66-80`) records the Terrapin's "Pay: 1,100
+credits per day" from `hail/hail_escort.png` as a disagreement; the
+original charges a Terrapin 1,500 a day here, so that capture's 1,100 came
+from something else (GUESS: a different Cost in that game's data or a
+plug-in), and the caveat can go. 2: `N/spaceport/mission_session.ts:698-712`
+advances the date (and settles the books) at the LANDING: **mismatch**
+in timing (the original's spaceport still shows the pre-wage credits; the
+charge comes at Leave). 3: `N/spaceport/daily_budget.ts:82-89`
+(`settleDailyBudget`) clamps the balance at 0 and keeps every escort
+("we have no dismissal flow yet"): **mismatch**.
+**Proposed:** keep the 1% rule and drop the 1,100 caveat; settle the
+day's wages at departure; when a hired escort's wage cannot be paid,
+dismiss that escort with "Due to lack of pay, one of your escorts has
+defected." (one dialog per escort, GUESS) and pay the others in roster
+order while the credits last.
+
+Confidence: high for 1 (two runs, ten hulls, exact sums twice a run);
+high for 2 (three runs); medium for 3 (one run, one defection).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w37/r12_a/*/`,
+`r12_b/*/`, `r12_c/*/` (`*-credits0.png`, `*-landed1.png`, `*-off1*.png`,
+`pilot-after/`).
+
+### Pirates and a disabled player (A9), wave 37: NOT reached for gövt 0x1000 (its warships never engaged the player); an ordinary always-hostile warship fired straight through the disable and DESTROYED the player, no board (2026-11-26, first pass)
+
+**Question** (catalogue A9): do pirates board a disabled player, and what
+do they take? (Bible gövt 0x1000: "Warships will plunder non-mission,
+trader-type enemies (including the player) before destroying them".)
+
+**Rig** (`wave37Resources` "A9", changed twice during the wave). gövt 293
+Kit Pirate Plunder (0x1000 | 0x0004) and 292 Kit Pirate Plain (0x0004),
+the AI 3 Kit Pirate (shïp 578, blue disc, crew 20), the player on shïp 579
+Kit Fragile Trader (InherentAI 1, so "trader-type"; shield 0, armor 1500)
+with 50,000 credits and 20 t of food, at the port of sÿst 1376 Kit Pirate
+Plunder Range (düde 502), 1377 Kit Pirate Plain Range (düde 503) or 1385
+Kit Pirate Mix (düde 502 or the one-ship fleet flët 323, avgShips 3).
+`tools/a9.sh`: Tab once, then a shot every 5 s for 2 minutes and every
+15 s for 2 more (the armor bar, the HUD credits and "Food: / Free:").
+
+| run | pirate weapon | what happened |
+|---|---|---|
+| a9_a, a9_b (0x1000, avgShips 1 then 2) | one-shot beam / one-shot bolt | **no ship in the system at all** (No Target, empty radar) for 4.5 minutes, twice |
+| a9_m (0x1000 mix, avgShips 3) | the Kit Escort Gun | one Kit Pirate Tab-targeted off screen at the start (100%), then nothing for 4 minutes; the player untouched |
+| a9_p (0x0004) | a one-frame 1200-damage beam turret, Reload 30000 | the pirate (red brackets) circled the player for 4.5 minutes and **never fired** |
+| a9_p2 (0x0004) | wave 13's Kit Disabler (one 1200-damage bolt, Reload 30000) | the same: circled, never fired |
+| a9_p3 (0x0004) | the Kit Escort Gun (30 damage, Reload 20) | it fired from the first seconds: the armor bar 151 -> 55 (36%) -> 34 (22%, under the one-third disable line) -> 16 -> 2 px at 5 s shots, then **"Ship destroyed."** and the title screen; no board, no pause at the disable, the credits (50,000) and the food (20 t) untouched until the end |
+
+**Findings.**
+1. **Not reached for 0x1000**: the plunder govt's warships never came
+   at the player (absent twice, gone after the first seconds once), so
+   whether they board a disabled player, and what they take, is still
+   open.
+2. **An always-hostile warship WITHOUT 0x1000 kills a disabled player
+   outright**: it kept firing through the disable and destroyed the
+   ship; no board, nothing taken.
+3. A hostile AI 3 armed ONLY with a one-shot weapon (Reload 30000) never
+   fired it at the player in 9 minutes over two runs (a rig lesson; wave
+   13's anchored Kit Disabler did fire at a player beside it).
+
+**NovaJS (main 01292b54).** `N/nova_plugin/npc/npc_plunder.ts:45-108`
+boards a disabled player for 0x1000 govts (AI 3) and takes half his cash
+(at least 2,000): unmeasured (finding 1). 2: a non-0x1000 NPC
+(`npcPlunder*` not engaged) is not stopped from finishing a disabled
+player either: **matches** as far as it goes (not checked frame by
+frame). No change proposed until a 0x1000 warship is seen engaging.
+**Next rig:** a 0x1000 warship placed by a MISSION beside the player
+(as wave 16 placed its Kit Disabler), not as traffic, armed with an
+ordinary gun.
+
+Confidence: high for 2 (one clean run, the whole fight recorded); 1 is
+not an answer.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w37/a9_*/*/`
+(`recording.mp4`, every 5 s / 15 s shot; `a9_p3`'s `07-f4.png` ..
+`10-f7.png`).
+
+### Outfit resale "entry" (R9) and the Trade Center (K6), wave 37: the count on entry is taken when the OUTFITTER OPENS (not at the landing); one commodity tier, or one jünk sold there, turns the Trade Center on (2026-11-26)
+
+**Questions** (wave-36 leftovers): R9, is the refund's "count on entry"
+the outfitter's opening or the landing? K6, what turns the Trade Center
+on: is one commodity tier enough, and does a jünk alone do it?
+
+**R9 rig and result** (`r9_entry`, pilot `w36_k_port`: the Kit Lancer at
+Kit Port with two pre-owned Kit Plain Mass, oütf 455, Cost 1,000, and
+10,000 credits; `tools/r9.sh`). One landing: outfitter, select, Buy, Done;
+outfitter again, select, Sell, Buy, Sell, Done. "You Have:" and the count
+read off every shot.
+
+| step | count | credits | change |
+|---|---|---|---|
+| landed, first opening | 2 | 10,000 | |
+| Buy | 3 | 9,000 | -1,000 |
+| Done, outfitter opened again | 3 | 9,000 | |
+| Sell | 2 | 9,500 | **+500** |
+| Buy | 3 | 8,500 | -1,000 |
+| Sell | 2 | 9,000 | **+500** |
+
+The unit bought before the reopening sold for HALF, though the count (3)
+was above the count on landing (2): **the count on entry is the count when
+the outfitter opens**. The second sale (3 -> 2 after a Buy in the same
+opening) was half too: the count before it (3) was not above the entry
+count (3), so a unit bought and sold back within one opening refunds in
+full only while the count is above the count at that opening.
+
+**K6 rig and result** (`wave37Resources` "K6"; `tools/k6.sh`, pilots
+`w37_k_one` / `w37_k_junk`). Kit TC One Tier (spöb 1932: flags 0x43 plus
+food LOW only, 0x10000000) and Kit TC Junk Only (spöb 1933: 0x43, every
+tier zero, jünk 204 Kit TC Junk sold there): `l l`, a shot of the
+spaceport. **Both showed Bar, Mission BBS and Trade Center** (and Leave;
+no outfitter, shipyard or recharge). With wave 36 (0x43 with no tier and
+no jünk: no Trade Center), the button needs flag 0x02 AND something to
+trade: any one commodity tier, or a jünk traded there.
+
+**NovaJS (main 01292b54).** R9: `N/spaceport/outfitter_rules.ts:487-533`
+(`sellRefund`: full price while `owned > countOnEntry` and something was
+bought this visit) with `countOnEntry` taken at the outfitter's opening
+(`N/spaceport/outfitter.ts:1316`): **matches** both sales (f0cd238f's
+GUESS is now measured). K6: `stellarHasTradeCenter`
+(`N/nova_plugin/economy/trade_logic.ts:38-46`: 0x02 and a tier or a jünk
+sold or bought there): **matches** both ports (52ca91aa's GUESS measured
+for the one tier and the jünk sold there; a jünk only BOUGHT there was not
+tried). No change proposed.
+
+Confidence: high (R9: two sales, every credit read; K6: two clean shots).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w37/r9_entry/*/`
+(`04-sel1.png` .. `12-done2.png`), `k6_one/*/02-port.png`,
+`k6_junk/*/02-port.png`.
+
+**The refuel button's label** (the hub's side question): **"Recharge"**,
+in the right column's third row, as in this wave's lossless
+`r9_entry/*/02-port.png` (crop `refuel_button_recharge.png`) and wave 36's
+`k_port/*/02-port.png`; it is hidden when there is nothing to recharge
+(r12_c's Kit Port landing at full fuel showed no button there).
+NovaJS labels it "Refuel" (`N/spaceport/spaceport.ts:222`): **mismatch**;
+**proposed:** "Recharge" (the hiding rule already matches, wave 36).
+
+### R19 in NPC fights, wave 37: the MaxOdds-200 edge is exactly 1.0, strict: a Strength-11 prey against the Strength-10 M200 hunter called the fleet in the first 20 s; Strength 10 (1.0, one clean fight and one unseen) and 8 (0.8) did not (2026-11-26, fourteenth pass)
+
+**Question** (wave-36 leftover): at MaxOdds 200 the edge lies between 0.6
+and 1.2; is it exactly half of MaxOdds / 100, i.e. 1.0?
+
+**Rig** (`wave37Resources` "R19"). Wave 36's MaxOdds-200 hunter govt 295
+(düde 498, the Strength-10 Hunter Full, its fleet flët 321) against
+gövt 294 preys made from wave 35's hulls: düde 505 / 506 / 507 (shïp 570 /
+566 / 571, Strength 10 / 11 / 8, holding 100% shield); sÿst 1381 Kit Reinf
+M200 1.0, 1382 M200 1.1, 1383 M200 0.8 (owner 295, ReinfFleet 321,
+avgShips 2), the Kit Ring Lancer watching from the port
+(`w37_m200_10` / `_11` / `_08`); the early recording and `tools/hunt.sh`
+with six rounds (censuses at about 16, 95 and 144 s), `tools/huntsum.sh`.
+
+| run | composition | ratio | fleet |
+|---|---|---|---|
+| m200_11_a | 1 S11 : 1 M200 hunter (census A, 16 s) | **1.1** | **called** 19.5 s ("Sensors detect Kit Reinf M reinforcement fleet approaching."); RF Lead + 2 RF Guards fought (82%, 20% / Shields Down) |
+| m200_10_a | 1 S10 : 1 hunter in all three censuses (16-160 s), both hit (99%) | **1.0** | **none** |
+| m200_10_b | 1 S10 : 1 hunter in all three censuses, every reading 100% (the fight not seen) | 1.0 | none |
+| m200_08_a | 1 S8 : 1 hunter in all three censuses, all 100% (not seen) | 0.8 | none |
+
+**Findings.**
+1. **The edge at MaxOdds 200 is exactly 1.0, strict**: 1.1 called in
+   the first seconds, 1.0 did not call through 145 s of a fight both sides
+   took hits in. With wave 36 (MaxOdds 100: 0.5 never, 0.6 always), the
+   rule is `attackers x 200 > MaxOdds x friends`: the GUESS in wave 36's
+   proposal is now measured at both MaxOdds.
+
+**NovaJS (main 01292b54).** Unchanged since wave 36:
+`N/nova_plugin/spawn/reinforcements.ts` `considerCall` still needs the
+player or his flock as the opponent, so no NPC fight calls the fleet
+(Forgejo #382). **Proposed:** wave 36's rule as written, with the edge's
+"GUESS" removed.
+
+Confidence: high for 1.1 (a clean call within 4 s of the census) and for
+1.0 (one clean fight); the two fights not seen add little.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w37/hunt_m200_*`
+(`recording.mp4`, `*-tab*.png`), `hunt_*_tabs.png`, `hunt_*_lines.png`.
+
 ### Reliability notes (for anyone running the reference)
 
+- **A mobile ship you bribe LEAVES (wave 37):** three bribed AI 3
+  warships were entering hyperspace 13-23 s after Accept, so a watch of a
+  bribe's life needs a ship that cannot leave (wave 37's anchored Kit
+  Bribe Warship, sÿst 1384). A hail with no target does nothing (no
+  dialog, no line), so a script that keeps hailing a ship that has gone
+  just takes empty shots.
+- **Tab never targets the player's hired escorts (wave 37 `r12_a`):**
+  seven Tabs among six hired escorts in empty Kit Range gave no target
+  and no hail; read wages from the credits across a day (or click an
+  escort to target it, as wave 23 did).
+- **`ctrl@120` does not fire the secondary (wave 37 `r6_bay`):** the
+  Kit Fighter Bay stayed at 2 after two `ctrl@120` taps; `down:ctrl wait
+  200 up:ctrl` (wave 7's form) launched both. Launched bay fighters fly
+  formation and leave a non-hostile target alone until ordered (`f`).
+- **A kit traffic system can stay EMPTY (wave 37 `a9_a` / `a9_b`):** Kit
+  Pirate Plunder Range (one AI 3 düde of a gövt 0x1000 | 0x0004, avgShips
+  1, then 2) showed no ship at all in two 4.5-minute runs, while the
+  same rig with a 0x0004-only govt had its pirate at Enter Ship. Check
+  the first Tab census before a long watch, and stop the run when it is
+  empty.
+- **An NPC never fired a one-frame beam turret with Reload 30000 (wave
+  37 `a9_p`):** the Kit Pirate (AI 3, hostile, red brackets) circled the
+  player for 4.5 minutes without a shot; wave 13's Kit Disabler BOLT
+  (reload 30000) does fire. Give NPCs bolts for one-shot rigs.
+- **`hunt.sh` can report "finished" for a run that is still in its
+  retry (wave 37 `hunt_m200_10_b`):** after the Enter Ship flake, the
+  failed first attempt's directory satisfies `waitfile.mjs`; the next
+  queued run then waits on the lock, harmlessly, but read the `-retry1`
+  directory for the results.
 - **A clearance-lapse edge moves from run to run (wave 36):** wave 35's
   250 px planet rig landed at 24.617 / 24.649 s on its evening and lapsed
   at every interval down to 24.356 s on wave 36's; tonight's rigs spread
@@ -18357,6 +18781,7 @@ per run, `*_both.png` (lines over censuses).
 | Wave 34 leftovers | Landing: a wormhole's window edge (104 px art: 1.75 W = 182; presses at 175-190 px) and its `l` selection range (selected at 300, nothing at about 730: is it the gates' 500 px circle?); whether the strict trunc(1.75 W) holds for a fractional ship position (a coasting press near a 17 px art's 28.75-29 px); a cleared press past 551 at the 315 px station (the walk-out decoration leaves the screen: a ruler stellar); the lapse's one-clock question (stations 24.44 vs planets 24.51). Capture: ratio 6.5 (ratio 6 reads a mean of 70 over six boards); the self-destruct's rate (3 in 39) and whether a trip comes before the roll; more rolls at low odds. R7: whether the per-hail first ask follows the mood line, a plea after an unanswered counter, Accept on a raised ask. R19: how the FRIENDS are counted in an NPC fight (the victim alone, or every fleet-side NPC shield-weighted: S12 Many again with full-shield hunters, 24 against 30), the threshold between 1.0 and 1.2, whether an NPC-caused call stamps a day (only the same visit is "the same day": a second fight after the first fleet leaves), the fleet's targets, a losing attack by the fleet's side. From wave 26 and older: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first); next free sÿst 1339, spöb 1873, shïp 563, düde 488, oütf 470, gövt 295, flët 318. | **Wave 35** answered ("... wave 35" sections; compared with main 08092a02, which applied the wave-34 fixes): Wormholes: the 104 px wormhole's window is trunc(1.75 W) = 182, strict (through at 180 / 181, "too far" at 182 / 183), and a stopped ship's `l` selects it only inside the gates' 498-500 px CIRCLE (400 / 498 selected; 500, 600 and the (400, 400) diagonal nothing): main matches both (comments to mark measured). R19 in NPC fights: the call's threshold is about HALF, not 1.0: every early fight at 0.6 or more called (a lone Strength-10 hunter against one Strength-6 or Strength-8 prey; 15 against two hunters), every one at 0.5 or less did not (a lone hunter against Strength 4, three runs; one prey of 11 / 15 against three hunters); the friends are summed with the victim; no shield weighting (three hunters at 0% shield never called against 15 : 30, a pack caveat); one NPC-caused call per visit (no second line in 240 s of fighting after the first fleet was gone). Wave 20's player points (0.75 and 0.67 refused) leave the player's edge apart. Main still never calls without a player (wave 33's proposal; now with a call over half of MaxOdds for NPC calls, plain Strength, a per-system day). Capture: ratio 6.5 reads 70-75 (mean 73.0; main 73, but its narrowed draw is 71-75, one board read 70; GUESS model: an uncapped mean 10 points a ratio from 5, the +-5 draw, then the 75 cap); one capture in six at 70-75%. R7: Accept on a raised 22,000 ask took more than the first ask (100.00M -> 99.97M; main charges the raised ask: matches to the panel's resolution); the price popup is modal, so no plea can follow an unanswered counter; one record-hostile warship was not hostile for 2.5 minutes and then asked 4,000 with a neutral line. Lapse: TWO clocks: the 250 px planet holds to 24.62-24.65 s (landed 24.617 / 24.649, lapsed 24.645 / 24.673), the 315 x 200 station to 24.40-24.44 s (docked 24.396, lapsed at every interval 24.53-24.80 twice); main's single 24.55 s misses both by about 0.1 s. Not run: the cleared window for a fractional position at a 17 px art, a press past 551 at the 315 px station, low-odds capture rolls, the self-destruct before or after the roll, R7's per-hail first ask against the mood line (one more point), R19's fleet targets and a losing attack, the wave-26 and older carry-overs. Left: see Wave 35 leftovers. **Applied 2026-11-25 (e1cf32fb, cd44482e, de7524ea)**: two clearance clocks, a planet's 24.63 s and a station's 24.42 s by the station flag (GUESS on what picks it; a gate keeps the planet's); capture odds drawn +-5 around an uncapped centre ([7, 0.80], [10, 1.10]) and capped after the draw (GUESS model; 6.5 reads 70-75); the wormhole's window edge and 500 px selection circle marked measured in the comments. Not applied: R19's NPC-caused call (waiting on Forgejo #382). |
 | Wave 35 leftovers | R19: the NPC-caused call's exact edge between 0.4 and 0.6 (a Strength-5 prey against a lone Strength-10 hunter: exactly half), whether it scales with the fleet govt's MaxOdds or the attacker's (a MaxOdds-200 hunter govt), whether a fleet member (flët escort) calls at all (the pack caveat: single Weak hunters, three at once, against one Strength-15 prey), why a player's call needs more (wave 20 refused 0.67-0.75: a player point between 0.75 and 1.0), the fleet's targets, a losing attack by the fleet's side. Landing: what picks the station clock (the station flag or the art: a station flag on a planet art, a planet flag on a station art), a gate's clock against the planet's 24.63 s, the cleared window for a fractional position at a 17 px art, a press past 551 at the 315 px station, the wormhole cap above a 121 px wormhole art. Capture: the draw near the cap (ratio 6.5 read 70 below main's 71-75; the uncapped-mean model predicts 75 half the time), more rolls at 70-75% (one capture in six), low-odds rolls, the self-destruct before or after the roll. R7: the exact charge on a raised ask (a pilot written after the Accept: land elsewhere or jump), the per-hail first ask against the mood line (wait for a hostile warship before hailing), why a record-hostile warship was not hostile for 2.5 minutes. From wave 26 and older: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first); next free sÿst 1365, spöb 1912, shïp 574, düde 497, oütf 470, gövt 295, flët 321. | **Wave 36** answered ("... wave 36" sections): the clearance clock is NOT picked by the station flag (a planet art with the station flag, a station art with the planet flags and a 72 px planet all lapsed at 24.41-24.54 s) and wave 35's own 250 px planet rig, its "planet clock" (24.62-24.65 s), lapsed by 24.36 s as tonight's control: the edge moves from run to run and even between clearances (24.18-24.54 s tonight; the S100 station at a constant 24.40 s lapsed five times, then docked): one clock of about 24.4 s fits every kind; main 482d3674's two clocks by the flag mismatch. R19: fleet members DO call (a fleet-placed lone hunter twice at 0.6, the pack against a Strength-40 prey), a MaxOdds-200 fleet govt called at 1.2 (not the Bible's 2-to-1) and did not at 0.6 (three fights; MaxOdds 100 calls at 0.6), so the edge scales with MaxOdds (half of it, GUESS), exactly 0.5 did not call (two fights). Boarding velocity after a TAKEN plunder: kept (two Energy takes). F1c re-flow offsets: the five stop 7.7-11.5 px short of their new slots on the line from the old ones and stay (a slot dead band; NovaJS converges exactly). Hub's catalogue items: K6 a missing venue's button is HIDDEN in a fixed slot (matches), but the Trade Center needs commodity price tiers, not flag 0x02 alone (mismatch); K1 `n` is the Mission BBS key (matches); R9 a pre-owned outfit sells for 50% (matches) and the full refund covers only units above the count on entry, not "bought this visit" (mismatch). Not reached: the trader call range (no hit inside 475-700 px: the far-mode driver lags 2.5 s), a second hull's coast (an unarmed hostile AI 3 never closed). Left: see Wave 36 leftovers. **Applied 2026-11-26 (5924594c, f0cd238f, 52ca91aa, 8ee8339b)**: one clearance clock, `STELLAR_CLEARANCE_MS = 24_400`, for ports, stations and gates (wave 35's two clocks reverted); the outfitter's full refund only above the count on entry (the receipts kept as a guard against granted units); the Trade Center only at a 0x02 port with a commodity tier or a jünk trade (Recharge already hid once used); a 12 px formation slot dead band (GUESS radius). Not applied: R19's NPC-caused call (waiting on Forgejo #382). |
 | Wave 36 leftovers | Landing: what moves the clearance edge between runs (measure the game's own frame rate during a lapse cascade, e.g. a moving ship's per-frame steps; repeat one rig several times in one session), whether a gate's count differs from a port's (24.18-24.24 vs 24.30-24.36 the same night), the per-clearance scatter's size and cause (a constant-interval cascade at 24.30 / 24.50 on two rigs). R19: the MaxOdds edge at 200 between 0.6 and 1.2 (a 0.8 / 1.0 / 1.1 prey against the M200 hunter: is it exactly half of MaxOdds, i.e. 1.0?), a losing attack by the fleet's side, the fleet's targets; the player's call against the NPC rule (wave 20 refused 0.67-0.75 with MaxOdds 100). Trader range: a rig with the shot fired from REST at a measured 550 / 650 px (decoration rulers) against a victim that holds its place. Coast: a second hull with a harmless gun (the Kit Tickler) so it closes in. R9: whether "entry" is the outfitter's opening or the landing; a 0x0200 outfit. K6: what turns the Trade Center on (one commodity tier; a jünk only). From wave 35: the cleared window for a fractional position at a 17 px art, a press past 551 at the 315 px station, the wormhole cap above a 121 px art; capture near the cap and low-odds rolls; R7 the exact charge on a raised ask, the per-hail first ask, the not-hostile warship. From wave 26 and older: R19's neutral fleet / escort hit, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first); next free sÿst 1376, spöb 1929, shïp 576, düde 502, oütf 470, gövt 293, flët 323. | open |
+| Wave 37 leftovers | A8: whether the same bought ship stays bought across a day (the take-off rebuilds the traffic; needs a ship that persists, e.g. a mission ship), a bought ship's life past 4.5 minutes, and whether a bribed FREIGHTER leaves too. A10: a disabled player WITH a repair-system outfit (ModType 49): when does it repair? R6: a captured (not hired) escort's kill, and whether NovaJS's launched fighters attack unordered. R12: which escort defects first when several cannot be paid, and the per-escort "Pay:" line (click-target an escort). A9: not reached for gövt 0x1000 (its traffic warships never engaged the player): place a 0x1000 warship with an ordinary gun by a MISSION beside the player (retire an old kit mïsn), then read the board, the take (credits / cargo) and whether it destroys the player after. R19: the MaxOdds-200 edge is closed (1.0 strict); a losing attack by the fleet's side, the fleet's targets, the player's call against the NPC rule still open. Not reached this wave: R13 (TravelStel -2), R18 (tribute), U8 (jump phase timings, fuel deduction). Side findings to apply: the combat rating's Strength / 5, "Ship disabled.", the "Recharge" label. From wave 36 and older: see the Wave 36 leftovers row (landing edge drift, trader range, a second hull's coast, R9 0x0200 outfit, the wormhole cap, capture near the cap, R7 leftovers, wave 21's carry-overs). Kit: the mïsn ids are used up (retire an old kit mission first); next free sÿst 1386, spöb 1939, shïp 590, düde 509, oütf 470, wëap 296, gövt 290, flët 324, jünk 205. | open |
 
 ## Catalogue
 
@@ -18394,9 +18819,9 @@ cosmetic or rare.
 | A5 | Do NPCs of the same govt pass through each other's shots? | `N/nova_plugin/ship/firing_group.ts:62-67` | CPg crossfire, VID | M |
 | A6 | Warship (AI 3) vs interceptor (AI 4) engagement thresholds against a criminal player (MaxOdds, strength) | `npc_decision.ts` odds logic | CPg govt MaxOdds variants, CPl rating/strength | M |
 | A7 | Brave/wimpy trader transitions: flee vs fight back, and when they calm down | `npc_decision.ts` cases 1/2 | **mostly (waves 3, 7)**: AI 2 fights to shields-down and keeps attacking 130 s after one tickle; AI 1 leaves within 35-40 s even unprovoked; AI 2 whose attacker flies out of reach runs away and leaves the system (wave 7). The last was a mismatch (NovaJS chased); applied in ae475ef8 | M |
-| A8 | How long a ship bribe lasts (NovaJS: 2 min) | `N/nova_plugin/encounters/hail_plugin.ts:228-233` | VID after bribing | M |
-| A9 | Do pirates board a disabled player, and what do they take? | `N/nova_plugin/npc/npc_plunder.ts:45-108` | CPl weak ship, VID, PD | M |
-| A10 | Does a disabled player ever recover unaided? | `N/nova_plugin/ship/disabled_component.ts:76-95` | VID 3 min | M |
+| A8 | How long a ship bribe lasts (NovaJS: 2 min) | `N/nova_plugin/encounters/hail_plugin.ts:278-283, 755-778` | **measured (wave 37, "A paid ship bribe (A8), wave 37")**: non-hostile at once; a mobile ship LEAVES the system within 13-23 s (3 of 3); an anchored one stayed bought 4.5 min; that ship only; a hit ends it at once | M |
+| A9 | Do pirates board a disabled player, and what do they take? | `N/nova_plugin/npc/npc_plunder.ts:45-108` | **first pass (wave 37, "Pirates and a disabled player (A9), wave 37")**: not reached for gövt 0x1000 (its traffic warships never engaged); a 0x0004-only warship destroyed the disabled player without boarding. Next: a mission-placed 0x1000 warship with an ordinary gun | M |
+| A10 | Does a disabled player ever recover unaided? | `N/nova_plugin/ship/disabled_component.ts:130-166` | **measured (wave 37, "A disabled player (A10), wave 37")**: NO (290 s, nobody around), and armor recharge is suspended while disabled; "Ship disabled." | M |
 | A11 | When do NPCs leave a system, and how often do they respawn? (AvgShips ±50%?) | `N/nova_plugin/spawn/npc_spawn_plugin.ts:138,833` | **partly (waves 4-5)**: AI 1 mission ships jump out 30-40 s after appearing (9 of 9); AI 1 traffic lands, lingers about 20 s at a stellar and jumps (wave 5) | M |
 | A12 | Do mission goal ships (other than chase-off) linger after the goal completes? | `N/nova_plugin/missions/mission_ship_spawn.ts:95-105` | CPg, VID | L |
 | A13 | Does a hostile Flags 0x0020 AI use its afterburner? Is a Flags2 0x0004 ship skipped by NPC targeting? | `P/parsers/ship_parse.ts` | CPg, VID | L |
@@ -18411,13 +18836,13 @@ cosmetic or rare.
 | R3 | #320.2 negative gövt penalty = none? | `reputation.ts:127-139` | CPg govt KillPenalty -5, PD | H |
 | R4 | Engine default when a penalty is 0 (NovaJS 5/2/3) | `reputation.ts:63-67` | CPg govt with zero penalties, PD | M |
 | R5 | Combat-rating multiplier (NovaJS raw Strength sum) | `reputation.ts:46-50`, `reputation_plugin.ts:185-220` | Kill one known-Strength ship, PD rating | M |
-| R6 | Who gets kill credit for an escort or fighter kill (NovaJS: group root) | `N/nova_plugin/reputation/reputation_plugin.ts:44-48` | CPl with escorts (pilot-make `escorts`), PD | M |
+| R6 | Who gets kill credit for an escort or fighter kill (NovaJS: group root) | `N/nova_plugin/reputation/reputation_plugin.ts:44-52, 265-306` | **measured (wave 37, "Kill credit ... (R6), wave 37")**: the player, in full (record and rating as his own kill); the rating adds Strength / 5 per kill | M |
 | R7 | Bribe price (NovaJS 10%/30% of cash, minimum 500) | **measured (R "R7 bribe price, wave 22"), applied 2026-11-24**: thousands, the ship's fuel-sale ask (0x8000: a flat 20,000), a planet 3,000 / 4,000, growth above 1M (GUESS shape), a third-of-cash cap with a 1,000 floor; 0x8000 alone takes no bribe (`N/nova_plugin/reputation/hail.ts` `shipBribePrice` / `planetBribePrice` / `shipTakesBribes`). Open: the growth's shape, the plain planet's 100M refusal, a bribe's Lower Price. **Wave 27 (R "R7 bribe price above 1M, wave 27"), applied 2026-11-25 (9e0d68ee)**: a ship's ask capped at 20,000; a plain planet refuses outright one time in eight (GUESS rate). **Wave 28 (R "R7 planet bribe, wave 28"), applied 2026-11-25 (6ef78f21)**: a planet's Lower Price counters (3/4) or withdraws; a withdrawal refuses every later offer that game day (GUESS scope); refusals answer from STR# 3002 45-49. **Wave 29** (R "R7 planet bribe withdrawal, wave 29"): the withdrawal outlasts the day (a landing in the system and a take-off still refused) and ends with a jump out and back: key it to the system visit (mismatch); a second Lower Price on a counter withdraws (matches); **applied 2026-11-25 (095fa3e1)**: the haggle lasts the system visit, the crossing into another system clears it. **Wave 30** ("R7 planet bribe withdrawal, wave 30"): the withdrawal holds through eight days of landings in the system (matches); a FRESH refusal holds through re-hails and a landing a day later (main re-draws it by day: mismatch); fresh refusals 6 in 25; **applied 2026-11-25 (286798ed)**: the fresh refusal is drawn once per system visit (a SystemVisit ordinal the crossing advances), one in four (GUESS, pooled 6 in 26). **Wave 32**: a fresh refusal ends with a jump out and back (matches; 7 in 27); a provoked freighter's Lower Price on Beg For Mercy counters once in five fresh asks (3/4) and each repeated plea on one channel asks 1,000 more, past 20,000 (main always withdrew and repeated the price: mismatch); **applied 2026-11-25 (c7622547)**: the mercy haggle per channel (one opening of the comm dialog), one counter in four (GUESS), +1,000 a plea, the withdrawal line per hail. **Wave 33** ("R7 a ship's Beg For Mercy haggle, wave 33"): the +1,000 never stops, warships haggle as freighters (matches); counters 19 in 59; every new hail draws its own mood and first ask (main fixed per ship and pilot: mismatch); **applied 2026-11-25 (b814e5bd)**: the channel seeds the plea's mood and growth, one counter in three (GUESS) | CPl with exact cash at 2-3 levels, SS | H |
 | R8 | Planet bribe price, duration and persistence | `N/nova_plugin/travel/planet_plugin.ts:149-156` | CPl, SS | L |
 | R9 | Outfit resale (NovaJS 50%), and same-visit buy+sell refund | `N/spaceport/outfitter_rules.ts:408-416`, `outfitter.ts:206` | CPl at Kit Port, PD credits | H |
 | R10 | Ship trade-in (25%: are stock outfits double-counted? ammo? clamp?) | `N/spaceport/shipyard_rules.ts:88-121` | CPl buy a kit hull, PD | H |
 | R11 | Cargo when the new hull's hold is smaller | `shipyard_rules.ts:327-340` | CPl full hold, PD | L |
-| R12 | Escort daily wage formula | `N/spaceport/escort_fees.ts:62-80` | CPg hulls differing in one field, SS/PD | M |
+| R12 | Escort daily wage formula | `N/spaceport/escort_fees.ts:122, 179-181`, `daily_budget.ts:82-89` | **measured (wave 37, "Escort wages (R12), wave 37")**: 1% of Cost a day (crew / Strength / mass nothing), charged on leaving the spaceport; an unpaid escort defects | M |
 | R13 | TravelStel -2 destination selection | `N/nova_plugin/missions/mission_offer.ts:119` | CPg, repeat offers | M |
 | R14 | Is a mission with no offer dësc auto-accepted? | `mission_offer.ts:35-62` | CPg AvailLoc 3 mïsn without dësc | L |
 | R15 | In-flight `S` starts: ShipSyst -6 spawn timing | `N/display/ship_mission_offer_plugin.ts:295-330` | CPg, VID | L |
