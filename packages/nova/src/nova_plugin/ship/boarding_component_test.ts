@@ -508,8 +508,6 @@ describe('capture, wave 33 (reference "Capture, wave 33")', () => {
             for (let draw = 0; draw < 11; draw++) {
                 expect(boardCaptureOdds(70, 10, draw)).toEqual(75);
             }
-            // Between 5 and 7: linear from 60% (GUESS).
-            expect(shown(60, 10)).toEqual(68);
         });
 
     it('reads ratio 3 on the 2-5 line (38-45%, mean 42.4)', () => {
@@ -561,12 +559,65 @@ describe('capture, wave 33 (reference "Capture, wave 33")', () => {
         });
     });
 
-    it('a capture click trips the self-destruct about one in ten (2 in 27; '
-        + 'GUESS)', () => {
+    it('a capture click trips the self-destruct about one in ten (3 in 39 '
+        + 'with wave 34)', () => {
             expect(CAPTURE_SELF_DESTRUCT_CHANCE).toEqual(0.1);
             expect(captureTripsSelfDestruct(0.0999)).toBeTrue();
             expect(captureTripsSelfDestruct(0.1)).toBeFalse();
             expect(captureTripsSelfDestruct(0.9)).toBeFalse();
+        });
+});
+
+describe('capture, wave 34 (reference "Capture, wave 34")', () => {
+    const shown = (attacker: number, defender: number) =>
+        Math.round(captureChance(attacker, defender) * 100);
+    /** Every odds a board can read, over enough draws to cover the
+     * spread. */
+    const boards = (attacker: number, defender: number, bonus = 0) =>
+        new Set([...Array(64).keys()].map(draw =>
+            boardCaptureOdds(attacker, defender, draw, bonus)));
+
+    it('reads ratio 6 at a mean of 70 (75, 71, 69, 68, 69, 68), under the '
+        + 'cap', () => {
+            expect(CAPTURE_ODDS_BY_CREW_RATIO).toContain([6, 0.70]);
+            expect(shown(60, 10)).toEqual(70);
+            const range = boards(60, 10);
+            for (const board of [75, 71, 69, 68, 69, 68]) {
+                expect(range.has(board)).withContext(`${board}`).toBeTrue();
+            }
+            expect(Math.max(...range)).toEqual(75);
+            expect(Math.min(...range)).toEqual(65);
+            // Still rising to the cap at 7 (between 6 and 7: linear).
+            expect(shown(65, 10)).toBeGreaterThan(70);
+            expect(shown(65, 10)).toBeLessThan(75);
+            expect(shown(70, 10)).toEqual(75);
+        });
+
+    it('Kit Marines 10 on crew 30 reads ratio 4\'s band (46, 55, 45)', () => {
+        const crew = boarderEffectiveCrew(30, { crew: 10, oddsPoints: 0 });
+        expect(crew).toEqual(40);
+        // Between ratio 3 (41) and ratio 5 (60): 51, boards 46-56.
+        expect(shown(crew, 10)).toEqual(51);
+        expect(shown(crew, 10)).toBeGreaterThan(shown(30, 10));
+        expect(shown(crew, 10)).toBeLessThan(shown(50, 10));
+        const range = boards(crew, 10);
+        expect(range.has(46)).toBeTrue();
+        expect(range.has(55)).toBeTrue();
+    });
+
+    it('Kit Marines 20 Pct on crew 30 adds its points to ratio 3 (60, 57, '
+        + '64)', () => {
+            const range = boards(30, 10, 20);
+            expect(Math.min(...range)).toEqual(56);
+            expect(Math.max(...range)).toEqual(66);
+            for (const board of [60, 57, 64]) {
+                expect(range.has(board)).withContext(`${board}`).toBeTrue();
+            }
+        });
+
+    it('holds the 75% cap over the percent bonus (crew 70 + Marines 20 '
+        + 'Pct: 75, 75, 75)', () => {
+            expect([...boards(70, 10, 20)]).toEqual([75]);
         });
 });
 

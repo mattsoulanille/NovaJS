@@ -672,20 +672,23 @@ export function capturable(target: Entity,
  * ============================================================================
  * Capture odds (fitted to the original, ruling #378; reference "U9 wave 8",
  * "Capture odds, wave 31", "Capture odds at crew ratio 1 and above, wave
- * 32" and "Capture, wave 33")
+ * 32", "Capture, wave 33" and "Capture, wave 34")
  * ============================================================================
  *
  * The odds the original shows against a hulk the player disabled, keyed by
  * the crew RATIO boarder / defender (wave 32, finding 2: the ratio is what
  * counts, 20 v 20 read as 10 v 10 and 20 v 10 as 10 v 5):
  *
- *     ratio   10    7     5      3      2      1      0.67   0.5    0.25   0.2
- *     odds    75%   75%   59.8%  42.4%  31.7%  19.4%  18%    16.2%  10%    12.0%
- *     used    75%   75%   60%    (41%)  32%    20%    18%    16.5%  12%    12%
+ *     ratio   10    7     6    5      3      2      1      0.67   0.5    0.25   0.2
+ *     odds    75%   75%   70%  59.8%  42.4%  31.7%  19.4%  18%    16.2%  10%    12.0%
+ *     used    75%   75%   70%  60%    (41%)  32%    20%    18%    16.5%  12%    12%
  *
  * RATIO 7 ALREADY READS THE CAP (wave 33, finding 2: crew 70 v 10, 75% on
  * all five boards), so the table reaches CAPTURE_CHANCE_MAX there, not at
- * 10; between 5 and 7 nothing was read (GUESS: linear from 5's 60%).
+ * 10. RATIO 6 reads a mean of 70 (wave 34, finding 1: crew 60 v 10 read
+ * 75, 71, 69, 68, 69, 68 over six boards), a little above the straight
+ * line from 5 to 7 (67.5) and under the cap, so it has its own point; the
+ * cap is reached between 6 and 7 (GUESS: linear between them).
  * Ratio 3 (wave 33, finding 3: 38-45%, mean 42.4 over five boards) sits on
  * the straight line from 2 to 5 (41%), so it needs no point of its own.
  *
@@ -733,6 +736,7 @@ export const CAPTURE_ODDS_BY_CREW_RATIO:
         [1, 0.20],
         [2, 0.32],
         [5, 0.60],
+        [6, 0.70],
         [7, CAPTURE_CHANCE_MAX],
         [10, CAPTURE_CHANCE_MAX],
     ];
@@ -793,7 +797,8 @@ export const CAPTURE_ODDS_SPREAD_POINTS = 5;
  * `bonusPoints`: the boarder's percent marines (boarderMarines), added
  * after the draw and capped at CAPTURE_CHANCE_MAX (reference "Capture,
  * wave 33", finding 4: ModVal -20 read 35, 35, 45 at ratio 1, whose own
- * boards read 15-25; GUESS: the cap holds over the bonus, unmeasured).
+ * boards read 15-25). MEASURED, the cap holds over the bonus ("Capture,
+ * wave 34", finding 4: crew 70 + ModVal -20 read 75 three times, not 95).
  */
 export function boardCaptureOdds(attackerCrew: number, defenderCrew: number,
     draw: number, bonusPoints = 0): number {
@@ -829,11 +834,15 @@ export function boardCaptureOdds(attackerCrew: number, defenderCrew: number,
  *  - `oddsPoints`: every negative one adds its magnitude, in percentage
  *    points, to the board's drawn odds (boardCaptureOdds), under the cap.
  *
+ * Both read again at a second ratio ("Capture, wave 34", findings 2-3):
+ * ModVal 10 on a crew-30 boarder read 46, 55, 45 (ratio 4's band, crew 40
+ * v 10), ModVal -20 on crew 30 read 60, 57, 64 (ratio 3's 42.4 plus about
+ * 18 points: a flat bonus in points, not a factor).
+ *
  * GUESSES: several units (or several marine outfits) add up, count times
  * ModVal; a percent ModVal below -100 counts as 100; marines give a
  * CREWLESS boarder nothing (the Bible's "0 crew ... can't capture" holds:
- * see boarderEffectiveCrew); only one unit of each kind was measured, at
- * ratio 1 only.
+ * see boarderEffectiveCrew); only one unit of each kind was measured.
  */
 export interface BoarderMarines {
     /** Crew the positive ModVals add. */
@@ -883,10 +892,11 @@ export function boarderEffectiveCrew(shipCrew: number,
  * A Capture Ship click can be answered "Oops! You tripped this ship's
  * security self-destruct mechanism." (STR# 2002 #112) instead of an
  * outcome: no capture, the hulk destroyed, as a plunder take's trip
- * (PLUNDER_SELF_DESTRUCT_CHANCE). MEASURED: 2 of 27 clicks (one at 75%,
- * one at 32%). GUESSES: a separate draw made BEFORE the capture roll (a
- * trip leaves no outcome to read), its rate 0.1 (2 in 27 is 0.07, Wilson
- * 95% about 0.02-0.23), the same at every odds.
+ * (PLUNDER_SELF_DESTRUCT_CHANCE). MEASURED: 3 of 39 clicks (waves 33 and
+ * 34, "Capture, wave 34", finding 5: at 75%, 32% and 75%), about 0.08, so
+ * the rate 0.1 is kept (Wilson 95% about 0.03-0.20). GUESSES: a separate
+ * draw made BEFORE the capture roll (a trip leaves no outcome to read),
+ * the same at every odds (the trips came at high and low odds alike).
  */
 export const CAPTURE_SELF_DESTRUCT_CHANCE = 0.1;
 
