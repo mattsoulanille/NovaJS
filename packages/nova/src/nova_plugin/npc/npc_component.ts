@@ -57,6 +57,13 @@ export const NpcState = t.intersection([t.type({
      * 'board'; gövt Flags 0x1000). Cleared the moment the approach ends,
      * however it ends. */
     boardTarget: t.string,
+    /** Sim time (ms) a plunder boarder that has come alongside its prize
+     * takes the plunder: NPC_PLUNDER_DOCK_MS after it first arrived
+     * (npc_plunder_board.ts; reference "Pirates and a disabled player
+     * (A9), wave 38": the pirate sat on the player about 5 s before the
+     * line). Set only while docked on a board run, dropped with
+     * `boardTarget`. */
+    boardUntil: t.number,
     /** Uuid of the player ship this interceptor is flying to scan for
      * contraband (mode 'scan'; npc/contraband_scan.ts). Cleared the
      * moment the approach ends, however it ends. */

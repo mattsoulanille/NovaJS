@@ -1,6 +1,6 @@
 import { JunkData } from 'novadatainterface/junk_data';
 import { PlanetData, TradeTier } from 'novadatainterface/planet_data';
-import { Cargo, cargoUsed } from '../ship/index.js';
+import { Cargo, cargoUsed, STANDARD_COMMODITY_BASE_PRICES } from '../ship/index.js';
 import { evaluateNCBTest, NCBParseError } from '../ncb/index.js';
 import { numericId, STANDARD_CARGO_NAMES } from '../missions/index.js';
 
@@ -52,9 +52,10 @@ export function stellarNeedsJunksForTrade(planet: PlanetData): boolean {
         && !planet.tradeTiers.some(tier => tier !== null);
 }
 
-/** Base prices of the six standard commodities (STR# 4004). */
-export const STANDARD_COMMODITY_BASE_PRICES =
-    [75, 350, 750, 900, 200, 550];
+// Base prices of the six standard commodities (STR# 4004): defined in the
+// ship domain beside the cargo hold (ship/cargo_plugin.ts), where the npc
+// domain's pirates can read them too, and re-exported here.
+export { STANDARD_COMMODITY_BASE_PRICES };
 
 /**
  * A commodity's price at a tier: exactly 80% / 100% / 125% of the base

@@ -512,6 +512,7 @@ export const NpcSteeringSystem = new System({
                     // Destroyed, jumped out, or patched up while we flew.
                     npc.mode = undefined;
                     npc.boardTarget = undefined;
+                    delete npc.boardUntil;
                     return;
                 }
                 steerArrive(movement, physics,

@@ -31,6 +31,16 @@ export const CargoType = map(t.string, t.number);
 export type Cargo = t.TypeOf<typeof CargoType>;
 export const CargoComponent = new Component<Cargo>('Cargo');
 
+/**
+ * Base prices of the six standard commodities ("cargo:0" .. "cargo:5",
+ * STR# 4004): Food, Industrial, Medical, Luxury, Metal, Equipment. The
+ * trade center prices off them (economy/trade_logic.ts, which re-exports
+ * this), and a pirate plundering a disabled player takes the costliest
+ * first (npc/npc_plunder.ts).
+ */
+export const STANDARD_COMMODITY_BASE_PRICES: readonly number[] =
+    [75, 350, 750, 900, 200, 550];
+
 /** Total tons used in a cargo hold. */
 export function cargoUsed(cargo: Cargo): number {
     let used = 0;

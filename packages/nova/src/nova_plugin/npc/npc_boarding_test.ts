@@ -21,13 +21,12 @@ import { makeSystem } from '../make_system.js';
 import { MissionShipComponent } from '../player/index.js';
 import { InitiateJumpEvent } from '../travel/index.js';
 import {
-    NpcComponent, npcPlunderCredits, NPC_PLUNDER_CREDIT_FRACTION,
-    NPC_PLUNDER_CREDIT_MINIMUM, NPC_PLUNDER_TAKES_FROM_PLAYERS,
+    NpcComponent, npcPlunderCargoPlan, npcPlunderCredits,
+    NPC_PLUNDER_DOCK_MS, NPC_PLUNDER_TAKES_FROM_PLAYERS,
     PlayerPlunderedEvent,
 } from './npc_ai_plugin.js';
-import {
-    BRIBE_MINIMUM, FUEL_SALE_CASH_DIVISOR, shipBribePrice,
-} from '../reputation/index.js';
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
+import { CargoComponent } from '../ship/index.js';
 import { ActiveMission, CreditsComponent, MissionsComponent } from '../player/index.js';
 import { playerPlunderedMessage } from '../../display/status_bar_content.js';
 import { ControlledByComponent } from '../player/index.js';
@@ -88,6 +87,8 @@ interface HulkOptions {
     alreadyBoarded?: string;
     /** Put it in its death sequence (ExplodingComponent) as well. */
     exploding?: boolean;
+    /** Its cargo hold, as a player's ship carries one. */
+    cargo?: [string, number][];
 }
 
 /**
@@ -102,10 +103,16 @@ async function plunderWorld(options: HulkOptions & {
     boarderAiType?: number;
     /** A second pirate, mirrored across the hulk. */
     secondPirate?: boolean;
+    /** The warship hull's cargo space (shïp Cargo). */
+    pirateHold?: number;
 } = {}) {
     const gameData = new MockGameData();
     for (const id of [WARSHIP_SHIP, TRADER_SHIP]) {
-        gameData.data.Ship.map.set(id, { ...getDefaultShipData(), id });
+        const data = { ...getDefaultShipData(), id };
+        if (id === WARSHIP_SHIP && options.pirateHold !== undefined) {
+            data.physics = { ...data.physics, freeCargo: options.pirateHold };
+        }
+        gameData.data.Ship.map.set(id, data);
     }
     gameData.data.Govt.map.set(PIRATE_GOVT, govt(PIRATE_GOVT, {
         classes: [5], enemies: [1],
@@ -171,6 +178,9 @@ async function plunderWorld(options: HulkOptions & {
             if (options.credits !== undefined) {
                 ship.components.set(CreditsComponent,
                     { credits: options.credits });
+            }
+            if (options.cargo) {
+                ship.components.set(CargoComponent, new Map(options.cargo));
             }
             if (options.exploding) {
                 // Far-future death time: it stays mid-explosion for the
@@ -378,10 +388,11 @@ describe('NPC plunder-boarding (gövt Flags 0x1000)', () => {
  * player")
  * ============================================================================
  *
- * Matthew's ruling: a disabled player is boarded exactly like a hulk, and
- * the pirates take a cut of their cash — a cut that MUST COST MORE THAN
- * BRIBING THE SAME SHIP OFF, or the bribe would be strictly dominated and
- * nobody would ever pay one.
+ * Reference "Pirates and a disabled player (A9), wave 38", seven runs: a
+ * 0x1000 warship that has disabled the player comes alongside, sits on him
+ * about 5 s, and takes "<N> tons of cargo and <M> credits stolen!" — as
+ * much cargo as its own hold takes, costliest first, and 7.5-8.4% of a
+ * 50,000 purse — then turns non-hostile toward him and leaves the system.
  */
 describe('pirates plundering a disabled player', () => {
     /**
@@ -396,61 +407,45 @@ describe('pirates plundering a disabled player', () => {
             controlled: true, governed: false, xenophobicPirate: true,
             credits: 20_000, ...extra,
         });
+    /** What a 20,000 purse can lose: 25-28 steps of 0.3%. */
+    const TAKES_OF_20K = [1_500, 1_560, 1_620, 1_680];
 
-    it('costs more than buying them off, at every purse and both bribe '
-        + 'tiers', () => {
-            // The relation the two functions must never drift out of. The
-            // fraction and floor are both pegged above the bribe's, and
-            // the floor is literally derived from BRIBE_MINIMUM.
-            expect(NPC_PLUNDER_CREDIT_FRACTION)
-                .toBeGreaterThan(1 / FUEL_SALE_CASH_DIVISOR);
-            expect(NPC_PLUNDER_CREDIT_MINIMUM)
-                .toBeGreaterThan(BRIBE_MINIMUM);
-
-            for (const purse of [0, 1, 4, 99, 499, 500, 501, 999, 1000, 1001,
-                1999, 2000, 2001, 5_000, 12_345, 100_000, 9_999_999]) {
-                const plunder = npcPlunderCredits(purse);
-                for (const [ship, larger] of [['ship0', false],
-                    ['ship3', false], ['ship13', false], ['ship 7', false],
-                    ['ship0', true]] as const) {
-                    const bribe = shipBribePrice(ship, 'player', purse,
-                        larger);
-                    // A purse under the bribe's floor cannot pay it.
-                    if (bribe > purse) {
-                        continue;
-                    }
-                    expect(plunder)
-                        .withContext(`purse ${purse}, larger ${larger}`)
-                        .toBeGreaterThanOrEqual(bribe);
-                    // Strictly more, EXCEPT when the bribe is already
-                    // taking the player's whole purse — nobody can take
-                    // more than everything.
-                    if (bribe < purse) {
-                        expect(plunder)
-                            .withContext(`purse ${purse}, larger ${larger}`)
-                            .toBeGreaterThan(bribe);
-                    }
-                }
-            }
+    it('takes 25-28 steps of 0.3% of the purse: 3,750-4,200 of 50,000, '
+        + 'the five readings', () => {
+            const takes = [0, 0.2499, 0.25, 0.5, 0.75, 0.9999]
+                .map(roll => npcPlunderCredits(50_000, roll));
+            expect(takes).toEqual([3_750, 3_750, 3_900, 4_050, 4_200, 4_200]);
+            expect(TAKES_OF_20K).toEqual([0, 0.25, 0.5, 0.75]
+                .map(roll => npcPlunderCredits(20_000, roll)));
         });
 
     it('never takes more than the player has', () => {
-        expect(npcPlunderCredits(0)).toEqual(0);
-        expect(npcPlunderCredits(300)).toEqual(300);
-        expect(npcPlunderCredits(-5)).toEqual(0);
+        expect(npcPlunderCredits(0, 0.5)).toEqual(0);
+        expect(npcPlunderCredits(-5, 0.5)).toEqual(0);
+        expect(npcPlunderCredits(10, 0.99)).toBeLessThanOrEqual(10);
     });
 
-    it('takes the fraction once the purse clears the floor', () => {
-        expect(npcPlunderCredits(100_000))
-            .toEqual(100_000 * NPC_PLUNDER_CREDIT_FRACTION);
-        // ...and the floor below that.
-        expect(npcPlunderCredits(3_000)).toEqual(NPC_PLUNDER_CREDIT_MINIMUM);
-    });
-
-    it('is a pure function of synced credits, with no roll', () => {
-        // A random cut would have to agree on its draw count with every
-        // other NPC decision roll on every peer.
-        expect(npcPlunderCredits(12_345)).toEqual(npcPlunderCredits(12_345));
+    it('takes cargo up to the free hold, costliest commodity first', () => {
+        // The reference's one ordering run: 30 t equipment + 50 t
+        // industrial into a 50 t hold took all 30 t of equipment and 20 t
+        // of industrial.
+        expect(npcPlunderCargoPlan(new Map([
+            ['cargo:1', 50], ['cargo:5', 30],
+        ]), 50)).toEqual([['cargo:5', 30], ['cargo:1', 20]]);
+        // All of it when it fits; nothing into a full hold.
+        expect(npcPlunderCargoPlan(new Map([['cargo:0', 20]]), 50))
+            .toEqual([['cargo:0', 20]]);
+        expect(npcPlunderCargoPlan(new Map([['cargo:0', 20]]), 0))
+            .toEqual([]);
+        // Luxury (900) > medical (750) > equipment (550); jünk after the
+        // standard goods; mission cargo never.
+        expect(npcPlunderCargoPlan(new Map([
+            ['mission:test:courier', 5], ['junk:test:1', 4],
+            ['cargo:5', 1], ['cargo:2', 1], ['cargo:3', 1],
+        ]), 100)).toEqual([
+            ['cargo:3', 1], ['cargo:2', 1], ['cargo:5', 1],
+            ['junk:test:1', 4],
+        ]);
     });
 
     it('boards a disabled player and takes the cut, exactly once',
@@ -459,42 +454,95 @@ describe('pirates plundering a disabled player', () => {
             expect(pirate.components.get(NpcComponent)?.mode).toEqual('board');
 
             expect(runUntilBoarded(world)).toBeTrue();
-            expect(hulk.components.get(CreditsComponent)!.credits)
-                .toEqual(20_000 - npcPlunderCredits(20_000));
+            const credits = hulk.components.get(CreditsComponent)!.credits;
+            expect(TAKES_OF_20K).toContain(20_000 - credits);
             expect(hulk.components.get(BoardedComponent)?.boarder)
                 .toEqual(PIRATE);
 
             // EXACTLY ONCE: the durable record is what stops the same
             // pirate — or the next one — coming back for seconds.
-            const after = hulk.components.get(CreditsComponent)!.credits;
             for (let i = 0; i < 300; i++) {
                 world.step();
             }
             expect(hulk.components.get(CreditsComponent)!.credits)
-                .toEqual(after);
+                .toEqual(credits);
         });
 
-    it('tells the player what happened', async () => {
-        // The boarding is over in the tick it happens — no dialog opens —
-        // so the event is the only feedback there is.
-        const { world, hulk } = await playerWorld();
-        const taken: number[] = [];
+    it('sits on the player for the dock before the take', async () => {
+        const { world, pirate, hulk } = await playerWorld();
+        let dockedAt: number | undefined;
+        for (let i = 0; i < 2000 && dockedAt === undefined; i++) {
+            world.step();
+            if (pirate.components.get(NpcComponent)?.boardUntil
+                !== undefined) {
+                dockedAt = world.resources.get(TimeResource)!.time;
+            }
+        }
+        expect(dockedAt).toBeDefined();
+        expect(plunderSpent(hulk.components.get(BoardedComponent)))
+            .toBeFalse();
+        expect(runUntilBoarded(world)).toBeTrue();
+        const tookAt = world.resources.get(TimeResource)!.time;
+        expect(tookAt - dockedAt!).toBeGreaterThanOrEqual(NPC_PLUNDER_DOCK_MS);
+        expect(tookAt - dockedAt!).toBeLessThan(NPC_PLUNDER_DOCK_MS + 100);
+    });
+
+    it('takes the cargo its hold has room for into its own hold',
+        async () => {
+            const { world, pirate, hulk } = await playerWorld({
+                pirateHold: 50, cargo: [['cargo:1', 50], ['cargo:5', 30]],
+            });
+            expect(runUntilBoarded(world)).toBeTrue();
+            expect([...hulk.components.get(CargoComponent)!])
+                .toEqual([['cargo:1', 30]]);
+            expect(new Map(pirate.components.get(CargoComponent)!))
+                .toEqual(new Map([['cargo:5', 30], ['cargo:1', 20]]));
+        });
+
+    it('tells the player what happened: tons and credits', async () => {
+        // No dialog opens, so the event is the only feedback there is.
+        const { world, hulk } = await playerWorld({
+            pirateHold: 50, cargo: [['cargo:0', 20]],
+        });
+        const taken: { credits: number, tons: number }[] = [];
         world.addSystem(new System({
             name: 'CollectPlundered',
             events: [PlayerPlunderedEvent],
             args: [PlayerPlunderedEvent, UUID] as const,
-            step({ credits }, uuid) {
+            step(plundered, uuid) {
                 if (uuid === HULK) {
-                    taken.push(credits);
+                    taken.push(plundered);
                 }
             },
         }));
         expect(runUntilBoarded(world)).toBeTrue();
-        expect(taken).toEqual([npcPlunderCredits(20_000)]);
-        expect(playerPlunderedMessage(taken[0])).toContain('stolen!');
+        expect(taken.length).toBe(1);
+        expect(taken[0].tons).toBe(20);
+        expect(TAKES_OF_20K).toContain(taken[0].credits);
         expect(hulk.components.get(CreditsComponent)!.credits)
-            .toEqual(20_000 - taken[0]);
+            .toEqual(20_000 - taken[0].credits);
+        expect(playerPlunderedMessage(taken[0].credits, taken[0].tons))
+            .toEqual(`20 tons of cargo and ${taken[0].credits
+                .toLocaleString('en-US')} credits stolen!`);
     });
+
+    it('then lets the player go: non-hostile toward him, and leaving',
+        async () => {
+            const { world, pirate, hulk } = await playerWorld();
+            expect(runUntilBoarded(world)).toBeTrue();
+            const npc = pirate.components.get(NpcComponent)!;
+            expect(npc.pacifiedFrom).toEqual(HULK);
+            expect(npc.mode).toEqual('depart');
+            expect(npc.boardTarget).toBeUndefined();
+            expect(npc.boardUntil).toBeUndefined();
+            // The player stays disabled and is not attacked again.
+            for (let i = 0; i < 300; i++) {
+                world.step();
+                expect(world.entities.get(PIRATE)?.components
+                    .get(NpcComponent)?.mode).not.toEqual('attack');
+            }
+            expect(hulk.components.has(DisabledComponent)).toBeTrue();
+        });
 
     /**
      * mïsn Flags 0x8000 "Mission will fail if player is boarded by

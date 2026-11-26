@@ -12,6 +12,7 @@ export * from './hail_component.js';
 export * from './npc_component.js';
 export * from './npc_formation.js';
 export * from './npc_plunder.js';
+export * from './let_go.js';
 export * from './npc_targeting.js';
 export * from './on_sight.js';
 export * from './system_hold.js';

@@ -551,18 +551,28 @@ export function landingRequestMessage(kind: LandingRequestKind,
 }
 
 /**
- * What the player is told when pirates board their disabled ship and take
- * a cut of their cash (gövt Flags 0x1000, "including the player").
+ * What the player is told when pirates board their disabled ship and rob
+ * it (gövt Flags 0x1000, "including the player"): "<N> tons of cargo and
+ * <M> credits stolen!" — the original's line, read off the screen in all
+ * seven runs of reference "Pirates and a disabled player (A9), wave 38"
+ * ("20 tons of cargo and 3,750 credits stolen!", "50 tons of cargo and 570
+ * credits stolen!", "... 105,000 credits stolen!").
  *
- * COMPOSED FROM STOCK VOCABULARY, the way the original composes its own
- * theft line. STR# 2002 has no whole sentence for this — it builds one out
- * of fragments, and the pieces sitting together at indices 372-373 are
- * "cargo" and "stolen!", i.e. "<what> stolen!". Matthew's ruling is that
- * pirates take CREDITS rather than cargo, so the same frame is filled with
- * the sum: "12,500 credits stolen!".
+ * STR# 2002 has no whole sentence for it: the original composes it from
+ * fragments, "ton" / "tons" (0-based 0 / 1), "cargo" (372), "credit" /
+ * "credits" (31 / 32) and "stolen!" (373), with "of" and "and" between.
+ * GUESS: the same full form when nothing was taken of one of the two (no
+ * run carried no cargo or no cash); the singulars are the table's own;
+ * the sum is written out in full with commas ("105,000"), never the
+ * HUD's "1.05M".
  */
-export function playerPlunderedMessage(credits: number): string {
-    return `${formatCredits(credits)} credits stolen!`;
+export function playerPlunderedMessage(credits: number, tons: number):
+    string {
+    const tonWord = tons === 1 ? 'ton' : 'tons';
+    const creditWord = credits === 1 ? 'credit' : 'credits';
+    return `${tons.toLocaleString('en-US')} ${tonWord} of cargo and `
+        + `${Math.max(0, Math.floor(credits)).toLocaleString('en-US')} `
+        + `${creditWord} stolen!`;
 }
 
 /**

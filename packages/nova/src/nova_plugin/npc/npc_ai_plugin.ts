@@ -118,6 +118,8 @@ import { DistressCallEvent, DistressCallEventType } from './distress.js';
  *  npc_fire_control.ts      NpcFireControlSystem
  *  npc_plunder.ts           gövt Flags 0x1000 rules and tunables
  *  npc_plunder_board.ts     NpcPlunderBoardSystem, PlayerPlunderedEvent
+ *  let_go.ts                letGo: a bribed ship / a pirate done
+ *                           plundering lets the player go (and leaves)
  *  npc_formation.ts         Formation / FormationComponent, slot
  *                           geometry, steerFormation, RCS tuning
  *  npc_formation_system.ts  FormationSystem
@@ -162,8 +164,10 @@ export {
 } from './npc_steering.js';
 export {
     NPC_PLUNDER_BOARDER_AI_TYPES, NPC_PLUNDER_VICTIM_AI_TYPES,
-    NPC_PLUNDER_TAKES_FROM_PLAYERS, NPC_PLUNDER_CREDIT_FRACTION,
-    NPC_PLUNDER_CREDIT_MINIMUM, npcPlunderCredits, NPC_PLUNDER_SEEK_RANGE,
+    NPC_PLUNDER_TAKES_FROM_PLAYERS, NPC_PLUNDER_CREDIT_STEP,
+    NPC_PLUNDER_CREDIT_MIN_STEPS, NPC_PLUNDER_CREDIT_MAX_STEPS,
+    npcPlunderCredits, npcPlunderCargoPlan, NPC_PLUNDER_DOCK_MS,
+    NPC_PLUNDER_SEEK_RANGE,
     NPC_BOARD_RADIUS, NPC_BOARD_SPEED, npcPlundersHulks, npcPlunderEligible,
     npcBoardArrived,
 } from './npc_plunder.js';

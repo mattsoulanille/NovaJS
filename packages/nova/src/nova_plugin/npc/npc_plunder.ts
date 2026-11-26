@@ -1,5 +1,5 @@
 import { MovementState } from 'nova_ecs/plugins/movement_plugin';
-import { BRIBE_MINIMUM } from '../reputation/index.js';
+import { STANDARD_COMMODITY_BASE_PRICES } from '../ship/index.js';
 
 // --- NPC plundering of disabled hulks (gövt Flags 0x1000) ---
 //
@@ -29,18 +29,21 @@ import { BRIBE_MINIMUM } from '../reputation/index.js';
 //    (InherentAI <= 2)".
 //  - "(including the player)" IS implemented (Matthew's ruling): a
 //    DISABLED player is boarded exactly like a hulk, and the pirates take
-//    a cut of the player's cash. See npcPlunderCredits for the amount and
-//    why it is pegged above the bribe.
-//  - DISABLED FIRST is imposed by this engine, not by the Bible (the
-//    flag says only "before destroying them"). Boarding in NovaJS is
-//    defined against a disabled hulk (boarding_component.ts), so an NPC
-//    plunder run waits for the hulk like the player does — the player
-//    included.
+//    cargo and a share of the cash, then let him go — measured on the
+//    original (reference "Pirates and a disabled player (A9), wave 38";
+//    see below). The player's HULL type does not matter (a warship-type
+//    player hull was plundered the same way), and the Bible's "before
+//    destroying them" did not happen: the pirate left him disabled.
+//  - DISABLED FIRST: the flag says only "before destroying them", but the
+//    original's pirate fired until "Ship disabled.", stopped, and boarded
+//    (reference A9, wave 38). Boarding in NovaJS is defined against a
+//    disabled hulk (boarding_component.ts) anyway, so an NPC plunder run
+//    waits for the hulk like the player does — the player included.
 //  - From an NPC HULK the boarder takes nothing material: there is
 //    nowhere for an NPC's booty to go and no way for anyone to observe
 //    it, so the whole point of the run is the DENIAL — the hulk's one
 //    plunder is spent and the player is refused. From a PLAYER there is
-//    somewhere for it to go, so credits actually move.
+//    somewhere for it to go, so cargo and credits actually move.
 //
 // This module holds the RULES (pure predicates and tunables). The
 // decision system consults them when gathering candidates, the steering
@@ -70,50 +73,114 @@ export const NPC_PLUNDER_TAKES_FROM_PLAYERS = true;
  * What pirates take off a disabled PLAYER
  * ============================================================================
  *
- * A cut of the player's cash — Matthew's ruling — and it MUST COST MORE
- * THAN BUYING THEM OFF. That relation is the whole design: a hostile ship
- * you can still fly away from will take `shipBribePrice` (hail.ts) to
- * leave you alone, so if letting yourself be disabled and boarded were
- * cheaper, the bribe would be strictly dominated and nobody would ever pay
- * one.
+ * MEASURED (reference "Pirates and a disabled player (A9), wave 38", seven
+ * runs): a 0x1000 warship that has disabled the player comes alongside,
+ * sits on him about 5 s (NPC_PLUNDER_DOCK_MS) and takes CARGO AND CREDITS
+ * in one go — "<N> tons of cargo and <M> credits stolen!" — then lets him
+ * go (npc/let_go.ts): non-hostile, off out of the system, the player left
+ * disabled and not shot again.
  *
- * So both terms of the demand are pegged above the bribe's:
- *
- *  - the FRACTION is above a third, the cash cap on any bribe (hail.ts's
- *    askingCashCap, reference "R7 bribe price, wave 22": no bribe asks
- *    more than a third of the cash, rounded down to 1,000s);
- *  - the FLOOR is DERIVED from BRIBE_MINIMUM (1,000, which a bribe asks
- *    even of a poorer pilot) rather than written out, so raising the bribe
- *    floor cannot silently leave a cheap plunder behind it.
- *
- * The one place the two can be EQUAL is a purse that is exactly the
- * bribe: the plunder is capped at what the player actually has, and
- * nobody can take more than everything. A purse under the bribe's floor
- * cannot pay the bribe at all. npc_boarding_test pins the relation (>=
- * every payable bribe, > whenever the bribe is not already taking the
- * whole purse) across a sweep of purses, ships and both bribe flags, so
- * the two functions cannot drift apart.
- *
- * PURE AND DETERMINISTIC: a function of the synced CreditsComponent
- * alone, with no roll, so every peer deducts the same amount on the same
- * tick. (A random cut would also have to agree on the draw count with
- * every other NPC's decision roll.)
+ *  - CARGO: as much as the pirate's own free hold takes (all 20 t of food;
+ *    50 of 80 t into a 50 t hold), the costliest commodity first (30 t of
+ *    equipment before 20 t of industrial; one run). npcPlunderCargoPlan.
+ *  - CREDITS: a drawn share of the purse. npcPlunderCredits.
  */
-export const NPC_PLUNDER_CREDIT_FRACTION = 0.50;
-/** The floor, pegged above the bribe's (see NPC_PLUNDER_CREDIT_FRACTION). */
-export const NPC_PLUNDER_CREDIT_MINIMUM = 2 * BRIBE_MINIMUM;
 
 /**
- * The credits pirates take off a disabled player: the larger of the
- * fraction and the floor, capped at what the player actually has.
- * The shape of a cash-capped demand, one tier above the bribe's.
+ * The credit share, in steps of NPC_PLUNDER_CREDIT_STEP of the purse: a
+ * uniform integer draw in [MIN_STEPS, MAX_STEPS].
+ *
+ * Every reading is a whole number of 0.3% steps of the purse: of 50,000,
+ * 3,750 / 3,900 / 4,050 (twice) / 4,200 — 25 to 28 steps of 150, five
+ * draws all on the step, which rounding to tens would almost never give —
+ * and 570 of 10,000 (19 steps), 105,000 of 1,000,000 (35 steps). GUESS on
+ * the shape: the draw spans the five 50,000 readings, 25-28 steps (7.5% to
+ * 8.4%); the two single readings of other purses (5.7%, 10.5%) say the
+ * share may grow with the purse, which wants more purses to pin (the
+ * "Wave 38 leftovers" row).
  */
-export function npcPlunderCredits(playerCredits: number): number {
+export const NPC_PLUNDER_CREDIT_STEP = 0.003;
+export const NPC_PLUNDER_CREDIT_MIN_STEPS = 25;
+export const NPC_PLUNDER_CREDIT_MAX_STEPS = 28;
+
+/**
+ * The credits pirates take off a disabled player with `playerCredits`,
+ * given ONE uniform draw `roll` in [0, 1) from the seeded RandomResource:
+ * floor(purse x steps x 0.3%), never more than the purse.
+ */
+export function npcPlunderCredits(playerCredits: number,
+    roll: number): number {
     const purse = Math.max(0, Math.floor(playerCredits));
-    const demand = Math.max(NPC_PLUNDER_CREDIT_MINIMUM,
-        Math.floor(purse * NPC_PLUNDER_CREDIT_FRACTION));
-    return Math.min(demand, purse);
+    const span = NPC_PLUNDER_CREDIT_MAX_STEPS
+        - NPC_PLUNDER_CREDIT_MIN_STEPS + 1;
+    const steps = NPC_PLUNDER_CREDIT_MIN_STEPS
+        + Math.min(span - 1, Math.floor(roll * span));
+    // Integer arithmetic: steps x 3 / 1000 of the purse, so a 50,000 purse
+    // gives exactly 3,750 / 3,900 / 4,050 / 4,200 on every peer.
+    return Math.min(purse, Math.floor(purse * steps * 3 / 1000));
 }
+
+/**
+ * The rank of a cargo key for a pirate's take: the standard commodities
+ * by base price, dearest first (equipment, 550, before industrial, 350:
+ * the one measured order), then jünk (GUESS: unmeasured; a jünk's price is
+ * game data the board does not read), and mission cargo never (GUESS: no
+ * run carried any; taking it would leave a mission no way to finish).
+ * Returns undefined for a key the pirate does not take.
+ */
+function cargoTakeRank(key: string): number | undefined {
+    const standard = /^cargo:(\d+)$/.exec(key);
+    if (standard) {
+        const price = STANDARD_COMMODITY_BASE_PRICES[Number(standard[1])];
+        return price === undefined ? undefined : -price;
+    }
+    if (key.startsWith('junk:')) {
+        return 0;
+    }
+    return undefined;
+}
+
+/**
+ * What a pirate takes from a disabled player's hold: up to `freeSpace`
+ * tons, the costliest commodity first (cargoTakeRank), ties by key so
+ * every peer moves the same tons of the same commodities. Returns [key,
+ * tons] entries with tons > 0.
+ */
+export function npcPlunderCargoPlan(cargo: ReadonlyMap<string, number>,
+    freeSpace: number): [string, number][] {
+    const ranked: [string, number][] = [];
+    for (const key of cargo.keys()) {
+        const rank = cargoTakeRank(key);
+        if (rank !== undefined) {
+            ranked.push([key, rank]);
+        }
+    }
+    ranked.sort(([a, ra], [b, rb]) => ra - rb || (a < b ? -1 : a > b ? 1 : 0));
+    let remaining = Math.max(0, Math.floor(freeSpace));
+    const plan: [string, number][] = [];
+    for (const [key] of ranked) {
+        if (remaining <= 0) {
+            break;
+        }
+        const take = Math.min(Math.max(0, Math.floor(cargo.get(key) ?? 0)),
+            remaining);
+        if (take > 0) {
+            plan.push([key, take]);
+            remaining -= take;
+        }
+    }
+    return plan;
+}
+
+/**
+ * MEASURED. How long a plunder boarder sits on its prize before the take:
+ * reference A9, wave 38 — the pirate came alongside about 76 s and the
+ * line came at 81.3 s (12.5-14 s after the disable in all seven runs, the
+ * approach included). The same dock for an NPC hulk (GUESS: only the
+ * player was watched).
+ */
+export const NPC_PLUNDER_DOCK_MS = 5000;
+
 /** TUNABLE. How far away a warship will notice a plunderable hulk. */
 export const NPC_PLUNDER_SEEK_RANGE = 4000;
 /** TUNABLE. "Pulled alongside", for an NPC (the player's own gate is

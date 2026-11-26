@@ -311,10 +311,11 @@ const ShowPlunderSelfDestructMessage = new System({
     },
 });
 
-// Pirates boarded the LOCAL PLAYER's disabled ship and took a cut of
-// their cash (gövt Flags 0x1000). Emitted in the sim targeted at the
+// Pirates boarded the LOCAL PLAYER's disabled ship and took cargo and a
+// share of their cash (gövt Flags 0x1000): "<N> tons of cargo and <M>
+// credits stolen!" (reference A9, wave 38). Emitted in the sim targeted at the
 // plundered ship, re-emitted here, shown on that player's client only.
-// The boarding is over in the tick it happens, so this line and the
+// No dialog opens (the take is over in one tick), so this line and the
 // boarding beep are the whole of the experience — hence the sound: it is
 // the same clamp-on beep the player hears when THEY board somebody
 // (BOARD_SOUND, snd nova:390), which is exactly what has just happened to
@@ -324,8 +325,8 @@ const ShowPlayerPlunderedMessage = new System({
     events: [PlayerPlunderedEvent],
     args: [PlayerPlunderedEvent, StatusLineResource, TimeResource,
         PlayerShipSelector, Emit] as const,
-    step({ credits }, statusLine, { time }, _player, emit) {
-        statusLine.setMessage(playerPlunderedMessage(credits), time);
+    step({ credits, tons }, statusLine, { time }, _player, emit) {
+        statusLine.setMessage(playerPlunderedMessage(credits, tons), time);
         emit(UiSoundEvent, { id: BOARD_SOUND });
     },
 });

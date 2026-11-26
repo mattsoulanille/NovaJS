@@ -19,7 +19,7 @@ import { GovtComponent } from '../core/index.js';
 import { JumpComponent } from '../travel/index.js';
 import {
     AssistingComponent, AssistingType, FuelHaggleComponent, FuelHaggleType,
-    isInFlock, MercyHaggleComponent, MercyHaggleType, NpcFireControlSystem,
+    MercyHaggleComponent, MercyHaggleType, NpcFireControlSystem,
 } from '../npc/index.js';
 import { NpcRespawnSystem } from '../spawn/index.js';
 import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/index.js';
@@ -61,15 +61,15 @@ import {
 import { ActiveRanksComponent } from '../ncb/index.js';
 import { ranksAllowAssistance, ranksGiveFreeFuel } from '../ncb/index.js';
 import { OutfitsStateComponent } from '../ship/index.js';
-import { ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
+import { ShipDataComponent } from '../ship/index.js';
 import {
     alliedEitherWay, localLawIn, shipDisposition,
 } from '../reputation/index.js';
 import {
-    heldInSystem, isPacifiedToward, NpcComponent, NpcSteeringSystem,
+    isPacifiedToward, NpcComponent, NpcSteeringSystem,
 } from '../npc/index.js';
 import { AggressionComponent, isIffHostile } from '../combat/index.js';
-import { contrabandDetectedBy, ShootAllWeaponsComponent } from '../npc/index.js';
+import { contrabandDetectedBy, letGo, shipLeavesWhenLettingGo, ShootAllWeaponsComponent } from '../npc/index.js';
 import {
     ControlledByComponent, CreditsComponent, GameDateComponent, MissionsComponent,
     PlayerEscortComponent,
@@ -280,19 +280,12 @@ function sendPlayerHail(world: World, sender: Entity, to: string,
  * reference "A paid ship bribe (A8), wave 37" — all three bribed MOBILE
  * warships flew off at once and were entering hyperspace 13-23 s after the
  * payment, while one that could not move (hull Speed / Accel 0) stayed,
- * bought, for the 4.5 minutes watched. So a ship leaves when it can: it
- * moves (its effective speed and acceleration, outfits included, are
- * above 0; GUESS: either at 0 anchors it) and nothing holds it here
- * (system_hold.ts: a refuel offer on the table, a rescue target waiting).
- * It leaves by the ordinary NPC jump-out ('depart': straight out past the
- * no-jump zone, then the jump), so when it is gone depends on where it is
- * and how fast it flies (the measured 13-23 s is the stock kit warship's).
+ * bought, for the 4.5 minutes watched. The rule is the npc domain's
+ * shipLeavesWhenLettingGo (npc/let_go.ts), which a pirate that has
+ * plundered a disabled player follows too (reference A9, wave 38).
  */
 export function bribedShipLeaves(ship: Entity): boolean {
-    const physics = ship.components.get(ShipPhysicsComponent)
-        ?? ship.components.get(ShipDataComponent)?.physics;
-    return physics !== undefined && physics.speed > 0
-        && physics.acceleration > 0 && !heldInSystem(ship);
+    return shipLeavesWhenLettingGo(ship);
 }
 
 /** Assist: the helper thrusts toward the client until within this range. */
@@ -782,36 +775,16 @@ export function applyHail(world: World, peerId: string | undefined,
     // was hunting gets the same relief until it jumps — unless that pilot
     // hits it, which records them as its aggressor but, not being the
     // briber, does not turn it back (GUESS; single-player reference only).
+    // The pacification itself, the departure and the forgotten aggression
+    // are npc/let_go.ts's letGo, which a pirate that has plundered a
+    // disabled player goes through too (reference A9, wave 38).
     const npc = target.components.get(NpcComponent);
     if (npc) {
-        npc.pacifiedFrom = found.uuid;
-        // The briber's escorts too: a ship one of them provoked records
-        // that escort as its aggressor (npc_targeting.ts's
-        // responsibleShip), and the money buys off the whole flock's fight.
-        if (npc.aggressor === found.uuid || (npc.aggressor !== undefined
-            && isInFlock(npc.aggressor, found.uuid,
-                id => world.entities.get(id)))) {
-            npc.aggressor = undefined;
-        }
-        const tgt = target.components.get(TargetComponent);
-        if (npc.mode === 'attack' && tgt?.target === found.uuid) {
-            npc.mode = undefined;
-            tgt.target = undefined;
-        }
-        if (bribedShipLeaves(target)) {
-            // Off at once, by the ordinary jump-out (the out-of-ammo exit's
-            // shape: whatever it was about is dropped).
-            npc.mode = 'depart';
-            if (tgt) {
-                tgt.target = undefined;
-            }
-            npc.boardTarget = undefined;
-            delete npc.mineTarget;
-            delete npc.scanTarget;
-            delete npc.scanSatOn;
-        }
+        letGo(target, action.target, npc, found.uuid,
+            id => world.entities.get(id));
+    } else {
+        forgetMutualAggression(player, action.target, target, found.uuid);
     }
-    forgetMutualAggression(player, action.target, target, found.uuid);
 }
 
 /**

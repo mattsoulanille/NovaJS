@@ -617,6 +617,7 @@ export const NpcDecisionSystem = new System({
             delete npc.scanTarget;
             delete npc.scanSatOn;
             npc.boardTarget = undefined;
+            delete npc.boardUntil;
             return;
         }
 
@@ -910,6 +911,11 @@ export const NpcDecisionSystem = new System({
                     const keep = npc.mode === 'board' && npc.boardTarget
                         !== undefined && plunderable.some(
                             ([u]) => u === npc.boardTarget);
+                    if (!keep) {
+                        // A fresh approach: no dock carried over from an
+                        // earlier run (npc_plunder_board.ts's boardUntil).
+                        delete npc.boardUntil;
+                    }
                     npc.boardTarget = keep
                         ? npc.boardTarget : chooseNearest(plunderable);
                     npc.mode = 'board';
@@ -920,6 +926,7 @@ export const NpcDecisionSystem = new System({
                     // out of range: back to ordinary warship business.
                     npc.mode = undefined;
                     npc.boardTarget = undefined;
+                    delete npc.boardUntil;
                 }
                 // A fleet escort goes when its LEADER goes (above), not on
                 // its own roll (fleetLeaderLeaving; reference "Traffic wave

@@ -253,6 +253,7 @@ function letGo(escort: Entity): void {
         npc.aggressor = undefined;
         npc.destination = undefined;
         npc.boardTarget = undefined;
+        delete npc.boardUntil;
     } else {
         escort.components.set(NpcComponent, {
             aiType: escort.components.get(ShipDataComponent)?.inherentAI ?? 1,
