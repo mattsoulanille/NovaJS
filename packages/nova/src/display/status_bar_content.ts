@@ -383,6 +383,13 @@ export function captureRepelledMessage(): string {
 }
 
 /**
+ * The line when the player's own ship is disabled: stock STR# 2002 0-based
+ * 286, verbatim (reference "A disabled player (A10), wave 37", finding 3:
+ * printed at the moment of the disable).
+ */
+export const SHIP_DISABLED_MESSAGE = 'Ship disabled.';
+
+/**
  * The stock line for a booty take that tripped the hulk's security
  * self-destruct: STR# 2002 index 112, verbatim (reference "Disabled ships,
  * wave 24": the only line shown, the dialog gone, the hulk destroyed).

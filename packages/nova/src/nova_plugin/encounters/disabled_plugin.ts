@@ -1,4 +1,6 @@
+import * as t from 'io-ts';
 import { Emit, GetEntity, UUID } from 'nova_ecs/arg_types';
+import { EcsEvent } from 'nova_ecs/events';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
@@ -29,6 +31,7 @@ import {
     JumpComponent, JumpRouteComponent, JumpSequenceSystem, warpUpSound,
 } from '../travel/index.js';
 import { PlayerSoundEvent } from '../core/index.js';
+import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
 
 /**
  * Ship disabling — see disabled_component.ts for the overview, the
@@ -57,6 +60,19 @@ import { PlayerSoundEvent } from '../core/index.js';
  * NPC target validity (npc_ai_plugin), running lights and target corners
  * (display).
  */
+
+/**
+ * Emitted (targeted at the ship) when a PLAYER-controlled ship becomes
+ * disabled, so that player's status line can say "Ship disabled." (stock
+ * STR# 2002 0-based 286, verbatim; reference "A disabled player (A10),
+ * wave 37", finding 3: printed at the moment of the disable). NPC
+ * disables emit nothing (no line names them). Display only: never
+ * mutates the simulation.
+ */
+export const ShipDisabledEvent =
+    new EcsEvent<Record<string, never>>('ShipDisabledEvent');
+export const ShipDisabledEventType = t.type({});
+registerSimulationBridgeEvent({ event: ShipDisabledEvent });
 
 const RepairProvider = ProvideFromCache({
     name: 'RepairProvider',
@@ -103,6 +119,9 @@ export const ShipDisableSystem = new System({
                 repairAt: rollRepairTime(time.time, repair.hasRepairSystem,
                     controlledBy !== undefined, () => random.next()),
             });
+            if (controlledBy !== undefined) {
+                emit(ShipDisabledEvent, {}, [uuid]);
+            }
             // Disabling drops the cloak through the existing decloak
             // transition (state flip + one cloak-off sound).
             if (cloakActive?.active) {
@@ -318,6 +337,8 @@ export const DisabledPlugin: Plugin = {
         // carry it through the default codec path (like NpcComponent).
         world.resources.get(SerializerResource)
             ?.addComponent(DisabledComponent, DisabledState);
+        world.resources.get(SerializerResource)
+            ?.addEvent(ShipDisabledEvent, ShipDisabledEventType);
 
         // The repair capability is derived from owned outfits and
         // re-derived wherever a full entity is built (staged insertion,

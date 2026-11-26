@@ -30,6 +30,7 @@ import {
     rollRepairTime,
 } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
+import { ShipDisabledEvent } from './disabled_plugin.js';
 import { SourceComponent } from '../combat/index.js';
 import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/index.js';
 import { makeShip } from '../ship/index.js';
@@ -561,6 +562,32 @@ describe('ship disabling in a live world', () => {
             expect(disabled.repairAt!).toBeGreaterThanOrEqual(
                 PLAYER_REPAIR_DELAY_MIN_MS);
         }, 120_000);
+
+    it('tells a player-controlled ship once, at the disable, and an NPC '
+        + 'never (reference "A disabled player (A10), wave 37": "Ship '
+        + 'disabled.")', async () => {
+        for (const controlled of [true, false]) {
+            const { world, ship } = await shipWorld(SKIFF, { controlled });
+            const told: string[] = [];
+            world.addSystem(new System({
+                name: 'CountShipDisabled',
+                events: [ShipDisabledEvent],
+                args: [UUID] as const,
+                step(uuid) {
+                    told.push(uuid);
+                },
+            }));
+            world.step();
+            expect(told).toEqual([]);
+            damageToFraction(ship, 0.2);
+            world.step();
+            expect(ship.components.has(DisabledComponent)).toBeTrue();
+            for (let i = 0; i < 30; i++) {
+                world.step();
+            }
+            expect(told).toEqual(controlled ? [SHIP] : []);
+        }
+    }, 120_000);
 
     it('leaves NPCs with no repair outfit stranded', async () => {
         const { world, ship } = await shipWorld(SKIFF);
