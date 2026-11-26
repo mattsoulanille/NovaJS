@@ -53,10 +53,13 @@ import { GovtData } from 'novadatainterface/govt_data';
  *
  * COMBAT RATING (Bible, Appendix I): "the number of kills you have
  * made, which is the sum of the strengths of all the ships you have
- * destroyed, times some internal multiplier". The multiplier is
- * undocumented; NovaJS uses 1 (raw strength sum), which matches the
- * scale real missions gate on (stock AvailRating values run 1..12800,
- * exactly Appendix I's kill-point tiers).
+ * destroyed, times some internal multiplier". The multiplier is 0.2:
+ * a kill adds a FIFTH of the victim's Strength (reference "Kill credit
+ * for an escort's or a bay fighter's kill (R6), wave 37": Strength 200
+ * -> +40, and wave 5's Strength 50 -> +10, wave 10's Strength 20 -> +4).
+ * The kill-point total is the pilot file's stored rating, so the tiers
+ * below (stock AvailRating values run 1..12800, exactly Appendix I's
+ * tiers) read it unscaled. See combatRatingKillPoints.
  */
 
 /** Per-player legal records: sÿst global id (e.g. 'nova:130') -> record
@@ -193,6 +196,16 @@ export const COMBAT_RATING_TIERS: readonly (readonly [number, string])[] = [
     [12800, 'Deadly'],
     [25600, 'Frightening'],
 ];
+
+/**
+ * The kill points one kill adds to the combat rating: a fifth of the
+ * victim's Strength (reference "... (R6), wave 37"). Rounded DOWN
+ * (GUESS: every Strength measured so far is a multiple of 5); a
+ * negative Strength adds nothing.
+ */
+export function combatRatingKillPoints(strength: number): number {
+    return Math.max(0, Math.floor(strength / 5));
+}
 
 /** The Appendix I rating name for a kill-point total. */
 export function combatRatingName(kills: number): string {

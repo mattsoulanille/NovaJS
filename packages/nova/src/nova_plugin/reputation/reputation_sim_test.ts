@@ -44,7 +44,7 @@ const VAEL = SYNTHETIC.systems.vael;
  * The reputation pipeline in a LIVE world (parsed game data, the full
  * simulation stack): a shot attributed to a player zeroes a Meridian
  * ship's armor -> the player's Meridian record drops by the kill penalty
- * and their combat rating grows by the victim's strength; and a Meridian
+ * and their combat rating grows by a fifth of the victim's strength; and a Meridian
  * warship's NPC brain treats a player with a criminal Meridian record as
  * an enemy.
  */
@@ -124,8 +124,11 @@ describe('reputation in a live world', () => {
             [THESSALY]: -killCost, [KESTREL]: -10 + 5, [OSSORY]: -3,
             [VAEL]: -10,
         });
+        // A fifth of the skiff's Strength 8, rounded down (reference
+        // "... (R6), wave 37": the combat rating adds Strength / 5).
+        expect(victimData.strength).toBe(8);
         expect(player.components.get(CombatRatingComponent)!.kills)
-            .toBe(victimData.strength);
+            .toBe(1);
 
         // Repeat hits on the exploding hulk do not double-credit.
         world.emit(DamagedEvent, {

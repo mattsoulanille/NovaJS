@@ -7,6 +7,7 @@ import {
     addRecordIn,
     availRatingOk,
     availRecordOk,
+    combatRatingKillPoints,
     combatRatingName,
     compRewardDelta,
     crimePenalty,
@@ -227,6 +228,23 @@ describe('availRecordOk / availRatingOk', () => {
         expect(availRatingOk(200, 199)).toBe(false);
         expect(availRatingOk(200, 200)).toBe(true);
         expect(availRatingOk(0, 0)).toBe(true);
+    });
+});
+
+describe('combatRatingKillPoints (R6, wave 37)', () => {
+    it('adds a fifth of the victim\'s Strength per kill', () => {
+        // Reference "... (R6), wave 37": Strength 200 -> +40; wave 5's
+        // Strength 50 -> +10; wave 10's Strength 20 -> +4.
+        expect(combatRatingKillPoints(200)).toBe(40);
+        expect(combatRatingKillPoints(50)).toBe(10);
+        expect(combatRatingKillPoints(20)).toBe(4);
+    });
+
+    it('rounds down (GUESS) and never subtracts', () => {
+        expect(combatRatingKillPoints(8)).toBe(1);
+        expect(combatRatingKillPoints(4)).toBe(0);
+        expect(combatRatingKillPoints(0)).toBe(0);
+        expect(combatRatingKillPoints(-50)).toBe(0);
     });
 });
 

@@ -16,7 +16,7 @@ import { SourceComponent } from '../ship/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { GovtComponent, SystemIdResource } from '../core/index.js';
 import { ArmorComponent, CloakDecloakOnHitSystem, ExplodingClearedSystem, KnockbackSystem, OutfitWeaponProvider } from '../ship/index.js';
-import { Crime } from './reputation.js';
+import { combatRatingKillPoints, Crime } from './reputation.js';
 import { applyCrime, LegalGeography, lawSystemOf } from './system_records.js';
 import { ShipDataComponent } from '../ship/index.js';
 import { ActiveRanksComponent, AggressionSuppressGovtsComponent } from '../ncb/index.js';
@@ -70,7 +70,8 @@ export const LegalRecordsComponent =
     new Component<LegalRecordsState>('SystemLegalRecords');
 
 export const CombatRatingType = t.type({
-    /** Appendix I kill points: summed strengths of destroyed ships. */
+    /** Appendix I kill points: a fifth of each destroyed ship's Strength,
+     * summed (combatRatingKillPoints). */
     kills: t.number,
 });
 export type CombatRatingState = t.TypeOf<typeof CombatRatingType>;
@@ -246,8 +247,8 @@ const DamageAttributionSystem = new System({
 
 /**
  * Credits a kill when a ship's armor reaches zero: the responsible
- * root's combat rating grows by the victim's shïp Strength (Appendix
- * I), and — when the victim has a government — the root's legal
+ * root's combat rating grows by a fifth of the victim's shïp Strength
+ * (Appendix I's "internal multiplier", combatRatingKillPoints), and — when the victim has a government — the root's legal
  * records take the crime of DisabPenalty + KillPenalty in this system and
  * the systems linked to it (chargeCrime). Roots without the components
  * (NPCs) are unaffected.
@@ -295,7 +296,7 @@ export const KillCreditSystem = new System({
         }
         const rating = root.components.get(CombatRatingComponent);
         if (rating) {
-            rating.kills += Math.max(0, shipData.strength);
+            rating.kills += combatRatingKillPoints(shipData.strength);
         }
         if (govt) {
             const govtData = gameData.data.Govt.getCached(govt.id);
