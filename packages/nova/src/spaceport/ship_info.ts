@@ -113,33 +113,35 @@ const WEAPONS_FONT: Partial<PIXI.ITextStyle> = {
     ...STAT_FONT, wordWrap: true, wordWrapWidth: WEAPONS_WIDTH,
 };
 
-/**
- * The qualitative acceleration rating shown in the ship info dialog, in
- * the original's raw shïp Accel units. The original's exact bands are
- * not documented; these are calibrated against the reference
- * screenshots (Shuttle 500 = "Good", IDA Frigate 275 = "Average").
+/*
+ * The qualitative Accel and Turn ratings of the ship info dialog, in the
+ * original's raw shïp units. MEASURED (reference "Ship-info rating words
+ * (E11), wave 40", twenty hulls at Accel 50 k / Turn 5 k): six words, the
+ * lowest "Terrible". Accel read Terrible at <= 100, Poor 150-200, Average
+ * 250-350, Good 400-550, Very Good 600-700, Excellent >= 750; Turn
+ * Terrible <= 10, Poor 15-20, Average 25-30, Good 35-40, Very Good 45-50,
+ * Excellent >= 55. Each edge is GUESSED at the lowest measured value of
+ * its band (a band starts somewhere in the 50- or 5-wide gap below it).
  */
-function accelRating(raw: number): string {
-    if (raw >= 700) return 'Excellent';
-    if (raw >= 550) return 'Very Good';
+
+/** The ship info dialog's Accel word, from the raw shïp Accel. */
+export function accelRating(raw: number): string {
+    if (raw >= 750) return 'Excellent';
+    if (raw >= 600) return 'Very Good';
     if (raw >= 400) return 'Good';
     if (raw >= 250) return 'Average';
     if (raw >= 150) return 'Poor';
-    return 'Feeble';
+    return 'Terrible';
 }
 
-/**
- * The qualitative turn rating shown in the ship info dialog, in the
- * original's raw shïp Maneuver units. Calibrated against the reference
- * screenshots (Shuttle 40 = "Good", IDA Frigate 30 = "Average").
- */
-function turnRating(raw: number): string {
-    if (raw >= 70) return 'Excellent';
+/** The ship info dialog's Turn word, from the raw shïp Maneuver. */
+export function turnRating(raw: number): string {
+    if (raw >= 55) return 'Excellent';
     if (raw >= 45) return 'Very Good';
     if (raw >= 35) return 'Good';
     if (raw >= 25) return 'Average';
     if (raw >= 15) return 'Poor';
-    return 'Feeble';
+    return 'Terrible';
 }
 
 /** "Maximum of N", "None", or the bare count, as the original shows. */
