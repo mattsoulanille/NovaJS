@@ -6,7 +6,8 @@ import {
 import { System } from 'nova_ecs/system';
 import { EscortCommandComponent } from '../player/index.js';
 import {
-    DisabledComponent, getShipMovementPhysics, ION_FACTOR, IsIonizedComponent,
+    DisabledComponent, getShipMovementPhysics, IonizationComponent,
+    ionSlowdown, IsIonizedComponent,
     ShipDataComponent, ShipPhysicsComponent,
 } from '../ship/index.js';
 import { EffectiveMovementPhysicsSystem, JumpComponent } from '../travel/index.js';
@@ -87,7 +88,7 @@ export function npcAfterburning(npc: NpcState | undefined,
  * Applies the AI afterburner: after EffectiveMovementPhysicsSystem has
  * written this tick's movement physics from the hull (ionization
  * included), a burning NPC's top speed is raised to AI_AFTERBURNER_FACTOR
- * times its (ion-slowed) base, and its acceleration multiplied by the same.
+ * times its base, and its (ion-cut) acceleration multiplied by the same.
  * A cap still above that (overspeed bleeding off) is kept. Not during a
  * jump sequence (its burn owns the physics) and not while disabled.
  *
@@ -100,19 +101,20 @@ export const NpcAfterburnerSystem = new System({
     args: [NpcComponent, ShipDataComponent, ShipPhysicsComponent,
         MovementPhysicsComponent,
         Optional(EscortCommandComponent), Optional(JumpComponent),
-        Optional(DisabledComponent), Optional(IsIonizedComponent)] as const,
+        Optional(DisabledComponent), Optional(IsIonizedComponent),
+        Optional(IonizationComponent)] as const,
     step(npc, shipData, shipPhysics, movementPhysics,
-        escortCommand, jump, disabled, isIonized) {
+        escortCommand, jump, disabled, isIonized, ionization) {
         if (jump || disabled || !npcAfterburning(npc, shipData.aiFlags,
             escortCommand !== undefined)) {
             return;
         }
         const base = getShipMovementPhysics(shipPhysics);
-        const slowness = isIonized ? ION_FACTOR : 1;
+        const ion = ionSlowdown(ionization, isIonized);
         movementPhysics.maxVelocity = Math.max(movementPhysics.maxVelocity,
-            base.maxVelocity * slowness * AI_AFTERBURNER_FACTOR);
+            base.maxVelocity * ion.maxVelocity * AI_AFTERBURNER_FACTOR);
         movementPhysics.acceleration =
-            base.acceleration * slowness * AI_AFTERBURNER_FACTOR;
+            base.acceleration * ion.acceleration * AI_AFTERBURNER_FACTOR;
     },
     after: [EffectiveMovementPhysicsSystem],
     before: [MovementSystem],

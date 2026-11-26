@@ -5,7 +5,10 @@ import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { DisabledComponent } from '../ship/index.js';
 import { FuelComponent } from '../ship/index.js';
-import { ION_FACTOR, IsIonizedComponent } from '../ship/index.js';
+import {
+    IonizationComponent, IonizationRechargeSystem, ionSlowdown,
+    IsIonizedComponent,
+} from '../ship/index.js';
 import { JumpComponent, JumpSequenceSystem, JUMP_BASE_SPEED, jumpStageDelays } from './jump_plugin.js';
 import { ShipControlStateComponent, StrictPlayComponent } from '../player/index.js';
 import { ControlShipSystem } from './ship_controller_plugin.js';
@@ -74,7 +77,7 @@ export function decayedSpeedCap(ceiling: number, speed: number,
 /**
  * The single per-tick writer of a ship's effective movement physics:
  * recomputes it from ShipPhysicsComponent and applies the transient
- * modifiers (ionization slowness, afterburner boost, hyperspace jump
+ * modifiers (ionization's cut to acceleration and turning, afterburner boost, hyperspace jump
  * burn, strict play's top-speed cut). Modifiers that hold while a
  * condition lasts belong here, so they compose instead of clobbering each
  * other's writes.
@@ -95,10 +98,12 @@ export const EffectiveMovementPhysicsSystem = new System({
     args: [ShipPhysicsComponent, MovementPhysicsComponent,
         MovementStateComponent, TimeResource,
         Optional(ShipControlStateComponent), Optional(FuelComponent),
-        Optional(IsIonizedComponent), Optional(JumpComponent),
+        Optional(IsIonizedComponent), Optional(IonizationComponent),
+        Optional(JumpComponent),
         Optional(DisabledComponent), Optional(StrictPlayComponent)] as const,
     step(shipPhysics, movementPhysics, movementState, time,
-        controlState, fuel, isIonized, jump, disabled, strictPlay) {
+        controlState, fuel, isIonized, ionization, jump, disabled,
+        strictPlay) {
         let afterburning = false;
         // A disabled ship cannot burn: DisabledMovementSystem erases the
         // thrust afterwards, but the fuel was already spent here (Matthew's
@@ -114,7 +119,7 @@ export const EffectiveMovementPhysicsSystem = new System({
         }
 
         const base = getShipMovementPhysics(shipPhysics);
-        const slowness = isIonized ? ION_FACTOR : 1;
+        const ion = ionSlowdown(ionization, isIonized);
         const boost = afterburning ? AFTERBURNER_FACTOR : 1;
         // A strict pilot's top speed only: not its acceleration, not its
         // turn rate (reference #316 wave 10).
@@ -122,14 +127,16 @@ export const EffectiveMovementPhysicsSystem = new System({
         // While the burner is on this IS the boosted cap: a ship at or
         // below it has no overspeed to bleed. Once it is released the cap
         // drops, and the leftover speed comes off over the following
-        // ticks rather than all at once. Same for the ionization
-        // slowdown, and for the burner cutting out on a dry tank.
+        // ticks rather than all at once. Same for the burner cutting out
+        // on a dry tank. (Ionization does not cut the top speed: reference
+        // "Ionization (E6), wave 39".)
         movementPhysics.maxVelocity = decayedSpeedCap(
-            base.maxVelocity * strict * slowness * boost,
+            base.maxVelocity * strict * ion.maxVelocity * boost,
             movementState.velocity.length,
             base.acceleration * OVERSPEED_DECAY_FACTOR, time.delta_s);
-        movementPhysics.acceleration = base.acceleration * slowness * boost;
-        movementPhysics.turnRate = base.turnRate * slowness;
+        movementPhysics.acceleration =
+            base.acceleration * ion.acceleration * boost;
+        movementPhysics.turnRate = base.turnRate * ion.turnRate;
         movementPhysics.movementType = base.movementType;
 
         // Hyperspace physics. JumpSequenceSystem (which runs first this
@@ -148,8 +155,11 @@ export const EffectiveMovementPhysicsSystem = new System({
     // effect before the ship moves. TimeSystem is listed explicitly
     // (determinism rule 4): this system reads time.delta_s to drain
     // afterburner fuel, and neither ControlShipSystem nor JumpSequenceSystem's
-    // ordering alone pins it after TimeSystem across a restore.
-    after: [TimeSystem, ControlShipSystem, JumpSequenceSystem],
+    // ordering alone pins it after TimeSystem across a restore. It reads
+    // the ion charge (ionSlowdown), so it runs after this tick's
+    // deionization too.
+    after: [TimeSystem, ControlShipSystem, JumpSequenceSystem,
+        IonizationRechargeSystem],
     before: [MovementSystem],
 });
 

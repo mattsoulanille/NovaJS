@@ -6,15 +6,19 @@ import { World } from 'nova_ecs/world';
 import { DamagedEvent } from './death_plugin.js';
 import { completeEntity } from '../spawn/index.js';
 import { IonizationComponent } from './health_plugin.js';
-import { ION_FACTOR, ionizedNow, IsIonizedComponent } from './ionization_plugin.js';
+import {
+    ION_FULL_ACCELERATION_FACTOR, ionizedNow, ionSlowdown, IsIonizedComponent,
+    NO_ION_SLOWDOWN,
+} from './ionization_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem } from '../make_system.js';
 
 /**
  * Maintainer ruling #153 (ionization_plugin.ts): "ionized" is a LEVEL
- * test — the charge is above half of IonizeMax — with no hysteresis, and
- * the slowdown factor is 0.6. Both are the pre-PR-#124 values, restored;
- * the maintainer will playtest from there. What #124 fixed alongside
+ * test — the charge is above half of IonizeMax — with no hysteresis. The
+ * slowdown is the measured one (reference "Ionization (E6), wave 39"): at
+ * a full charge no turn, a third of the acceleration, the top speed kept;
+ * linear from the half line (GUESS). What #124 fixed alongside
  * stays pinned here: a hull with no ion capacity is never ionized and
  * never shows a NaN percent.
  */
@@ -134,19 +138,67 @@ describe('ionization in a live world', () => {
             expect(charge().percent).toBe(0);
         });
 
-    it('slows an ionized ship by ION_FACTOR', async () => {
-        const { world, ship, hit } = await ionWorld();
-        hit(BASE.ionization);
-        steps(world, 2);
-        const physics = ship.components.get(MovementPhysicsComponent)!;
-        expect(physics.maxVelocity).toBeCloseTo(BASE.speed * ION_FACTOR, 6);
-        expect(physics.acceleration)
-            .toBeCloseTo(BASE.acceleration * ION_FACTOR, 6);
-        expect(physics.turnRate).toBeCloseTo(BASE.turnRate * ION_FACTOR, 6);
+    it('at a full charge: no turn, a third of the acceleration, the top '
+        + 'speed kept (reference "Ionization (E6), wave 39")', async () => {
+            const { world, ship, hit, charge } = await ionWorld();
+            hit(BASE.ionization * 3);
+            steps(world, 2);
+            const physics = ship.components.get(MovementPhysicsComponent)!;
+            expect(physics.maxVelocity).toBeCloseTo(BASE.speed, 6);
+            // The stat clamps the charge to IonizeMax and Deionize has
+            // taken two ticks off it since, so the cut is a hair short of
+            // full: the physics follow this tick's charge.
+            const cut = ionSlowdown(charge(), true);
+            expect(physics.acceleration)
+                .toBeCloseTo(BASE.acceleration * cut.acceleration, 6);
+            expect(physics.turnRate)
+                .toBeCloseTo(BASE.turnRate * cut.turnRate, 6);
+            expect(physics.acceleration)
+                .toBeLessThan(BASE.acceleration * 0.35);
+            expect(physics.turnRate).toBeLessThan(BASE.turnRate * 0.05);
+        });
+
+    it('frees the movement again once the charge falls to half',
+        async () => {
+            const { world, ship, hit, charge } = await ionWorld();
+            hit(BASE.ionization);
+            while (charge().current > BASE.ionization / 2) {
+                world.step();
+            }
+            steps(world, 2);
+            const physics = ship.components.get(MovementPhysicsComponent)!;
+            expect(physics.turnRate).toBeCloseTo(BASE.turnRate, 6);
+            expect(physics.acceleration)
+                .toBeCloseTo(BASE.acceleration, 6);
+        });
+});
+
+describe('ionSlowdown', () => {
+    const charge = (current: number, max = 100) => ({ current, max });
+
+    it('is nothing for a ship that is not ionized', () => {
+        expect(ionSlowdown(charge(100), false)).toEqual(NO_ION_SLOWDOWN);
+        expect(ionSlowdown(charge(100), undefined)).toEqual(NO_ION_SLOWDOWN);
+        expect(ionSlowdown(undefined, true)).toEqual(NO_ION_SLOWDOWN);
+        expect(ionSlowdown(charge(10, 0), true)).toEqual(NO_ION_SLOWDOWN);
     });
 
-    it('slows by the pre-#124 factor, 0.6 (ruling #153; maintainer will '
-        + 'playtest)', () => {
-            expect(ION_FACTOR).toBe(0.6);
-        });
+    it('is the measured cut at IonizeMax and past it', () => {
+        for (const current of [100, 250]) {
+            expect(ionSlowdown(charge(current), true)).toEqual({
+                maxVelocity: 1,
+                acceleration: ION_FULL_ACCELERATION_FACTOR,
+                turnRate: 0,
+            });
+        }
+    });
+
+    it('scales linearly from the half line (GUESS)', () => {
+        const at = (current: number) => ionSlowdown(charge(current), true);
+        expect(at(50)).toEqual(NO_ION_SLOWDOWN);
+        expect(at(75).turnRate).toBeCloseTo(0.5, 9);
+        expect(at(75).acceleration).toBeCloseTo(2 / 3, 9);
+        expect(at(75).maxVelocity).toBe(1);
+        expect(at(90).turnRate).toBeCloseTo(0.2, 9);
+    });
 });

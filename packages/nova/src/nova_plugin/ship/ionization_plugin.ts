@@ -24,7 +24,7 @@ import { IonizationComponent, IonizationRechargeSystem } from "./health_plugin.j
  * "Ionized" is a LEVEL test: a ship is ionized while its charge is above
  * HALF of IonizeMax, and free again the tick it decays to half or below
  * — however it got there. While it holds, the ship is slowed
- * (ION_FACTOR), the wëap IonizeColor tint is painted
+ * (ionSlowdown), the wëap IonizeColor tint is painted
  * (ship_animation_plugin reads IsIonizedComponent), and wëap Flags
  * 0x0020 weapons can't fire.
  *
@@ -50,13 +50,52 @@ import { IonizationComponent, IonizationRechargeSystem } from "./health_plugin.j
  */
 
 /**
- * How much ionization slows a ship — the multiplier on speed,
- * acceleration and turn rate while IsIonizedComponent is true (applied
- * by EffectiveMovementPhysicsSystem in afterburner_plugin.ts). The
- * Bible gives no number; 0.6 is the pre-#124 value, restored by ruling
- * #153 (the maintainer will playtest). TUNABLE.
+ * How ionization slows a ship, MEASURED at a full charge (reference
+ * "Ionization (E6), wave 39"): a player ionized to (or past) IonizeMax
+ * does not turn at all (0 deg/s in every hold, the control 87.8 deg/s),
+ * accelerates about a third as fast (0 -> top speed in 3-3.4 s against
+ * 1.1 s) and keeps its top speed. This replaces ruling #153's 0.6 on all
+ * three (the pre-#124 value, never measured).
  */
-export const ION_FACTOR = 0.6;
+export const ION_FULL_TURN_FACTOR = 0;
+export const ION_FULL_ACCELERATION_FACTOR = 1 / 3;
+
+/** Multipliers ionization puts on a ship's movement physics. */
+export interface IonSlowdown {
+    maxVelocity: number;
+    acceleration: number;
+    turnRate: number;
+}
+
+export const NO_ION_SLOWDOWN: Readonly<IonSlowdown> =
+    { maxVelocity: 1, acceleration: 1, turnRate: 1 };
+
+/**
+ * The slowdown of a ship whose IsIonizedComponent is `isIonized` and whose
+ * charge is `ionization`: none unless ionized; the measured full-charge
+ * cut at IonizeMax or above; and in between, GUESS, linear in the charge
+ * from the half line (where the ship becomes ionized, so the cut starts
+ * from nothing) to IonizeMax (wave 6's "a fraction of its normal turn" was
+ * a ship at a lower charge; the scaling itself was not measured). The top
+ * speed is never cut.
+ */
+export function ionSlowdown(
+    ionization: { current: number, max: number } | undefined,
+    isIonized: boolean | undefined): IonSlowdown {
+    if (!isIonized || !ionization || ionization.max <= 0) {
+        return NO_ION_SLOWDOWN;
+    }
+    const half = ionization.max / 2;
+    const severity = Math.min(1, Math.max(0,
+        (ionization.current - half) / half));
+    // Written as a blend so a full charge gives the constants exactly.
+    return {
+        maxVelocity: 1,
+        acceleration: (1 - severity)
+            + severity * ION_FULL_ACCELERATION_FACTOR,
+        turnRate: (1 - severity) + severity * ION_FULL_TURN_FACTOR,
+    };
+}
 
 export const IonizedEvent = new EcsEvent<boolean>('IonizedEvent');
 export const IsIonizedComponent = new Component<boolean>('IsIonizedComponent');
