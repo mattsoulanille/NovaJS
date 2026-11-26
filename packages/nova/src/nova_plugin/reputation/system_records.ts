@@ -250,8 +250,8 @@ export function scaledPenalty(field: number, jumps: number): number {
 }
 
 /**
- * The penalty fields a crime charges, signed, each with its engine default
- * for a zero field (reputation.ts's crimePenalty). A kill is Disab + Kill
+ * The penalty fields a crime charges, signed, as written (0 is no penalty:
+ * reputation.ts's crimePenalty). A kill is Disab + Kill
  * (`['disable', 'kill']`), or Kill alone when the same player was already
  * charged the Disab for disabling it (reputation_plugin.ts).
  */

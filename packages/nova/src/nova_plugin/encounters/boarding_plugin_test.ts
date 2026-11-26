@@ -2563,13 +2563,14 @@ describe('bay-capture shortcut', () => {
         });
         // A real govt entry, not MockGettable's shared default: applyCrime
         // keys the record by the GovtData's own id, so the default's id
-        // would be charged instead of this one.
+        // would be charged instead of this one. BoardPenalty 3: a zero
+        // field is no penalty (R4, wave 39).
         gameData.data.Govt.map.set(GOVT, {
-            ...getDefaultGovtData(), id: GOVT,
+            ...getDefaultGovtData(), id: GOVT, boardPenalty: 3,
         });
         // The victim's govt owns the system, so the board is a crime here
         // (records are per system, ruling #380: in an unowned system a
-        // board of the default 3 would fall to a zero quarter).
+        // board of 3 would fall to a zero quarter).
         gameData.data.System.map.set('test:system', {
             ...getDefaultSystemData(), id: 'test:system', govt: GOVT,
         });

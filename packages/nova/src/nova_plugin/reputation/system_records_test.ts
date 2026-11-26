@@ -267,9 +267,10 @@ describe('per-system legal records: the crime spread (A14 waves 12-15)', () => {
             const geography = new LegalGeography(
                 [sys('s:a', wary.id, [], [0, 0])], govtEntries([wary]));
             const records = kill(geography, 's:a', wary);
-            expect(records.get('s:a')).toBe(-5 - 2 - 10);
+            expect(records.get('s:a')).toBe(-5 - 0 - 10);
             // Unknown crime system: only itself, owned by nobody, so the
-            // unowned quarter of the victim's Disab 2 (default) + Kill 10.
+            // unowned quarter of the victim's Disab 0 (no penalty: R4,
+            // wave 39) + Kill 10.
             expect(geography.jumpsFrom('s:nowhere'))
                 .toEqual(new Map([['s:nowhere', 0]]));
             expect(asObject(kill(geography, 's:nowhere', wary)))

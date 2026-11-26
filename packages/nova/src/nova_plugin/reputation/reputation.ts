@@ -35,12 +35,14 @@ import { GovtData } from 'novadatainterface/govt_data';
  *
  * Most stock gövts DO set their penalty fields (57 of the 68 stock
  * govts carry a non-zero KillPenalty — the Federation's is 5, the
- * Vell-os' 40), and those values are used as written. A minority
- * (11 stock govts, e.g. Spanner and the Derelicts) leave them at
- * zero, yet the real engine still penalizes crimes against them, so
- * it must have built-in defaults. Those defaults are undocumented;
- * NovaJS substitutes the DEFAULT_* constants below whenever a govt's
- * field is 0.
+ * Vell-os' 40), and those values are used as written. A field of 0 is
+ * NO penalty: the engine has no built-in default (MEASURED, reference
+ * "Zero govt penalties (R4), wave 39": a kill of a ship whose gövt sets
+ * every penalty field to 0 left the record at 0 while the combat rating
+ * counted it). The 11 stock govts that leave them at zero (e.g. Spanner
+ * and the Derelicts) are therefore free to attack, as far as the legal
+ * record goes. (Earlier revisions substituted unmeasured 5 / 2 / 3
+ * defaults for a zero field.)
  *
  * (An earlier revision of this comment claimed stock data leaves
  * EVERY penalty field zero. That was wrong: it was measured with
@@ -65,18 +67,6 @@ import { GovtData } from 'novadatainterface/govt_data';
 /** Per-player legal records: sÿst global id (e.g. 'nova:130') -> record
  * (system_records.ts). */
 export type LegalRecords = Map<string, number>;
-
-/**
- * Engine-default penalties, used only when a govt's field is 0 (see
- * the module comment). Chosen to sit in the middle of the stock
- * govts' own values — the stock Federation's KillPenalty is likewise
- * 5, so a govt that omits the field behaves like a typical one.
- */
-export const DEFAULT_KILL_PENALTY = 5;
-export const DEFAULT_DISABLE_PENALTY = 2;
-/** Boarding/pirating a ship (boarding_plugin.ts) when the govt leaves
- * BoardPenalty at 0. */
-export const DEFAULT_BOARD_PENALTY = 3;
 
 /** Records are int16 in the original pilot file; clamp to its range. */
 const RECORD_MIN = -32767;
@@ -113,8 +103,8 @@ function intersects(a: readonly number[], b: readonly number[]): boolean {
 export type Crime = 'kill' | 'disable' | 'board';
 
 /**
- * A crime's base penalty: the govt's field, SIGNED, or the engine default
- * for a zero field.
+ * A crime's base penalty: the govt's field, SIGNED and as written (0 is no
+ * penalty: reference "Zero govt penalties (R4), wave 39").
  *
  * A NEGATIVE field is applied as written: the crime RAISES the record.
  * Measured (docs/reference_experiments.md, "A14 with system traffic as
@@ -130,13 +120,9 @@ export type Crime = 'kill' | 'disable' | 'board';
  * -1 + Kill -1), as the original's arithmetic would.
  */
 export function crimePenalty(govt: GovtData, crime: Crime): number {
-    const field = crime === 'kill' ? govt.killPenalty
+    return crime === 'kill' ? govt.killPenalty
         : crime === 'disable' ? govt.disablePenalty
             : govt.boardPenalty;
-    const fallback = crime === 'kill' ? DEFAULT_KILL_PENALTY
-        : crime === 'disable' ? DEFAULT_DISABLE_PENALTY
-            : DEFAULT_BOARD_PENALTY;
-    return field !== 0 ? field : fallback;
 }
 
 /**

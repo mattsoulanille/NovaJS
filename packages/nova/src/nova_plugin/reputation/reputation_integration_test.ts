@@ -5,9 +5,6 @@ import {
     availRecordOk,
     crimePenalty,
     decodePayVal,
-    DEFAULT_BOARD_PENALTY,
-    DEFAULT_DISABLE_PENALTY,
-    DEFAULT_KILL_PENALTY,
     LEGAL_STATUS_EVIL_TIERS,
     LEGAL_STATUS_GOOD_TIERS,
     LEGAL_STATUS_NO_RECORD,
@@ -90,21 +87,19 @@ describe('reputation against real Nova data', () => {
         expect(vellos.killPenalty).toBe(40);
     });
 
-    it('falls back to the engine defaults for the govts that leave '
-        + 'their fields zero', async () => {
+    it('charges nothing for the govts that leave their fields zero '
+        + '(reference "Zero govt penalties (R4), wave 39")', async () => {
             const gameData = await getIntegrationGameData();
             // nova:171 (Spanner) is one of the 11 stock govts with no
-            // penalties of its own, so the DEFAULT_* constants apply.
+            // penalties of its own: a zero field is no penalty.
             const spanner = await gameData.data.Govt.get('nova:171');
             expect(spanner.name).toBe('Spanner');
             expect(spanner.killPenalty).toBe(0);
             expect(spanner.disablePenalty).toBe(0);
             expect(spanner.boardPenalty).toBe(0);
-            expect(crimePenalty(spanner, 'kill')).toBe(DEFAULT_KILL_PENALTY);
-            expect(crimePenalty(spanner, 'disable'))
-                .toBe(DEFAULT_DISABLE_PENALTY);
-            expect(crimePenalty(spanner, 'board'))
-                .toBe(DEFAULT_BOARD_PENALTY);
+            expect(crimePenalty(spanner, 'kill')).toBe(0);
+            expect(crimePenalty(spanner, 'disable')).toBe(0);
+            expect(crimePenalty(spanner, 'board')).toBe(0);
         });
 
     it('the derelict Wraiths\' -1 fields apply signed: a kill raises the '

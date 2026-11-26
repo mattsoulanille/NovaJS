@@ -13,9 +13,6 @@ import {
     crimePenalty,
     decodePayVal,
     govtRelation,
-    DEFAULT_BOARD_PENALTY,
-    DEFAULT_DISABLE_PENALTY,
-    DEFAULT_KILL_PENALTY,
     INDEPENDENT_STATUS_GOVT,
     LEGAL_STATUS_NO_RECORD,
     legalStatusInSystem,
@@ -98,11 +95,12 @@ describe('crimePenalty', () => {
         expect(crimePenalty(fed, 'disable')).toBe(2);
     });
 
-    it('substitutes the engine defaults for zero fields (stock data)', () => {
-        const stock = makeGovt('nova:130');
-        expect(crimePenalty(stock, 'kill')).toBe(DEFAULT_KILL_PENALTY);
-        expect(crimePenalty(stock, 'disable')).toBe(DEFAULT_DISABLE_PENALTY);
-        expect(crimePenalty(stock, 'board')).toBe(DEFAULT_BOARD_PENALTY);
+    it('charges nothing for a zero field: no engine default (reference '
+        + '"Zero govt penalties (R4), wave 39")', () => {
+        const zero = makeGovt('nova:130');
+        expect(crimePenalty(zero, 'kill')).toBe(0);
+        expect(crimePenalty(zero, 'disable')).toBe(0);
+        expect(crimePenalty(zero, 'board')).toBe(0);
     });
 
     it('uses the govt BoardPenalty field for pirating when set', () => {
