@@ -671,6 +671,99 @@ describe('makeMissionOffer', () => {
         expect(makeMissionOffer(mission, ctx)?.travelPlanet).toBe('nova:214');
     });
 
+    /**
+     * Reference "Random mission destinations (R13), wave 38": a chain
+     * Origin - N1 - N2 - N3 (hyperlinks along the chain only) plus a
+     * system linked to nothing. Neither the offering system nor its
+     * neighbour is ever drawn; two jumps away is; an unreachable system
+     * is; an uninhabited stellar never is for a govt-ranged code.
+     */
+    describe('R13 (wave 38): the destination is at least two jumps away', () => {
+        const SYSTEMS = [
+            { id: 'sys:origin', govt: null, links: ['sys:n1'] },
+            { id: 'sys:n1', govt: null, links: ['sys:origin', 'sys:n2'] },
+            { id: 'sys:n2', govt: null, links: ['sys:n1', 'sys:n3'] },
+            { id: 'sys:n3', govt: null, links: ['sys:n2'] },
+            { id: 'sys:island', govt: null, links: [] },
+        ];
+        const SYSTEM_OF: Record<string, string> = {
+            'nova:128': 'sys:origin',
+            'nova:140': 'sys:origin', // the offering system's other port
+            'nova:141': 'sys:n1',
+            'nova:142': 'sys:n2',
+            'nova:143': 'sys:n3',
+            'nova:144': 'sys:n3',     // an uninhabited rock in N3
+            'nova:145': 'sys:island', // unreachable by hyperspace
+        };
+        const fed = makeGovt('nova:128', { classes: [1] });
+        function chainContext(random: () => number,
+            partial: Partial<MissionContext> = {}): MissionContext {
+            return makeContext({
+                getGovt: id => (id === 'nova:128' ? fed : undefined),
+                stellarCandidates: [
+                    makeStellar({ govt: 'nova:128' }),
+                    makeStellar({ id: 'nova:140', govt: 'nova:128' }),
+                    makeStellar({ id: 'nova:141', govt: 'nova:128' }),
+                    makeStellar({ id: 'nova:142', govt: 'nova:128' }),
+                    makeStellar({ id: 'nova:143', govt: 'nova:128' }),
+                    makeStellar({ id: 'nova:144', govt: 'nova:128',
+                        uninhabited: true }),
+                    makeStellar({ id: 'nova:145' }),
+                ],
+                systems: SYSTEMS,
+                systemIdOfStellar: id => SYSTEM_OF[id],
+                random,
+                ...partial,
+            });
+        }
+        /** Every destination the draw can name, by sweeping the PRNG. */
+        function drawable(travelStel: number,
+            partial: Partial<MissionContext> = {}): Set<string> {
+            const seen = new Set<string>();
+            for (let i = 0; i < 100; i++) {
+                const offer = makeMissionOffer(makeMission({ travelStel }),
+                    chainContext(() => i / 100, partial));
+                if (offer?.travelPlanet) {
+                    seen.add(offer.travelPlanet);
+                }
+            }
+            return seen;
+        }
+
+        it('-2 draws two jumps away and unreachable systems, never the '
+            + 'offering system or its neighbour', () => {
+            expect([...drawable(-2)].sort())
+                .toEqual(['nova:142', 'nova:143', 'nova:145']);
+        });
+
+        it('a govt-ranged draw skips the same systems and an uninhabited '
+            + 'stellar', () => {
+            // TravelStel 10000: a stellar of gövt 128.
+            expect([...drawable(10000)].sort())
+                .toEqual(['nova:142', 'nova:143']);
+        });
+
+        it('falls back to the nearer stellars when nothing else qualifies',
+            () => {
+                // Only the offering system's other port and the neighbour.
+                const near = drawable(-2, {
+                    stellarCandidates: [
+                        makeStellar(),
+                        makeStellar({ id: 'nova:140' }),
+                        makeStellar({ id: 'nova:141' }),
+                    ],
+                });
+                expect([...near].sort()).toEqual(['nova:140', 'nova:141']);
+            });
+
+        it('excludes nothing without system topology', () => {
+            expect([...drawable(-2, {
+                systems: undefined, systemIdOfStellar: undefined,
+            })].sort()).toEqual(
+                ['nova:140', 'nova:141', 'nova:142', 'nova:143', 'nova:145']);
+        });
+    });
+
     it('resolves the return stellar -4 to the offering stellar', () => {
         const mission = makeMission({ returnStel: -4 });
         const offer = makeMissionOffer(mission, makeContext());

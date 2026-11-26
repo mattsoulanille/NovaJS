@@ -103,7 +103,11 @@ function resolveStellarRef(ref: number, refId: string | null,
         candidates = ctx.stellarCandidates.filter(
             s => !isInhabited(s) && s.canLand && stellarVisible(s, ctx.bits));
     } else {
-        candidates = ctx.stellarCandidates.filter(s => s.canLand
+        // Govt-ranged and the other ranged codes need an INHABITED port:
+        // a landable but uninhabited stellar of the govt was never drawn
+        // (reference "Random mission destinations (R13), wave 38", finding
+        // 4: 0 of 18; GUESS strength).
+        candidates = ctx.stellarCandidates.filter(s => isPort(s)
             && stellarVisible(s, ctx.bits)
             && matchesStellarRef(ref, null, s, setStringPrefix(mission),
                 ctx.getGovt));
@@ -113,10 +117,48 @@ function resolveStellarRef(ref: number, refId: string | null,
     if (elsewhere.length > 0) {
         candidates = elsewhere;
     }
+    // Nor anywhere in the offering system or a system one jump from it
+    // (R13 wave 38, finding 3). The rest of the galaxy stays in the pool,
+    // reachable or not, explored or not (finding 1), and the draw stays
+    // uniform with replacement, so two missions may name one stellar
+    // (finding 2). If that empties the pool the nearer stellars are drawn
+    // after all: the Bible says Nova only "attempts" the distance.
+    const near = systemsNearOffering(ctx);
+    if (near.size > 0) {
+        const far = candidates.filter(s => {
+            const system = ctx.systemIdOfStellar!(s.id);
+            return system === undefined || !near.has(system);
+        });
+        if (far.length > 0) {
+            candidates = far;
+        }
+    }
     if (candidates.length === 0) {
         return undefined;
     }
     return candidates[Math.floor(ctx.random() * candidates.length)].id;
+}
+
+/**
+ * The offering system and the systems one hyperlink from it, whose
+ * stellars are never a random destination (reference "Random mission
+ * destinations (R13), wave 38", finding 3: over a five-system chain, 18
+ * govt-ranged draws named the next-door system 0 times and the system two
+ * jumps away 4 times, so the Bible's "more than two hyper jumps away"
+ * reads as AT LEAST two; GUESS for the rule's reach). By the hyperlink
+ * graph (sÿst links). Empty for a context without system topology, which
+ * then excludes nothing.
+ */
+export function systemsNearOffering(ctx: MissionContext): Set<string> {
+    if (!ctx.systems || !ctx.systemIdOfStellar) {
+        return new Set();
+    }
+    const here = ctx.systemIdOfStellar(ctx.stellar.id);
+    if (here === undefined) {
+        return new Set();
+    }
+    const origin = ctx.systems.find(system => system.id === here);
+    return new Set([here, ...(origin?.links ?? [])]);
 }
 
 /**
