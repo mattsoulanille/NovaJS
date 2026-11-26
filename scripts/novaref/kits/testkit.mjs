@@ -311,9 +311,9 @@ export default {
 
 /**
  * Wave-34 experiments (docs/reference_experiments.md, "... wave 34").
- * Nothing retired (no mïsn needed). sÿst 1304-1337, spöb 1804-1871, shïp
- * 557-562, düde 483-487. Map row y = -2340 (x -800 .. 520). The next free
- * ids: sÿst 1338+, spöb 1872+ (spares 1495, 1496, 1499), shïp 563+, düde
+ * Nothing retired (no mïsn needed). sÿst 1304-1338, spöb 1804-1872, shïp
+ * 557-562, düde 483-487. Map row y = -2340 (x -800 .. 560). The next free
+ * ids: sÿst 1339+, spöb 1873+ (spares 1495, 1496, 1499), shïp 563+, düde
  * 488+, ränk 205+, mïsn NONE (retire an old kit mission to add one), gövt
  * 295 and below, flët 318+, wëap 295+, oütf 470+, bits 9250+.
  *
@@ -335,7 +335,8 @@ export default {
  *      483-485; wave 33's Hunt B had 500): sÿst 1317-1319 Kit Reinf Hunt
  *      S15 / S25 / S40 (ReinfFleet 317, ports at the centre). Added during
  *      the wave (all three called): preys of Strength 8 / 12 (shïp 561-562,
- *      düde 486-487), sÿst 1336-1337 Kit Reinf Hunt S8 / S12 (spöb 1870-1871).
+ *      düde 486-487), sÿst 1336-1337 Kit Reinf Hunt S8 / S12 (spöb 1870-1871),
+ *      and sÿst 1338 Kit Reinf Hunt S12 Many (the hunters 80 : 20, spöb 1872).
  *  C   Capture: shïp 557 Kit Ring Crawler Crew 60 (ratio 6 against wave 8's
  *      crew-10 hulk); the marines (oütf 468 / 469) go on wave 33's crew-30
  *      and crew-70 boarders.
@@ -425,6 +426,14 @@ function wave34Resources() {
             reinfFleet: 317, reinfTime: 150, reinfInterval: 0 };
         out.push(sys, spob(1870 + i, `Kit Reinf Hunt S${s} Port`, 0, 0, 138, { flags: 0x43 }));
     });
+    // --- R19c (added during the wave: S8 and S12 called too, the preys outnumbering): the S12 preys outnumbered by the
+    // hunters (dudeProbs 80 / 20, avgShips 5), sÿst 1338 Kit Reinf Hunt S12 Many (spöb 1872).
+    {
+        const sys = system(1338, "Kit Reinf Hunt S12 Many", nextX(), Y, 297, [1872]);
+        sys.set = { ...sys.set, avgShips: 5, dudes: [478, 487, ...none8].slice(0, 8), dudeProbs: [80, 20, ...zero8].slice(0, 8),
+            reinfFleet: 317, reinfTime: 150, reinfInterval: 0 };
+        out.push(sys, spob(1872, "Kit Reinf Hunt S12 Many Port", 0, 0, 138, { flags: 0x43 }));
+    }
     return out;
 }
 
