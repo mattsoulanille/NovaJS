@@ -411,7 +411,14 @@ novaref pilot-make scripts/novaref/pilots/probe_a.json
   (+ammo), legal (**per sÿst id**, because EV Nova keeps legal records per
   system), clearLegal, explored/exploreAll, missionBits/clearMissionBits,
   clearMissions, escorts, fighters, rating, nickname, shipName, strictPlay,
-  dominated, and priceFlux. Ids are resource ids, not indexes.
+  dominated, priceFlux, and stellarShipCount (spöb id -> defence ships
+  left). Ids are resource ids, not indexes.
+- **Defence fleets** (wave 39): the pilot file keeps every stellar's
+  defence ships LEFT. The base pilot predates the kit, so it holds 0 for
+  every kit stellar, which the original reads as "fleet destroyed" (a
+  12,800 tribute demand is then accepted at once). A tribute or defence
+  experiment must set `"stellarShipCount": {"<spöb id>": <DefCount
+  total>}`.
 - The **base** is a pilot the game created itself (title screen > New
   Pilot), so every field the spec leaves alone holds a value the original
   wrote. The base used on 2026-11-23 is
@@ -570,6 +577,14 @@ player: 0x1000 | 0x0004 never did; place it by a mission on the player's
 port. Weapons are locked once `j` is pressed (a self-disable cannot cut a
 jump short). `scenarios/w38_space_interactive.json` / `w38_space_early.json`
 (inbox `w38.jsonl`).
+Wave 39 used sÿst 1400-1407, spöb 1955-1962, shïp 593-598, düde 512-517,
+gövt 285-287 (no mïsn: it reused wave 6's mïsn 1005 ion target and wave
+12's mïsn 1039); next free: sÿst 1408, spöb 1963 (spares 1495 / 1496 /
+1499), shïp 599, düde 518, ränk 205, mïsn **none**, wëap 296, oütf 470,
+gövt 284 and below, flët 324, jünk 205, bits 9255. Set
+`stellarShipCount` for any kit stellar whose defence fleet matters (see
+"Custom pilots"). `scenarios/w39_space_interactive.json` /
+`w39_space_early.json` (inbox `w39.jsonl`).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they

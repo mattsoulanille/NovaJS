@@ -310,8 +310,130 @@ export default {
         ...wave36Resources(),
         ...wave37Resources(),
         ...wave38Resources(),
+        ...wave39Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-39 experiments (docs/reference_experiments.md, "... wave 39"):
+ * catalogue gaps. Nothing retired (no new mïsn: the rigs reuse wave 6's
+ * mïsn 1005 ion target and wave 12's mïsn 1039 plain NPC). Used: sÿst
+ * 1400-1407, spöb 1955-1962, shïp 593-598, düde 512-517, gövt 285-287.
+ * Map row y = -2640 (x -800 .. -520). The next free ids: sÿst 1408+, spöb
+ * 1963+ (spares 1495, 1496, 1499), shïp 599+, düde 518+, ränk 205+, mïsn
+ * NONE (retire an old kit mission), gövt 284 and below, flët 324+, wëap
+ * 296+, oütf 470+, jünk 205+, bits 9255+.
+ *
+ * LESSONS: a pilot keeps each stellar's defence ships LEFT (stellarShipCount);
+ * novaref pilots come from a pre-kit base pilot, so every kit stellar holds 0
+ * ("fleet destroyed": a 12,800 demand is accepted at once) unless the pilot
+ * spec sets "stellarShipCount" (pilot-make, wave 39). A saturated ionized
+ * player cannot turn at all.
+ *
+ *  R18 What launches a planet's defence fleet (wave 38: never, at any
+ *      rating): shïp 593 Kit Tribute Guard S1000 (wave 38's one-bolt red
+ *      disc with Strength 1000) and düde 512 (gövt 290); sÿst 1400 Kit
+ *      Tribute Plain (spöb 1955 Kit Tribute Plain Six: Tribute 1234, wave
+ *      38's Strength-20 düde 509, DefCount 6, a plain count), 1401 Kit
+ *      Tribute Strong (spöb 1956 Kit Tribute Strong Six: Tribute -1,
+ *      TechLevel 4, düde 512, DefCount 1062: six in waves of two), 1402 Kit
+ *      Tribute Fed (spöb 1957 Kit Tribute Fed Four: Tribute 0, TechLevel 3,
+ *      the STOCK düde 130 Lone Big Federation Ship, DefCount 1042: four in
+ *      waves of two); linked 1400 - 1401 - 1402; all owned by gövt 290.
+ *      shïp 594 Kit Lancer Mighty: the Kit Lancer with Strength 30000.
+ *  U8  shïp 595 Kit Jump Slow (inertial, Speed 200, Accel 100, Turn 10,
+ *      Fuel 300) for wave 38's Kit Jump A / B rig.
+ *  E6  shïp 596 Kit Ring Ion: the Kit Ring Lancer's pointer sprite (Turn
+ *      30 = 87.1 deg/s) with IonizeMax 100, Deionize 1; at Kit Port with
+ *      bit 9046 (wave 6's mïsn 1005, the immobile Ion Target Near firing
+ *      Ionization 200 a hit).
+ *  R4  gövt 287 Kit Zero Penalty (every penalty field 0, CrimeTol 30000);
+ *      düde 513 (wave 37's one-bolt yellow AI 1 Kit EK Victim hull 580 in
+ *      gövt 287); sÿst 1403 Kit Zero Penalty Range (owner 287, avgShips 3
+ *      of düde 513, port spöb 1958).
+ *  K5  gövt 286 Kit Hail Quiet Hostile (Flags 0x0004, Flags2 0x0001) and
+ *      285 Kit Hail Quiet Calm (Flags2 0x0001 only); düde 514 (AI 3, gövt
+ *      286, the Kit Raider 707), 515 (AI 1, gövt 285, the Kit Trader 708),
+ *      516 (AI 1, gövt 363 Kit Neutral, the Kit Probe B 701); sÿst 1404 Kit Hail
+ *      Keys (owner 363, avgShips 4 of 514 / 515 / 516, port spöb 1959).
+ *  A11 sÿst 1405 Kit Respawn (owner 363, avgShips 4 of düde 516 AI 1
+ *      traders, port spöb 1960).
+ *  Added during the wave: shïp 597 / düde 517 / sÿst 1406 / spöb 1961 Kit
+ *      Tribute Huge Six (Strength-30000 defenders, linked to 1400); shïp
+ *      598 Kit Ring Ion Fade (E6, Deionize 20); sÿst 1407 Kit Hail Hostile
+ *      (spöb 1962, düde 514 alone).
+ */
+function wave39Resources() {
+    const out = [];
+    const Y = -2640;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const port = (id, name, set = {}) => spob(id, name, 0, 0, 138, { flags: 0x43, ...set });
+    const linked = (sys, links) => { sys.set = { ...sys.set, links: [...links, ...none16].slice(0, 16) }; return sys; };
+    const traffic = (id, name, owner, spobId, dudes, avgShips, portSet = {}) => {
+        const sys = system(id, name, nextX(), Y, owner, [spobId]);
+        sys.set = { ...sys.set, avgShips, dudes: [...dudes, ...none8].slice(0, 8), dudeProbs: [...dudes.map(() => Math.floor(100 / dudes.length)), ...zero8].slice(0, 8) };
+        out.push(sys, port(spobId, `${name} Port`, portSet));
+    };
+    // --- R18: shïp 593-594, düde 512, sÿst 1400-1402, spöb 1955-1957 (gövt 290, wave 38).
+    out.push({ type: "shïp", id: 593, name: "Kit Tribute Guard S1000", clone: "shïp:128", set: { ...shipBase, shortName: "Kit Tribute Guard S1000",
+        longName: "Kit Tribute Guard S1000", commName: "Kit Tribute Guard", subtitle: "", accel: 300, speed: 300, turn: 30, mass: 50,
+        freeMass: 100, cargo: 10, crew: 5, flags: 0, flags2: 0, ai: 3, armor: 25, shield: 0, shieldRecharge: 0, armorRecharge: 0, strength: 1000,
+        weapons: [361, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] } });
+    out.push({ type: "shän", id: 593, name: "Kit Tribute Guard S1000", clone: "shän:128", set: { "@0:i16": 1971, "@2:i16": 1972, "@4:i16": 1,
+        "@6:i16": 24, "@8:i16": 24 } });
+    out.push(dude(512, "Kit Tribute Guard S1000", 3, 290, 593));
+    out.push(...ship(594, "Kit Lancer Mighty", 135, { accel: 2000, speed: 800, turn: 60, armor: 30000, shield: 30000, shieldRecharge: 1000, mass: 50,
+        freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 30000, flags: 0, flags2: 0x00C8 }));
+    const tributeSys = (sid, name, links, pid, pname, set) => {
+        out.push(linked(system(sid, name, nextX(), Y, 290, [pid]), links), port(pid, pname, { govt: 290, ...set }));
+    };
+    tributeSys(1400, "Kit Tribute Plain", [1401, 1406], 1955, "Kit Tribute Plain Six", { tribute: 1234, defenseDude: 509, defenseCount: 6 });
+    tributeSys(1401, "Kit Tribute Strong", [1400, 1402], 1956, "Kit Tribute Strong Six", { tribute: -1, techLevel: 4, defenseDude: 512,
+        defenseCount: 1062 });
+    tributeSys(1402, "Kit Tribute Fed", [1401], 1957, "Kit Tribute Fed Four", { tribute: 0, techLevel: 3, defenseDude: 130, defenseCount: 1042 });
+    // --- U8: shïp 595 (wave 38's sÿst 1387 / 1388).
+    out.push(...ship(595, "Kit Jump Slow", 135, { accel: 100, speed: 200, turn: 10, armor: 30000, shield: 30000, shieldRecharge: 1000, mass: 50,
+        freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, flags: 0, flags2: 0x0088, fuel: 300 }));
+    // --- E6: shïp 596, the Kit Ring Lancer (wave 21, rlëD 1955) with ion capacity.
+    out.push({ type: "shïp", id: 596, name: "Kit Ring Ion", clone: "shïp:128", set: { ...shipBase, shortName: "Kit Ring Ion", longName: "Kit Ring Ion",
+        commName: "Kit Ring Ion", subtitle: "", accel: 2000, speed: 800, turn: 30, armor: 30000, shield: 30000, shieldRecharge: 1000, mass: 50,
+        freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, crew: 10, flags: 0, flags2: 0x00C8, ionization: 100,
+        deionize: 1 } },
+    { type: "shän", id: 596, name: "Kit Ring Ion", clone: "shän:128", set: { "@0:i16": 1955, "@2:i16": 1956, "@4:i16": 1, "@6:i16": 24, "@8:i16": 24 } });
+    // Added during the wave (the Deionize-1 hull, saturated, never turned at all): shïp 598 Kit Ring Ion Fade, the same with
+    // Deionize 20, so the charge drains while a turn is held away from the ion target.
+    out.push({ type: "shïp", id: 598, name: "Kit Ring Ion Fade", clone: "shïp:128", set: { ...shipBase, shortName: "Kit Ring Ion Fade",
+        longName: "Kit Ring Ion Fade", commName: "Kit Ring Ion Fade", subtitle: "", accel: 2000, speed: 800, turn: 30, armor: 30000, shield: 30000,
+        shieldRecharge: 1000, mass: 50, freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, crew: 10, flags: 0,
+        flags2: 0x00C8, ionization: 100, deionize: 20 } },
+    { type: "shän", id: 598, name: "Kit Ring Ion Fade", clone: "shän:128", set: { "@0:i16": 1955, "@2:i16": 1956, "@4:i16": 1, "@6:i16": 24, "@8:i16": 24 } });
+    // --- R4: gövt 287, düde 513, sÿst 1403, spöb 1958.
+    out.push(govt(287, "Kit Zero Penalty", { killPenalty: 0, disabPenalty: 0, boardPenalty: 0, shootPenalty: 0, smugPenalty: 0, crimeTol: 30000 }));
+    out.push(dude(513, "Kit Zero Victim", 1, 287, 580));
+    traffic(1403, "Kit Zero Penalty Range", 287, 1958, [513], 3, { govt: 287 });
+    // --- K5: gövt 285-286, düde 514-516, sÿst 1404, spöb 1959.
+    out.push(govt(286, "Kit Hail Quiet Hostile", { flags: 0x0004, flags2: 0x0001 }), govt(285, "Kit Hail Quiet Calm", { flags2: 0x0001 }));
+    out.push(dude(514, "Kit Hail Quiet Warship", 3, 286, 707), dude(515, "Kit Hail Quiet Freighter", 1, 285, 708),
+        dude(516, "Kit Neutral Freighter", 1, 363, 701));
+    traffic(1404, "Kit Hail Keys", 363, 1959, [514, 515, 516], 4);
+    // Added during the wave (k5s_a's four Tabs met only freighters): sÿst 1407 Kit Hail Hostile, avgShips 2 of düde 514 alone.
+    traffic(1407, "Kit Hail Hostile", 363, 1962, [514], 2);
+    // --- A11: sÿst 1405, spöb 1960.
+    traffic(1405, "Kit Respawn", 363, 1960, [516], 4);
+    // --- R18 (added during the wave: Strong Six's 6,000 Strength gave in at once at 12,800 too): shïp 597 Kit Tribute Guard
+    // S30000 (the one-bolt red disc with Strength 30000), düde 517 (gövt 290); sÿst 1406 Kit Tribute Huge (linked to 1400):
+    // spöb 1961 Kit Tribute Huge Six (Tribute 1000, TechLevel 2, düde 517, DefCount 1062: six in waves of two, 180,000 in all).
+    out.push({ type: "shïp", id: 597, name: "Kit Tribute Guard S30000", clone: "shïp:128", set: { ...shipBase, shortName: "Kit Tribute Guard S30000",
+        longName: "Kit Tribute Guard S30000", commName: "Kit Tribute Guard", subtitle: "", accel: 300, speed: 300, turn: 30, mass: 50,
+        freeMass: 100, cargo: 10, crew: 5, flags: 0, flags2: 0, ai: 3, armor: 25, shield: 0, shieldRecharge: 0, armorRecharge: 0, strength: 30000,
+        weapons: [361, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] } });
+    out.push({ type: "shän", id: 597, name: "Kit Tribute Guard S30000", clone: "shän:128", set: { "@0:i16": 1971, "@2:i16": 1972, "@4:i16": 1,
+        "@6:i16": 24, "@8:i16": 24 } });
+    out.push(dude(517, "Kit Tribute Guard S30000", 3, 290, 597));
+    tributeSys(1406, "Kit Tribute Huge", [1400], 1961, "Kit Tribute Huge Six", { tribute: 1000, techLevel: 2, defenseDude: 517, defenseCount: 1062 });
+    return out;
+}
 
 /**
  * Wave-38 experiments (docs/reference_experiments.md, "... wave 38"):

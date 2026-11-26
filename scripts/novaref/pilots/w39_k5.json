@@ -1,0 +1,18 @@
+{
+  "name": "novaref-w39-k5",
+  "edits": {
+    "ship": 703,
+    "stellar": 1959,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1404": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w39-k5"
+  }
+}

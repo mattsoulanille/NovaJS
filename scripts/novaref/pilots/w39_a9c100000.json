@@ -1,0 +1,28 @@
+{
+  "name": "novaref-w39-a9c100000",
+  "edits": {
+    "ship": 579,
+    "stellar": 1939,
+    "credits": 100000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1386": 2
+    },
+    "missionBits": {
+      "9252": true
+    },
+    "nickname": "Probe",
+    "shipName": "w39-a9c100000",
+    "cargo": [
+      20,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  }
+}

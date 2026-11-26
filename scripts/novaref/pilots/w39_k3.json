@@ -1,0 +1,30 @@
+{
+  "name": "novaref-w39-k3",
+  "edits": {
+    "ship": 703,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {
+      "9082": true
+    },
+    "nickname": "Probe",
+    "shipName": "w39-k3",
+    "escorts": [
+      {
+        "ship": 704,
+        "hired": true
+      },
+      {
+        "ship": 704,
+        "hired": true
+      }
+    ]
+  }
+}

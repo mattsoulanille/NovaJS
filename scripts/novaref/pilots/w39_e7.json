@@ -1,0 +1,30 @@
+{
+  "name": "novaref-w39-e7",
+  "edits": {
+    "ship": 590,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 0,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w39-e7",
+    "outfits": {
+      "128": 0,
+      "186": 1
+    },
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6
+    }
+  }
+}

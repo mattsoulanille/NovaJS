@@ -1,0 +1,18 @@
+{
+  "name": "novaref-w39-e6c",
+  "edits": {
+    "ship": 596,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w39-e6c"
+  }
+}

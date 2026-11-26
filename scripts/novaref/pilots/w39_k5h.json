@@ -1,0 +1,26 @@
+{
+  "name": "novaref-w39-k5h",
+  "edits": {
+    "ship": 703,
+    "stellar": 1962,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1407": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w39-k5h",
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6
+    }
+  }
+}
