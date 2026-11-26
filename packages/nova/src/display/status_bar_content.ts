@@ -408,6 +408,13 @@ export const JUMP_TOO_CLOSE_MESSAGE =
 export const JUMP_NO_FUEL_MESSAGE = 'Insufficient energy for hyperspace jump.';
 
 /**
+ * The line when the player's own disabled ship repairs itself (a repair
+ * system, oütf ModType 49): stock STR# 2002 0-based 36, verbatim
+ * (reference "Wave-37 leftovers, wave 38", A10: printed at the repair).
+ */
+export const SHIP_REPAIRED_MESSAGE = 'Propulsion systems repaired.';
+
+/**
  * The stock line for a booty take that tripped the hulk's security
  * self-destruct: STR# 2002 index 112, verbatim (reference "Disabled ships,
  * wave 24": the only line shown, the dialog gone, the hulk destroyed).

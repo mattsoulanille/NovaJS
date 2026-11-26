@@ -104,11 +104,17 @@ export function disabledCoastSpeed(speed: number, deltaS: number): number {
 
 /**
  * Repair margin: a self-repair brings armor to (threshold + this fraction
- * of max armor), capped at max. TUNABLE: 10% of max armor above the
- * threshold means a freshly repaired 33%-threshold ship sits at 43% — a
- * stray hit knocks it down without instantly re-disabling it.
+ * of max armor), capped at max. MEASURED (reference "Wave-37 leftovers,
+ * wave 38", A10): Repair Droids lifted a disabled player's armor bar from
+ * 20% to 51 of 151 px, 33.8% — the first bar pixel over the one-third
+ * line — in both runs. The bar resolves about 0.7% of the armor, so the
+ * margin is 1% (GUESS within that pixel): a freshly repaired
+ * 33%-threshold ship sits at 34%, and any real hit disables it again.
+ * Not zero: a ship parked exactly AT the threshold satisfies
+ * `isBelowDisableThreshold` (<=) and would re-disable on the next tick.
+ * (Was 0.10, i.e. 43%.)
  */
-export const REPAIR_MARGIN_FRACTION = 0.10;
+export const REPAIR_MARGIN_FRACTION = 0.01;
 
 /**
  * Repair-system outfit (oütf ModType 49) delay range, ms. The Bible only
@@ -116,6 +122,9 @@ export const REPAIR_MARGIN_FRACTION = 0.10;
  * TUNABLE: modeled as one seeded-random draw in [min, max) made at the
  * moment of disabling, uniform, so peers agree and the wait feels
  * "occasional" (tens of seconds) without stranding anyone for minutes.
+ * The reference's Repair Droids (stock oütf 437) repaired 10.9 s and
+ * 25.7 s after the disable (wave 38, A10): both inside this window, so it
+ * stays until more readings narrow it.
  */
 export const OUTFIT_REPAIR_DELAY_MIN_MS = 10_000;
 export const OUTFIT_REPAIR_DELAY_MAX_MS = 30_000;

@@ -19,9 +19,9 @@ import {
     GameDateComponent, PlayerNamesComponent, playerShipName, PlayerShipSelector,
 } from '../nova_plugin/player/index.js';
 import { Optional } from 'nova_ecs/optional';
-import { ArrivalRoute, bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, JUMP_COLLAPSED_MESSAGE, jumpArrivalMessage, landingBlockedMessage, landingRequestMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage, SHIP_DISABLED_MESSAGE, stellarClearedMessage } from "./status_bar_content.js";
+import { ArrivalRoute, bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, JUMP_COLLAPSED_MESSAGE, jumpArrivalMessage, landingBlockedMessage, landingRequestMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage, SHIP_DISABLED_MESSAGE, SHIP_REPAIRED_MESSAGE, stellarClearedMessage } from "./status_bar_content.js";
 import { LandingBlockedEvent, LandingClearedEvent, LandingRequestEvent } from "../nova_plugin/travel/index.js";
-import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, PlunderSelfDestructEvent, SentHailComponent, ShipDisabledEvent } from "../nova_plugin/encounters/index.js";
+import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, PlunderSelfDestructEvent, SentHailComponent, ShipDisabledEvent, ShipRepairedEvent } from "../nova_plugin/encounters/index.js";
 import { missionCargoName } from '../nova_plugin/missions/index.js';
 import {
     ContrabandScanEvent, DistressCallEvent, distressCallMessage, distressLine,
@@ -447,6 +447,19 @@ export const ShowShipDisabledMessage = new System({
     },
 });
 
+// The LOCAL player's own disabled ship repaired itself (disabled_plugin's
+// ShipRepairedEvent, the repair-system outfit's or the inherent repair's):
+// "Propulsion systems repaired." (reference "Wave-37 leftovers, wave 38",
+// A10). No sound (none checked in the reference).
+export const ShowShipRepairedMessage = new System({
+    name: 'ShowShipRepairedMessage',
+    events: [ShipRepairedEvent],
+    args: [StatusLineResource, TimeResource, PlayerShipSelector] as const,
+    step(statusLine, { time }) {
+        statusLine.setMessage(SHIP_REPAIRED_MESSAGE, time);
+    },
+});
+
 // A rescue board took the mission cargo (rescue_board.ts): no dialog
 // opens, so this line is all the original shows. Same targeting as the
 // other boarding messages, and a success, so no cant-do beep.
@@ -602,6 +615,7 @@ export const StatusMessagePlugin: Plugin = {
         world.addSystem(ShowReinforcementArrivalMessage);
         world.addSystem(ShowEscortRepairedMessage);
         world.addSystem(ShowShipDisabledMessage);
+        world.addSystem(ShowShipRepairedMessage);
         world.addSystem(ShowBayCaptureMessage);
         world.addSystem(ShowCargoRetrievedMessage);
         world.resources.set(SeenPlayerHailsResource, new Map());
@@ -622,6 +636,7 @@ export const StatusMessagePlugin: Plugin = {
         world.removeSystem(ShowReinforcementArrivalMessage);
         world.removeSystem(ShowEscortRepairedMessage);
         world.removeSystem(ShowShipDisabledMessage);
+        world.removeSystem(ShowShipRepairedMessage);
         world.removeSystem(ShowBayCaptureMessage);
         world.removeSystem(ShowCargoRetrievedMessage);
         world.removeSystem(ShowPlayerHailMessage);

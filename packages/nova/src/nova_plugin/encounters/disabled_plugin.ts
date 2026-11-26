@@ -84,6 +84,21 @@ export const ShipDisabledEventType = t.partial({
 });
 registerSimulationBridgeEvent({ event: ShipDisabledEvent });
 
+/**
+ * Emitted (targeted at the ship) when a PLAYER-controlled ship repairs
+ * itself out of the disabled state — the repair-system outfit (oütf
+ * ModType 49), or NovaJS's inherent player repair standing in for one
+ * (Forgejo #383) — so that player's status line can say "Propulsion
+ * systems repaired." (stock STR# 2002 0-based 36, verbatim; reference
+ * "Wave-37 leftovers, wave 38", A10: printed at the repair, both runs).
+ * Not emitted for an outside repair (a hail assist, a capture, a death's
+ * refill), nor for an NPC. Display only: never mutates the simulation.
+ */
+export const ShipRepairedEvent =
+    new EcsEvent<Record<string, never>>('ShipRepairedEvent');
+export const ShipRepairedEventType = t.type({});
+registerSimulationBridgeEvent({ event: ShipRepairedEvent });
+
 const RepairProvider = ProvideFromCache({
     name: 'RepairProvider',
     provided: RepairComponent,
@@ -171,6 +186,9 @@ export const ShipDisableSystem = new System({
         if (disabled.repairAt !== null && time.time >= disabled.repairAt) {
             armor.current = repairedArmor(armor.max, fraction);
             entity.components.delete(DisabledComponent);
+            if (controlledBy !== undefined) {
+                emit(ShipRepairedEvent, {}, [uuid]);
+            }
         }
     },
     // RepairProvider is a #237 pin (shared: RepairComponent,
@@ -356,6 +374,8 @@ export const DisabledPlugin: Plugin = {
             ?.addComponent(DisabledComponent, DisabledState);
         world.resources.get(SerializerResource)
             ?.addEvent(ShipDisabledEvent, ShipDisabledEventType);
+        world.resources.get(SerializerResource)
+            ?.addEvent(ShipRepairedEvent, ShipRepairedEventType);
 
         // The repair capability is derived from owned outfits and
         // re-derived wherever a full entity is built (staged insertion,

@@ -30,7 +30,7 @@ import {
     rollRepairTime,
 } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
-import { ShipDisabledEvent } from './disabled_plugin.js';
+import { ShipDisabledEvent, ShipRepairedEvent } from './disabled_plugin.js';
 import { SourceComponent } from '../combat/index.js';
 import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/index.js';
 import { makeShip } from '../ship/index.js';
@@ -142,7 +142,15 @@ describe('disable threshold helpers', () => {
             { current: repairedArmor(1000, 0.33), max: 1000 }, 0.33))
             .toBeFalse();
         // A margin that would exceed max armor is capped.
-        expect(repairedArmor(10, 0.95)).toEqual(10);
+        expect(repairedArmor(10, 0.995)).toEqual(10);
+    });
+
+    it('repairs to just over a third (reference wave 38 A10: 33.8%)', () => {
+        // Repair Droids lifted the bar to 51 of 151 px, the first pixel
+        // over the one-third line; 43% (the old 10% margin) was too high.
+        const repaired = repairedArmor(2500, 0.33) / 2500;
+        expect(repaired).toBeGreaterThan(0.33);
+        expect(repaired).toBeLessThan(0.35);
     });
 
     it('rolls repair times: outfit precedes player, ranges hold', () => {
@@ -587,6 +595,46 @@ describe('ship disabling in a live world', () => {
             }
             expect(told).toEqual(controlled ? [SHIP] : []);
         }
+    }, 120_000);
+
+    it('tells a player-controlled ship "Propulsion systems repaired." once, '
+        + 'at its own repair, and not on an outside repair (reference '
+        + 'wave 38 A10)', async () => {
+        const { world, ship } = await shipWorld(SKIFF, { controlled: true });
+        const told: string[] = [];
+        world.addSystem(new System({
+            name: 'CountShipRepaired',
+            events: [ShipRepairedEvent],
+            args: [UUID] as const,
+            step(uuid) {
+                told.push(uuid);
+            },
+        }));
+        damageToFraction(ship, 0.2);
+        world.step();
+        const repairAt = ship.components.get(DisabledComponent)!.repairAt!;
+        const steps = Math.ceil(repairAt / (1000 / 60)) + 5;
+        for (let i = 0; i < steps
+            && ship.components.has(DisabledComponent); i++) {
+            world.step();
+        }
+        expect(ship.components.has(DisabledComponent)).toBeFalse();
+        for (let i = 0; i < 10; i++) {
+            world.step();
+        }
+        expect(told).toEqual([SHIP]);
+
+        // An outside repair (armor lifted above the threshold) says nothing.
+        told.length = 0;
+        damageToFraction(ship, 0.2);
+        world.step();
+        expect(ship.components.has(DisabledComponent)).toBeTrue();
+        armorOf(ship).current = armorOf(ship).max;
+        for (let i = 0; i < 10; i++) {
+            world.step();
+        }
+        expect(ship.components.has(DisabledComponent)).toBeFalse();
+        expect(told).toEqual([]);
     }, 120_000);
 
     it('leaves NPCs with no repair outfit stranded', async () => {

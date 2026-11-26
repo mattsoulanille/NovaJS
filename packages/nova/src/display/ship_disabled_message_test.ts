@@ -2,13 +2,13 @@ import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
-import { ShipDisabledEvent } from '../nova_plugin/encounters/index.js';
+import { ShipDisabledEvent, ShipRepairedEvent } from '../nova_plugin/encounters/index.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import {
-    JUMP_COLLAPSED_MESSAGE, SHIP_DISABLED_MESSAGE,
+    JUMP_COLLAPSED_MESSAGE, SHIP_DISABLED_MESSAGE, SHIP_REPAIRED_MESSAGE,
 } from './status_bar_content.js';
 import {
-    ShowShipDisabledMessage, StatusLineResource,
+    ShowShipDisabledMessage, ShowShipRepairedMessage, StatusLineResource,
 } from './status_message_plugin.js';
 
 /**
@@ -56,6 +56,46 @@ describe('ShowShipDisabledMessage (A10, wave 37)', () => {
     it('says nothing for another player\'s ship', () => {
         const { world, lines } = makeDisplayWorld();
         world.emit(ShipDisabledEvent, {}, [OTHER]);
+        world.step();
+        expect(lines).toEqual([]);
+    });
+});
+
+/**
+ * Reference "Wave-37 leftovers, wave 38", A10: Repair Droids repair the
+ * disabled player with "Propulsion systems repaired." (stock STR# 2002
+ * 0-based 36) on the status line.
+ */
+describe('ShowShipRepairedMessage (A10, wave 38)', () => {
+    const ME = 'my-ship';
+    const OTHER = 'their-ship';
+
+    function makeDisplayWorld() {
+        const world = new World();
+        const lines: string[] = [];
+        world.resources.set(StatusLineResource, {
+            setMessage: (message: string) => lines.push(message),
+        } as never);
+        world.resources.set(TimeResource,
+            { time: 1_700_000_000_000, delta_ms: 16, delta_s: 0.016, frame: 1 });
+        world.addSystem(ShowShipRepairedMessage);
+        world.entities.set(ME, new Entity()
+            .addComponent(PlayerShipSelector, undefined));
+        world.entities.set(OTHER, new Entity());
+        return { world, lines };
+    }
+
+    it('says "Propulsion systems repaired." when this player\'s ship repairs', () => {
+        const { world, lines } = makeDisplayWorld();
+        world.emit(ShipRepairedEvent, {}, [ME]);
+        world.step();
+        expect(lines).toEqual([SHIP_REPAIRED_MESSAGE]);
+        expect(SHIP_REPAIRED_MESSAGE).toBe('Propulsion systems repaired.');
+    });
+
+    it('says nothing for another player\'s ship', () => {
+        const { world, lines } = makeDisplayWorld();
+        world.emit(ShipRepairedEvent, {}, [OTHER]);
         world.step();
         expect(lines).toEqual([]);
     });

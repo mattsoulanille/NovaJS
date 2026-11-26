@@ -271,10 +271,11 @@ function applyBoardCrime(boarder: Entity, records: LegalRecords | undefined,
  * 33% threshold (1000) and about 53% (1600) of max.
  *
  * The fitted margin is REPAIR_MARGIN_FRACTION (`repairedArmor`, threshold
- * + 10% of max armor = 43%, 1300 of 3000 on that hull), the one already
- * used by self-repair, the hail assist and capture: it sits inside the
- * measured 33%-53% bracket, and one 600 blast (to 700, under 1000)
- * re-disables it exactly as the original's did. The margin is not zero
+ * + 1% of max armor = 34%, 1020 of 3000 on that hull), the one already
+ * used by self-repair, the hail assist and capture (fitted on the Repair
+ * Droids, reference wave 38 A10): it sits inside the measured 33%-53%
+ * bracket, and one 600 blast (to 420, under 1000) re-disables it exactly
+ * as the original's did. The margin is not zero
  * because a ship parked exactly AT the threshold satisfies
  * `isBelowDisableThreshold` (the comparison is <=), so ShipDisableSystem
  * would re-disable it on the next tick.

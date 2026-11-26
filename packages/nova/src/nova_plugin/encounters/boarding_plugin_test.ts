@@ -45,7 +45,7 @@ import {
 } from '../escorts/index.js';
 import { CollisionHitterComponent } from '../core/index.js';
 import { HurtboxHullComponent } from '../core/index.js';
-import { isBelowDisableThreshold } from '../ship/index.js';
+import { isBelowDisableThreshold, REPAIR_MARGIN_FRACTION } from '../ship/index.js';
 import { CargoComponent } from '../ship/index.js';
 import {
     CollisionEvent, CollisionVulnerabilityComponent,
@@ -1431,7 +1431,7 @@ describe('boarding in a live world', () => {
             expect(isBelowDisableThreshold(armor, shipData.disableArmorFraction))
                 .toBeFalse();
             expect(armor.current).toEqual(
-                (shipData.disableArmorFraction + 0.10) * armor.max);
+                (shipData.disableArmorFraction + REPAIR_MARGIN_FRACTION) * armor.max);
             const shield = target.components.get(ShieldComponent)!;
             expect(shield.current).toBeLessThan(0.01 * shield.max);
             // Status feedback fired at the boarder.
@@ -1550,7 +1550,7 @@ describe('boarding in a live world', () => {
                 expect(isBelowDisableThreshold(
                     armor, shipData.disableArmorFraction)).toBeFalse();
                 expect(armor.current).toEqual(
-                    (shipData.disableArmorFraction + 0.10) * armor.max);
+                    (shipData.disableArmorFraction + REPAIR_MARGIN_FRACTION) * armor.max);
                 // The shield is left down (see the spec above).
                 const shield = target.components.get(ShieldComponent)!;
                 expect(shield.current).toBeLessThan(0.01 * shield.max);
