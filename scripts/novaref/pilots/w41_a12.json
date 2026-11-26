@@ -1,0 +1,31 @@
+{
+  "name": "novaref-w41-a12",
+  "edits": {
+    "ship": 703,
+    "stellar": 1995,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1431": 2,
+      "1435": 2
+    },
+    "missionBits": {
+      "9268": true
+    },
+    "nickname": "Probe",
+    "shipName": "w41-a12",
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}

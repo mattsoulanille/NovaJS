@@ -596,6 +596,21 @@ jünk 205, bits 9266. A player's fighter bay is a SECONDARY: select it with
 `w` before `down:ctrl` (wave 40's first E8 runs launched nothing).
 `scenarios/w40_space_interactive.json` / `w40_space_early.json` (inbox
 `w40.jsonl`).
+Wave 41 used sÿst 1428-1440, spöb 1987-1999 plus the spares 1495 / 1496,
+shïp 628-685, düde 523-531, gövt 284, wëap 305-308, oütf 487-489 and bits
+9266-9275, and RETIRED wave 10's mïsn 1032-1037 (bits 9073-9080) and wave
+11's 1038 / 1040 (bits 9081 / 9083; the ships and düdes stay), using
+1031-1038 and 1040 for its own. Next free: sÿst 1441, spöb **none in
+1421-1999** (the last spare is 1499: open a new spöb range, checking the
+stock files and the kit; the kit holds 2000-2175), shïp 686, düde 532, ränk
+205, mïsn **none** (retire another old kit mission), wëap 309, oütf 490,
+gövt 283 and below, flët 324, jünk 205, bits 9276. Lessons: the play area
+is x 0-639 with the player at (318, 302) (the HUD starts at 640; a click
+meant for a stellar 300 px east hit the HUD); a click on a stellar selects
+it for `l`; Deionize 0 is NOT "no drain". `scenarios/w41_space_interactive.json`
+/ `w41_space_early.json` / `w41_space_early10.json` (10 fps, long watches) /
+`w41_r5_title.json` (title-screen reads of several pushed pilots, no
+plug-in; inbox `w41.jsonl`).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they

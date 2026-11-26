@@ -1,0 +1,31 @@
+{
+  "name": "novaref-w41-a6i50",
+  "edits": {
+    "ship": 654,
+    "stellar": 1997,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1437": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w41-a6i50",
+    "legal": {
+      "1437": -1000
+    },
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}

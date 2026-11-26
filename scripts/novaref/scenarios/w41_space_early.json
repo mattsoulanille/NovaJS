@@ -1,0 +1,47 @@
+{
+ "name": "w41_space_early",
+ "_comment": "Wave 41: as w41_space_interactive (inbox w41.jsonl) but the recording starts BEFORE Enter Ship, so the first seconds after Enter Ship are on the recording.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 500
+  },
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w41.jsonl",
+    "maxMs": 1800000
+   }
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

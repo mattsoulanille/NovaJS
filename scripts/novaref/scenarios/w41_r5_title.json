@@ -1,0 +1,231 @@
+{
+ "name": "w41_r5_title",
+ "_comment": "Wave 41 R5: the combat-rating tier names off the TITLE SCREEN. No plug-ins (the stock game); Last Pilot parked. The first pilot (rating 0) is pushed by --pilot as novaref-scenario; novaref-r5-<rating> must be pushed first (pilots push ... as novaref-r5-<rating>). open_pilot each, shot. Never Enter Ship.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "park_last_pilot": true,
+ "steps": [
+  {
+   "wait": 1500
+  },
+  {
+   "move": true
+  },
+  {
+   "shot": "r5-0",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-1"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-1",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-99"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-99",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-100"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-100",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-199"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-199",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-200"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-200",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-399"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-399",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-400"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-400",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-799"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-799",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-800"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-800",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-1599"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-1599",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-1600"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-1600",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-3199"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-3199",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-3200"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-3200",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-6399"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-6399",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-6400"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-6400",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-12799"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-12799",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-12800"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-12800",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-25599"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-25599",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-25600"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-25600",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-51200"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-51200",
+   "window": true
+  },
+  {
+   "open_pilot": "novaref-r5-1000000"
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "r5-1000000",
+   "window": true
+  }
+ ],
+ "pull": false
+}

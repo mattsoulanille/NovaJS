@@ -1,0 +1,36 @@
+{
+  "name": "novaref-w41-e10c10",
+  "edits": {
+    "ship": 497,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w41-e10c10",
+    "weapons": {
+      "128": 0,
+      "308": 1
+    },
+    "outfits": {
+      "128": 0,
+      "489": 1
+    },
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}
