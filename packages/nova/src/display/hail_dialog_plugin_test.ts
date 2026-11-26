@@ -37,7 +37,8 @@ import {
     ASSIST_FOR_PAY_FALLBACK, ASSIST_PAID_FALLBACK, ASSIST_REFUSED_FALLBACK,
     JUST_AN_ESCORT_FALLBACK, MERCY_REFUSED_FIRST_INDEX, fuelSaleTerms,
     planetRefusesBribe, planetLowerPriceCounters, bribeDay,
-    MERCY_LOWERED_FIRST_INDEX, NO_MERCY_HAGGLE,
+    MERCY_LOWERED_FIRST_INDEX, NO_MERCY_HAGGLE, shipBribePrice,
+    fuelSaleMoodText, hashString,
 } from '../nova_plugin/reputation/index.js';
 import {
     CANNOT_UPGRADE_TEXT, escortReadout, HailContext, HailPage, HailPress, haggleText,
@@ -1103,6 +1104,47 @@ describe('computeContext: a ship hail OPENS with the channel-open group', () => 
             // Another hail draws again: every line turns up.
             expect(seen.size).toBe(lines.length);
         });
+
+    it('draws a hostile ship\'s MOOD and FIRST ASK once per hail (reference '
+        + '"R7 a ship\'s Beg For Mercy haggle, wave 33", finding 2)',
+    async () => {
+        const { world, gameData } = makeWorld(target => {
+            target.components.set(GovtComponent, { id: 'test:raiders' });
+            target.components.set(NpcComponent,
+                { aiType: 3, mode: 'attack' });
+            target.components.set(TargetComponent, { target: PLAYER });
+        });
+        const raiders = {
+            ...gameData.data.Govt.defaultValue!, id: 'test:raiders',
+        };
+        // An ordinary bribe-taker (no 0x8000): the mood's ask plus growth.
+        raiders.flags = { ...raiders.flags, warshipsTakeBribes: true };
+        gameData.data.Govt.map.set('test:raiders', raiders);
+        world.entities.get(PLAYER)!.components
+            .set(CreditsComponent, { credits: 100_000_000 });
+        const assets = commAssets();
+        const strings = (await assets.data.StringTable
+            .get(HAIL_RESPONSE_TABLE)).strings as string[];
+        const asks = new Set<number>();
+        const moods = new Set<string>();
+        for (let channel = 0; channel < 40; channel++) {
+            const result = await computeContext(world, gameData, assets,
+                undefined, channel);
+            const mercy = result!.replies.mercy!;
+            // The sim's charge on this channel.
+            expect(mercy.firstAsk).toBe(shipBribePrice(TARGET, PLAYER,
+                100_000_000, false, channel));
+            expect(result!.context.bribe!.amount).toBe(mercy.firstAsk);
+            // The mood line goes with the hail's mood.
+            expect(mercy.offer).toBe(fuelSaleMoodText(strings,
+                fuelSaleTerms(TARGET, channel).mood,
+                hashString(`${TARGET}:mood:${channel}`)));
+            asks.add(mercy.firstAsk);
+            moods.add(mercy.offer);
+        }
+        expect(asks.size).toBeGreaterThan(1);
+        expect(moods.size).toBeGreaterThan(1);
+    });
 
     it('opens a NON-TALKATIVE govt\'s channel too, with nothing to greet '
         + 'with', async () => {

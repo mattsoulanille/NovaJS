@@ -447,14 +447,26 @@ export const FUEL_SALE_PRICE_STEP = 1000;
  * any record is applied) and applyHail (which charges it) agree on every
  * peer, and the ship keeps its mood and its ask for every pilot and every
  * ask.
+ *
+ * `channel`, for a Beg For Mercy plea ({@link shipBribePrice}): the hail's
+ * own draw. MEASURED (reference "R7 a ship's Beg For Mercy haggle, wave
+ * 33", finding 2): every new hail of one ship drew a new mood line and
+ * first ask (a "bad mood" 4,000 between two "good mood" 20,000s; 3,000 to
+ * 20,000 over seven hails). The fuel sale keeps the ship's one mood (no
+ * channel): its moods were only ever measured within a hail.
  */
-export function fuelSaleTerms(shipUuid: string): FuelSaleTerms {
+export function fuelSaleTerms(shipUuid: string, channel?: number):
+    FuelSaleTerms {
     // ONE hash, two bit fields: the low two bits pick the mood and bit 16
     // the step. (Two hashes salted "mood" / "base" are correlated in their
     // low bits, FNV-1a mixing upward only: they paired every mood with
     // one step.) The good mood has no step (wave 21), so bit 16 splits
-    // only the neutral and bad moods, about evenly each (hail_test).
-    const roll = hashString(`fuelSale:ask:${shipUuid}`);
+    // only the neutral and bad moods, about evenly each (hail_test). A
+    // channel's key is avalanched: it differs from the next hail's in its
+    // last digits only.
+    const roll = channel === undefined
+        ? hashString(`fuelSale:ask:${shipUuid}`)
+        : avalanche(hashString(`fuelSale:ask:${shipUuid}:${channel}`));
     const mood: FuelSaleMood = roll % 4 === 0 ? 'good'
         : roll % 4 === 3 ? 'bad' : 'neutral';
     const step = mood === 'good' ? 0 : (roll >>> 16) & 1;
@@ -578,10 +590,18 @@ export function askingCashCap(credits: number): number {
  * past the 20,000 cap (which holds for the channel's first ask only). A new
  * hail starts afresh.
  *
+ * A SHIP's plea is priced PER HAIL (reference "R7 a ship's Beg For Mercy
+ * haggle, wave 33", finding 2: one warship asked 20,000, 20,000, 9,000,
+ * 20,000, 20,000, 3,000, 20,000 over seven hails, each with its own mood
+ * line): the channel joins the seed of the ship's mood ({@link
+ * fuelSaleTerms}) and of its growth ({@link bribeGrowth}).
+ *
  * NOT MODELLED: a second Offer Bribe in the same channel after a COUNTER
- * answered as an insult (wave 22); a NEW hail's new price (the 0x8000
- * planet asked 25,000, then 99,000): here the price is fixed per ship (or
- * planet) and pilot for given cash.
+ * answered as an insult (wave 22); a PLANET's new price on a new hail (the
+ * 0x8000 planet asked 25,000, then 99,000): a planet's price is fixed per
+ * planet and pilot for given cash. An unfriendly ship's price for its
+ * HELP ('forPay', priced like a bribe, GUESS) also stays per ship and
+ * pilot: its record names no channel.
  *
  * Pure over synced state (the target's and pilot's uuids, the pilot's
  * cash, the govt's flags), so the dialog's quote and applyHail's charge
@@ -632,16 +652,19 @@ export const BRIBE_GROWTH_CASH_DIVISOR = 1_000;
  * MEASURED: the asks grow with the cash and spread very widely (a "good
  * mood" asked 1,000, 3,000 and 8,000 at 20M; a 0x8000 planet 4,000 at
  * 20M and 25,000 / 99,000 at 100M). GUESSES: the linear range, the even
- * draw and its seed (16 bits of a hash of the target and the pilot, so
- * one ship asks one pilot one price for given cash; the original
- * re-draws on a new hail).
+ * draw and its seed (16 bits of a hash of the target, the pilot and, for
+ * a ship's plea, the hail's `channel`: MEASURED that a ship redraws its
+ * first ask on every hail, reference "R7 a ship's Beg For Mercy haggle,
+ * wave 33", finding 2; without a channel one target asks one pilot one
+ * price for given cash).
  */
 export function bribeGrowth(credits: number, targetUuid: string,
-    playerUuid: string): number {
+    playerUuid: string, channel?: number): number {
     const cash = Math.max(0, Math.floor(credits) || 0);
     const range = Math.floor(cash / BRIBE_GROWTH_CASH_DIVISOR);
-    const draw = avalanche(hashString(
-        `bribe:grow:${targetUuid}:${playerUuid}`)) & 0xffff;
+    const draw = avalanche(hashString(channel === undefined
+        ? `bribe:grow:${targetUuid}:${playerUuid}`
+        : `bribe:grow:${targetUuid}:${playerUuid}:${channel}`)) & 0xffff;
     // Integers throughout (range < 2^37 for any plausible cash, times
     // 2^16 stays exact in a double).
     const extra = Math.floor(range * draw / 0x10000);
@@ -653,13 +676,15 @@ export function bribeGrowth(credits: number, targetUuid: string,
  * an unfriendly govt's 'forPay', GUESS: priced the same): its fuel-sale
  * base plus the cash's growth up to {@link SHIP_BRIBE_CAP}, or 20,000
  * flat for a 0x8000 govt, capped by a third of the cash with a floor of
- * 1,000. See the section comment.
+ * 1,000. See the section comment. `channel`: the plea's hail, which draws
+ * its own mood and growth (reference "R7 a ship's Beg For Mercy haggle,
+ * wave 33"); absent for the help's price (one per ship and pilot).
  */
 export function shipBribePrice(shipUuid: string, playerUuid: string,
-    credits: number, largerBribes: boolean): number {
+    credits: number, largerBribes: boolean, channel?: number): number {
     const ask = largerBribes ? LARGER_SHIP_BRIBE
-        : Math.min(SHIP_BRIBE_CAP, fuelSaleTerms(shipUuid).base
-            + bribeGrowth(credits, shipUuid, playerUuid));
+        : Math.min(SHIP_BRIBE_CAP, fuelSaleTerms(shipUuid, channel).base
+            + bribeGrowth(credits, shipUuid, playerUuid, channel));
     return Math.min(ask, askingCashCap(credits));
 }
 
@@ -1020,13 +1045,17 @@ export function laterFuelHaggle(a: FuelHaggleState | undefined,
  * client can only ever reset the haggle that way, which re-hailing does
  * anyway.
  *
- * GUESSES: how often the first Lower Price of an ask counters (the fuel
- * sale's one in four, {@link FUEL_COUNTER_IN_FOUR}: 1 in 6 fresh asks
- * measured, waves 31-32); that only a WITHDRAWAL moves the next plea's ask
- * on (every repeated plea measured followed one), like the fuel sale's
- * {@link lowerFuelPrice}. The first ask is {@link shipBribePrice}, fixed
- * per ship and pilot for given cash (the original re-draws it per hail:
- * NOT MODELLED). Nothing is recorded until a price is accepted.
+ * Reference "R7 a ship's Beg For Mercy haggle, wave 33": the +1,000 never
+ * stops (twelve pleas, 20,000 to 31,000), warships haggle as freighters,
+ * and every NEW HAIL draws its own mood line and first ask (finding 2):
+ * the first ask is {@link shipBribePrice} on the channel, the ship's mood
+ * and growth seeded by the channel too.
+ *
+ * GUESSES: how often the first Lower Price of an ask counters (about one
+ * in three, {@link MERCY_COUNTER_ONE_IN}: 19 in 59 first presses, waves
+ * 32-33); that only a WITHDRAWAL moves the next plea's ask on (every
+ * repeated plea measured followed one), like the fuel sale's
+ * {@link lowerFuelPrice}. Nothing is recorded until a price is accepted.
  */
 export interface MercyHaggleState {
     /** How many of this channel's asks the ship has withdrawn: each adds
@@ -1061,6 +1090,15 @@ export function mercyPrice(firstAsk: number, haggle: MercyHaggleState):
 }
 
 /**
+ * One FIRST Lower Price on a ship's plea in this many counters. GUESS
+ * within the measured odds (reference "R7 a ship's Beg For Mercy haggle,
+ * wave 33", finding 3: 19 counters in 59 first presses with wave 32, 32%,
+ * Wilson 95% about 22-45%; the fuel sale's one in four,
+ * {@link FUEL_COUNTER_IN_FOUR}, fits as well, one in three is nearer).
+ */
+export const MERCY_COUNTER_ONE_IN = 3;
+
+/**
  * Whether the first Lower Price on ask number `asks` of `channel` counters
  * (see {@link lowerMercyPrice}): a pure draw per ship, pilot, channel and
  * ask, so the dialog that must show it and every peer agree without the
@@ -1070,7 +1108,7 @@ export function mercyLowerPriceCounters(shipUuid: string, playerUuid: string,
     channel: number, asks: number): boolean {
     return avalanche(hashString(
         `mercy:lower:${shipUuid}:${playerUuid}:${channel}:${asks}`))
-        % 4 < FUEL_COUNTER_IN_FOUR;
+        % MERCY_COUNTER_ONE_IN === 0;
 }
 
 /**

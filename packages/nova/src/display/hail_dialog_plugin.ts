@@ -1034,9 +1034,13 @@ export async function computeContext(world: World,
             // cost extra.") and "Pay me N credits.".
             // The channel's FIRST ask: each further plea on it asks 1,000
             // more (mercyOffer; reference "R7 a provoked freighter's Lower
-            // Price, wave 32").
+            // Price, wave 32"). Drawn PER HAIL with the mood line below
+            // (reference "R7 a ship's Beg For Mercy haggle, wave 33",
+            // finding 2: one warship asked 3,000 to 20,000 over seven
+            // hails, each with its own mood), so the channel seeds both,
+            // as it does applyHail's charge.
             const firstAsk = shipBribePrice(shipTargetUuid, player.uuid,
-                credits, !!govt?.flags.largerBribes);
+                credits, !!govt?.flags.largerBribes, channel);
             const priced = response.canBribe && !othersShip;
             const miscStrings = priced
                 ? await loadStrings(displayAssets, MISC_STRING_TABLE)
@@ -1045,7 +1049,8 @@ export async function computeContext(world: World,
                 ? {
                     firstAsk,
                     offer: fuelSaleMoodText(shipStrings,
-                        fuelSaleTerms(shipTargetUuid).mood, shipSeed),
+                        fuelSaleTerms(shipTargetUuid, channel).mood,
+                        hashString(`${shipTargetUuid}:mood:${channel}`)),
                     // What they say once the demand is PAID (STR# 3000
                     // 135-139). Resolved here because the Pay handler is
                     // synchronous, exactly like the assistance replies.

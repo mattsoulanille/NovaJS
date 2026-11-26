@@ -19,7 +19,7 @@ import { SourceComponent } from '../combat/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { GovtComponent, SimulationGameDataResource } from '../core/index.js';
 import {
-    FUEL_SALE_AMOUNT, fuelSaleTerms,
+    FUEL_SALE_AMOUNT, fuelSaleTerms, shipBribePrice,
     LegalRecordsComponent, mercyLowerPriceCounters,
 } from '../reputation/index.js';
 import { getDefaultRankData } from 'novadatainterface/rank_data';
@@ -260,10 +260,11 @@ describe('applyHail: bribe / beg for mercy', () => {
             ship.components.set(TargetComponent, { target: 'player' });
         });
         applyHail(world, PEER, { kind: 'bribe', target: 'target' });
-        // The ship's fuel-sale ask ('target' is in a good mood: 1,000;
-        // armed is not a 0x8000 govt), reference "R7 ..., wave 22".
+        // The ship's fuel-sale ask on the plea's channel (0: no channel
+        // named; armed is not a 0x8000 govt), reference "R7 ..., wave 22"
+        // and "R7 a ship's Beg For Mercy haggle, wave 33".
         expect(player(world).components.get(CreditsComponent)!.credits)
-            .toBe(99_000);
+            .toBe(100_000 - fuelSaleTerms('target', 0).base);
         const npc = target(world).components.get(NpcComponent)!;
         expect(npc.pacifiedFrom).toBe('player');
         expect(npc.pacifiedUntil).toBeGreaterThan(0);
@@ -457,6 +458,32 @@ describe('applyHail: a ship\'s Beg For Mercy haggle (reference "R7 a '
                 channel: channel + 1 });
             expect(credits(world)).toBe(200_000_000 - 20_000);
         });
+
+    it('each hail draws its own first ask, and Accept Price pays the '
+        + 'channel\'s (reference "R7 a ship\'s Beg For Mercy haggle, wave '
+        + '33": 20,000, 20,000, 9,000, 20,000, 20,000, 3,000, 20,000)',
+    async () => {
+        const paid = new Set<number>();
+        for (let channel = 100; channel < 116; channel++) {
+            const { world, addShip } = await makeWorld();
+            player(world).components.set(CreditsComponent,
+                { credits: 100_000_000 });
+            await addShip('target', 500, 0, ship => {
+                ship.components.set(GovtComponent, { id: 'test:armed' });
+                ship.components.set(NpcComponent,
+                    { aiType: 3, mode: 'attack', aggressor: 'player' });
+                ship.components.set(TargetComponent, { target: 'player' });
+            });
+            applyHail(world, PEER, { kind: 'bribe', target: 'target',
+                channel });
+            const amount = 100_000_000 - credits(world);
+            // The dialog's quote for this channel.
+            expect(amount).toBe(shipBribePrice('target', 'player',
+                100_000_000, false, channel));
+            paid.add(amount);
+        }
+        expect(paid.size).toBeGreaterThan(1);
+    });
 
     it('a pilot who cannot pay the ask haggles nothing', async () => {
         const world = await pirateAt200M();
@@ -765,10 +792,10 @@ describe('applyHail: hostility is the ship\'s IFF (ruling #297)', () => {
         async () => {
             const { world } = await fleeingAggressor('test:armed', 0);
             applyHail(world, PEER, { kind: 'bribe', target: 'target' });
-            // 'target' asks its good mood's 1,000 (armed is not a 0x8000
-            // govt; reference "R7 bribe price, wave 22").
+            // 'target' asks its channel-0 mood's price (armed is not a
+            // 0x8000 govt; reference "R7 bribe price, wave 22").
             expect(player(world).components.get(CreditsComponent)!.credits)
-                .toBe(99_000);
+                .toBe(100_000 - fuelSaleTerms('target', 0).base);
             expect(target(world).components.get(NpcComponent)!.pacifiedFrom)
                 .toBe('player');
         });
@@ -904,7 +931,7 @@ describe('applyHail: a criminal record counts by the local law (#297/A14)',
                     .toBeFalse();
                 applyHail(world, PEER, { kind: 'bribe', target: 'target' });
                 expect(player(world).components.get(CreditsComponent)!.credits)
-                    .toBe(99_000);
+                    .toBe(100_000 - fuelSaleTerms('target', 0).base);
                 expect(target(world).components.get(NpcComponent)!
                     .pacifiedFrom).toBe('player');
             });

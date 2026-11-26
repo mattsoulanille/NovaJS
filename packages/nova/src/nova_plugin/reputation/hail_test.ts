@@ -75,7 +75,7 @@ import {
     shipHailResponse,
     shipTakesBribes,
     lowerMercyPrice, MERCY_ASK_STEP, mercyHaggleOn, mercyLowerPriceCounters,
-    mercyPrice, NO_MERCY_HAGGLE,
+    mercyPrice, NO_MERCY_HAGGLE, MERCY_COUNTER_ONE_IN,
 } from './hail.js';
 
 function govt(overrides: Partial<GovtData> = {}): GovtData {
@@ -849,8 +849,9 @@ describe('a ship\'s Beg For Mercy haggle (reference "R7 a provoked '
         expect(mercyPrice(3_000, { asks: 0, countered: true })).toBe(2_200);
     });
 
-    it('Lower Price counters about one first press in four, or withdraws; '
-        + 'on a counter it always withdraws', () => {
+    it('Lower Price counters about one first press in three (19 in 59, '
+        + 'waves 32-33), or withdraws; on a counter it always withdraws',
+    () => {
             let counters = 0;
             const trials = 4000;
             for (let channel = 0; channel < trials; channel++) {
@@ -874,8 +875,9 @@ describe('a ship\'s Beg For Mercy haggle (reference "R7 a provoked '
                         .toEqual({ asks: 1, countered: false });
                 }
             }
-            expect(counters / trials).toBeGreaterThan(0.2);
-            expect(counters / trials).toBeLessThan(0.3);
+            expect(MERCY_COUNTER_ONE_IN).toBe(3);
+            expect(counters / trials).toBeGreaterThan(0.29);
+            expect(counters / trials).toBeLessThan(0.38);
         });
 
     it('draws the counter per ship, pilot, channel and ask', () => {
@@ -899,6 +901,65 @@ describe('a ship\'s Beg For Mercy haggle (reference "R7 a provoked '
                 .toEqual({ asks: 2, countered: true });
             expect(mercyHaggleOn(entry, 8)).toEqual(NO_MERCY_HAGGLE);
             expect(mercyHaggleOn(undefined, 7)).toEqual(NO_MERCY_HAGGLE);
+        });
+});
+
+describe('a ship\'s Beg For Mercy on a new hail (reference "R7 a ship\'s '
+    + 'Beg For Mercy haggle, wave 33", finding 2)', () => {
+    const channels = Array.from({ length: 64 }, (_, i) => 1000 + 17 * i);
+
+    it('draws a new mood and first ask per hail (one warship asked 20,000, '
+        + '20,000, 9,000, 20,000, 20,000, 3,000, 20,000 at 100M)', () => {
+            const asks = channels.map(channel =>
+                shipBribePrice('warship', 'p', 100e6, false, channel));
+            // Mostly the 20,000 cap, sometimes far under it.
+            expect(asks.filter(a => a === SHIP_BRIBE_CAP).length)
+                .toBeGreaterThan(32);
+            expect(asks.some(a => a < 10_000)).toBeTrue();
+            for (const ask of asks) {
+                expect(ask % 1_000).toBe(0);
+                expect(ask).toBeGreaterThanOrEqual(1_000);
+                expect(ask).toBeLessThanOrEqual(SHIP_BRIBE_CAP);
+            }
+            const moods = new Set(channels.map(channel =>
+                fuelSaleTerms('warship', channel).mood));
+            expect(moods).toEqual(new Set(['good', 'neutral', 'bad']));
+        });
+
+    it('keeps one hail\'s draw fixed (the dialog\'s quote is applyHail\'s '
+        + 'charge)', () => {
+            for (const channel of channels) {
+                expect(shipBribePrice('warship', 'p', 100e6, false, channel))
+                    .toBe(shipBribePrice('warship', 'p', 100e6, false,
+                        channel));
+                expect(fuelSaleTerms('warship', channel))
+                    .toEqual(fuelSaleTerms('warship', channel));
+            }
+        });
+
+    it('a mood\'s ask still follows the measured ladder up to 1M', () => {
+        for (const channel of channels) {
+            const terms = fuelSaleTerms('ship 9', channel);
+            expect(shipBribePrice('ship 9', 'p', 1_000_000, false, channel))
+                .toBe(terms.base);
+            expect(terms.mood === 'good' ? [1000]
+                : terms.mood === 'neutral' ? [2000, 3000] : [3000, 4000])
+                .toContain(terms.base);
+        }
+    });
+
+    it('the 0x8000 flat 20,000 is every hail\'s first ask', () => {
+        for (const channel of channels) {
+            expect(shipBribePrice('ls', 'p', 20e6, true, channel))
+                .toBe(20_000);
+        }
+    });
+
+    it('leaves the fuel sale and the help\'s price per ship (no channel)',
+        () => {
+            expect(shipBribePrice('ship 9', 'p', 50e6, false))
+                .toBe(Math.min(SHIP_BRIBE_CAP, fuelSaleTerms('ship 9').base
+                    + bribeGrowth(50e6, 'ship 9', 'p')));
         });
 });
 

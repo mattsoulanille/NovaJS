@@ -729,17 +729,18 @@ export function applyHail(world: World, peerId: string | undefined,
     // reference "R7 a provoked freighter's Lower Price, wave 32"): the
     // channel's first ask is shipBribePrice (reference "R7 bribe price,
     // wave 22": its fuel-sale ask grown with the cash, or 20,000 flat for
-    // a 0x8000 govt, capped by a third of the cash, floor 1,000), each ask
-    // the ship withdrew on this channel adds 1,000, and its 3/4 counter
-    // replaces the ask while on the table. A pilot who cannot pay it pays
-    // nothing, haggles nothing and stays unpacified (the dialog offers no
-    // Lower Price then).
+    // a 0x8000 govt, capped by a third of the cash, floor 1,000; its mood
+    // and growth drawn per channel, reference "R7 a ship's Beg For Mercy
+    // haggle, wave 33"), each ask the ship withdrew on this channel adds
+    // 1,000, and its 3/4 counter replaces the ask while on the table. A
+    // pilot who cannot pay it pays nothing, haggles nothing and stays
+    // unpacified (the dialog offers no Lower Price then).
     const channel = action.channel ?? 0;
     const haggle = mercyHaggleOn(
         target.components.get(MercyHaggleComponent)?.get(found.uuid),
         channel);
     const amount = mercyPrice(shipBribePrice(action.target, found.uuid,
-        credits.credits, !!targetGovt?.flags.largerBribes), haggle);
+        credits.credits, !!targetGovt?.flags.largerBribes, channel), haggle);
     if (amount <= 0 || credits.credits < amount) {
         return;
     }
