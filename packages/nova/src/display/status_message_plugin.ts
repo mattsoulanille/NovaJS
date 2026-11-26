@@ -659,6 +659,7 @@ export const StatusMessagePlugin: Plugin = {
         world.removeSystem(ShowEscortRepairedMessage);
         world.removeSystem(ShowShipDisabledMessage);
         world.removeSystem(ShowShipRepairedMessage);
+        world.removeSystem(ShowStellarDominatedMessage);
         world.removeSystem(ShowBayCaptureMessage);
         world.removeSystem(ShowCargoRetrievedMessage);
         world.removeSystem(ShowPlayerHailMessage);
