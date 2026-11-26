@@ -48,6 +48,20 @@ export class Stat {
             Math.min(this.max, this.current + this.recharge * delta));
     }
 
+    /**
+     * Like step, but enforcing only the floor: a stat whose current may
+     * exceed its max (the ion charge, which piles up past IonizeMax:
+     * reference "Ionization's cap and the afterburner (E6 leftovers),
+     * wave 40"). A stat already at or below its max that recharges
+     * upward still stops at the max.
+     */
+    stepUncapped(delta: number) {
+        const next = this.current + this.recharge * delta;
+        const ceiling = Math.max(this.max, this.current);
+        this.wrappedCurrent.wrappedVal = Math.max(this.min,
+            Math.min(ceiling, next));
+    }
+
     get percent() {
         if (this.max <= 0) {
             // A stat with no capacity (IonizeMax 0 hulls, shieldless

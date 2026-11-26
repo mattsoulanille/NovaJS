@@ -184,6 +184,12 @@ interface StatBounds {
     max: number;
     min: number;
     recharge: number;
+    /**
+     * `current` may sit above `max` (the ion charge: reference
+     * "Ionization's cap and the afterburner (E6 leftovers), wave 40").
+     * Only the floor is enforced when the bounds change.
+     */
+    uncapped?: boolean;
 }
 
 /**
@@ -211,7 +217,7 @@ function shipStatSystem(name: string, component: Component<Stat>,
 
 /** The step of shipStatSystem, shared with the fuel provider below. */
 function reconcileStat(setComponent: SetComponentFunction<Stat>,
-    stat: Stat | undefined, { max, min, recharge }: StatBounds,
+    stat: Stat | undefined, { max, min, recharge, uncapped }: StatBounds,
     initialCurrent: number): void {
     if (!stat) {
         setComponent(new Stat({
@@ -233,7 +239,8 @@ function reconcileStat(setComponent: SetComponentFunction<Stat>,
     // Selling the tank spills what no longer fits. The recharge
     // systems clamp too, but only after this tick's readers
     // (the jump check, the status bar) have looked.
-    const clamped = Math.max(min, Math.min(max, stat.current));
+    const clamped = Math.max(min,
+        uncapped && max > 0 ? stat.current : Math.min(max, stat.current));
     if (stat.current !== clamped) {
         stat.current = clamped;
     }
@@ -372,6 +379,8 @@ const ShipIonizationProvider = shipStatSystem(
         max: physics.ionization,
         min: 0,
         recharge: -physics.deionize,
+        // The charge piles up past IonizeMax (E6, wave 40).
+        uncapped: true,
     }),
     () => 0,
     // #237 pin (shared: ShipPhysicsComponent).

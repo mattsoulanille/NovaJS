@@ -36,11 +36,18 @@ import { IonizationComponent, IonizationRechargeSystem } from "./health_plugin.j
  * half-capacity level and the 0.6 factor, and will playtest from there.
  * Everything else #124 fixed stays: the IonizeMax-0 guard below, the
  * stat's percent guard (health_plugin), the IonizeColor tint, and the
- * ordering before the decay-and-clamp.
+ * ordering before the decay.
  *
  * The state lives in IsIonizedComponent, which is serializer-registered
  * and so carried in rollback snapshots and wire baselines like
  * DisabledComponent; every peer derives it from the same charge history.
+ *
+ * The charge is NOT capped at IonizeMax: each hit adds its whole wëap
+ * Ionization and Deionize drains the pile (health_plugin's
+ * IonizationRechargeSystem). MEASURED (reference "Ionization's cap and
+ * the afterburner (E6 leftovers), wave 40"): a Deionize-50 hull hit for
+ * about 14 s was still fully ionized 150 s later. The slowdown saturates
+ * at IonizeMax (ionSlowdown); the extra charge only makes it last.
  *
  * RULING (Bible silent): a hull with IonizeMax <= 0 has no ion capacity
  * and is never ionized. Two plug-in hulls ship that value (arpia:599,
@@ -126,9 +133,9 @@ export const IonizedSystem = new System({
         emit(IonizedEvent, isIonized, [uuid]);
     },
     // Judge the raw charge left by last tick's hits (DamageSystem adds
-    // after the step, unclamped) before this tick's decay-and-clamp:
-    // otherwise a hit that lands exactly on IonizeMax would be decayed
-    // below "fully ionized" before anyone looked at it.
+    // after the step) before this tick's decay: otherwise a hit that
+    // lands exactly on the half line would be decayed below it before
+    // anyone looked at it.
     before: [IonizationRechargeSystem],
 });
 

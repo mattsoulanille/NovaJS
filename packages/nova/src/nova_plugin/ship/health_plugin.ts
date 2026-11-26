@@ -47,6 +47,15 @@ export const FUEL_PER_JUMP = 100;
 const disableSuspendedStats = new Set<Component<Stat>>(
     [ShieldComponent, ArmorComponent, FuelComponent]);
 
+// The ion charge is NOT capped at IonizeMax: every hit adds its full
+// Ionization and Deionize drains the whole pile. MEASURED (reference
+// "Ionization's cap and the afterburner (E6 leftovers), wave 40"): a
+// Deionize-50 hull (15 a second) was still fully ionized 150 s after
+// leaving the ion gun, where a charge capped at IonizeMax 100 drains in
+// under 7 s. A hull with no ion capacity (IonizeMax <= 0) is still
+// clamped to [0, 0] (see ionization_plugin's ruling).
+const uncappedStats = new Set<Component<Stat>>([IonizationComponent]);
+
 function rechargeSystem(statComponent: Component<Stat>, after: System[]) {
     return new System({
         name: `${statComponent.name}Recharge`,
@@ -58,6 +67,10 @@ function rechargeSystem(statComponent: Component<Stat>, after: System[]) {
                 // subtraction (DamageSystem) is unbounded and normally
                 // relies on this step's clamping.
                 stat.step(0);
+                return;
+            }
+            if (uncappedStats.has(statComponent) && stat.max > 0) {
+                stat.stepUncapped(time.delta_s);
                 return;
             }
             stat.step(time.delta_s);
@@ -80,10 +93,10 @@ function rechargeSystem(statComponent: Component<Stat>, after: System[]) {
 export const ShieldRechargeSystem = rechargeSystem(ShieldComponent, [HitboxHullProvider]);
 export const ArmorRechargeSystem = rechargeSystem(ArmorComponent, [ShieldRechargeSystem]);
 /**
- * The ionization stat's per-tick decay-and-clamp, exported so
- * IonizedSystem (ionization_plugin) can order itself BEFORE it and judge
- * "fully ionized" on the raw post-hit charge, before the clamp to
- * IonizeMax and the tick's Deionize erase the overshoot.
+ * The ionization stat's per-tick decay (floored at 0, NOT capped at
+ * IonizeMax: E6, wave 40), exported so IonizedSystem (ionization_plugin)
+ * can order itself BEFORE it and judge "ionized" on the raw post-hit
+ * charge, before the tick's Deionize drains it.
  */
 export const IonizationRechargeSystem = rechargeSystem(IonizationComponent, []);
 export const FuelRechargeSystem = rechargeSystem(FuelComponent, [ArmorRechargeSystem]);

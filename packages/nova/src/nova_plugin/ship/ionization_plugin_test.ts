@@ -94,13 +94,32 @@ describe('ionization in a live world', () => {
         expect(ionized()).toBeTrue();
     });
 
-    it('is ionized at IonizeMax, and the stat clamps the charge there',
-        async () => {
+    it('is ionized at IonizeMax', async () => {
+        const { world, hit, ionized } = await ionWorld();
+        hit(BASE.ionization);
+        steps(world, 2);
+        expect(ionized()).toBeTrue();
+    });
+
+    it('piles the charge up past IonizeMax and drains the whole pile '
+        + '(reference "Ionization\'s cap and the afterburner (E6 '
+        + 'leftovers), wave 40")', async () => {
             const { world, hit, ionized, charge } = await ionWorld();
-            hit(BASE.ionization);
-            steps(world, 2);
+            hit(BASE.ionization * 3);
+            hit(BASE.ionization * 3);
+            expect(charge().current).toBeGreaterThan(5 * BASE.ionization);
+            // Draining past IonizeMax takes as long as the extra charge
+            // says, and the ship is ionized throughout.
+            const perTick = charge().recharge;
+            expect(perTick).toBeLessThan(0);
+            let ticks = 0;
+            while (charge().current > BASE.ionization) {
+                expect(ionized()).toBeTrue();
+                world.step();
+                ticks++;
+            }
+            expect(ticks).toBeGreaterThan(1);
             expect(ionized()).toBeTrue();
-            expect(charge().current).toBeLessThanOrEqual(BASE.ionization);
         });
 
     it('frees the ship the tick its charge decays to half, not when it '
@@ -145,17 +164,13 @@ describe('ionization in a live world', () => {
             steps(world, 2);
             const physics = ship.components.get(MovementPhysicsComponent)!;
             expect(physics.maxVelocity).toBeCloseTo(BASE.speed, 6);
-            // The stat clamps the charge to IonizeMax and Deionize has
-            // taken two ticks off it since, so the cut is a hair short of
-            // full: the physics follow this tick's charge.
-            const cut = ionSlowdown(charge(), true);
-            expect(physics.acceleration)
-                .toBeCloseTo(BASE.acceleration * cut.acceleration, 6);
-            expect(physics.turnRate)
-                .toBeCloseTo(BASE.turnRate * cut.turnRate, 6);
-            expect(physics.acceleration)
-                .toBeLessThan(BASE.acceleration * 0.35);
-            expect(physics.turnRate).toBeLessThan(BASE.turnRate * 0.05);
+            // The charge is not capped (E6, wave 40): three times
+            // IonizeMax, less two ticks of Deionize, is still past it,
+            // and the cut saturates at the measured full one.
+            expect(charge().current).toBeGreaterThan(BASE.ionization);
+            expect(physics.acceleration).toBeCloseTo(
+                BASE.acceleration * ION_FULL_ACCELERATION_FACTOR, 6);
+            expect(physics.turnRate).toBeCloseTo(0, 6);
         });
 
     it('frees the movement again once the charge falls to half',
