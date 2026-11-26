@@ -116,6 +116,10 @@ function sshArgs() {
         "-o", "ControlMaster=auto",
         "-o", `ControlPath=${controlDir}/%C`,
         "-o", "ControlPersist=120",
+        // Optional jump host (config "proxyJump", e.g. "terrapin") for when
+        // this machine is off the reference Mac's LAN. The jump connection
+        // uses ~/.ssh/config for that host, not the fox key above.
+        ...(cfg.proxyJump ? ["-o", `ProxyJump=${cfg.proxyJump}`] : []),
     ];
 }
 
