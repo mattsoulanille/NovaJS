@@ -52,10 +52,13 @@ import { JumpComponent, JumpState, JumpStateType } from "./jump_state.js";
 // is already, or that jumps without slowing), whatever its turn rate;
 // a moving ship first brakes, at a rate that stops it from its top speed
 // in JUMP_BRAKE_MS whatever its acceleration. Inside the clock it turns
-// onto the jump heading at its own rate, holds JUMP_SPINUP_DELAY_MS, and
-// burns: from JUMP_DEPART_DELAY_MS before the departure, or later if the
-// turn and the hold run past that, and at the latest JUMP_MIN_BURN_MS
-// before it, turned or not. The departure itself does not wait for the
+// onto the jump heading at its own rate and burns: from
+// JUMP_DEPART_DELAY_MS before the departure, or later if the turn runs
+// past that, and at the latest JUMP_MIN_BURN_MS before it, turned or not.
+// A ship still turning burns as soon as the slot is open and it is within
+// JUMP_BURN_ANGLE of the heading, with no hold, finishing the turn under
+// thrust (reference "Jump start angle on a slow hull (U8 leftover), wave
+// 40"); only a ship that is fully turned early holds JUMP_SPINUP_DELAY_MS. The departure itself does not wait for the
 // turn (the arrival heading is the arrival rule's anyway). An NPC's
 // departure (`vanish`) keeps its phases: a physical stop, the turn, 1 s
 // still and a 2 s burn (NPC_DEPARTURE_*).
@@ -75,8 +78,16 @@ export const JUMP_CLOCK_MS = 4800;
 export const JUMP_BRAKE_MS = 900;
 /** The least time a ship holds still, facing the destination, before the
  * hyperdrive engages (thrust starting): the ~0.4 s the original's ship
- * sat still (U8 wave 38, u8_a j1: 0.43 s; GUESS that it is a minimum). */
+ * sat still (U8 wave 38, u8_a j1: 0.43 s; GUESS that it is a minimum).
+ * Only a ship that is fully turned before the burn's slot holds: a slow
+ * turner burns within JUMP_BURN_ANGLE with no hold (U8 wave 40). */
 export const JUMP_SPINUP_DELAY_MS = 400;
+/** How far off the jump heading (radians) a ship still turning may be
+ * when its burn starts. MEASURED (U8 wave 40): the Kit Jump Slow Ring
+ * (about 29 deg/s) began to move while still 20-45 deg off, with no hold,
+ * and was aligned 1-1.5 s before the flash. GUESS: 45 deg, the section's
+ * proposal. */
+export const JUMP_BURN_ANGLE = Math.PI / 4;
 /** The burn's length when the turn leaves room for it: it starts this
  * long before the departure. Acceleration is scaled so the ship reaches
  * its full jump speed exactly at departure. MEASURED: about 3.5 s of
@@ -846,10 +857,17 @@ export const JumpSequenceSystem = new System({
                 const misalignment =
                     movement.rotation.distanceTo(target).angle;
                 const aligned = Math.abs(misalignment) < ALIGNED_TOLERANCE;
-                // A slow turner still short of the heading when the burn
-                // is due burns anyway, still turning (U8 wave 39).
+                // A slow turner still short of the heading burns anyway:
+                // with no hold once its slot is open and it is within
+                // JUMP_BURN_ANGLE (U8 wave 40: 20-45 deg off), and
+                // however far off when the latest start comes (U8 wave
+                // 39). It keeps turning under thrust.
                 const burnDue = clocked && jump.departAt !== undefined
-                    && time.time >= jump.departAt - JUMP_MIN_BURN_MS;
+                    && (time.time >= jump.departAt - JUMP_MIN_BURN_MS
+                        || (!aligned
+                            && Math.abs(misalignment) <= JUMP_BURN_ANGLE
+                            && time.time
+                                >= jump.departAt - JUMP_DEPART_DELAY_MS));
                 if (aligned || burnDue) {
                     if (aligned) {
                         movement.turnTo = null;

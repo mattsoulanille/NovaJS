@@ -18,7 +18,7 @@ import { PlayerSoundEvent } from "../core/index.js";
 import { Entity } from "nova_ecs/entity";
 import { DisabledComponent } from "../ship/index.js";
 import { Angle } from "nova_ecs/datatypes/angle";
-import { jumpStageDelays, JUMP_BRAKE_MS, JUMP_CLOCK_MS, JUMP_MIN_BURN_MS, NPC_DEPARTURE_DEPART_DELAY_MS, NPC_DEPARTURE_SPINUP_DELAY_MS } from "./jump_plugin.js";
+import { jumpStageDelays, JUMP_BRAKE_MS, JUMP_BURN_ANGLE, JUMP_CLOCK_MS, JUMP_MIN_BURN_MS, NPC_DEPARTURE_DEPART_DELAY_MS, NPC_DEPARTURE_SPINUP_DELAY_MS } from "./jump_plugin.js";
 import { ShipPhysics } from "novadatainterface/ship_data";
 import { PlanetTargetComponent } from "./planet_plugin.js";
 import { ControlledByComponent } from "../player/index.js";
@@ -1078,6 +1078,48 @@ describe('jump phases (U8, waves 38-39)', () => {
                 .toEqual(['aligning', 'accelerating', 'arriving']);
             expect(Math.abs(slowRun.burnTicks - ticksFor(JUMP_MIN_BURN_MS)))
                 .toBeLessThanOrEqual(2);
+        }, 30_000);
+
+    it('a slow hull with a 100 deg turn burns within 45 deg of the heading '
+        + 'with no hold, and is aligned before the flash (reference "Jump '
+        + 'start angle on a slow hull (U8 leftover), wave 40")', async () => {
+            // The Kit Jump Slow Ring: about 29 deg/s, about 100 deg to
+            // turn (u8r2_a).
+            const { world, ship, expectedDirection } =
+                await restingFacingDestination(
+                    { turnRate: 0.5, acceleration: 1 }, -100 / 180 * Math.PI);
+            let finished = false;
+            world.events.get(FinishJumpEvent)
+                .subscribe(() => { finished = true; });
+            pressHyperjump(world);
+            const target = new Angle(expectedDirection);
+            const stages: string[] = [];
+            let offAtBurn: number | undefined;
+            let alignedBeforeDeparture = false;
+            const ticks = stepUntil(world, () => {
+                const jump = ship.components.get(JumpComponent);
+                const movement = ship.components.get(MovementStateComponent)!;
+                const off = Math.abs(
+                    movement.rotation.distanceTo(target).angle);
+                if (jump && stages[stages.length - 1] !== jump.stage) {
+                    stages.push(jump.stage);
+                    if (jump.stage === 'accelerating') {
+                        offAtBurn = off;
+                    }
+                }
+                if (jump?.stage === 'accelerating' && off < 1e-6) {
+                    alignedBeforeDeparture = true;
+                }
+                return finished;
+            }) + 1;
+            expect(Math.abs(ticks - ticksFor(JUMP_CLOCK_MS)))
+                .toBeLessThanOrEqual(3);
+            // No spin-up hold: straight from the turn into the burn.
+            expect(stages).toEqual(['aligning', 'accelerating', 'arriving']);
+            expect(offAtBurn).toBeGreaterThan(0);
+            expect(offAtBurn!).toBeLessThanOrEqual(JUMP_BURN_ANGLE);
+            // It finishes the turn under thrust, well before departing.
+            expect(alignedBeforeDeparture).toBeTrue();
         }, 30_000);
 
     it('from top speed: the same clock after a 0.9 s brake, however weak '
