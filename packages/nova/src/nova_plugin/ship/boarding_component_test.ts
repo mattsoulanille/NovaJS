@@ -16,7 +16,7 @@ import {
     BoardingGovtLookup,
     boardingRange,
     boardCaptureOdds,
-    captureChance,
+    captureChance, captureOddsCentre,
     CAPTURE_CHANCE_MAX, CAPTURE_CHANCE_MIN, CAPTURE_ODDS_BY_CREW_RATIO,
     CAPTURE_ODDS_SPREAD_POINTS,
     boarderMarines, boarderEffectiveCrew, CAPTURE_SELF_DESTRUCT_CHANCE,
@@ -460,13 +460,18 @@ describe('boardCaptureOdds (drawn per board, reference "Capture odds, '
         }
     });
 
-    it('narrows at the cap and the floor', () => {
+    it('piles up at the cap and narrows at the floor', () => {
         // Every crew-1 board on the original read 75%.
         expect(new Set(cycle(10, 1))).toEqual(new Set([75]));
         expect(new Set(cycle(500, 1))).toEqual(new Set([75]));
-        // Two points under the cap: 73-75 only.
+        expect(new Set(cycle(10, 0))).toEqual(new Set([75]));
+        // A centre two points over the cap (77, ratio 6.67): drawn 72-82,
+        // so 72-75, every figure over the cap reading 75 (wave 35).
         const nearCap = cycle(10, 1.5);
-        expect(Math.max(...nearCap)).toBeLessThanOrEqual(75);
+        expect(Math.round(captureOddsCentre(10, 1.5) * 100)).toEqual(77);
+        expect(Math.min(...nearCap)).toEqual(72);
+        expect(Math.max(...nearCap)).toEqual(75);
+        expect(nearCap.filter(odds => odds === 75).length).toEqual(8);
         // The 1% floor holds on every board.
         expect(new Set(cycle(1, 1e6))).toEqual(new Set([1]));
         expect(Math.min(...cycle(1, 100))).toBeGreaterThanOrEqual(1);
@@ -503,7 +508,8 @@ describe('capture, wave 33 (reference "Capture, wave 33")', () => {
 
     it('reaches the 75% cap by ratio 7 (crew 70 v 10: 75 on all five '
         + 'boards)', () => {
-            expect(CAPTURE_ODDS_BY_CREW_RATIO).toContain([7, 0.75]);
+            // The centre is 80 since wave 35 (capped after the draw).
+            expect(CAPTURE_ODDS_BY_CREW_RATIO).toContain([7, 0.80]);
             expect(captureChance(70, 10)).toEqual(CAPTURE_CHANCE_MAX);
             for (let draw = 0; draw < 11; draw++) {
                 expect(boardCaptureOdds(70, 10, draw)).toEqual(75);
@@ -587,9 +593,10 @@ describe('capture, wave 34 (reference "Capture, wave 34")', () => {
             }
             expect(Math.max(...range)).toEqual(75);
             expect(Math.min(...range)).toEqual(65);
-            // Still rising to the cap at 7 (between 6 and 7: linear).
-            expect(shown(65, 10)).toBeGreaterThan(70);
-            expect(shown(65, 10)).toBeLessThan(75);
+            // The centre keeps rising past the cap (wave 35): 75 at 6.5,
+            // 80 at 7; capped, ratio 7 shows 75.
+            expect(captureOddsCentre(65, 10)).toBeCloseTo(0.75, 10);
+            expect(captureOddsCentre(70, 10)).toBeCloseTo(0.80, 10);
             expect(shown(70, 10)).toEqual(75);
         });
 
@@ -619,6 +626,80 @@ describe('capture, wave 34 (reference "Capture, wave 34")', () => {
         + 'Pct: 75, 75, 75)', () => {
             expect([...boards(70, 10, 20)]).toEqual([75]);
         });
+});
+
+describe('capture, wave 35 (reference "Capture, wave 35")', () => {
+    /** Every odds a board can read, one per draw over a full cycle of
+     * the +-5 draw. */
+    const cycle = (attacker: number, defender: number, bonus = 0) =>
+        [...Array(2 * CAPTURE_ODDS_SPREAD_POINTS + 1).keys()].map(draw =>
+            boardCaptureOdds(attacker, defender, draw, bonus));
+
+    it('reads ratio 6.5 at 70-75 (73, 70, 75, 73, 73, 74): an uncapped '
+        + 'centre of 75 drawn +-5, then capped', () => {
+            expect(captureOddsCentre(65, 10)).toBeCloseTo(0.75, 10);
+            const boards = cycle(65, 10);
+            expect(Math.min(...boards)).toEqual(70);
+            expect(Math.max(...boards)).toEqual(75);
+            for (const board of [73, 70, 75, 73, 73, 74]) {
+                expect(boards).withContext(`${board}`).toContain(board);
+            }
+            // 75 about half the time (6 of 11), a mean of about 73.6
+            // (the six boards' 73.0).
+            expect(boards.filter(odds => odds === 75).length).toEqual(6);
+            const mean = boards.reduce((a, b) => a + b, 0) / boards.length;
+            expect(mean).toBeCloseTo(73.6, 1);
+        });
+
+    it('the centre rises 10 points a ratio from 5 to 7 (60, 70, 80) and on '
+        + 'to 110 at 10', () => {
+            for (const [crew, centre] of [[50, 0.60], [55, 0.65], [60, 0.70],
+                [65, 0.75], [70, 0.80], [85, 0.95], [100, 1.10],
+                [500, 1.10]] as const) {
+                expect(captureOddsCentre(crew, 10)).withContext(`${crew}`)
+                    .toBeCloseTo(centre, 10);
+            }
+            expect(captureOddsCentre(10, 0)).toBeCloseTo(1.10, 10);
+            expect(captureOddsCentre(0, 10)).toEqual(0);
+            // Under the cap the shown chance is the centre; over it, 75.
+            expect(captureChance(60, 10)).toBeCloseTo(0.70, 10);
+            expect(captureChance(65, 10)).toEqual(CAPTURE_CHANCE_MAX);
+        });
+
+    it('keeps every earlier measured band', () => {
+        const bands: [number, number, number, number, number[]][] = [
+            // [boarder, defender, lowest, highest, boards read]
+            [10, 10, 15, 25, [18, 22, 18, 20]],    // ratio 1
+            [10, 5, 27, 37, [32, 32, 31, 34]],     // ratio 2
+            [30, 10, 36, 46, [42, 42, 38, 45, 45]], // ratio 3
+            [50, 10, 55, 65, [59, 64, 61, 55]],    // ratio 5
+            [60, 10, 65, 75, [75, 71, 69, 68, 69, 68]], // ratio 6
+            [70, 10, 75, 75, [75, 75, 75, 75, 75]], // ratio 7
+            [10, 1, 75, 75, [75, 75, 75]],         // ratio 10, crew-1 hulk
+            [500, 1, 75, 75, [75]],
+        ];
+        for (const [a, d, low, high, readings] of bands) {
+            const boards = cycle(a, d);
+            expect(Math.min(...boards)).withContext(`${a} v ${d}`)
+                .toEqual(low);
+            expect(Math.max(...boards)).withContext(`${a} v ${d}`)
+                .toEqual(high);
+            for (const board of readings) {
+                expect(boards).withContext(`${a} v ${d}: ${board}`)
+                    .toContain(board);
+            }
+        }
+        // Marines: Kit Marines 20 Pct on crew 10 v 10 (35, 35, 45) and on
+        // crew 30 v 10 (60, 57, 64); crew 70 + 20 Pct reads 75 throughout.
+        for (const board of [35, 45]) {
+            expect(cycle(10, 10, 20)).toContain(board);
+        }
+        for (const board of [60, 57, 64]) {
+            expect(cycle(30, 10, 20)).toContain(board);
+        }
+        expect(new Set(cycle(70, 10, 20))).toEqual(new Set([75]));
+        expect(new Set(cycle(65, 10, 20))).toEqual(new Set([75]));
+    });
 });
 
 describe('money booty (the original\'s, ruling #378)', () => {

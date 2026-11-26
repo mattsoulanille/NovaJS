@@ -672,23 +672,29 @@ export function capturable(target: Entity,
  * ============================================================================
  * Capture odds (fitted to the original, ruling #378; reference "U9 wave 8",
  * "Capture odds, wave 31", "Capture odds at crew ratio 1 and above, wave
- * 32", "Capture, wave 33" and "Capture, wave 34")
+ * 32", "Capture, wave 33", "Capture, wave 34" and "Capture, wave 35")
  * ============================================================================
  *
  * The odds the original shows against a hulk the player disabled, keyed by
  * the crew RATIO boarder / defender (wave 32, finding 2: the ratio is what
  * counts, 20 v 20 read as 10 v 10 and 20 v 10 as 10 v 5):
  *
- *     ratio   10    7     6    5      3      2      1      0.67   0.5    0.25   0.2
- *     odds    75%   75%   70%  59.8%  42.4%  31.7%  19.4%  18%    16.2%  10%    12.0%
- *     used    75%   75%   70%  60%    (41%)  32%    20%    18%    16.5%  12%    12%
+ *     ratio   10    7     6.5   6    5      3      2      1      0.67   0.5    0.25   0.2
+ *     odds    75%   75%   73.0% 70%  59.8%  42.4%  31.7%  19.4%  18%    16.2%  10%    12.0%
+ *     centre  110%  80%   75%   70%  60%    (41%)  32%    20%    18%    16.5%  12%    12%
  *
- * RATIO 7 ALREADY READS THE CAP (wave 33, finding 2: crew 70 v 10, 75% on
- * all five boards), so the table reaches CAPTURE_CHANCE_MAX there, not at
- * 10. RATIO 6 reads a mean of 70 (wave 34, finding 1: crew 60 v 10 read
- * 75, 71, 69, 68, 69, 68 over six boards), a little above the straight
- * line from 5 to 7 (67.5) and under the cap, so it has its own point; the
- * cap is reached between 6 and 7 (GUESS: linear between them).
+ * THE TABLE IS THE CENTRE OF A BOARD'S DRAW, UNCAPPED; the 75% cap comes
+ * after the draw (boardCaptureOdds). GUESS, the model (reference "Capture,
+ * wave 35", Proposed), fitted to ratios 5-7 together: the centre rises 10
+ * points a ratio from 5 (60, 70, 80 at 7, and on to 110 at 10), each board
+ * draws +-5 around it, THEN the cap. So ratio 6 reads 65-75 (wave 34,
+ * finding 1: 75, 71, 69, 68, 69, 68, mean 70); ratio 6.5 reads 70-80
+ * capped, 70-75 with 75 about half the time, a mean of about 73.6 (wave
+ * 35, MEASURED: 73, 70, 75, 73, 73, 74, mean 73.0; the old narrowed draw
+ * allowed only 71-75 and missed the 70); ratio 7 reads 75-85 capped,
+ * always 75 (wave 33, finding 2: crew 70 v 10, 75% on all five boards);
+ * ratio 10 and the crew-1 hulk always 75 (waves 8, 25, 30, 32). Ratio 6's
+ * measured point (kept in the table) now sits on the line from 5 to 7.
  * Ratio 3 (wave 33, finding 3: 38-45%, mean 42.4 over five boards) sits on
  * the straight line from 2 to 5 (41%), so it needs no point of its own.
  *
@@ -700,9 +706,9 @@ export function capturable(target: Entity,
  * mean), 0.5 (crew 20: 12-18%, six boards; the reference's proposed 16.5),
  * 0.25 (crew 40: 7-12%, three boards) and 0.2 (crew 50: 7-17%, thirteen
  * boards). No simple formula fits (a crew share would give 83 / 67 / 50 /
- * 40 / 33 / 20%), so captureChance interpolates the table linearly in the
- * ratio: from 0 at ratio 0 (floored at CAPTURE_CHANCE_MIN) up to the cap
- * at ratio 7.
+ * 40 / 33 / 20%), so captureOddsCentre interpolates the table linearly
+ * in the ratio: from 0 at ratio 0 (floored at CAPTURE_CHANCE_MIN) up to
+ * 110% at ratio 10 and held there beyond; captureChance caps it.
  *
  * THE 0.25 POINT IS HELD AT 0.2's 12%, not its own 10% mean: three boards
  * (7, 11, 12) are too few to say the odds DIP as the boarders gain on the
@@ -711,8 +717,9 @@ export function capturable(target: Entity,
  *
  * THE ODDS ARE DRAWN PER BOARD (wave 31, finding 1): the same hulk, the
  * same boarder and the same seven hits read 11, 17, 13, 10 and 14%. So the
- * table gives the MEAN, and boardCaptureOdds draws each board's odds as a
- * whole percent from it, once, as the session opens; the dialog shows that
+ * table gives the draw's CENTRE (the boards' mean wherever the draw stays
+ * under the cap), and boardCaptureOdds draws each board's odds as a whole
+ * percent around it, once, as the session opens; the dialog shows that
  * number and the capture is rolled against it. The hulk's damage plays no
  * part (7 vs 9 hits against crew 50: 13.0 vs 13.3%; 7, 8 and 9 shots
  * against crew 20: 17, 18, 17%), and nothing else enters here either.
@@ -737,26 +744,29 @@ export const CAPTURE_ODDS_BY_CREW_RATIO:
         [2, 0.32],
         [5, 0.60],
         [6, 0.70],
-        [7, CAPTURE_CHANCE_MAX],
-        [10, CAPTURE_CHANCE_MAX],
+        [7, 0.80],
+        [10, 1.10],
     ];
 
 /**
- * The MEAN capture probability from crew counts (Bible: odds relate to crew,
- * and marines add to the boarder's effective crew: `attackerCrew` is the
- * EFFECTIVE crew, shïp Crew plus the positive marines, boarderMarines).
- * See CAPTURE_ODDS_BY_CREW_RATIO; a board's own odds are boardCaptureOdds.
+ * The UNCAPPED centre of a board's capture odds from crew counts (Bible:
+ * odds relate to crew, and marines add to the boarder's effective crew:
+ * `attackerCrew` is the EFFECTIVE crew, shïp Crew plus the positive
+ * marines, boarderMarines): CAPTURE_ODDS_BY_CREW_RATIO interpolated, at
+ * least CAPTURE_CHANCE_MIN, and the table's last centre beyond its last
+ * ratio (or against a crewless defender). Above ratio 6.5 it passes the
+ * 75% cap: boardCaptureOdds draws around it and caps after the draw.
  */
-export function captureChance(attackerCrew: number,
+export function captureOddsCentre(attackerCrew: number,
     defenderCrew: number): number {
+    const table = CAPTURE_ODDS_BY_CREW_RATIO;
     if (attackerCrew <= 0) {
         return 0;
     }
     if (defenderCrew <= 0) {
-        return CAPTURE_CHANCE_MAX;
+        return table[table.length - 1][1];
     }
     const ratio = attackerCrew / defenderCrew;
-    const table = CAPTURE_ODDS_BY_CREW_RATIO;
     for (let i = 1; i < table.length; i++) {
         const [r1, odds1] = table[i];
         if (ratio <= r1) {
@@ -765,7 +775,21 @@ export function captureChance(attackerCrew: number,
                 odds0 + (odds1 - odds0) * (ratio - r0) / (r1 - r0));
         }
     }
-    return CAPTURE_CHANCE_MAX;
+    return table[table.length - 1][1];
+}
+
+/**
+ * The capture probability the crew counts give, CAPPED at
+ * CAPTURE_CHANCE_MAX: captureOddsCentre under the cap. Below ratio 6 it is
+ * the boards' mean; nearer the cap the boards average under it, as the
+ * draw piles up at 75 (ratio 6.5: 75 here, the boards 70-75, mean about
+ * 73.6). See CAPTURE_ODDS_BY_CREW_RATIO; a board's own odds are
+ * boardCaptureOdds.
+ */
+export function captureChance(attackerCrew: number,
+    defenderCrew: number): number {
+    return Math.min(CAPTURE_CHANCE_MAX,
+        captureOddsCentre(attackerCrew, defenderCrew));
 }
 
 /**
@@ -779,15 +803,18 @@ export function captureChance(attackerCrew: number,
 export const CAPTURE_ODDS_SPREAD_POINTS = 5;
 
 /**
- * ONE BOARD'S CAPTURE ODDS, as a whole percent: the table's mean
- * (captureChance, rounded to a percent) plus an even draw of whole points
- * in [-w, +w], w = CAPTURE_ODDS_SPREAD_POINTS.
+ * ONE BOARD'S CAPTURE ODDS, as a whole percent: the table's UNCAPPED centre
+ * (captureOddsCentre, rounded to a percent) plus an even draw of whole
+ * points in [-w, +w], w = CAPTURE_ODDS_SPREAD_POINTS, THEN capped at 75%.
  *
- * GUESS, the shape: the spread is uniform and symmetric so the mean stays
- * the table's, and it NARROWS so a board never reads above the 75% cap or
- * below the 1% floor (w is also no more than the gap to either). The
- * narrowing is what keeps a crew-1 hulk at the cap reading 75% on every
- * board, as all of the original's did (waves 8, 25 and 30).
+ * GUESS, the shape: the spread is uniform and symmetric, so under the cap
+ * the boards' mean is the table's. It NARROWS only at the 1% floor (w is no
+ * more than the gap down to it). At the cap it does not narrow: the draw
+ * is taken around the uncapped centre and every figure over 75 reads 75
+ * (reference "Capture, wave 35", Proposed: ratio 6.5's boards read 70-75,
+ * a narrowed 71-75 missed its 70; ratio 6 had read 75 from a centre of 70).
+ * Ratio 7 and up (a centre of 80 or more) and the crew-1 hulk read 75% on
+ * every board, as all of the original's did (waves 8, 25, 30 and 33).
  *
  * `draw` is an unsigned 32-bit hash the caller salts per board (the
  * boarder, the victim and the board's own seeded draw: boarding_plugin.ts),
@@ -802,15 +829,18 @@ export const CAPTURE_ODDS_SPREAD_POINTS = 5;
  */
 export function boardCaptureOdds(attackerCrew: number, defenderCrew: number,
     draw: number, bonusPoints = 0): number {
-    const mean = Math.round(captureChance(attackerCrew, defenderCrew) * 100);
-    if (mean <= 0) {
+    const centre = Math.round(
+        captureOddsCentre(attackerCrew, defenderCrew) * 100);
+    if (centre <= 0) {
         return 0;
     }
     const floor = Math.round(CAPTURE_CHANCE_MIN * 100);
     const cap = Math.round(CAPTURE_CHANCE_MAX * 100);
     const w = Math.max(0, Math.min(CAPTURE_ODDS_SPREAD_POINTS,
-        mean - floor, cap - mean));
-    const odds = mean - w + ((draw >>> 0) % (2 * w + 1));
+        centre - floor));
+    const odds = centre - w + ((draw >>> 0) % (2 * w + 1));
+    // The cap after the draw and the bonus (the bonus is never negative,
+    // so this is the capped draw plus the bonus, capped again).
     return Math.min(cap, odds + Math.max(0, Math.floor(bonusPoints) || 0));
 }
 
