@@ -81,6 +81,14 @@ export interface PilotEdits {
     dominated?: { [id: string]: boolean };
     /** AltPlayerFileDataStruct priceFlux (4 shorts at 0x3588; meaning unknown, see #321). */
     priceFlux?: number[];
+    /**
+     * spöb resource id -> defence ships remaining (AltPlayerFileDataStruct
+     * stellarShipCount, 2048 shorts at 0x0006). The original fills it from
+     * each spöb's DefCount when a pilot is CREATED, so a stellar added by a
+     * plug-in later reads 0 there ("no fleet left") until it is set
+     * (reference "Tribute (R18), wave 39").
+     */
+    stellarShipCount?: { [id: string]: number };
 }
 
 /** Absolute offsets in the decrypted Mac PlayerFileDataStruct. */
@@ -95,7 +103,7 @@ export const PLAYER_OFFSETS = {
 } as const;
 
 /** Absolute offsets in the decrypted AltPlayerFileDataStruct. */
-export const GLOBALS_OFFSETS = { strictPlay: 0x0002, priceFlux: 0x3588, nickname: 0x5d98 } as const;
+export const GLOBALS_OFFSETS = { strictPlay: 0x0002, stellarShipCount: 0x0006, priceFlux: 0x3588, nickname: 0x5d98 } as const;
 
 const MISSION_OBJECTIVES_SIZE = 20;
 
@@ -213,6 +221,9 @@ export function editMacPilot(pilot: DecryptedMacPilot, edits: PilotEdits): Decry
     if (e.rating !== undefined) p.setInt32(O.rating, e.rating);
     if (e.nickname !== undefined) writePString(globals, GLOBALS_OFFSETS.nickname, e.nickname, 63);
     if (e.strictPlay !== undefined) g.setInt16(GLOBALS_OFFSETS.strictPlay, e.strictPlay ? 1 : 0);
+    for (const [id, n] of Object.entries(e.stellarShipCount ?? {})) {
+        g.setInt16(GLOBALS_OFFSETS.stellarShipCount + 2 * index(id, "spöb", 2048), n);
+    }
     if (e.priceFlux) {
         if (e.priceFlux.length !== 4) throw new Error("priceFlux needs 4 values");
         e.priceFlux.forEach((v, i) => g.setInt16(GLOBALS_OFFSETS.priceFlux + 2 * i, v));

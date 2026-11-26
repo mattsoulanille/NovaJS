@@ -61,6 +61,7 @@ describe("pilot_write", () => {
             strictPlay: true,
             dominated: { 2000: true },
             priceFlux: [3, -2, 1, 0],
+            stellarShipCount: { 2000: 6, 128: 600 },
         });
         const parsed = reparse(buildMacPilotFork(edited));
         const p = parsed.player;
@@ -91,6 +92,8 @@ describe("pilot_write", () => {
         expect(parsed.globals.nickname).toBe("Probe");
         expect(parsed.globals.strictPlay).toBeTrue();
         expect(parsed.globals.priceFlux).toEqual([3, -2, 1, 0]);
+        expect(parsed.globals.stellarShipCount[2000 - 128]).toBe(6);
+        expect(parsed.globals.stellarShipCount[0]).toBe(600);
         // Untouched fields keep the base's values.
         expect(parsed.globals.shipColor).toEqual(SYNTHETIC.shipColor);
     });
