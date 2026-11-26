@@ -3,6 +3,7 @@ import { Plugin } from 'nova_ecs/plugin';
 import { MovementPhysicsComponent, MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movement_plugin';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
+import { ShipSpeedConversionFactor } from 'novaparse/parsers/constants';
 import { DisabledComponent } from '../ship/index.js';
 import { FuelComponent } from '../ship/index.js';
 import {
@@ -16,14 +17,29 @@ import { getShipMovementPhysics, ShipPhysicsComponent } from '../ship/index.js';
 
 /**
  * How much an engaged afterburner multiplies a ship's top speed and
- * acceleration. The EVN Bible documents only the afterburner's fuel
- * burn (oütf ModType 15, units of fuel per second). MEASURED (reference
- * "The player's afterburner (U4), wave 39"): about 1.5 x the top speed
- * (6.1 against 4.05 px a frame, Kit Probe A, Speed 300). GUESS: a factor
- * rather than an added constant (one hull cannot separate them), and the
- * acceleration boosted by the same factor (not measured). Was 2.
+ * acceleration, from the ship's top speed (`speed`, NovaJS units: the
+ * shïp Speed field x ShipSpeedConversionFactor, outfits included). The
+ * EVN Bible documents only the afterburner's fuel burn (oütf ModType 15,
+ * units of fuel per second).
+ *
+ * MEASURED on two hulls: x 1.5 on Kit Probe A (Speed 300, Accel 300: 4.05
+ * -> 6.1 px a frame, reference "The player's afterburner (U4), wave 39")
+ * and x 1.75 on Kit Probe B (Speed 600, Accel 150: 7.2 -> 12.6, "The
+ * afterburner on a second hull (U4 leftover), wave 40"). Neither one
+ * factor nor one added speed fits both. GUESS: the factor grows with the
+ * Speed field, 1.25 + Speed / 1200, the straight line through the two
+ * readings (the same two would fit one falling with Accel instead; a
+ * third hull would separate them). The acceleration is boosted by the
+ * same factor (not measured). Was a constant 1.5 (and 2 before that).
  */
-export const AFTERBURNER_FACTOR = 1.5;
+export function afterburnerFactor(speed: number): number {
+    return AFTERBURNER_FACTOR_BASE
+        + speed / ShipSpeedConversionFactor / AFTERBURNER_SPEED_PER_FACTOR;
+}
+/** afterburnerFactor's intercept (a Speed-0 hull). */
+export const AFTERBURNER_FACTOR_BASE = 1.25;
+/** afterburnerFactor's slope: Speed field units per whole factor. */
+export const AFTERBURNER_SPEED_PER_FACTOR = 1200;
 
 /**
  * What strict play multiplies the player's top speed by. Measured on the
@@ -51,8 +67,10 @@ export const STRICT_PLAY_SPEED_FACTOR = 2 / 3;
  * MEASURED (reference "The player's afterburner (U4), wave 39"): the
  * coast back down from the boosted 6.1 px a frame to the 4.0 top speed
  * took about 2.5 s, about 25 px/s², roughly HALF the hull's own
- * acceleration (its ramp from rest about 54 px/s²). GUESS from one hull:
- * half the acceleration on every hull. Was 1.
+ * acceleration (its ramp from rest about 54 px/s²). Wave 40's Kit Probe B
+ * (Accel 150) took about 10 s from 12.6 back to 7.2, again about half its
+ * acceleration ("The afterburner on a second hull (U4 leftover), wave
+ * 40"): half the acceleration on every hull. Was 1.
  */
 export const OVERSPEED_DECAY_FACTOR = 0.5;
 
@@ -124,7 +142,7 @@ export const EffectiveMovementPhysicsSystem = new System({
 
         const base = getShipMovementPhysics(shipPhysics);
         const ion = ionSlowdown(ionization, isIonized);
-        const boost = afterburning ? AFTERBURNER_FACTOR : 1;
+        const boost = afterburning ? afterburnerFactor(base.maxVelocity) : 1;
         // A strict pilot's top speed only: not its acceleration, not its
         // turn rate (reference #316 wave 10).
         const strict = strictPlay ? STRICT_PLAY_SPEED_FACTOR : 1;

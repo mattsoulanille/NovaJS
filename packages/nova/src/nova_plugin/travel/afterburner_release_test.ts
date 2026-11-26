@@ -5,8 +5,9 @@ import { Entity } from 'nova_ecs/entity';
 import { MovementPhysicsComponent, MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import {
-    AFTERBURNER_FACTOR, decayedSpeedCap, OVERSPEED_DECAY_FACTOR,
+    afterburnerFactor, decayedSpeedCap, OVERSPEED_DECAY_FACTOR,
 } from './afterburner_plugin.js';
+import { ShipSpeedConversionFactor } from 'novaparse/parsers/constants';
 import { completeEntity } from '../spawn/index.js';
 import { makeShip } from '../ship/index.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
@@ -16,6 +17,7 @@ const SHIP_ID = 'test:ship';
 const BASE_SPEED = getDefaultShipPhysics().speed;
 const ACCELERATION = getDefaultShipPhysics().acceleration;
 const DELTA_S = SIMULATION_STEP_MS / 1000;
+const AFTERBURNER_FACTOR = afterburnerFactor(BASE_SPEED);
 /** How much speed one tick of the coast-down sheds. */
 const DECAY_PER_STEP = ACCELERATION * OVERSPEED_DECAY_FACTOR * DELTA_S;
 
@@ -47,9 +49,14 @@ describe('afterburner release', () => {
         });
     });
 
-    it('boosts 1.5 x and coasts down at half the hull\'s acceleration '
-        + '(reference "The player\'s afterburner (U4), wave 39")', () => {
-            expect(AFTERBURNER_FACTOR).toBe(1.5);
+    it('boosts 1.5 x a Speed-300 hull and 1.75 x a Speed-600 one, and '
+        + 'coasts down at half the hull\'s acceleration (reference "The '
+        + 'player\'s afterburner (U4), wave 39", "The afterburner on a '
+        + 'second hull (U4 leftover), wave 40")', () => {
+            expect(afterburnerFactor(300 * ShipSpeedConversionFactor))
+                .toBeCloseTo(1.5, 9);
+            expect(afterburnerFactor(600 * ShipSpeedConversionFactor))
+                .toBeCloseTo(1.75, 9);
             expect(OVERSPEED_DECAY_FACTOR).toBe(0.5);
         });
 

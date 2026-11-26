@@ -6,7 +6,7 @@ import { AmmoType, getDefaultProjectileWeaponData, ProjectileWeaponData } from '
 import { Entity } from 'nova_ecs/entity';
 import { MovementPhysicsComponent, MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
-import { AFTERBURNER_FACTOR } from '../travel/index.js';
+import { afterburnerFactor } from '../travel/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { FuelComponent } from './health_plugin.js';
 import { makeShip } from './make_ship.js';
@@ -295,7 +295,7 @@ describe('afterburner', () => {
         await stepWorld(world, 60);
 
         expect(movementPhysics.maxVelocity)
-            .toEqual(baseSpeed * AFTERBURNER_FACTOR);
+            .toEqual(baseSpeed * afterburnerFactor(baseSpeed));
         const movementState = ship.components.get(MovementStateComponent)!;
         expect(movementState.accelerating).toEqual(1);
         const fuel = ship.components.get(FuelComponent)!;
@@ -312,7 +312,7 @@ describe('afterburner', () => {
         const movementPhysics = ship.components.get(MovementPhysicsComponent)!;
         const baseSpeed = getDefaultShipPhysics().speed;
         expect(movementPhysics.maxVelocity)
-            .toEqual(baseSpeed * AFTERBURNER_FACTOR);
+            .toEqual(baseSpeed * afterburnerFactor(baseSpeed));
 
         const fuel = ship.components.get(FuelComponent)!;
         fuel.current = 0;
