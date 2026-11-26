@@ -16995,7 +16995,478 @@ on the stellar's station flag (GUESS: the flag, not the art), in
 24.803; the flag picks the clock on a 250 px and a 315 x 200 art alike. No
 schema change (`clearedUntil` already carries the lapse).
 
+### Boarding velocity after a TAKEN plunder, wave 36: the boarder still keeps its own velocity (two Energy takes, then Abort: it went on over the hulk at its pre-board 7-9 px/s); a third take tripped the self-destruct (2026-11-26)
+
+**Question** (U9 velocity leftover since wave 23): wave 23 found that the
+original keeps the boarder's own velocity after an ABORTED plunder; does
+a plunder that TAKES something change that?
+
+**Rig.** Wave 7's slow pass (`scenarios/w36_board_take.json`, from
+`board_pass_soft8`: pilot `w7_bspeedsoft`, the inertialess Kit Crawler
+Soft crossing wave 7's immobile 50,000-credit Kit Hulk at about 8 px/s
+pressing `b`), but the dialog gets a TAKE, then Abort, and 4 s more are
+recorded. The Kit Hulk's offset from the player per frame:
+`analysis/magenta_track.mjs`.
+
+| run | dialog | take | hulk offset (x, y) from the player, px |
+|---|---|---|---|
+| `board_take_a`, `_c` | never opened (the pass began over the hulk / missed) | | |
+| `board_take_b` | opened | Credits: none to take (grey, "None") | (an Abort: wave 23's case again) |
+| `board_take_d` | opened | **Energy** (2,760 -> "None", no trip; the dialog stayed open) | before: -24.9 -> -15.8 over frames 2730-2770 (**+0.23 px a frame**, about 6.8 px/s, closing); after the Abort click (frame 3217): +10.0 -> +39.5 over frames 3290-3400 (**+0.27 px a frame**, about 8 px/s), the SAME direction: the player crossed the hulk and went on past it |
+| `board_take_e` | opened | **Energy** (510 -> "None", no trip) | before: y -79.0 -> -17.4 over frames 3270-3490 (**+0.28 px a frame**, closing); after the Abort (frame 3979): +10.4 -> +45.6 over frames 4050-4170 (**+0.29 px a frame**), the same direction, past the hulk |
+| `board_take_f` | opened | Energy (1,190): the take **tripped** the self-destruct (the dialog closed, the hulk gone after frame 1750) | before: +0.28 px a frame; nothing to track after |
+
+**Finding.** A board that takes something leaves the boarder's velocity
+as it was, like an Aborted one: the player kept crossing the immobile hulk
+at its pre-board speed. (While the dialog is up the game is paused; the
+0.04 px a frame difference is within the track's noise.)
+
+**NovaJS (main 482d3674).** `N/nova_plugin/encounters/boarding_plugin.ts:566-572`
+matches the boarder to the hulk on every successful board
+(`matchBoardedVelocity`), Matthew's deliberate departure (ruling
+2026-11-24, docs/novajs_enhancements.md). The original does not do it
+after a take either; no fix proposed, the ruling stands (the relative
+speed at a board is under about 9 px/s).
+
+Confidence: high (two clean taken boards, each with the speed before and after within 0.04 px a frame; wave 23's three Aborts agree).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w36/board_take_d/*/`
+(`08-pass-06.png`, `09-dialog-energy-07.png`, `10-dialog-abort-08.png`,
+`recording.mp4`), `board_take_d/take_sheet.png`, `board_take_d/track.json`;
+`board_take_a` .. `_c`, `_e`, `_f`.
+
+### F1c re-flow offsets, wave 36: the re-flowed five STOP 7.7-11.5 px short of their new slots, each on the straight line from its old slot, and stay there (90 s at rest, then at cruise); not a slow settle (2026-11-25)
+
+**Question** (wave-23 leftover, "F1c: why the re-flowed five sit 4-9 px off
+the lattice"). Wave 23 read the five escorts left after rank 1's release
+6 s and 8.5 s later; were they still settling?
+
+**Rig.** Wave 23's: `w22_f1c_6` (six hired discs, red rank 1 .. cyan rank
+6) at rest at Kit Port; `tools/f1crel.sh`: a shot, a click on red (found
+by `discshot.mjs`), `y`, Release (306, 383), then window shots 3, 6, 12,
+20, 30, 45, 60 and 90 s after the release, 4 s of thrust and three cruise
+shots. Offsets along / across the leader's heading (`tools/comps.mjs
+--travel -0.999,0.053`, the heading of the first shot; + across is red's
+side).
+
+| escort | before (rank, slot) | new rank and its five-layout slot (wave 22 `f1c_5`) | 3 s .. 90 s at rest (every shot identical) | cruise |
+|---|---|---|---|---|
+| green | 2 (-23.3, -23.8) | 1 (-23.5, +23.5) | (-21.2, +16.1): **7.8 px short** | (-20.5, +17.0) |
+| blue | 3 (-47.6, +47.6) | 2 (-23.5, -23.5) | (-29.6, -16.1): **9.6 short** | (-28.0, -14.7) |
+| yellow | 4 (-47.6, -47.6) | 3 (-47.0, 0) | (-45.5, -7.6): **7.7 short** | (-45.7, -5.8) |
+| magenta | 6 (-71.8, +23.8) | 4 (-47.5, +47.7) | (-56.0, +40.0): **11.5 short** | (-50.4, +41.8) |
+| cyan | 5 (-71.3, -23.3) | 5 (-47.5, -47.5) | (-55.2, -40.1): **10.7 short** | (-53.0, -38.3) |
+
+**Findings.**
+1. **Not a settle**: the nine rest shots from 3 s to 90 s are identical
+   to the pixel, and the cruise shots keep the same offsets within 2-6
+   px. Wave 23's 6 s and 8.5 s readings were the final positions.
+2. **Each escort stops SHORT of its new slot on the straight line from
+   its old one**: the remaining error points back along each escort's
+   path (green's old slot was across -23.8, its new +23.5, it stopped at
+   +16.1; magenta came in from (-71.8, +23.8) toward (-47.5, +47.7) and
+   stopped with (8.5, 7.7) to go; the others alike), 7.7-11.5 px short.
+   So the original's escort stops correcting inside about 8-12 px of its
+   slot (a dead band), and an escort that enters the band moving stays
+   where it stopped. Pilot-loaded escorts start ON their slots (wave 22:
+   0.5 px rms) and launched fighters fly in (wave 22: about 7 px rms off
+   the lattice), which this explains too.
+
+**NovaJS (main 482d3674).** `N/nova_plugin/npc/npc_formation.ts:442-465`
+`steerFormation`: a proportional controller with no dead band (`closing`
+`:454` is distance x 1.2 and goes to zero only at the slot), so a
+re-flowed escort converges onto its slot exactly: **mismatch** (7.7-11.5
+px). **Proposed:** a slot dead band: when an escort is within
+`FORMATION_SLOT_DEADBAND` of its slot it only matches the leader's
+velocity (no closing term), MEASURED 7.7-11.5 px short on five escorts
+(GUESS: a 12 px band, the largest reading, with the stop inside it coming
+from the braking), so a re-flowed escort parks at the band's edge on its
+approach line and a launched fighter parks within the band. Low priority
+(a visual offset of under 12 px).
+
+Confidence: high for "not a settle" and the stop pattern (five escorts,
+one run, every shot alike); the band's exact radius and that it is a
+radius (not a per-axis box) are GUESSES.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w36/f1c_rel/*/`
+(`02-r0.png`, `05-rel.png`, `06-s3.png` .. `13-s90.png`, `14-c1.png` ..
+`16-c3.png`).
+
+### A second hull's coast, wave 36: not reached: an UNARMED always-hostile AI 3 raider never closed on the player (2026-11-25)
+
+**Question** (wave-25 / 26 leftover): is wave 25's exponential coast
+(tau 3.74 s from 34 px/s) the same for another hull and a faster start?
+Wave 26's fast trader slowed for its landing before it came in reach.
+
+**Rig** (`wave36Resources` "C"). shïp 575 Kit Coast Fast Raider: wave 25's
+magenta pointer as an UNARMED AI 3 hull of gövt 362 (0x0004, always
+attacks the player), Speed / Accel 600, 3000 / 3000; the only traffic of
+sÿst 1374 Kit Coast Raid Range; the Kit Ring Lancer with the Kit Disable
+Gun on the port (`tools/coastraid.sh`: `hitat.mjs` near mode, one shot
+when its brackets come within 260 px).
+
+**Result.** `coast_raid_a`: the raider was on the radar at about 94 radar
+px in the first shot and never came nearer: 150 s of shots with it
+targeted ("tgt") and no blip inside the radar, no shot fired.
+`coast_raid_b` was stopped after the same start. An unarmed AI 3 hull,
+even of an always-hostile govt, does not close on the player (wave 27's
+non-firing attacker had a weapon). **Next rig:** give the raider a
+harmless gun (1 damage, the Kit Tickler wëap 361) so it attacks, and
+disable it as it comes in.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w36/coast_raid_a/*/`,
+`coast_raid_a.hit.log`.
+
+### R19 trader call range, wave 36: no new point inside 475-700 px: the one hit landed at about 360-450 px (it called, as expected); the other three runs never got the victim into the radar band (2026-11-26)
+
+**Question** (wave-22 leftover, "the 475-700 px trader range"): does an
+AI 1 victim call when the player hits it from 550-650 px (NovaJS's GUESS
+`REINFORCEMENT_TRADER_CALL_RANGE = 600`)?
+
+**Rig.** Wave 22's: the Kit Ring Lancer with the Kit Pulse Beam, `hitat.mjs`
+far mode with GOTO steering (fire when the targeted victim's white radar
+blip is 18.5-20 radar px off, about 540-580 px at wave 22's 29 px a radar
+px, or 21.2-22.8, about 615-660 px), against the mobile AI 1 S50 (sÿst
+1143, `w22_mobile`: `tr560`, `tr640`) and the slow one (sÿst 1159,
+`w21_slow300`: `trs560`, `trs640`).
+
+**Results.**
+- `tr560`: hitat fired on a blip at 19.7 radar px, but its shot was 2.5 s
+  old by the press (frame 1374 vs 1449): the victim was flying in, and the
+  recording puts it about 360-450 px off at the hit (first on screen 345 px
+  out 15 frames after the press, closing at 1.4-3 px a frame). "Sensors
+  detect Kit Reinf reinforcement fleet approaching." followed and the fleet
+  came: a call from inside the known 475 px, nothing new.
+- `tr640`: no shot in 150 s (the victim never sat in the 615-660 band).
+- `trs560`, `trs640`: the slow victim stayed near the port; the steering's
+  0.5 s thrust legs never opened the distance to 18.5 radar px in 240 s
+  (`trs640` was stopped early).
+**NovaJS** unchanged (`N/nova_plugin/spawn/reinforcements.ts:251`, 600 px,
+GUESS between 475 and 700). **Next rig:** a victim that stays put without
+being anchored (an AI 4 trader-class hull is not a trader; an AI 1 with
+Speed 1?), or the player flown out to a measured distance first (a
+decoration ruler at 550 / 650 px from the port, as the wormhole rigs) and
+the shot fired from rest.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w36/tr560/`
+(`hitframes.png`, `sheet.png`, `recording.mp4`), `tr640/`, `trs560/`,
+`trs640/`, `tr*.log`.
+
+### Spaceport venue buttons (K6, #373), wave 36: a missing venue's button is HIDDEN (not greyed) and the others keep their slots; the Trade Center needs commodity price tiers, not flag 0x02 alone; Recharge hides once used (2026-11-25)
+
+**Question** (the hub's catalogue audit; #373): when a stellar lacks a
+venue, are its spaceport buttons hidden or greyed?
+
+**Rig.** Landings (`l l`) at Kit Port (spöb Flags 0x1241244F: every
+venue and every commodity tier), Kit Market (0x43 plus commodity tiers:
+land, commodities, bar), and the wave-36 lapse ports: Kit Lapse P72 120
+and S315 Planet 230 (0x43, NO commodity tiers) and P250 Station 230 (0x11:
+land and station only). Window shots of the spaceport (`k_port`,
+`k_market`; the lapse runs' last recorded frame, `k6_flags_sheet.png`).
+
+| port | left column (rows 1-3) | right column (rows 1-4) |
+|---|---|---|
+| Kit Port (all) | Bar, Mission BBS, Trade Center | Shipyard, Outfitter, Recharge, Leave |
+| Kit Port after `r` | the same | Shipyard, Outfitter, (empty), Leave |
+| Kit Market (no outfitter / shipyard) | Bar, Mission BBS, Trade Center | (empty), (empty), (empty), Leave |
+| 0x43, no commodity tiers (P72, S315 Planet) | Bar, Mission BBS, (empty) | (empty) x3, Leave |
+| 0x11 (P250 Station: no bar) | (empty), Mission BBS, (empty) | (empty) x3, Leave |
+
+**Findings.**
+1. **Hidden, not greyed**: a missing venue leaves no button at all
+   (bare panel metal), and every other button keeps its own slot (no
+   button moves up: with no bar, the Mission BBS stays in row 2 under an
+   empty row 1; Leave is always the fourth right-hand row).
+2. **The Trade Center needs commodity price tiers**: three 0x43 ports
+   (flag 0x02 set, every commodity tier zero) showed no Trade Center;
+   Kit Market (0x43 with tiers) and Kit Port did. (GUESS: any non-zero
+   tier, or a jünk sold there, turns it on; only "none" and "several" were
+   seen.)
+3. **Recharge hides once there is nothing to recharge**: `r` charged 2
+   credits (10,000 -> 9,998) and the button vanished, leaving its slot
+   empty.
+
+**NovaJS (main 482d3674).** `N/spaceport/spaceport.ts:1089-1102` hides
+the Bar / Trade Center / Outfitter / Shipyard buttons for a missing venue
+(`container.visible = false`) in fixed slots: 1 **matches**. The Trade
+Center follows `hasCommodityExchange`, which is the bare 0x02 bit
+(`novaparse/src/parsers/planet_parse.ts:354`): 2 **mismatch** (NovaJS shows
+a Trade Center at a 0x02 port with no prices). Recharge: hidden at full
+fuel (`spaceport.ts:1014-1020`): 3 matches. **Proposed:** show the Trade
+Center only where the stellar trades something (0x02 and at least one
+commodity tier, or a special commodity bought or sold there; GUESS for
+the jünk part); the venue itself is then never built at a no-price port.
+
+Confidence: high for 1 and 3 (five ports, clean shots); medium for 2
+(three ports of one kind; what exactly turns it on is a GUESS).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w36/k_port/*/`
+(`02-port.png`, `06-key_r.png`), `k_market/*/02-market.png`,
+`k6_flags_sheet.png` (P72 / P250 Station / S315 Planet).
+
+### Mission BBS key (K1), wave 36: `n` opens the Mission BBS (2026-11-25)
+
+**Question** (K1 leftover since wave 5): the spaceport's Mission BBS
+hotkey (`m` is the star map).
+
+**Result** (`k_port`). `n` in Kit Port's spaceport put up "There are no
+missions available here." with an Okay button, exactly what a click on
+the Mission BBS button gave right after (the empty-board answer); so `n`
+is the Mission BBS key. **NovaJS:** `missionBBS` is KeyN
+(`packages/nova/settings/controls.json:67`, `spaceport.ts:389`) and an
+empty board answers with `BBS_NO_MISSIONS` (`N/spaceport/mission_board.ts:72`):
+**matches**. K1 is closed: `o` `s` `t` `b` `n` `r` (Recharge, this run)
+`m` (map), Return = Leave.
+
+**Evidence:** `k_port/*/03-key_n.png`, `05-bbs_click.png`, `okay_bbs.png`.
+
+### Outfit resale (R9), wave 36: a pre-owned outfit sells for HALF its price; the full refund covers only units ABOVE the count the player had when he came in, not "units bought this visit" (2026-11-25)
+
+**Question** (the hub's catalogue audit; R9): what does selling a
+pre-owned outfit refund (NovaJS 50%), and the same-visit refund.
+
+**Rig** (`k_port`). Pilot `w36_k_port`: the Kit Lancer at Kit Port with
+TWO Kit Plain Mass installed (oütf 455: Cost 1,000, Mass 10, no flags) and
+10,000 credits. In the outfitter: select it, Sell x2, Buy, Sell, Buy x3,
+Sell x3; "You Have:" read after each.
+
+| action | count after | credits | change |
+|---|---|---|---|
+| (start, after a 2-credit recharge) | 2 | 9,998 | |
+| Sell (pre-owned) | 1 | 10,498 | **+500** |
+| Sell (pre-owned) | 0 | 10,998 | **+500** |
+| Buy | 1 | 9,998 | -1,000 |
+| Sell (the unit JUST BOUGHT) | 0 | 10,498 | **+500** |
+| Buy x3 | 3 | 7,498 | -3,000 |
+| Sell | 2 | 8,498 | **+1,000** |
+| Sell | 1 | 8,998 | **+500** |
+| Sell | 0 | 9,498 | **+500** |
+
+**Findings.**
+1. **A pre-owned unit sells for 50% of its price** (500 of 1,000, twice).
+2. **The full refund is not per unit bought this visit**: a unit bought
+   and sold straight back after the two pre-owned ones were sold refunded
+   500, and of three bought this visit only one refunded in full. Every
+   reading fits "a sale refunds the full price while the count before it
+   is ABOVE the count the player came in with (here 2), half otherwise"
+   (the count went 3 -> 2 at full price, 2 -> 1 and 1 -> 0 at half; 1 -> 0
+   after selling below the starting count at half). Wave 10's same-visit
+   full refunds (from a count of 0) fit it too.
+
+**NovaJS (main 482d3674).** `N/spaceport/outfitter_rules.ts:418`
+`OUTFIT_RESALE_FRACTION = 0.5`: 1 **matches**. `sellRefund`
+(`:495-506`) refunds in full while a per-outfit `boughtThisVisit` counter
+is above zero (`outfitter.ts:900` keeps it), so the same sequence pays
+1,000 for the unit bought after the two pre-owned sales and 1,000 for all
+three of the last three: 2 **mismatch** (3,000 more than the original
+over this sequence). **Proposed:** replace the bought-this-visit counter
+with the count on entry: `sellRefund` pays `outfitPrice` when the
+installed count before the sale is above the count recorded when the
+outfitter opened, `outfitResaleValue` otherwise (GUESS: "entry" is the
+outfitter's opening, not the landing; one visit measured). The no-profit
+invariant still holds (a unit sold at full price was bought at full price
+in the same visit).
+
+Confidence: high (nine sales, every credit read off the panel; one
+outfit, one visit).
+
+**Evidence:** `k_port/*/08-sel.png` .. `16-sell6.png`, `r9_sheet.png`,
+`r9_sheet2.png`.
+
+### Landing clearance lapse, wave 36: NOT two clocks by the station flag: a planet with the station flag, a station art with the planet flags and a 72 px planet all lapse at about 24.42-24.50 s, a 100 x 70 station at 24.30-24.36 s, and wave 35's own 250 px planet rig (24.62-24.65 s then) lapsed by 24.36 s tonight; the same station at a CONSTANT 24.40 s lapsed five times and then docked: the life jitters per clearance; one clock, about 24.4 s, is the fit (2026-11-26)
+
+**Questions** (brief item 2; wave-35 leftover): what picks the station
+clock (the station flag or the art), and the gate's clock against the
+planet's 24.63 s. (Main 482d3674 has since applied wave 35's two clocks:
+`PLANET_CLEARANCE_MS = 24_630`, `STATION_CLEARANCE_MS = 24_420` by the
+station flag, gates on the planet clock.)
+
+**Rig** (`wave36Resources` "L", "L2"). As wave 35's: the Kit Lancer at rest
+on a decoration, ONE landable port at (d, 0) inside the 249 clearance
+square and its landing window; `tools/lapse35.sh`, one keys step: `l`
+clears, then `l` presses at falling intervals (a press inside the
+clearance's life lands / docks / opens the gate map and ends the cascade,
+one after it gets a fresh clearance line); intervals from the `press`
+events (`tools/lapsesum.sh`), the outcome from the window 25 frames after
+each press. Requested 24.57 .. 24.21 s (actual 24.72 .. 24.36 in 0.06 s
+steps), and 24.15 .. 23.73 s (actual 24.30 .. 23.87) for the two that
+never landed.
+
+| rig (art, flags) | fresh clearance at (s) | landed / docked at (s) | edge |
+|---|---|---|---|
+| Kit Lapse P250 Station 230 (250 px PLANET art, flags 0x11) | 24.722 .. 24.475 (six) | **24.417** ("cleared to dock") | 24.42-24.47 |
+| Kit Lapse S315 Planet 230 (315 x 200 STATION art, flags 0x43) | 24.721 .. 24.538 (five) | **24.474** ("cleared to land") | 24.47-24.54 |
+| Kit Lapse P72 120 (72 px planet, 0x43) | 24.725 .. 24.473 (six) | **24.414** | 24.41-24.47 |
+| Kit Lapse S100 150 (100 x 70 station, 0x11) | 24.723 .. 24.357 (all seven) | none | below 24.36 |
+| the same, lower (`lapse_s100_low`) | (none) | **24.304** (the first press) | **24.30-24.36** |
+| Kit Lapse S100 Heavy (the same station, a Jupiter-art decoration on screen) | 24.720 .. 24.481 (five) | **24.418** | **24.42-24.48** |
+| **control**: wave 35's `w31_land_p250_230` (250 px planet, 0x43; wave 35: landed 24.617 / 24.649) | 24.722 .. **24.356** (all seven) | **none** | **below 24.36** |
+| Kit Gate J325 245 (gate, Jupiter's 325 px art) | 24.725 .. 24.357 (all seven) | none | below 24.36 |
+| the same, lower (`lapse_gate_low`) | 24.301, 24.237 | **24.182** (the gate map) | **24.18-24.24** |
+| Kit Lapse S100 150, nine presses at a CONSTANT interval (`lapse_s100_const`, the last run) | **24.401, 24.400, 24.397, 24.398, 24.400** (five) | **24.397** (the sixth) | **jitters across 24.40** |
+
+**Findings.**
+1. **The station flag does not pick the clock**: the planet art WITH the
+   station flag lapsed between 24.42 and 24.47 s, the station art with the
+   PLANET flags between 24.47 and 24.54 s, and a plain 72 px planet between
+   24.41 and 24.47 s, all near wave 35's "station" 24.40-24.44 and none
+   near its "planet" 24.62-24.65. The flag sets only the wording ("cleared
+   to dock" / "to land").
+2. **The same rig changed between sessions**: wave 35's 250 px planet rig,
+   run unchanged as the control, lapsed at every interval down to 24.356 s
+   tonight, where on wave 35's evening it landed at 24.617 and 24.649 s.
+   So wave 35's two clocks were two RUNS, not two kinds of stellar.
+3. **The life jitters per clearance**: on the 100 x 70 station, nine
+   presses at a constant 24.40 s gave five fresh clearances and then a
+   docking, and earlier the same evening the same rig docked at 24.304,
+   lapsed at 24.357 and 24.413, and (with a Jupiter-art decoration on
+   screen) docked at 24.418. So a clearance's life is not one fixed
+   number even within a run: it scatters by a few frames (about 0.05-0.1
+   s) about its centre, and the centre drifted between evenings (wave 35's
+   planet rig held past 24.6 s; tonight it lapsed by 24.36).
+4. **One clock fits every stellar kind**: tonight's nine edges (gate
+   24.18-24.24, S100 24.30-24.36, P72 24.41-24.47, P250 Station 24.42-24.47,
+   S100 Heavy 24.42-24.48, S315 Planet 24.47-24.54, the constant run about
+   24.40, the control and the gate's first cascade below 24.36) centre on
+   about 24.4 s with no order by flag or art; waves 32-35's edges
+   (24.40-24.65) sit inside the same spread. What sets the scatter (the
+   reference Mac's frame pacing, a random term) is not settled: GUESS.
+5. **Gate**: the J325 gate's edge tonight, 24.18-24.24 s, is the lowest
+   reading but inside the spread; its clearance lapses on the ports'
+   clock (wave 32), and nothing here separates it.
+
+**NovaJS (main 482d3674).** `N/nova_plugin/travel/planet_plugin.ts:404`
+`PLANET_CLEARANCE_MS = 24_630`, `:417` `STATION_CLEARANCE_MS = 24_420`,
+`stellarClearanceMs` (`:425-428`) by the station flag, gates on the planet
+clock. 1 and 2 **mismatch**: the flag rule is refuted (a 0x43 port lapsed at
+24.41-24.47 and 24.47-24.54, a 0x11 planet art at 24.42-24.47), and the
+24.63 s planet value was one evening's reading of a rig that lapsed by
+24.36 tonight. **Proposed:** one clock again for ports, stations and
+gates, `STELLAR_CLEARANCE_MS = 24_400` (MEASURED: the centre of the nine
+edges of one evening and of the constant-interval run; GUESS: a fixed
+value, the original's per-clearance scatter of a few frames not
+modelled, since it would need a deterministic draw for an effect under
+0.1 s), dropping `stellarClearanceMs`'s station branch, the comments to
+cite this section.
+
+Confidence: high for 1 and 2 (seven cascades, each bracketed to one 0.06
+s step; the control lapsed seven times in a row where wave 35 landed);
+high for the per-clearance scatter (five lapses then a docking at one
+constant interval); the 24.4 s centre is medium (one evening's nine
+edges); the cause of the scatter is a GUESS (the game's own frame rate
+was not measured: EV Nova's planets do not spin, so the recording holds
+no game-frame clock at rest).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w36/lapse_p250st`,
+`lapse_s315pl`, `lapse_p72`, `lapse_s100`, `lapse_s100_low`,
+`lapse_s100heavy`, `lapse_p250_ctrl`, `lapse_gate`, `lapse_gate_low`, `lapse_s100_const`
+(`recording.mp4`, `recording.events.json`) and `lapse_*_sheet.png` (the
+window 25 frames after each press, in order).
+
+### R19 in NPC fights, wave 36: fleet members DO call (a fleet-placed lone hunter twice at 0.6, the three-hunter pack against a Strength-40 prey); a MaxOdds-200 fleet govt called at 1.2 (so not the Bible's 2-to-1); the edge SCALES with the fleet govt's MaxOdds: the MaxOdds-200 fleet never came at 0.6 (three fights) and came at 1.2, where MaxOdds 100 calls at 0.6; exactly 0.5 did not call at MaxOdds 100 (two fights) (2026-11-26, thirteenth pass)
+
+**Questions** (brief item 3; wave-35 leftovers): the NPC-caused call's edge
+between 0.4 and 0.6 (exactly half), whether it scales with the fleet
+govt's MaxOdds, and whether a fleet member calls at all (wave 35's packs
+never did, at 0.5).
+
+**Rig** (`wave36Resources` "R19"). Wave 35's Kit Reinf Pair rigs (the Kit
+Ring Lancer watching from the port at the centre; avgShips 2, one hunter
+and one prey about half the time; hulls that hold 100% shield; the early
+recording, `scenarios/w36_space_early.json`; `tools/hunt.sh`: Tab censuses
+at about 15 s, 100 s and 165 s, a shot every 12 s between). New: Kit Reinf
+Pair 0.5 (Hunter Full S10 : Prey S5), Kit Reinf M200 0.6 / 1.2 (a hunter
+govt 295 with MaxOdds **200**, its own fleet flët 321, against preys of
+govt 294 with Strength 6 / 12), Kit Reinf Solo 0.6 (the S10 hunter placed
+as a FLEET of one, flët 322, against wave 35's S6 prey), Kit Reinf Pack S40
+(wave 35's three-hunter pack, flët 319, against wave 34's Strength-40
+prey: 40 against 30). Each call's time from `tools/huntsum.sh` (the
+status line at lit 30 / 4 frames: the default 90 / 8 missed several).
+
+| run | composition at the call (or through the watch) | preys : hunters | ratio | fleet |
+|---|---|---|---|---|
+| solo06_a | 1 S6 : the fleet-placed hunter (census A) | 6 : 10 | 0.6 | **called** 14.5 s |
+| solo06_b | the same | 6 : 10 | 0.6 | **called** 12.9 s |
+| packs40_a | 2 S40 first, the pack came, 1 S40 : 3 hunters in census B | 40 (or 80) : 30 | 1.3 (2.7) | **called** 71.9 s |
+| packs40_b | preys only, then the pack only | | | none (no fight) |
+| m200_12_b | 1 S12 : 1 M200 hunter (census A) | 12 : 10 | **1.2** | **called** 9.9 s ("Kit Reinf M") |
+| m200_12_a | 2 S12 first, a hunter came; 1 : 1 in census B | 24 or 12 : 10 | 2.4 / 1.2 | called 58.2 s |
+| pair05_a | 2 hunters first; 1 S5 : 1 hunter from census B to the end (prey 99%: fought) | 5 : 10 | **0.5** | **none** (about 100 s of 1 : 1) |
+| pair05_b, m200_06_a, m200_06_b | hunters only (a prey only in the last census) | | | none (no fight) |
+| m200_06_c | 1 S6 : 1 M200 hunter from census A (15 s) to the end (160 s); the prey 99% once (fought) | 6 : 10 | **0.6** | **none** |
+| m200_06_d | the same from census A to the end; the fight on screen, the hunter 99% | 6 : 10 | **0.6** | **none** |
+| m200_06_e | 2 hunters first; 1 S6 : 1 hunter from census B (94 s) to the end, the hunter 99% | 6 : 10 | **0.6** | **none** |
+| pair05_c | 1 S5 : 1 hunter from census A (15 s) to the end (160 s), both hit (99%) | 5 : 10 | **0.5** | **none** |
+
+**Findings.**
+1. **Fleet members call**: a hunter placed by the system as a fleet of
+   one called at 0.6 twice (as wave 35's single-düde pair06 did), and the
+   three-hunter PACK called against a Strength-40 prey (40 : 30). So
+   wave 35's packs that never called at 15 : 30 were held back by the odds
+   (0.5), not by being a fleet: wave 35's caveat is lifted, and its "no
+   shield weighting" (three hit Weak pack hunters, 15 : 30 unweighted, 15
+   : 9 weighted, never called) now stands on the pack runs too.
+2. **MaxOdds 200 does not mean 2-to-1**: the MaxOdds-200 fleet govt was
+   called at 12 : 10 (1.2) in the first seconds of m200_12_b, where the
+   Bible's "odds against exceed MaxOdds" would need 2.0. **But the
+   MaxOdds DOES move the edge**: three 0.6 fights against the MaxOdds-200
+   hunter (one prey and one hunter for 65-145 s, both sides hit) never
+   called, where the MaxOdds-100 fleet came at 0.6 in the first 9-15 s
+   three times (wave 35's pair06_b, solo06_a / _b). So at MaxOdds 200 the
+   edge is between 0.6 and 1.2, at MaxOdds 100 between 0.5 and 0.6: both
+   fit "the attackers' sum over HALF of MaxOdds / 100 times the
+   friends'" (an edge of 0.5 at 100 and 1.0 at 200).
+3. **Exactly half does not call** (two fights: pair05_a, one Strength-5
+   prey against one Strength-10 hunter for about 100 s, and pair05_c for
+   145 s, both sides hit, no line), with wave 35's 0.6 calls: the edge
+   is "more than half", strict.
+
+**NovaJS (main 482d3674).** `N/nova_plugin/spawn/reinforcements.ts`
+`considerCall` (`:538-629`) still needs a player or his flock as the
+opponent (`:562`), so no NPC fight calls the fleet (waves 33-35's mismatch,
+unchanged; the NPC-caused call waits on Forgejo #382); `reinforcementOddsCall` (`:329-338`) is enemies / friends x
+100 > MaxOdds. 1: nothing to compare in NovaJS until NPC-caused calls
+exist; the proposal below counts every fleet-side NPC (fleet members
+included) as a possible caller. 2-3: **mismatch** with the player rule
+reused for NPCs. **Proposed** (wave 35's, refined): an NPC-caused call
+when an NPC of the fleet's side is attacked by NPCs and the attackers'
+plain Strength sum is MORE than MaxOdds / 200 times the fleet side's plain sum (MEASURED: at MaxOdds 100 between 0.5 and 0.6, at 200 between 0.6 and 1.2; GUESS: exactly half of the fleet govt's MaxOdds, strict, i.e. `enemies x 200 > maxOdds x friends`) (the
+victim counted; fleet members, placed or not, call like any ship);
+the player's call keeps `reinforcementOddsCall` (wave 20).
+
+Confidence: high for 1 (three calls, two of them clean in the first
+seconds); high for "not 2-to-1" (one clean call at 1.2); medium for the
+strict half (two clean fights at 0.5); high for "MaxOdds scales it" (three clean non-calls at 0.6 against three clean calls); the exact edge at 200 (1.0) is a GUESS.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w36/hunt_*`
+(`recording.mp4`, `*-tab*.png`), `hunt_*_tabs.png` / `hunt_*_lines.png`
+per run, `*_both.png` (lines over censuses).
+
 ### Reliability notes (for anyone running the reference)
+
+- **A clearance-lapse edge moves from run to run (wave 36):** wave 35's
+  250 px planet rig landed at 24.617 / 24.649 s on its evening and lapsed
+  at every interval down to 24.356 s on wave 36's; tonight's rigs spread
+  24.18-24.54 s. Run a CONTROL rig in the same session as any comparison
+  of lapse times, and never read a difference under about 0.3 s between
+  two sessions as a property of the stellar.
+- **`hitat.mjs`'s far mode fires 2.5 s after the shot it judged (wave 36
+  `tr560`):** a mobile victim read at 19.7 radar px (about 570 px) was
+  about 360-450 px off at the press. Read the hit distance from the
+  recording at the press's frame (+4), not from the hit log.
+- **`linesheet.sh`'s default thresholds (lit 90, 8 frames) missed "Sensors
+  detect ..." in several wave-36 hunts:** `tools/huntsum.sh` runs it at
+  lit 30 / 4 frames and prints the census times beside it.
+- **The Kit Hulk (wave 7's slow-pass target, sÿst 2020) carries NO
+  credits:** its Credits button is grey ("None"); take Energy (or Cargo)
+  when a board must take something.
+- **An unarmed AI 3 hull of an always-hostile govt (0x0004) never closes
+  on the player (wave 36 `coast_raid_a`):** it stayed beyond the radar for
+  150 s; give an attacker a harmless gun.
+- **macOS has no `timeout`, and a zsh glob with no match aborts the whole
+  command (wave 36 setup):** `rm q*.sh` with no q*.sh left the copied
+  tools' old queue scripts in place until rerun under `bash -c 'shopt -s
+  nullglob; ...'`.
 
 - **A press interval inside one keys step is the wait plus about 150 ms
   (wave 35 `lapse_*`):** "l wait 24650 l" put the presses 24.80 s apart,
@@ -17835,7 +18306,8 @@ schema change (`clearedUntil` already carries the lapse).
 | Wave 32 leftovers | Landing: the lapse's exact frame count inside 24.51-24.61 s; a STATION's lapse (planets and gates measured); whether a gate whose clearance lapsed closes its sprite; the cleared window's edge past 425 (a 430-440 press), the cleared-line form odds (#97 / #98 / #99 8 : 5 : 3, tails 9 : 7), whether a wormhole clears a standing request on entry. Capture: whether the capture roll uses the SHOWN odds, the boarder's strength or marines (ModType 25), ratios between 2 and 5 and 5-10 (the curve's shape up to the cap), the draw's shape (18 / 22 only at ratio 1). R7: the ship counter's odds (1 in 6 so far), the +1,000 per plea (does it keep climbing; does the first ask ever pass 20,000), whether a second channel's ask is fresh or carries the climb (19,000 after 22,000). R19: an NPC of the fleet's side in a fight with another NPC (a rig whose NPCs do fight: a xenophobic 0x0001 govt, or a stock border system) and the arrival distance inside the radar. From wave 26: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, the escort-cap capture, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first); next free sÿst 1302, spöb 1802, shïp 552, düde 480, gövt 295, flët 318. | **Wave 33** answered ("... wave 33" sections; compared with main 0478c197, which applied the wave-32 fixes): R19: the fleet's side ATTACKED by another NPC with the odds against it CALLS the fleet with no player in the fight (Strength-10 hunters vs armed Strength-500 preys: "Sensors detect ...", the fleet fought the preys; main never calls without a player: mismatch); ATTACKING with the odds for it does not (3 minutes, a prey worn to 13%); the fleet came in about 1,740 px from the centre, 1.5 s after the line (main 1,800: matches); wave 32's no-fight was gövt MaxOdds (Strength 10 vs 500), not Enemies. R7: the +1,000 per plea never stops (to 31,000 twice, 27,000), a counter one first press in three (19 in 59 with wave 32; main's one in four fits), 3/4 rounded down to 100, a Lower Price on a counter withdraws; 0x0200 warships haggle like the provoked freighter and the 0x8000 flat 20,000 is each hail's first ask (main matches all of it); every new hail draws its own mood and first ask (one warship 3,000-20,000 over seven hails; main fixed per ship and pilot: mismatch). Capture: the roll fits the shown odds (8 captures in 25 rolls, 10.1 expected; one 75% failed); ratio 7 already reads the 75% cap (main 66%: mismatch), ratio 3 38-45% (main 41%: matches); marines count (ModVal 10 = ten crew, ModVal -20 = about +20 points; main ignores ModType 25: mismatch); a Capture Ship click tripped the self-destruct 2 in 27 (main never); at the escort cap "Capture Odds: 0%", a grey button and no line (main greys it but drops the odds and adds the #123 note). Landing: a station lapses on the planets' clock (docked at 23.55-24.15 s, lapsed at 24.44; main 24.55: within a frame or two); a lapsed gate plays its closing animation at the lapse, silently (main matches); the 250 px planet's cleared window reaches 432.4 px but not 439.4 (main 1.7 W = 425: mismatch); the cleared-line pieces pool to 16 : 9 : 7, Commence 18 : Welcome 14 (main's 8 : 5 : 3, 9 : 7 fits). Not run: the lapse's exact frame count, a wormhole and a standing request, the counter's "first ask over 20,000" question (every first ask stayed at or under 20,000), and the wave-26 carry-overs (see Wave 33 leftovers). **Applied 2026-11-25 (b814e5bd, a3f6b1a2, d4393b70)**: each hail draws a ship's mood line and first ask (the channel seeds both), the plea's counter one in three (GUESS); capture odds `[7, 0.75]`, marines count (a positive ModVal as crew, a negative one as points), a capture attempt draws the self-destruct first (0.1, GUESS); the cleared landing window 1.74 W (not the proposed 1.75, which would land U9 wave 6's 80 px "too far" at 140). Not applied: R19's NPC-caused call (waiting on Forgejo #382); the escort-cap readout (main keeps its greyed button, no odds row and the #123 note, per rulings #161 / #250; the original reads "Capture Odds: 0%" with no line). |
 | Wave 33 leftovers | Landing: a wormhole and a standing request (does entering a wormhole after a far `l` act by itself?); the cleared window's rule (1.75 W, 1.7 W + the ship's half-size, or a wider true frame: a second art between 432 and 439 px, e.g. the 315 px station or the 325 px gate's 552); the lapse's one-clock question (stations lapsed at 24.44 where a planet held at 24.51: more presses at 24.4-24.6 on both). Capture: the self-destruct's rate on a capture (2 in 27) and whether a trip comes before the roll; where between ratios 5 and 7 the cap is reached (a crew-60 boarder); marines at another ratio (does -20 add 20 points at ratio 3? does +10 crew read exactly ratio 2's band?); more rolls at low odds for the shown-odds test (2 of 18 at 15-45%). R7: whether the per-hail first ask follows the mood line (bad 4,000 vs good 20,000 at 100M), whether Lower Price is needed for the +1,000 (a plea after a counter that is never answered), Accept on a raised ask (charged as shown?). R19: the call's odds threshold in an NPC fight (raise the hunters' Strength until it stops), whether the day stamp is per system for an NPC-caused call (a second fight the same day), the fleet's targets (the attackers only?), an NPC-vs-NPC fight where the fleet's side attacks and LOSES. From wave 26 and older: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first); next free sÿst 1304, spöb 1804, shïp 557, düde 483, oütf 470, gövt 295, flët 318. | **Wave 34** answered ("... wave 34" sections; compared with main 6aaad1c4, which applied the wave-33 fixes): Landing: a cleared ship lands when max(|dx|, |dy|) < trunc(1.75 W), strictly, measured to the pixel on four arts at rest (40 px planet 69 / 70, 72 px planet 125 / 126, 17 x 31 station 28 / 29, 100 x 70 station 174 / 175) and a walk-out from the 315 x 200 station (docked from 545.4); the ship's size does not count (96 and 160 px hulls too far at 150 from the 72 px planet); stations by their width like planets (main's 1.74 W inclusive matches every edge but the 17 px station's 29, which lands in NovaJS: propose trunc(1.75 W) with a strict test). A wormhole has no clearance and no standing request: "too far" at 230 px inside the 249 square, and a ship coasting (or flying unpressed) over it is not taken through (matches); a far `l` about 730 px out selects nothing (main picks a wormhole at any distance: small mismatch). Capture: ratio 6 reads 68-75 (mean 70 over six boards, main 68), marines +10 on crew 30 read ratio 4's band, -20 on crew 30 adds about 18 points to ratio 3, the cap holds over the bonus (crew 70 + -20: 75 x 3), the capture click's self-destruct 1 in 12 (3 in 39 pooled; main's 0.1 fits); main matches all but ratio 6. R19: the attackers' Strengths are summed (three Strength-8 preys on one Strength-10 hunter called, one against three did not), every fight with the preys' sum over the hunters' called, and one at 24 against a nominal 30 with a hunter at 20% shield (GUESS: both sides summed, shield-weighted); main still never calls without a player (wave 33's proposal). A landing moves the date on (June 23rd to 24th), so the same-day question cannot be put by landing (the next day's fight called 8 s after take-off). Not run: the lapse's one-clock question, low-odds shown-odds rolls, R7's per-hail ask vs mood / plea after a counter / Accept on a raised ask, R19's fleet targets and a losing attack by the fleet's side, and the wave-26 and older carry-overs. Left: see Wave 34 leftovers. **Applied 2026-11-25 (a2025369, d76630fe, b093c0e6)**: the cleared landing window trunc(1.75 W), strict (the 249 px clearance square keeps its inclusive edge); a wormhole is selected by `l` only inside the gates' 500 px circle (GUESS on the radius); capture odds `[6, 0.70]`, the marines and the cap over the bonus marked measured, the self-destruct citing 3 in 39. Not applied: R19's NPC-caused call (waiting on Forgejo #382). |
 | Wave 34 leftovers | Landing: a wormhole's window edge (104 px art: 1.75 W = 182; presses at 175-190 px) and its `l` selection range (selected at 300, nothing at about 730: is it the gates' 500 px circle?); whether the strict trunc(1.75 W) holds for a fractional ship position (a coasting press near a 17 px art's 28.75-29 px); a cleared press past 551 at the 315 px station (the walk-out decoration leaves the screen: a ruler stellar); the lapse's one-clock question (stations 24.44 vs planets 24.51). Capture: ratio 6.5 (ratio 6 reads a mean of 70 over six boards); the self-destruct's rate (3 in 39) and whether a trip comes before the roll; more rolls at low odds. R7: whether the per-hail first ask follows the mood line, a plea after an unanswered counter, Accept on a raised ask. R19: how the FRIENDS are counted in an NPC fight (the victim alone, or every fleet-side NPC shield-weighted: S12 Many again with full-shield hunters, 24 against 30), the threshold between 1.0 and 1.2, whether an NPC-caused call stamps a day (only the same visit is "the same day": a second fight after the first fleet leaves), the fleet's targets, a losing attack by the fleet's side. From wave 26 and older: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first); next free sÿst 1339, spöb 1873, shïp 563, düde 488, oütf 470, gövt 295, flët 318. | **Wave 35** answered ("... wave 35" sections; compared with main 08092a02, which applied the wave-34 fixes): Wormholes: the 104 px wormhole's window is trunc(1.75 W) = 182, strict (through at 180 / 181, "too far" at 182 / 183), and a stopped ship's `l` selects it only inside the gates' 498-500 px CIRCLE (400 / 498 selected; 500, 600 and the (400, 400) diagonal nothing): main matches both (comments to mark measured). R19 in NPC fights: the call's threshold is about HALF, not 1.0: every early fight at 0.6 or more called (a lone Strength-10 hunter against one Strength-6 or Strength-8 prey; 15 against two hunters), every one at 0.5 or less did not (a lone hunter against Strength 4, three runs; one prey of 11 / 15 against three hunters); the friends are summed with the victim; no shield weighting (three hunters at 0% shield never called against 15 : 30, a pack caveat); one NPC-caused call per visit (no second line in 240 s of fighting after the first fleet was gone). Wave 20's player points (0.75 and 0.67 refused) leave the player's edge apart. Main still never calls without a player (wave 33's proposal; now with a call over half of MaxOdds for NPC calls, plain Strength, a per-system day). Capture: ratio 6.5 reads 70-75 (mean 73.0; main 73, but its narrowed draw is 71-75, one board read 70; GUESS model: an uncapped mean 10 points a ratio from 5, the +-5 draw, then the 75 cap); one capture in six at 70-75%. R7: Accept on a raised 22,000 ask took more than the first ask (100.00M -> 99.97M; main charges the raised ask: matches to the panel's resolution); the price popup is modal, so no plea can follow an unanswered counter; one record-hostile warship was not hostile for 2.5 minutes and then asked 4,000 with a neutral line. Lapse: TWO clocks: the 250 px planet holds to 24.62-24.65 s (landed 24.617 / 24.649, lapsed 24.645 / 24.673), the 315 x 200 station to 24.40-24.44 s (docked 24.396, lapsed at every interval 24.53-24.80 twice); main's single 24.55 s misses both by about 0.1 s. Not run: the cleared window for a fractional position at a 17 px art, a press past 551 at the 315 px station, low-odds capture rolls, the self-destruct before or after the roll, R7's per-hail first ask against the mood line (one more point), R19's fleet targets and a losing attack, the wave-26 and older carry-overs. Left: see Wave 35 leftovers. **Applied 2026-11-25 (e1cf32fb, cd44482e, de7524ea)**: two clearance clocks, a planet's 24.63 s and a station's 24.42 s by the station flag (GUESS on what picks it; a gate keeps the planet's); capture odds drawn +-5 around an uncapped centre ([7, 0.80], [10, 1.10]) and capped after the draw (GUESS model; 6.5 reads 70-75); the wormhole's window edge and 500 px selection circle marked measured in the comments. Not applied: R19's NPC-caused call (waiting on Forgejo #382). |
-| Wave 35 leftovers | R19: the NPC-caused call's exact edge between 0.4 and 0.6 (a Strength-5 prey against a lone Strength-10 hunter: exactly half), whether it scales with the fleet govt's MaxOdds or the attacker's (a MaxOdds-200 hunter govt), whether a fleet member (flët escort) calls at all (the pack caveat: single Weak hunters, three at once, against one Strength-15 prey), why a player's call needs more (wave 20 refused 0.67-0.75: a player point between 0.75 and 1.0), the fleet's targets, a losing attack by the fleet's side. Landing: what picks the station clock (the station flag or the art: a station flag on a planet art, a planet flag on a station art), a gate's clock against the planet's 24.63 s, the cleared window for a fractional position at a 17 px art, a press past 551 at the 315 px station, the wormhole cap above a 121 px wormhole art. Capture: the draw near the cap (ratio 6.5 read 70 below main's 71-75; the uncapped-mean model predicts 75 half the time), more rolls at 70-75% (one capture in six), low-odds rolls, the self-destruct before or after the roll. R7: the exact charge on a raised ask (a pilot written after the Accept: land elsewhere or jump), the per-hail first ask against the mood line (wait for a hostile warship before hailing), why a record-hostile warship was not hostile for 2.5 minutes. From wave 26 and older: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first); next free sÿst 1365, spöb 1912, shïp 574, düde 497, oütf 470, gövt 295, flët 321. | open |
+| Wave 35 leftovers | R19: the NPC-caused call's exact edge between 0.4 and 0.6 (a Strength-5 prey against a lone Strength-10 hunter: exactly half), whether it scales with the fleet govt's MaxOdds or the attacker's (a MaxOdds-200 hunter govt), whether a fleet member (flët escort) calls at all (the pack caveat: single Weak hunters, three at once, against one Strength-15 prey), why a player's call needs more (wave 20 refused 0.67-0.75: a player point between 0.75 and 1.0), the fleet's targets, a losing attack by the fleet's side. Landing: what picks the station clock (the station flag or the art: a station flag on a planet art, a planet flag on a station art), a gate's clock against the planet's 24.63 s, the cleared window for a fractional position at a 17 px art, a press past 551 at the 315 px station, the wormhole cap above a 121 px wormhole art. Capture: the draw near the cap (ratio 6.5 read 70 below main's 71-75; the uncapped-mean model predicts 75 half the time), more rolls at 70-75% (one capture in six), low-odds rolls, the self-destruct before or after the roll. R7: the exact charge on a raised ask (a pilot written after the Accept: land elsewhere or jump), the per-hail first ask against the mood line (wait for a hostile warship before hailing), why a record-hostile warship was not hostile for 2.5 minutes. From wave 26 and older: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first); next free sÿst 1365, spöb 1912, shïp 574, düde 497, oütf 470, gövt 295, flët 321. | **Wave 36** answered ("... wave 36" sections): the clearance clock is NOT picked by the station flag (a planet art with the station flag, a station art with the planet flags and a 72 px planet all lapsed at 24.41-24.54 s) and wave 35's own 250 px planet rig, its "planet clock" (24.62-24.65 s), lapsed by 24.36 s as tonight's control: the edge moves from run to run and even between clearances (24.18-24.54 s tonight; the S100 station at a constant 24.40 s lapsed five times, then docked): one clock of about 24.4 s fits every kind; main 482d3674's two clocks by the flag mismatch. R19: fleet members DO call (a fleet-placed lone hunter twice at 0.6, the pack against a Strength-40 prey), a MaxOdds-200 fleet govt called at 1.2 (not the Bible's 2-to-1) and did not at 0.6 (three fights; MaxOdds 100 calls at 0.6), so the edge scales with MaxOdds (half of it, GUESS), exactly 0.5 did not call (two fights). Boarding velocity after a TAKEN plunder: kept (two Energy takes). F1c re-flow offsets: the five stop 7.7-11.5 px short of their new slots on the line from the old ones and stay (a slot dead band; NovaJS converges exactly). Hub's catalogue items: K6 a missing venue's button is HIDDEN in a fixed slot (matches), but the Trade Center needs commodity price tiers, not flag 0x02 alone (mismatch); K1 `n` is the Mission BBS key (matches); R9 a pre-owned outfit sells for 50% (matches) and the full refund covers only units above the count on entry, not "bought this visit" (mismatch). Not reached: the trader call range (no hit inside 475-700 px: the far-mode driver lags 2.5 s), a second hull's coast (an unarmed hostile AI 3 never closed). Left: see Wave 36 leftovers. |
+| Wave 36 leftovers | Landing: what moves the clearance edge between runs (measure the game's own frame rate during a lapse cascade, e.g. a moving ship's per-frame steps; repeat one rig several times in one session), whether a gate's count differs from a port's (24.18-24.24 vs 24.30-24.36 the same night), the per-clearance scatter's size and cause (a constant-interval cascade at 24.30 / 24.50 on two rigs). R19: the MaxOdds edge at 200 between 0.6 and 1.2 (a 0.8 / 1.0 / 1.1 prey against the M200 hunter: is it exactly half of MaxOdds, i.e. 1.0?), a losing attack by the fleet's side, the fleet's targets; the player's call against the NPC rule (wave 20 refused 0.67-0.75 with MaxOdds 100). Trader range: a rig with the shot fired from REST at a measured 550 / 650 px (decoration rulers) against a victim that holds its place. Coast: a second hull with a harmless gun (the Kit Tickler) so it closes in. R9: whether "entry" is the outfitter's opening or the landing; a 0x0200 outfit. K6: what turns the Trade Center on (one commodity tier; a jünk only). From wave 35: the cleared window for a fractional position at a 17 px art, a press past 551 at the 315 px station, the wormhole cap above a 121 px art; capture near the cap and low-odds rolls; R7 the exact charge on a raised ask, the per-hail first ask, the not-hostile warship. From wave 26 and older: R19's neutral fleet / escort hit, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first); next free sÿst 1376, spöb 1929, shïp 576, düde 502, oütf 470, gövt 293, flët 323. | open |
 
 ## Catalogue
 
