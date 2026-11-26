@@ -54,8 +54,9 @@ import {
  *
  * THE HOLD: each hull has its own, and a swap destroys nothing. The pilot's
  * hold and the incoming hull's are pooled; the incoming hull takes every ton
- * of mission cargo and as many commodities as it has room for, in
- * cargoForNewShip's order; the rest stays aboard the hull being put away.
+ * of mission cargo and the commodities by cargoForNewShip's rule (each
+ * scaled by the same fraction of the room and floored, when they do not
+ * all fit); the rest stays aboard the hull being put away.
  * That is usually at most what the hull held already, but not always: mission
  * cargo the incoming hull must take can push commodities out past what the
  * outgoing hull can hold (a 10 t hull carrying 20 t of mission cargo swapped

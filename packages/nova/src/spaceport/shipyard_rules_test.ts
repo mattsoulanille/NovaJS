@@ -419,17 +419,38 @@ describe('shipyard purchase rules', () => {
                 .toEqual([['cargo:1', 10], ['cargo:2', 5]]);
         });
 
-        it('jettisons commodities down to the new capacity', () => {
-            const cargo = new Map([['cargo:1', 10], ['cargo:2', 10]]);
-            const result = cargoForNewShip(cargo, 12);
-            expect([...result.values()].reduce((a, b) => a + b, 0)).toBe(12);
+        it('scales every commodity to the new capacity and floors each '
+            + '(R11, wave 40: 100 + 50 t into 20 t -> 13 + 6)', () => {
+            const cargo = new Map([['cargo:0', 100], ['cargo:2', 50]]);
+            expect([...cargoForNewShip(cargo, 20)].sort())
+                .toEqual([['cargo:0', 13], ['cargo:2', 6]]);
         });
 
-        it('never jettisons mission cargo', () => {
+        it('scales by the same fraction whatever the key order', () => {
+            const cargo = new Map([['cargo:2', 50], ['junk:nova:150', 30],
+                ['cargo:0', 100]]);
+            // 20 / 180 of each: 5.6, 3.3, 11.1.
+            expect([...cargoForNewShip(cargo, 20)].sort()).toEqual([
+                ['cargo:0', 11], ['cargo:2', 5], ['junk:nova:150', 3]]);
+        });
+
+        it('drops a commodity whose share floors to nothing', () => {
+            const cargo = new Map([['cargo:0', 99], ['cargo:1', 1]]);
+            expect([...cargoForNewShip(cargo, 10)])
+                .toEqual([['cargo:0', 9]]);
+        });
+
+        it('never jettisons mission cargo; commodities share the room '
+            + 'it leaves', () => {
             const cargo = new Map([['mission:nova:128', 15], ['cargo:1', 10]]);
             const result = cargoForNewShip(cargo, 10);
             expect(result.get('mission:nova:128')).toBe(15);
             expect(result.has('cargo:1')).toBe(false);
+
+            const roomy = new Map([['mission:nova:128', 5], ['cargo:1', 10],
+                ['cargo:2', 10]]);
+            expect([...cargoForNewShip(roomy, 15)].sort()).toEqual([
+                ['cargo:1', 5], ['cargo:2', 5], ['mission:nova:128', 5]]);
         });
 
         it('leaves an over-full hold of pure mission cargo intact', () => {

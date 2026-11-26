@@ -343,35 +343,44 @@ export function outfitsForNewShip(newShip: ShipData,
 /**
  * The cargo hold the new ship starts with.
  *
- * JUDGMENT CALL: cargo transfers, but the new hull may have a smaller
- * hold. Rather than refuse the sale (which would strand a player who
- * happened to be carrying freight) or silently keep an over-full hold,
- * ordinary commodity and junk cargo is jettisoned until the load fits.
+ * The original (reference_experiments "Cargo into a smaller hold (R11),
+ * wave 40") neither refuses nor questions the sale: a 20 t hull bought
+ * with 100 t food + 50 t industrial aboard kept 13 t + 6 t. Every
+ * commodity is scaled by the same fraction, capacity / load, and floored
+ * on its own, so a ton or two may stay free. Junk scales like a
+ * commodity.
+ *
  * MISSION cargo ("mission:" keys) is never dropped -- losing it would
- * fail a mission as a side effect of shopping -- so a hold packed with
- * mission freight can still end up over capacity. Commodities are
- * dropped in descending-key order so the result is deterministic across
- * peers rather than dependent on Map insertion order.
+ * fail a mission as a side effect of shopping -- so it is taken off the
+ * capacity first and the commodities share what is left (GUESS: the
+ * reference run carried no mission cargo). A hold packed with mission
+ * freight can therefore still end up over capacity. Each key's share is
+ * computed from the totals alone, so nothing depends on Map order.
  */
 export function cargoForNewShip(cargo: Cargo, newCapacity: number): Cargo {
     const result = new Map(cargo);
     if (cargoUsed(result) <= newCapacity) {
         return result;
     }
-    const droppable = [...result.keys()]
-        .filter(key => !key.startsWith('mission:'))
-        .sort()
-        .reverse();
-    for (const key of droppable) {
-        if (cargoUsed(result) <= newCapacity) {
-            break;
-        }
-        const held = result.get(key) ?? 0;
-        const over = cargoUsed(result) - newCapacity;
-        if (held <= over) {
-            result.delete(key);
+    let missionLoad = 0;
+    let ordinaryLoad = 0;
+    for (const [key, tons] of result) {
+        if (key.startsWith('mission:')) {
+            missionLoad += tons;
         } else {
-            result.set(key, held - over);
+            ordinaryLoad += tons;
+        }
+    }
+    const room = Math.max(0, newCapacity - missionLoad);
+    for (const [key, tons] of cargo) {
+        if (key.startsWith('mission:')) {
+            continue;
+        }
+        const kept = Math.floor(tons * room / ordinaryLoad);
+        if (kept > 0) {
+            result.set(key, kept);
+        } else {
+            result.delete(key);
         }
     }
     return result;

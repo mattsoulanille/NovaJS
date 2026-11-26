@@ -1013,7 +1013,7 @@ export function canBuyOutfit(outfit: OutfitData,
         // The hold left must hold the FREIGHT ABOARD, not merely stay at
         // or above zero: five Mass Expansions on a full 400-ton hold used
         // to leave 400 tons in a 325-ton hold, which nothing downstream
-        // ever corrected. The shipyard jettisons to fit on a trade
+        // ever corrected. The shipyard scales the hold to fit on a trade
         // (shipyard_rules' cargoForNewShip); the outfitter refuses, since
         // the player can sell the freight first.
         const holdAfter = freeCargo(context) + cargoUse;
