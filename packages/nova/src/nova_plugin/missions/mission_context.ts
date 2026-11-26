@@ -41,6 +41,11 @@ export interface MissionContext {
     /** The player's combat-rating kill points (AvailRating). */
     combatRating?: number;
     /**
+     * The stellars the player has dominated (DominatedComponent, #353), for
+     * mïsn AvailRecord -32000 / -32001. Absent = none.
+     */
+    dominated?: readonly string[];
+    /**
      * The player's combined 64-bit Contribute mask (ship + outfits),
      * checked against the mïsn Require field. Absent = 0n (only a
      * zero Require passes).

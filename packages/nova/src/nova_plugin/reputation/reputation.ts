@@ -145,7 +145,7 @@ export const AVAIL_RECORD_DOMINATED_ANY = -32001;
  * Whether a record satisfies a mïsn AvailRecord requirement (Bible):
  * 0 ignored; positive = record at least this high; negative = record
  * at least this LOW (criminal missions). The domination sentinels are
- * the caller's business (domination is not implemented).
+ * the caller's business (mission_availability.ts, over DominatedComponent).
  */
 export function availRecordOk(availRecord: number, record: number): boolean {
     if (availRecord === 0) {

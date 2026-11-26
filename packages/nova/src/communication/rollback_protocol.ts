@@ -907,7 +907,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    defence ships are never disabled, attack only demanders, their escorts
 //    and whoever provokes them, and their kills are charged to nobody. The
 //    derived wire schema fingerprint changes (cf33a842962aab5c ->
-//    FINGERPRINT_TBD), and the join gate keeps older and newer builds
+//    7c258fc1263a74e7), and the join gate keeps older and newer builds
 //    apart.
 
 export const PROTOCOL_VERSION = 8;

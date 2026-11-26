@@ -126,19 +126,29 @@ export function missionMatchesLocation(mission: MissionData,
             stellarAdjacencyOf(ctx), ctx.systemExists)) {
         return false;
     }
-    // Domination is not implemented; missions gated on it never show.
+    // mïsn AvailRecord -32000 "available only if the player has dominated
+    // the stellar in question" (the stellar the mission is offered at) and
+    // -32001 "... at least one stellar" (Bible; #353). No record test
+    // follows: the sentinels replace it.
     if (mission.availRecord === AVAIL_RECORD_DOMINATED_HERE
         || mission.availRecord === AVAIL_RECORD_DOMINATED_ANY) {
-        return false;
-    }
-    // AvailRecord: the record in this stellar's system (independent
-    // systems judge by govt 128's InitialRec, per the Bible's Appendix II
-    // rule for independent systems).
-    if (!availRecordOk(mission.availRecord,
+        const dominated = ctx.dominated ?? [];
+        const ok = mission.availRecord === AVAIL_RECORD_DOMINATED_ANY
+            ? dominated.length > 0
+            : location !== LOCATION_SHIP
+                && dominated.includes(ctx.stellar.id);
+        if (!ok) {
+            return false;
+        }
+    } else if (!availRecordOk(mission.availRecord,
         stellarRecord(ctx.stellar, ctx.records ?? new Map(),
             prefix, ctx.getGovt, ctx))) {
         return false;
     }
+    // AvailRecord (above, after the sentinels): the record in this
+    // stellar's system (independent systems judge by govt 128's
+    // InitialRec, per the Bible's Appendix II rule for independent
+    // systems).
     if (!availRatingOk(mission.availRating, ctx.combatRating ?? 0)) {
         return false;
     }

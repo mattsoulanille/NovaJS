@@ -202,14 +202,20 @@ describe('AvailRecord gating', () => {
                 'nova', id => wary.get(id), where)).toBe(-3);
         });
 
-    it('still fails closed on the domination sentinels', () => {
-        expect(missionMatchesLocation(
-            makeMission({ availRecord: -32000 }),
-            LOCATION_MISSION_COMPUTER, makeContext())).toBe(false);
-        expect(missionMatchesLocation(
-            makeMission({ availRecord: -32001 }),
-            LOCATION_MISSION_COMPUTER, makeContext())).toBe(false);
-    });
+    it('gates the domination sentinels on the dominated stellars (#353): '
+        + '-32000 this stellar, -32001 any', () => {
+            const here = makeMission({ availRecord: -32000 });
+            const any = makeMission({ availRecord: -32001 });
+            const at = (dominated?: string[]) => [here, any].map(mission =>
+                missionMatchesLocation(mission, LOCATION_MISSION_COMPUTER,
+                    makeContext(dominated ? { dominated } : {})));
+            expect(at()).toEqual([false, false]);
+            expect(at([])).toEqual([false, false]);
+            // Another stellar: only "at least one".
+            expect(at(['nova:200'])).toEqual([false, true]);
+            // This one (the context's stellar, nova:128): both.
+            expect(at(['nova:128'])).toEqual([true, true]);
+        });
 });
 
 describe('AvailRating gating', () => {

@@ -36,8 +36,9 @@ export interface GateData {
  * the player tries to dominate it. From the spöb DefenseDude and DefCount
  * fields (EVN Bible, spöb resource; TMPL offsets 28 and 30).
  *
- * PARSED ONLY: nothing in the game launches defence fleets yet (see the
- * gameplay feature request, tracker issue #353).
+ * Launched by a demand for tribute (#353; nova's
+ * spawn/defense_fleet_system.ts). `waveSize` is not used there: Matthew's
+ * ruling has no true waves, only a cap of defenders up at once.
  */
 export interface PlanetDefenseFleet {
     /**
@@ -106,7 +107,8 @@ export interface PlanetWeaponData {
  * per-player state (admin1's ruling on #306, matching the original's pilot
  * file); none of it is in PlanetData, which only describes the stellar.
  *
- * PARSED ONLY: nothing in the game implements domination yet.
+ * `tribute` is paid (nova's spaceport/daily_budget.ts); `alwaysDominated`,
+ * `onDominate` and `onRelease` are not implemented yet (#353).
  */
 export interface PlanetDominationData {
     /**

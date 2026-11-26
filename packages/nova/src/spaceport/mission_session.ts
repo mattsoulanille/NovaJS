@@ -291,6 +291,7 @@ export class MissionSession {
             records: this.state.records,
             combatRating: this.entity.components
                 .get(CombatRatingComponent)?.kills ?? 0,
+            dominated: this.entity.components.get(DominatedComponent),
             playerContribute: this.playerContribute,
             systems: this.universe.systemInfos,
             systemIdOfStellar: id =>
