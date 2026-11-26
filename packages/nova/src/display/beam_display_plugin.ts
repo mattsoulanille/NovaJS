@@ -30,23 +30,31 @@ import { DebrisDrawSystem } from "./asteroid_display_plugin.js";
 export const BeamGraphicsResource = new Resource<PIXI.Graphics>('BeamGraphics');
 
 /**
- * The fraction of a beam's full length to draw at `elapsedMs` into its
- * life, per the wëap Decay rule for beams (EVN Bible ~:3437): "If Decay
- * is greater than zero, the beam will 'shrink' before it disappears
- * from the screen. The actual time the beam spends on screen will be
- * Count + 16 - CoronaFalloff".
+ * How much of a beam's CORONA to draw at `elapsedMs` into its life, per
+ * the wëap Decay rule for beams (EVN Bible ~:3437): "If Decay is greater
+ * than zero, the beam will 'shrink' before it disappears from the
+ * screen. The actual time the beam spends on screen will be Count + 16 -
+ * CoronaFalloff".
  *
- * RULE (the Bible gives no curve): full length for the beam's Count
- * (`shotDurationMs`, its damage window), then a LINEAR shrink to
- * nothing over the tail that ends at `onScreenDurationMs` — the beam
- * is drawn vanishing rather than blinking out. Without a positive
- * decay, or with no tail (onScreen <= Count), the beam is full length
- * for its whole life, exactly as before. DISPLAY-ONLY: the sim's damage
- * window already closes at Count. Pure arithmetic on sim flight time
- * (see ProjectileFadeSystem for why the display's mirrored sim clock,
- * not its wall clock, is the time source), so every peer draws the same.
+ * MEASURED (reference "Beam decay and projectile fade (E10), wave 40"):
+ * the "shrink" is not of the LENGTH: a Count-30 Decay beam stayed 300 px
+ * long to its last frame while its corona thinned (pixel count -20%)
+ * over the tail. So the beam is drawn full length and full core width for
+ * its whole life, and its corona's width over the core goes LINEARLY from
+ * full at the Count (`shotDurationMs`, the damage window) to nothing at
+ * `onScreenDurationMs` (GUESS for the curve). Without a positive decay,
+ * or with no tail (onScreen <= Count), the corona is full throughout.
+ * DISPLAY-ONLY: the sim's damage window already closes at Count. Pure
+ * arithmetic on sim flight time (see ProjectileFadeSystem for why the
+ * display's mirrored sim clock, not its wall clock, is the time source),
+ * so every peer draws the same.
+ *
+ * Not changed here: the Count's unit. NovaJS counts beam Count (and the
+ * tail) in 1/30 s; the same section saw a Count-30 beam for 0.53 s (about
+ * 1/56 s a unit, perhaps the original's drawing rate), flagged there for
+ * one more check before any change.
  */
-export function beamShrinkFraction(decay: number, shotDurationMs: number,
+export function beamCoronaFraction(decay: number, shotDurationMs: number,
     onScreenDurationMs: number, elapsedMs: number): number {
     const tailMs = onScreenDurationMs - shotDurationMs;
     if (!(decay > 0) || !(tailMs > 0)) {
@@ -157,14 +165,14 @@ export const BeamDisplaySystem: System = new System({
         simTime, source, target, entities) {
         const { width, beamColor, coronaColor, coronaFalloff, length: dataLength, lightningAmplitude, lightningDensity }
             = beamData.beamAnimation;
-        // A decaying beam shrinks over its tail (beamShrinkFraction);
-        // a beam with no CreateTime (never expected) draws full length.
-        const shrink = createTime === undefined ? 1 : beamShrinkFraction(
+        // A decaying beam keeps its length and thins its corona over the
+        // tail (beamCoronaFraction); a beam with no CreateTime (never
+        // expected) draws its full corona.
+        const corona = createTime === undefined ? 1 : beamCoronaFraction(
             beamData.decay, beamData.shotDuration,
             beamData.onScreenDuration ?? beamData.shotDuration,
             simTime.time - createTime);
-        const length = Math.min(dataLength * shrink,
-            beamState.hitDist ?? Infinity);
+        const length = Math.min(dataLength, beamState.hitDist ?? Infinity);
         const pose = drawnBeamPose(movement, beamState, source,
             target?.target, entities);
         const origin = beamOrigin(pose.position, cameraFocus);
@@ -194,14 +202,19 @@ export const BeamDisplaySystem: System = new System({
             const coronaScale = 2 * 16;
             const coronaWidth = coronaScale / coronaFalloff;
             const coronaSteps = coronaWidth / 2;
-            if (coronaFalloff >= 2) {
+            // The corona's width over the core, thinned by Decay's tail.
+            if (corona <= 0) {
+                // Fully thinned: only the core is left.
+            } else if (coronaFalloff >= 2) {
                 for (let i = 0; i < coronaSteps; i++) {
-                    setLineStyle(beamGraphics, width + 2 + i * coronaWidth / coronaSteps, coronaColor, 1 / coronaSteps);
+                    setLineStyle(beamGraphics,
+                        width + (2 + i * coronaWidth / coronaSteps) * corona,
+                        coronaColor, 1 / coronaSteps);
                     beamGraphics.moveTo(origin.x, origin.y);
                     beamGraphics.lineTo(destination.x, destination.y);
                 }
             } else {
-                setLineStyle(beamGraphics, width + 2, coronaColor);
+                setLineStyle(beamGraphics, width + 2 * corona, coronaColor);
                 beamGraphics.moveTo(origin.x, origin.y);
                 beamGraphics.lineTo(destination.x, destination.y);
             }
@@ -236,7 +249,7 @@ export const BeamDisplayPlugin: Plugin = {
         beamGraphics.zIndex = ZIndex.BEAM;
         world.resources.set(BeamGraphicsResource, beamGraphics);
         space.addChild(beamGraphics);
-        // The mirrored sim clock the shrink reads; applySimulationFrame
+        // The mirrored sim clock the corona's decay reads; applySimulationFrame
         // overwrites it every frame (same arrangement as ProjectileFadePlugin).
         if (!world.resources.has(SimulationTimeResource)) {
             world.resources.set(SimulationTimeResource,

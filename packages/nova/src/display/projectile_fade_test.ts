@@ -75,14 +75,16 @@ describe('falloffFadeFrames', () => {
 });
 
 describe('projectileFadeAlpha', () => {
-    // A 50-frame life (Fusion Pulse Cannon) with falloff 2 -> 16-frame fade
-    // window. fadeMs = 16 * (1000/30); shotDuration = 50 * (1000/30).
+    // A 50-frame life (Fusion Pulse Cannon) with falloff 2: the fade
+    // starts 32 frames before the end and lasts 32 / 2 = 16 frames.
     const FALLOFF = 2;
     const SHOT_MS = 50 * FRAME_MS;
+    const FADE_START = SHOT_MS - 32 * FRAME_MS;
     const FADE_MS = 16 * FRAME_MS; // 32 / falloff frames
 
     it('is fully opaque (1) for the whole flight when falloff is 0', () => {
-        // Weapons without the field render exactly as before.
+        // Weapons without the field render exactly as before (the
+        // original's Falloff 0 blinks out at its Count: E10 wave 40).
         expect(projectileFadeAlpha(0, SHOT_MS, 0)).toEqual(1);
         expect(projectileFadeAlpha(0, SHOT_MS, SHOT_MS / 2)).toEqual(1);
         expect(projectileFadeAlpha(0, SHOT_MS, SHOT_MS)).toEqual(1);
@@ -99,46 +101,63 @@ describe('projectileFadeAlpha', () => {
         expect(projectileFadeAlpha(FALLOFF, SHOT_MS, 0)).toEqual(1);
     });
 
-    it('stays at full alpha until the final fade window begins', () => {
-        // One frame before the window: still opaque.
-        const fadeStart = SHOT_MS - FADE_MS;
-        expect(projectileFadeAlpha(FALLOFF, SHOT_MS, fadeStart - FRAME_MS))
+    it('stays at full alpha until 32 frames before the end', () => {
+        expect(projectileFadeAlpha(FALLOFF, SHOT_MS, FADE_START - FRAME_MS))
             .toEqual(1);
-        // Exactly at the window start: opaque (remaining == fadeMs). The
-        // value is 1 up to float round-off from the two subtractions, so
-        // compare with tolerance — the difference is ~1e-16, invisible.
-        expect(projectileFadeAlpha(FALLOFF, SHOT_MS, fadeStart))
+        expect(projectileFadeAlpha(FALLOFF, SHOT_MS, FADE_START))
             .toBeCloseTo(1, 6);
     });
 
-    it('fades linearly to 0 across the final window', () => {
-        const fadeStart = SHOT_MS - FADE_MS;
-        // Halfway through the window: alpha 0.5.
-        expect(projectileFadeAlpha(FALLOFF, SHOT_MS, fadeStart + FADE_MS / 2))
+    it('fades linearly to 0 over 32 / falloff frames from there', () => {
+        expect(projectileFadeAlpha(FALLOFF, SHOT_MS, FADE_START + FADE_MS / 2))
             .toBeCloseTo(0.5, 6);
-        // A quarter through: alpha 0.75.
-        expect(projectileFadeAlpha(FALLOFF, SHOT_MS, fadeStart + FADE_MS / 4))
+        expect(projectileFadeAlpha(FALLOFF, SHOT_MS, FADE_START + FADE_MS / 4))
             .toBeCloseTo(0.75, 6);
-        // Three quarters through: alpha 0.25.
-        expect(projectileFadeAlpha(FALLOFF, SHOT_MS, fadeStart + 3 * FADE_MS / 4))
-            .toBeCloseTo(0.25, 6);
+        expect(projectileFadeAlpha(FALLOFF, SHOT_MS,
+            FADE_START + 3 * FADE_MS / 4)).toBeCloseTo(0.25, 6);
+        expect(projectileFadeAlpha(FALLOFF, SHOT_MS, FADE_START + FADE_MS))
+            .toBeCloseTo(0, 6);
     });
 
-    it('reaches 0 exactly at expiry and stays 0 past it', () => {
+    it('is gone (32 - 32 / falloff) frames before expiry and stays 0', () => {
+        // Falloff 2: invisible 16 frames before the shot expires.
+        expect(projectileFadeAlpha(FALLOFF, SHOT_MS, SHOT_MS - 15 * FRAME_MS))
+            .toEqual(0);
         expect(projectileFadeAlpha(FALLOFF, SHOT_MS, SHOT_MS)).toEqual(0);
-        // A display frame lagging past expiry clamps to 0 (never negative).
         expect(projectileFadeAlpha(FALLOFF, SHOT_MS, SHOT_MS + 1000)).toEqual(0);
     });
 
+    it('reaches 0 exactly at expiry for falloff 1 (the Bible\'s "final 32 '
+        + 'frames")', () => {
+        expect(projectileFadeAlpha(1, SHOT_MS, FADE_START)).toBeCloseTo(1, 6);
+        expect(projectileFadeAlpha(1, SHOT_MS, SHOT_MS - 16 * FRAME_MS))
+            .toBeCloseTo(0.5, 6);
+        expect(projectileFadeAlpha(1, SHOT_MS, SHOT_MS)).toBeCloseTo(0, 9);
+    });
+
+    it('matches the measured Count-90 bolts (reference "Beam decay and '
+        + 'projectile fade (E10), wave 40")', () => {
+        // Falloff 1 gone by about 80 visible frames and Falloff 4 by
+        // about 64 on a pixel threshold: at frame 79 / 63 both are down
+        // to about a third (the section's threshold, alpha ~0.35), and
+        // Falloff 4 is fully gone 24 frames before its Count.
+        const COUNT_MS = 90 * FRAME_MS;
+        expect(projectileFadeAlpha(1, COUNT_MS, 79 * FRAME_MS))
+            .toBeLessThanOrEqual(0.38);
+        expect(projectileFadeAlpha(4, COUNT_MS, 63 * FRAME_MS))
+            .toBeLessThanOrEqual(0.38);
+        expect(projectileFadeAlpha(4, COUNT_MS, 66 * FRAME_MS)).toEqual(0);
+        // Both full brightness until frame 58.
+        expect(projectileFadeAlpha(1, COUNT_MS, 57 * FRAME_MS)).toEqual(1);
+        expect(projectileFadeAlpha(4, COUNT_MS, 57 * FRAME_MS)).toEqual(1);
+    });
+
     it('never exceeds 1 or drops below 0 (clamping)', () => {
-        // Before birth (defensive): clamps to 1.
         expect(projectileFadeAlpha(FALLOFF, SHOT_MS, -1000)).toEqual(1);
-        // Well past expiry: clamps to 0.
         expect(projectileFadeAlpha(FALLOFF, SHOT_MS, SHOT_MS + 1e6)).toEqual(0);
     });
 
     it('is monotonic non-increasing over the whole flight', () => {
-        // Sample every frame and assert the alpha never increases.
         let prev = 2;
         for (let f = 0; f <= 60; f++) {
             const a = projectileFadeAlpha(FALLOFF, SHOT_MS, f * FRAME_MS);
@@ -148,36 +167,22 @@ describe('projectileFadeAlpha', () => {
         expect(prev).toEqual(0); // ends transparent.
     });
 
-    it('fades faster (steeper drop) for higher falloff, same expiry', () => {
-        // "Higher values fade out faster" = the 1->0 sweep is steeper
-        // (completes in fewer frames), NOT "more faded at a fixed time
-        // before expiry": both windows anchor at expiry, so a higher
-        // falloff starts its (shorter) window LATER. Assert the per-frame
-        // alpha drop inside the window is larger for falloff 3 than 2,
-        // and that both reach 0 at the same expiry.
-        const dropPerFrame = (falloff: number) => {
-            const fadeMs = falloffFadeFrames(falloff) * FRAME_MS;
-            const mid = SHOT_MS - fadeMs / 2; // middle of this window
-            return projectileFadeAlpha(falloff, SHOT_MS, mid)
-                - projectileFadeAlpha(falloff, SHOT_MS, mid + FRAME_MS);
-        };
-        expect(dropPerFrame(3)).toBeGreaterThan(dropPerFrame(2));
-        // Both are opaque at birth and transparent at the same expiry.
-        expect(projectileFadeAlpha(2, SHOT_MS, 0)).toEqual(1);
-        expect(projectileFadeAlpha(3, SHOT_MS, 0)).toEqual(1);
-        expect(projectileFadeAlpha(2, SHOT_MS, SHOT_MS)).toEqual(0);
-        expect(projectileFadeAlpha(3, SHOT_MS, SHOT_MS)).toEqual(0);
-        // Higher falloff starts fading later: at 13 frames before expiry,
-        // falloff 2 (16-frame window) is already fading, falloff 3
-        // (10.67-frame window) is still opaque.
-        const elapsed = SHOT_MS - 13 * FRAME_MS;
-        expect(projectileFadeAlpha(2, SHOT_MS, elapsed)).toBeLessThan(1);
-        expect(projectileFadeAlpha(3, SHOT_MS, elapsed)).toEqual(1);
+    it('starts every falloff at the same frame and finishes higher ones '
+        + 'sooner', () => {
+        const elapsed = FADE_START + 5 * FRAME_MS;
+        // Same start: all opaque one frame before it.
+        for (const falloff of [1, 2, 3, 4]) {
+            expect(projectileFadeAlpha(falloff, SHOT_MS,
+                FADE_START - FRAME_MS)).toEqual(1);
+        }
+        // Five frames in, the higher falloff is further down.
+        expect(projectileFadeAlpha(3, SHOT_MS, elapsed))
+            .toBeLessThan(projectileFadeAlpha(2, SHOT_MS, elapsed));
+        expect(projectileFadeAlpha(2, SHOT_MS, elapsed))
+            .toBeLessThan(projectileFadeAlpha(1, SHOT_MS, elapsed));
     });
 
     it('returns 1 (no fade) for a non-positive shot duration', () => {
-        // A degenerate life can't anchor a tail fade; avoid divide-by-zero
-        // / NaN.
         expect(projectileFadeAlpha(2, 0, 0)).toEqual(1);
         expect(projectileFadeAlpha(2, -100, 50)).toEqual(1);
     });
@@ -227,38 +232,35 @@ describe('projectile fade (real Nova data)', () => {
         expect(fpc.decay).toEqual(25); // damage decay, not opacity.
     });
 
-    it('fades the Fusion Pulse Cannon over its final 16 frames', () => {
-        // falloff 2 -> 32/2 = 16-frame window. FPC life is 50 frames.
+    it('fades the Fusion Pulse Cannon over 16 frames from 32 before its end',
+        () => {
+        // falloff 2 -> 32/2 = 16 frames of fade. FPC life is 50 frames.
         const fadeFrames = falloffFadeFrames(fpc.falloff);
         expect(fadeFrames).toEqual(16);
         const lifeFrames = fpc.shotDuration / FRAME_MS;
         expect(lifeFrames).toBeCloseTo(50, 6);
 
         const fadeMs = fadeFrames * FRAME_MS;
-        const fadeStart = fpc.shotDuration - fadeMs;
+        const fadeStart = fpc.shotDuration - 32 * FRAME_MS;
 
-        // Opaque at birth and right up to the window.
         expect(projectileFadeAlpha(fpc.falloff, fpc.shotDuration, 0)).toEqual(1);
         expect(projectileFadeAlpha(fpc.falloff, fpc.shotDuration, fadeStart))
             .toBeCloseTo(1, 6);
-        // Half-faded at the window midpoint.
         expect(projectileFadeAlpha(fpc.falloff, fpc.shotDuration,
             fadeStart + fadeMs / 2)).toBeCloseTo(0.5, 6);
-        // Transparent at expiry.
+        // Invisible for the last 16 frames.
         expect(projectileFadeAlpha(fpc.falloff, fpc.shotDuration,
-            fpc.shotDuration)).toEqual(0);
+            fpc.shotDuration - 15 * FRAME_MS)).toEqual(0);
     });
 
-    it('fades the railgun over its final 16 frames too (longer life, same window)', () => {
-        // falloff 2 -> same 16-frame window as the FPC, but the railgun
-        // lives 110 frames, so it stays opaque much longer.
+    it('fades the railgun the same way (longer life, same window)', () => {
         expect(falloffFadeFrames(railgun.falloff)).toEqual(16);
         const lifeFrames = railgun.shotDuration / FRAME_MS;
         expect(lifeFrames).toBeCloseTo(110, 6);
 
         const fadeMs = 16 * FRAME_MS;
-        const fadeStart = railgun.shotDuration - fadeMs;
-        // Opaque for the first ~94 frames, then fades.
+        const fadeStart = railgun.shotDuration - 32 * FRAME_MS;
+        // Opaque for the first 78 frames, then fades.
         expect(projectileFadeAlpha(railgun.falloff, railgun.shotDuration,
             fadeStart - FRAME_MS)).toEqual(1);
         expect(projectileFadeAlpha(railgun.falloff, railgun.shotDuration,
@@ -323,11 +325,11 @@ describe('ProjectileFadeSystem', () => {
         expect(spriteAlpha(graphic)).toEqual(1);
     });
 
-    it('fades across the final window from the mirrored sim clock', () => {
+    it('fades across the window from the mirrored sim clock', () => {
         const FALLOFF = 2;
         const SHOT_MS = 50 * FRAME_MS;
         const FADE_MS = 16 * FRAME_MS;
-        const fadeStart = SHOT_MS - FADE_MS;
+        const fadeStart = SHOT_MS - 32 * FRAME_MS;
         // createTime 1000, sim time 1000 + (fadeStart + FADE_MS/2)
         // -> elapsed = fadeStart + FADE_MS/2 -> alpha 0.5.
         const createTime = 1000;
@@ -447,8 +449,10 @@ describe('projectile fade sim -> display wiring', () => {
             displayShot.components.set(AnimationGraphicComponent, graphic);
 
             const fadeMs = falloffFadeFrames(data.falloff) * FRAME_MS;
-            // Halfway through the fade window -> alpha 0.5.
-            const simTime = 1000 + data.shotDuration - fadeMs / 2;
+            // Halfway through the fade, which starts 32 frames before
+            // the end -> alpha 0.5.
+            const simTime = 1000 + data.shotDuration
+                - FALLOFF_BASE_FADE_FRAMES * FRAME_MS + fadeMs / 2;
             const displayWorld = new World('mirror-fade-test');
             displayWorld.resources.set(SimulationTimeResource,
                 { ...defaultSimulationTime(), time: simTime });

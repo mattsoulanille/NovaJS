@@ -16,8 +16,9 @@ import { DrawPlanetCornersSystem } from "./planet_corners_plugin.js";
 export const FADE_FRAME_MS = 1000 / 30;
 
 /**
- * The anchor scale of the wëap Falloff fade: a Falloff of 1 fades the
- * sprite out over the final this-many frames of the shot's life. The
+ * The anchor scale of the wëap Falloff fade: every fading sprite starts
+ * to fade this many frames before the end of the shot's life, and a
+ * Falloff of 1 takes all of them to fade out. The
  * constant comes straight from the EVN Bible (wëap Falloff, Errata note
  * for sprite-based weapons): "setting this field to a value of 1 will
  * cause the sprite to fade out over the final 32 frames of its life."
@@ -25,11 +26,11 @@ export const FADE_FRAME_MS = 1000 / 30;
 export const FALLOFF_BASE_FADE_FRAMES = 32;
 
 /**
- * How many frames at the end of a shot's life its sprite fades over, per
- * the wëap Falloff field. Falloff 1 -> 32 frames; "higher values will
- * fade out faster", read as a shorter window: 32 / falloff frames
- * (2 -> 16, 3 -> ~10.7, 16 -> 2). A falloff <= 0 (or NaN/missing) means
- * no fade and returns 0.
+ * How many frames a shot's sprite takes to fade out, per the wëap Falloff
+ * field: 32 / falloff (1 -> 32, 2 -> 16, 3 -> ~10.7, 16 -> 2). The fade
+ * always STARTS FALLOFF_BASE_FADE_FRAMES before the end of the shot's
+ * life (projectileFadeAlpha), so a higher falloff finishes earlier. A
+ * falloff <= 0 (or NaN/missing) means no fade and returns 0.
  *
  * `!(falloff > 0)` rather than `falloff <= 0` so a missing/NaN falloff
  * — e.g. a deserialized snapshot from before this field existed, which
@@ -47,29 +48,26 @@ export function falloffFadeFrames(falloff: number): number {
  * Projectile sprite alpha in [0, 1] at a given point in a shot's flight,
  * per the wëap Falloff field.
  *
- * RULE (engine-plausible reading, documented): the shot is fully opaque
- * (alpha 1) until the final `32 / falloff` frames of its life, then fades
- * LINEARLY to 0 right as the shot expires. Equivalently:
+ * MEASURED (reference "Beam decay and projectile fade (E10), wave 40"):
+ * the fade STARTS 32 frames before the end of the shot's life whatever
+ * the Falloff, and runs Falloff times faster, so it is over 32 / falloff
+ * frames after it starts:
  *
- *     alpha = clamp((shotDurationMs - elapsedMs) / fadeMs, 0, 1)
- *     where fadeMs = (32 / falloff) * FADE_FRAME_MS
+ *     alpha = clamp(1 - (elapsedMs - fadeStartMs) / fadeMs, 0, 1)
+ *     where fadeStartMs = shotDurationMs - 32 * FADE_FRAME_MS
+ *     and   fadeMs      = (32 / falloff) * FADE_FRAME_MS
  *
- * This is the simplest reading of the Bible's wording ("fade out over the
- * final 32 frames of its life. Higher values will fade out faster"): the
- * fade window is `32 / falloff` frames anchored at the END of life, and
- * the alpha is the fraction of that window remaining. The Bible does not
- * state the alpha CURVE (linear vs eased), so linear is the defensible
- * default. If the fade window is longer than the shot's whole life (a
- * very short-lived shot with a small falloff), the clamp leaves the shot
- * starting part-faded and reaching 0 at expiry — the literal result of
- * the formula, and the behaviour of the simplest engine implementation
- * (no special-cased window start). All stock fading weapons have a window
- * far shorter than their life (Fusion Pulse Cannon: falloff 2, 50-frame
- * life -> 16-frame window; railguns: falloff 2, 100-180-frame life), so
- * this edge case does not arise in practice.
+ * A Count-90 bolt with Falloff 1 faded over its last ~16 visible frames
+ * and was gone by ~80; with Falloff 4 it was gone by ~64, about 24 frames
+ * before its Count (a fade over the LAST 32 / falloff frames would have
+ * kept it bright to about 87). Falloff 1 is the Bible's "fade out over
+ * the final 32 frames of its life"; the curve is linear (GUESS; the
+ * reading was a pixel threshold). The shot itself still lives to its
+ * Count: only its sprite is gone. A shot shorter-lived than 32 frames
+ * starts part-faded, the formula's literal result.
  *
- * `falloff <= 0` (or NaN/missing) means NO FADE: always 1, so weapons
- * without the field render exactly as before. A non-positive
+ * `falloff <= 0` (or NaN/missing) means NO FADE: always 1 (matches the
+ * original's Falloff 0, which blinked out at its Count). A non-positive
  * `shotDurationMs` is degenerate and also returns 1 (no meaningful life
  * to anchor a fade to) rather than divide-by-zero / produce NaN.
  *
@@ -89,14 +87,16 @@ export function projectileFadeAlpha(falloff: number, shotDurationMs: number,
         return 1; // Degenerate life: no meaningful fade.
     }
     const fadeMs = fadeFrames * FADE_FRAME_MS;
-    const remainingMs = shotDurationMs - elapsedMs;
-    const alpha = remainingMs / fadeMs;
+    const fadeStartMs = shotDurationMs
+        - FALLOFF_BASE_FADE_FRAMES * FADE_FRAME_MS;
+    const alpha = 1 - (elapsedMs - fadeStartMs) / fadeMs;
     return Math.max(0, Math.min(1, alpha));
 }
 
 /**
- * Fades projectile sprites to transparency over the final `32 / falloff`
- * frames of their flight, per the wëap Falloff field (see
+ * Fades projectile sprites to transparency from 32 frames before the end
+ * of their flight, over `32 / falloff` frames, per the wëap Falloff field
+ * (see
  * {@link projectileFadeAlpha}).
  *
  * Determinism / time source: the fade compares the shot's synced
