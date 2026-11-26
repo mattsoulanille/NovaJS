@@ -249,6 +249,11 @@ export class Button {
         this.text.text = label;
     }
 
+    /** The button's caption as drawn. */
+    get label(): string {
+        return this.text.text;
+    }
+
     /**
      * Restyles the caption in every state; the per-state colours (the colr
      * ones) stay unless `style` sets a fill. The comm dialogs set their

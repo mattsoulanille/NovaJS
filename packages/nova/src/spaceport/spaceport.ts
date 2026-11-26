@@ -213,13 +213,16 @@ export class Spaceport extends Menu<Entity> {
                 { x: RIGHT_BUTTON_X, y: buttonY(0) }),
             outfitter: new Button(displayAssets, "Outfitter", BUTTON_WIDTH,
                 { x: RIGHT_BUTTON_X, y: buttonY(1) }),
-            // The Refuel button occupies the right column's third slot,
-            // but only exists while the player's fuel isn't full — it
-            // disappears when full (e.g. an auto-refueller outfit) and
-            // greys out when the player can't afford the fill. The
-            // reference screenshot (spaceport/earth.png) shows the gap
-            // because that capture's player had full fuel.
-            refuel: new Button(displayAssets, "Refuel", BUTTON_WIDTH,
+            // The refuel button, captioned "Recharge" as in the original
+            // (reference "... (R9) and the Trade Center (K6), wave 37",
+            // the refuel button's label; its key is `r`), occupies the
+            // right column's third slot, but only exists while the
+            // player's fuel isn't full — it disappears when full (e.g. an
+            // auto-refueller outfit) and greys out when the player can't
+            // afford the fill. The reference screenshot
+            // (spaceport/earth.png) shows the gap because that capture's
+            // player had full fuel.
+            refuel: new Button(displayAssets, "Recharge", BUTTON_WIDTH,
                 { x: RIGHT_BUTTON_X, y: buttonY(2) }),
             leave: new Button(displayAssets, "Leave", BUTTON_WIDTH,
                 { x: RIGHT_BUTTON_X, y: buttonY(3) }),

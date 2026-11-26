@@ -242,7 +242,7 @@ describe('the hail dialog\'s letter keys (g greets, r assists / begs, ' +
     it('keeps g and r from everything under it while open, and lets go ' +
         'when the channel closes', async () => {
             // Stand-in for any surface below the dialog that also uses
-            // these keys (the bar's Gamble, the spaceport's Refuel).
+            // these keys (the bar's Gamble, the spaceport's Recharge).
             const below = new MenuControls(controls, {
                 gamble: jasmine.createSpy('below gamble'),
                 recharge: jasmine.createSpy('below recharge'),

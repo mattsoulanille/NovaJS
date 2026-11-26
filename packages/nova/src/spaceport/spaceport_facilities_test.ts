@@ -278,6 +278,10 @@ describe('spaceport venues by facility (#373)', () => {
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
             expect(buttons.refuel.container.visible).toBeTrue();
+            // Captioned "Recharge", as in the original (reference "...
+            // (R9) and the Trade Center (K6), wave 37", the refuel
+            // button's label).
+            expect(buttons.refuel.label).toBe('Recharge');
             const { y } = buttons.refuel.container.position;
             controlEvents.next({ action: 'recharge', state: 'start' });
             const after = entity.components.get(FuelComponent)!;
