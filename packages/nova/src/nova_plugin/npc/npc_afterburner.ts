@@ -10,7 +10,7 @@ import {
     ionSlowdown, IsIonizedComponent,
     ShipDataComponent, ShipPhysicsComponent,
 } from '../ship/index.js';
-import { EffectiveMovementPhysicsSystem, JumpComponent } from '../travel/index.js';
+import { EffectiveMovementPhysicsSystem, GravitySystem, JumpComponent } from '../travel/index.js';
 import { NpcComponent, NpcState } from './npc_component.js';
 
 /**
@@ -116,6 +116,8 @@ export const NpcAfterburnerSystem = new System({
         movementPhysics.acceleration =
             base.acceleration * ion.acceleration * AI_AFTERBURNER_FACTOR;
     },
+    // GravitySystem: both follow EffectiveMovementPhysicsSystem; the burn
+    // writes the caps, gravity only the velocity (shared: MovementPhysics).
     after: [EffectiveMovementPhysicsSystem],
-    before: [MovementSystem],
+    before: [MovementSystem, GravitySystem],
 });

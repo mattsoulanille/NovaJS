@@ -88,6 +88,15 @@ describe("ShipParse", () => {
         });
     });
 
+    describe("Flags3 0x0010 \"Ship ignores gravity\" (EVN Bible ~:2651)", () => {
+        it("sets ignoresGravity only with the bit", async () => {
+            expect((await parse({ flags3N: 0x0010 })).physics.ignoresGravity)
+                .toBeTrue();
+            expect((await parse({ flags3N: 0x0020 })).physics.ignoresGravity)
+                .toBeFalse();
+        });
+    });
+
     describe("FuelRegen and Flags 0x0008 (EVN Bible ~:2517, ~:2554)", () => {
         it("converts FuelRegen for AI use whether or not the flag is set",
             async () => {

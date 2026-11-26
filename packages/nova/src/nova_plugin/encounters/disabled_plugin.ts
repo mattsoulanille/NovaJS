@@ -9,7 +9,7 @@ import { RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
-import { EffectiveMovementPhysicsSystem } from '../travel/index.js';
+import { EffectiveMovementPhysicsSystem, GravitySystem } from '../travel/index.js';
 import { ReturnAI } from '../escorts/index.js';
 import { CloakActiveComponent, CLOAK_OFF_SOUND } from '../ship/index.js';
 import { IonizationRechargeSystem, ZeroArmorEvent } from '../ship/index.js';
@@ -334,7 +334,10 @@ export const DisabledMovementSystem = new System({
         JumpSequenceSystem, EffectiveMovementPhysicsSystem,
         NpcSteeringSystem, NpcAfterburnerSystem, FormationSystem,
         EscortCommandBehaviorSystem,
-        EscortLandingSystem, ReturnAI, FollowAI],
+        EscortLandingSystem, ReturnAI, FollowAI,
+        // A hulk in a gravity well is pulled, then coasts (GUESS: not
+        // measured on a disabled ship).
+        GravitySystem],
     before: [MovementSystem],
 });
 

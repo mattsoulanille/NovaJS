@@ -376,7 +376,8 @@ export interface PlanetData extends SpaceObjectData {
      * game reads them yet — the gameplay is feature request #353 —
      * so they change neither the simulation nor the wire (PlanetData
      * crosses the wire as an id reference). Each sentinel is decoded here,
-     * so consumers never see the raw -1 / 0 / 1000+ encodings.
+     * so consumers never see the raw -1 / 0 / 1000+ encodings. (Gravity is
+     * read by the sim now: see `gravity` below.)
      */
 
     /**
@@ -407,8 +408,10 @@ export interface PlanetData extends SpaceObjectData {
     /**
      * spöb Gravity: "0 for none, positive for stellars that pull, negative
      * for stellars that push" (the Bible warns it "severely confuses the
-     * AI"). Raw strength in the engine's own unspecified unit; every stock
-     * stellar has 0.
+     * AI"). Raw strength; every stock stellar has 0. READ by the sim's
+     * GravitySystem (nova travel/gravity_plugin.ts): an acceleration of
+     * about 30 px/s² a unit toward the stellar, capped at the ship's top
+     * speed (reference "spöb Gravity (U7), wave 40").
      */
     gravity: number;
 }

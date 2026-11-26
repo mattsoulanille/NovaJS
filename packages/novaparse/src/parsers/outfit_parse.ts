@@ -191,6 +191,10 @@ export async function OutfitParse(outf: OutfResource, notFoundFunction: (m: stri
         else if (fType === "inertial damper") {
             physics.inertialess = true;
         }
+        else if (fType === "gravity resistance") {
+            // ModType 41: spöb Gravity does not move the carrying ship.
+            physics.ignoresGravity = true;
+        }
         else if (fType === "murk modifier") {
             // ModVal is the amount ADDED to the system's murkiness (EVN
             // Bible); murkClear is how much murk this outfit REMOVES, so it

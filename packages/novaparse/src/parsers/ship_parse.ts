@@ -403,6 +403,8 @@ export async function ShipParse(ship: ShipResource,
         multiJump: 0,
         autoRefuel: false,
         hyperspaceSpeedMod: 0,
+        // shïp Flags3 0x0010 (EVN Bible ~:2651): "Ship ignores gravity".
+        ignoresGravity: Boolean(ship.flags3N & 0x0010),
     }
 
     // The HUD target render (EVN Bible ~:2700): PICT 3000 + id - 128, or

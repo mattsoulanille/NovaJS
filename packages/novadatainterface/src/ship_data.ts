@@ -32,6 +32,10 @@ export interface ShipPhysics extends SpaceObjectPhysics {
     // outfits). Negative speeds jumps up; the effective per-jump time is
     // still floored at 1 day (see calendar.ts daysPerJump). 0 = no mod.
     hyperspaceSpeedMod: number;
+    // shïp Flags3 0x0010 "Ship ignores gravity", or a "gravity resistance"
+    // outfit (oütf ModType 41): spöb Gravity does not move the ship.
+    // Granted if any outfit has it.
+    ignoresGravity: boolean;
 }
 
 export function getDefaultShipPhysics(): ShipPhysics {
@@ -48,6 +52,7 @@ export function getDefaultShipPhysics(): ShipPhysics {
         multiJump: 0,
         autoRefuel: false,
         hyperspaceSpeedMod: 0,
+        ignoresGravity: false,
     }
 }
 

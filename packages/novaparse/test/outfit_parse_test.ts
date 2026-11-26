@@ -58,6 +58,13 @@ describe("OutfitParse", () => {
         expect(outfit.physics.inertialess).toEqual(true);
     });
 
+    it("parses gravity resistance (ModType 41) into ignoresGravity",
+        async () => {
+            const outfit = await OutfitParse(
+                fakeOutf([["gravity resistance", true]]), () => { });
+            expect(outfit.physics.ignoresGravity).toEqual(true);
+        });
+
     it("omits jump properties from outfits without them", async () => {
         const outfit = await OutfitParse(fakeOutf([["shield", 55]]), () => { });
         expect(outfit.physics.jumpDistanceMod).toBeUndefined();
