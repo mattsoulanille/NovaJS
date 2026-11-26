@@ -1250,6 +1250,10 @@ export class Spaceport extends Menu<Entity> {
             } catch (e) {
                 console.warn('Escort deals failed to settle at lift-off:', e);
             }
+            // The landing day's tribute comes in before its wages go out
+            // (GUESS on the order: the original advances the date at the
+            // Leave and pays both there).
+            this.settleTributeAtLiftOff();
             reports.push(this.settleEscortWagesAtLiftOff());
             reports = reports.filter(report => report !== undefined);
             for (const report of reports) {
@@ -1312,6 +1316,24 @@ export class Spaceport extends Menu<Entity> {
                 + `at a cost of ${upgrade.cost} credits on departure.`);
         }
         return escortSettlementReport(settled);
+    }
+
+    /**
+     * The landing day's TRIBUTE at lift-off (landed_transaction.ts's
+     * settleTribute): every dominated stellar pays its day, from the
+     * mission universe's planet data (loaded with the landing). Nothing
+     * without a transaction.
+     */
+    private settleTributeAtLiftOff(): void {
+        const transaction = this.transaction;
+        if (!this.alive || !transaction || transaction.isClosed) {
+            return;
+        }
+        const paid = transaction.settleTribute(
+            id => this.universe.getPlanet(id));
+        if (paid > 0) {
+            console.log(`Tribute of ${paid} credits paid on departure.`);
+        }
     }
 
     /**

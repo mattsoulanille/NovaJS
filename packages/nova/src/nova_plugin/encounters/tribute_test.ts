@@ -16,6 +16,9 @@ import { World } from 'nova_ecs/world';
 import { isIffHostile } from '../combat/index.js';
 import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import { makeSystem } from '../make_system.js';
+import {
+    decodeSave, encodeSave, extractSaveData, restorePlayerState,
+} from '../pilot/index.js';
 import { NpcComponent, SystemHoldComponent } from '../npc/index.js';
 import {
     ControlledByComponent, CreditsComponent, DominatedComponent,
@@ -493,6 +496,33 @@ describe('Demand Tribute in the sim', () => {
         // The release changes nothing else.
         expect(record(world, 'a')).toBe(-1200);
     });
+});
+
+describe('a domination in the pilot save', () => {
+    it('is saved, survives a decode, and restores (none: no field, no '
+        + 'component)', async () => {
+            const { world, addPlayer } = await build();
+            await addPlayer('a', PEER_A, 12_800);
+            applyHail(world, PEER_A, { kind: 'demandTribute',
+                target: STATION_UUID });
+            applyHail(world, PEER_A, { kind: 'demandTribute',
+                target: OPEN_UUID });
+            const player = world.entities.get('a')!;
+            const save = extractSaveData(player, SYSTEM)!;
+            expect(save.dominated).toEqual([OPEN, STATION].sort());
+            const decoded = decodeSave(encodeSave(save))!;
+            expect(decoded.dominated).toEqual([OPEN, STATION].sort());
+            const restored = new Entity('restored');
+            restorePlayerState(restored, decoded);
+            expect(restored.components.get(DominatedComponent))
+                .toEqual([OPEN, STATION].sort());
+            // A pilot who dominates nothing writes nothing and restores none.
+            player.components.delete(DominatedComponent);
+            const clean = extractSaveData(player, SYSTEM)!;
+            expect(clean.dominated).toBeUndefined();
+            restorePlayerState(restored, clean);
+            expect(restored.components.has(DominatedComponent)).toBeFalse();
+        });
 });
 
 /** A hit on `victim` through the real DamagedEvent path. */

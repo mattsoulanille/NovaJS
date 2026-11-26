@@ -24,6 +24,7 @@ import {
     CreditsComponent,
     CronStatesComponent,
     CronStateType,
+    DominatedComponent,
     GameDateComponent,
     GameDateType,
     MissionsComponent,
@@ -308,6 +309,13 @@ export const SaveData = t.intersection([
         // called, which is what an empty list means, so every older save
         // reads correctly without one. Written only when non-empty.
         reinforcementCalls: t.array(t.tuple([t.string, t.number])),
+        // The stellars this pilot has dominated (#353), spöb global ids,
+        // sorted (DominatedComponent; player/dominated.ts): a domination
+        // survives leaving, landings and days until Release (reference
+        // "Tribute (R18), wave 39"). Optional, with no migration, like
+        // `reinforcementCalls`: absent means none, which is what every
+        // older save meant. Written only when non-empty.
+        dominated: t.array(t.string),
         // A v5-or-older save's PER-GÖVT legal records, parked here by the
         // v5 -> v6 migration (which cannot see game data) for
         // restorePlayerState to seed into `legalRecords` with the
@@ -436,6 +444,10 @@ export function extractSaveData(entity: Entity, systemId: string,
         entity.components.get(PlayerNamesComponent)?.ship);
     if (shipName !== undefined) {
         save.shipName = shipName;
+    }
+    const dominated = entity.components.get(DominatedComponent);
+    if (dominated && dominated.length > 0) {
+        save.dominated = [...dominated].sort();
     }
     const calls = entity.components.get(ReinforcementCallsComponent);
     if (calls && calls.size > 0) {
@@ -573,6 +585,13 @@ export function restorePlayerState(entity: Entity, save: SaveData,
             new Map(save.reinforcementCalls));
     } else {
         entity.components.delete(ReinforcementCallsComponent);
+    }
+    // Replaced or removed, like the cooldowns above.
+    if (save.dominated && save.dominated.length > 0) {
+        entity.components.set(DominatedComponent,
+            [...new Set(save.dominated)].sort());
+    } else {
+        entity.components.delete(DominatedComponent);
     }
     // Every save this build writes and every pre-v3 save it migrates has a
     // 'kills' entry, but the codec only requires `[string, number]` pairs,

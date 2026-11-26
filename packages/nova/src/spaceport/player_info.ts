@@ -1,3 +1,4 @@
+import { PlanetData } from 'novadatainterface/planet_data';
 import { ShipData, ShipPhysics } from 'novadatainterface/ship_data';
 import { ShipAccelerationConversionFactor, ShipSpeedConversionFactor } from 'novaparse/parsers/constants';
 import { Entity } from 'nova_ecs/entity';
@@ -6,8 +7,8 @@ import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import {
-    formatDate, CreditsComponent, GameDateComponent, MissionsComponent,
-    PlayerNamesComponent, playerPilotName, playerShipName,
+    formatDate, CreditsComponent, DominatedComponent, GameDateComponent,
+    MissionsComponent, PlayerNamesComponent, playerPilotName, playerShipName,
 } from '../nova_plugin/player/index.js';
 import {
     CargoComponent, ArmorComponent, FuelComponent, ShieldComponent, OutfitsState,
@@ -362,6 +363,8 @@ export class PlayerInfoDialog {
     private rankData = new Map<string, RankData>();
     /** Ship classes of the escorts on the player's payroll, for Expenses. */
     private payrollShips = new Map<string, ShipData>();
+    /** The stellars the pilot has dominated, for the tribute in Income. */
+    private dominatedPlanets = new Map<string, PlanetData>();
     /**
      * The "Pilot Name:" row's quiet fallback for a ship that carries no
      * pilot name: the active pilot file's label in the pilot list (set by
@@ -562,6 +565,18 @@ export class PlayerInfoDialog {
         // is the same fetch the date advance does before it charges).
         this.payrollShips =
             await loadPayrollShips(entity, this.simulationData);
+        // The stellars paying the pilot tribute (#353), so "Income:"
+        // includes it: the same Tribute figure the date advance pays.
+        const dominatedPlanets = new Map<string, PlanetData>();
+        for (const id of entity.components.get(DominatedComponent) ?? []) {
+            try {
+                dominatedPlanets.set(id,
+                    await this.simulationData.data.Planet.get(id));
+            } catch {
+                // A stellar this build cannot resolve pays nothing.
+            }
+        }
+        this.dominatedPlanets = dominatedPlanets;
 
         // Outfit names and prices, for the Extras page.
         this.outfitNames.clear();
@@ -759,6 +774,8 @@ export class PlayerInfoDialog {
             getRank: id => this.rankData.get(id),
             escortShips: playerPayroll(entity),
             getShip: id => this.payrollShips.get(id),
+            dominated: entity.components.get(DominatedComponent),
+            getPlanet: id => this.dominatedPlanets.get(id),
         }, credits);
     }
 

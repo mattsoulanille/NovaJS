@@ -43,8 +43,9 @@
  *
  *   NOT importable: escorts and deployed fighters (no NovaJS entities to
  *   build them from — noted with a count), fuel and shield (not part of
- *   SaveData), stellar domination / defense fleets / përs liveness /
- *   disasters / cröns (no NovaJS state for them yet).
+ *   SaveData), defense fleet counts (not kept between visits here) / përs
+ *   liveness / disasters / cröns (no NovaJS state for them yet). The
+ *   dominated stellars ARE imported (`dominated`).
  *
  * WHAT A BROWSER CAN READ. The file picker yields the DATA FORK. A Windows
  * `.plt` is a flat data-fork file and imports directly. A Mac pilot's data
@@ -510,6 +511,18 @@ export function convertOriginalPilot(pilot: PilotData,
         }
     });
 
+    // The stellars the pilot dominated (#353), by the file's per-stellar
+    // flag (spöb id = index + 128). An id this data set has no spöb for
+    // pays no tribute (encounters/tribute.ts's dailyTribute skips it).
+    // The file's per-stellar defence-ship counts are not imported: here a
+    // fleet is not kept between visits (Matthew's ruling on #353).
+    const dominated: string[] = [];
+    player.dominated.forEach((flag, index) => {
+        if (flag) {
+            dominated.push(globalId(index));
+        }
+    });
+
     // The fields the file has nothing for take the save's own defaults:
     // no cron progress (crons are NovaJS's own record), no escorts (not
     // imported; see the note above), no auto-abort squad pending.
@@ -533,6 +546,9 @@ export function convertOriginalPilot(pilot: PilotData,
     const shipName = sanitizeShipName(pilot.shipName);
     if (shipName !== undefined) {
         save.shipName = shipName;
+    }
+    if (dominated.length > 0) {
+        save.dominated = dominated.sort();
     }
 
     const baseName = fileName.replace(/\.[^.]*$/, '').trim();

@@ -3,7 +3,8 @@ import { CronData, getDefaultCronData } from 'novadatainterface/cron_data';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import {
-    dayNumber, EscortPayrollComponent, CreditsComponent, CronStatesComponent, GameDateComponent,
+    dayNumber, DominatedComponent, EscortPayrollComponent, CreditsComponent,
+    CronStatesComponent, GameDateComponent,
 } from '../nova_plugin/player/index.js';
 import { makeShip } from '../nova_plugin/ship/index.js';
 import { ActiveRanksComponent, ControlBitsComponent } from '../nova_plugin/ncb/index.js';
@@ -167,5 +168,37 @@ describe('a landing\'s day leaves the escort wages to the departure '
         await advanceEntityDate(jumped, 2, universe, gameData);
         expect(jumped.components.get(CreditsComponent)!.credits)
             .toBe(10_000 + 2 * (100 - 900));
+    });
+});
+
+describe('the tribute of a dominated stellar (#353; reference "Tribute '
+    + '(R18), wave 38 / 39")', () => {
+    it('is paid on every day of a jump, wherever the pilot is, and a '
+        + 'landing\'s day leaves it to the departure', async () => {
+        const gameData = await getSyntheticGameData();
+        const universe = new MissionUniverse(gameData);
+        await universe.load();
+        // Port Amberline: Tribute 0, TechLevel 5, so 5,000 a day.
+        const port = SYNTHETIC.planets.port;
+        expect(universe.getPlanet(port)!.domination.tribute).toBe(5000);
+        const make = async () => {
+            const entity = makeShip(
+                await gameData.data.Ship.get(SYNTHETIC.ships.skiff));
+            entity.components.set(CreditsComponent, { credits: 10_000 });
+            entity.components.set(GameDateComponent,
+                { day: 1, month: 1, year: 1177 });
+            entity.components.set(CronStatesComponent, new Map());
+            entity.components.set(DominatedComponent, [port]);
+            return entity;
+        };
+        const jumped = await make();
+        await advanceEntityDate(jumped, 2, universe, gameData);
+        expect(jumped.components.get(CreditsComponent)!.credits)
+            .toBe(10_000 + 2 * 5000);
+        const landed = await make();
+        await advanceEntityDate(landed, 1, universe, gameData,
+            { escortWages: false, tribute: false });
+        expect(landed.components.get(CreditsComponent)!.credits)
+            .toBe(10_000);
     });
 });

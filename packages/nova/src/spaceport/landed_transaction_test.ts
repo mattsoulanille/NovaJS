@@ -11,7 +11,8 @@ import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
 import {
-    dayNumber, escortDeal, PlayerEscortComponent, withEscortDeal, CreditsComponent,
+    dayNumber, DominatedComponent, escortDeal, PlayerEscortComponent,
+    withEscortDeal, CreditsComponent,
     GameDateComponent, MissionsComponent, NO_DEAL,
 } from '../nova_plugin/player/index.js';
 import {
@@ -308,6 +309,30 @@ describe('the landed transaction', () => {
             transaction.rollback(bar);
             expect(transaction.credits.credits).toBe(96_500);
             expect(creditBalance(entity)).toBe(97_000);
+        });
+
+    it('pays the landing day\'s tribute at the Leave, into the one ledger '
+        + '(#353; reference "Tribute (R18), wave 38": the Leave added it)',
+        async () => {
+            const tribute = new Map([
+                ['nova:200', { domination: { tribute: 5000 } }],
+                ['nova:201', { domination: { tribute: 1234 } }],
+            ]);
+            const entity = pilot();
+            entity.components.set(DominatedComponent,
+                ['nova:200', 'nova:201']);
+            const { transaction } = await landing(entity);
+            const visit = transaction.savepoint('leave');
+            expect(transaction.settleTribute(
+                id => tribute.get(id) as never)).toBe(6234);
+            transaction.release(visit);
+            expect(creditBalance(entity)).toBe(106_234);
+            // A pilot who dominates nothing is paid nothing.
+            const { entity: plain, transaction: plainTransaction } =
+                await landing();
+            expect(plainTransaction.settleTribute(
+                id => tribute.get(id) as never)).toBe(0);
+            expect(creditBalance(plain)).toBe(100_000);
         });
 
     describe('the escort-deal settlement at lift-off, through the visit', () => {

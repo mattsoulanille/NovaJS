@@ -1,4 +1,6 @@
+import { PlanetData } from 'novadatainterface/planet_data';
 import { ShipData } from 'novadatainterface/ship_data';
+import { dailyTribute } from '../nova_plugin/encounters/index.js';
 import { RankLookup, rankSalaryBreakdown } from '../nova_plugin/ncb/index.js';
 import { escortPayrollFee } from './escort_fees.js';
 
@@ -25,7 +27,16 @@ import { escortPayrollFee } from './escort_fees.js';
  *
  *   income    ränk Salary, the positive ones ("The number of credits that
  *             the affiliated government will pay the player, per day"),
- *             each gated by its own SalaryCap.
+ *             each gated by its own SalaryCap; and the TRIBUTE of every
+ *             stellar the pilot has dominated (#353: "Daily tribute payout
+ *             can go in 'income' using the same system as ranks, ... but
+ *             it should appear on the `p` menu"), its decoded Tribute
+ *             field (encounters/tribute.ts's dailyTribute; reference
+ *             "Tribute (R18), wave 39": every dominated stellar pays at
+ *             every day's advance, wherever the pilot is). A LANDING's day
+ *             pays it at the departure, as the escort wages are paid
+ *             (MEASURED, wave 38: the spaceport still read the old balance,
+ *             the Leave added the Tribute).
  *   expenses  the daily wage of every escort on the player's payroll
  *             (escort_fees.ts: 10% of that escort's hire price), PLUS the
  *             absolute value of any NEGATIVE ränk Salary — Extra Outfits'
@@ -55,6 +66,10 @@ export interface DailyBudgetInputs {
     escortShips?: Iterable<string>;
     /** Ship data for those ids; a miss contributes no fee (see escort_fees). */
     getShip?: (id: string) => ShipData | undefined;
+    /** The spöb ids the pilot has dominated (DominatedComponent). */
+    dominated?: Iterable<string>;
+    /** Planet data for those ids; a miss pays no tribute. */
+    getPlanet?: (id: string) => Pick<PlanetData, 'domination'> | undefined;
 }
 
 /**
@@ -68,8 +83,10 @@ export function dailyBudget(inputs: DailyBudgetInputs,
     const getShip = inputs.getShip;
     const escorts = getShip
         ? escortPayrollFee(inputs.escortShips ?? [], getShip) : 0;
+    const getPlanet = inputs.getPlanet;
+    const tribute = getPlanet ? dailyTribute(inputs.dominated, getPlanet) : 0;
     return {
-        income: ranks.income,
+        income: ranks.income + tribute,
         expenses: ranks.expenses + escorts,
     };
 }

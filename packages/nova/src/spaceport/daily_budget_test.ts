@@ -55,6 +55,30 @@ describe('the daily budget', () => {
             }, 1_000)).toEqual({ income: 500, expenses: 1000 });
         });
 
+    it('counts the dominated stellars\' Tribute as income (#353; '
+        + 'reference "Tribute (R18), wave 39": 4,000 + 3,000 a day)', () => {
+            const planets = new Map([
+                ['nova:200', { domination: { tribute: 4000 } }],
+                ['nova:201', { domination: { tribute: 3000 } }],
+            ]);
+            const getPlanet = (id: string) => planets.get(id) as never;
+            expect(dailyBudget({
+                ...lookups, ranks: ['nova:129'],
+                dominated: ['nova:200', 'nova:201'], getPlanet,
+            }, 1_000)).toEqual({ income: 250 + 7000, expenses: 0 });
+            // Every day of a jump pays it again.
+            expect(settleDailyBudget({
+                ...lookups, dominated: ['nova:200'], getPlanet,
+            }, 100_000, 2)).toBe(108_000);
+            // Without the planet lookup (or a stellar it cannot resolve)
+            // nothing is paid.
+            expect(dailyBudget({ ...lookups, dominated: ['nova:200'] }, 0))
+                .toEqual({ income: 0, expenses: 0 });
+            expect(dailyBudget({
+                ...lookups, dominated: ['nova:999'], getPlanet,
+            }, 0)).toEqual({ income: 0, expenses: 0 });
+        });
+
     it('charges each escort on the payroll its own daily wage', () => {
         expect(dailyBudget({
             ...lookups, escortShips: ['nova:307', 'nova:335'],

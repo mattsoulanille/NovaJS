@@ -169,6 +169,23 @@ describe('original pilot import', () => {
             .toBeDefined();
     });
 
+    it('imports the dominated stellars (#353), spöb id = index + 128',
+        () => {
+            // The synthetic pilot sets dominated[5]: spöb nova:133.
+            const pilot = parsePilotBytes(buildPltPilotFile('Ring of Glory'));
+            expect(convertOriginalPilot(pilot, 'x.plt', CTX).save.dominated)
+                .toEqual([`nova:${S.dominatedStellar + 128}`]);
+            pilot.player.dominated[0] = true;
+            const { save } = convertOriginalPilot(pilot, 'x.plt', CTX);
+            expect(save.dominated).toEqual(['nova:128', 'nova:133']);
+            expect(decodeSave(JSON.stringify({
+                version: SAVE_VERSION, data: save,
+            }))?.dominated).toEqual(['nova:128', 'nova:133']);
+            pilot.player.dominated.fill(false);
+            expect(convertOriginalPilot(pilot, 'x.plt', CTX).save.dominated)
+                .toBeUndefined();
+        });
+
     it('imports an active mission without special ships from a Mac pilot',
         () => {
             // The Mac builder fills mission slot 0 (mïsn 474, no special

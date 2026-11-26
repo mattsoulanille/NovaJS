@@ -11,7 +11,10 @@ import {
 import {
     CargoComponent, OutfitsStateComponent, ShipComponent,
 } from '../nova_plugin/ship/index.js';
-import { CreditsComponent, MissionsComponent } from '../nova_plugin/player/index.js';
+import { dailyTribute } from '../nova_plugin/encounters/index.js';
+import {
+    CreditsComponent, DominatedComponent, MissionsComponent,
+} from '../nova_plugin/player/index.js';
 import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import { JumpRoute, JumpRouteComponent } from '../nova_plugin/travel/index.js';
 import { commitVenueCredits, creditBalance } from './credit_commit.js';
@@ -462,7 +465,7 @@ export class LandedTransaction {
     async processLanding(): Promise<MissionEvent[]> {
         const classBefore = this.hull.components.get(ShipComponent)?.id;
         await advanceEntityDate(this.hull, 1, this.universe, this.gameData,
-            { escortWages: false });
+            { escortWages: false, tribute: false });
         // The crons just ran on the entity (bits, ranks, outfits, the
         // books): the working copy and the per-hull facts follow.
         this.session.reseed(this.hull);
@@ -842,6 +845,29 @@ export class LandedTransaction {
             uuid => this.holdOpen(uuid));
         this.applyExternalCredits(-settled.paid);
         return settled;
+    }
+
+    /**
+     * THE LANDING DAY'S TRIBUTE, at lift-off (#353; reference "Tribute
+     * (R18), wave 38": the spaceport still read the old balance after the
+     * landing, and the Leave added the dominated stellar's Tribute): every
+     * stellar the pilot has dominated pays its day, through the one ledger
+     * (applyExternalCredits), as the escort deals' credits do. Run by the
+     * spaceport's Leave BEFORE the wages and {@link commit}; the landing's
+     * own date advance leaves it out (mission_session.ts's `tribute:
+     * false`). Returns the credits paid in.
+     */
+    settleTribute(getPlanet: Parameters<typeof dailyTribute>[1]): number {
+        if (this.closed) {
+            this.warnAbandoned('tribute settlement');
+            return 0;
+        }
+        const tribute = dailyTribute(
+            this.hull.components.get(DominatedComponent), getPlanet);
+        if (tribute > 0) {
+            this.applyExternalCredits(tribute);
+        }
+        return tribute;
     }
 
     private endLease(): void {
