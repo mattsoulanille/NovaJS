@@ -2,7 +2,8 @@
  * encounters: what happens between two ships up close.
  *
  * Hailing (bribes, assistance requests, comm responses), ship disabling
- * and repair, and boarding (plunder, capture, escort conversion).
+ * and repair, boarding (plunder, capture, escort conversion), and a
+ * stellar's tribute (Demand Tribute, its defence fleet, domination).
  *
  * Sits above `escorts` because a capture becomes an escort.
  */
@@ -10,6 +11,7 @@ export * from './boarding_plugin.js';
 export * from './disabled_plugin.js';
 export * from './hail_plugin.js';
 export * from './rescue_board.js';
+export * from './tribute.js';
 
 import { Domain, domainPlugin } from '../core/index.js';
 import { HailPlugin } from './hail_plugin.js';

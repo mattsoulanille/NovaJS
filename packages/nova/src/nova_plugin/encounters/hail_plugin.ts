@@ -78,6 +78,7 @@ import { GovtsResource, LegalRecordsComponent } from '../reputation/index.js';
 import { findControlledEntity } from '../player/index.js';
 import { ShipComponent } from '../ship/index.js';
 import { TargetComponent } from '../ship/index.js';
+import { applyTributeDemand, applyTributeRelease } from './tribute.js';
 
 /**
  * ============================================================================
@@ -127,6 +128,13 @@ export type HailAction =
      */
     | { kind: 'lowerPrice', target: string, channel?: number }
     | { kind: 'bribe', target: string, channel?: number }
+    /**
+     * A STELLAR's Demand Tribute and Release (#353; tribute.ts's
+     * applyTributeDemand / applyTributeRelease): the answer, the record
+     * change and the domination are re-derived from synced state.
+     */
+    | { kind: 'demandTribute', target: string }
+    | { kind: 'releaseTribute', target: string }
     /** A button pressed in a channel to ANOTHER PLAYER's ship (#332). */
     | { kind: 'message', target: string, message: PlayerHailMessage };
 
@@ -159,6 +167,8 @@ export const HailActionType: t.Type<HailAction> = t.union([
         t.type({ kind: t.literal('bribe'), target: t.string }),
         t.partial({ channel: t.number }),
     ]),
+    t.type({ kind: t.literal('demandTribute'), target: t.string }),
+    t.type({ kind: t.literal('releaseTribute'), target: t.string }),
     t.type({
         kind: t.literal('message'), target: t.string,
         message: PlayerHailMessageType,
@@ -476,9 +486,15 @@ export function applyHail(world: World, peerId: string | undefined,
         return;
     }
     // A STELLAR was hailed, not a ship: the only actions it accepts are a
-    // bribe for landing clearance and a Lower Price on it.
+    // bribe for landing clearance, a Lower Price on it, and Demand Tribute
+    // / Release (tribute.ts).
     if (target.components.has(PlanetComponent)) {
-        if (action.kind === 'bribe') {
+        if (action.kind === 'demandTribute') {
+            applyTributeDemand(world, player, found.uuid, target,
+                action.target);
+        } else if (action.kind === 'releaseTribute') {
+            applyTributeRelease(player, target);
+        } else if (action.kind === 'bribe') {
             applyPlanetBribe(world, player, found.uuid, target,
                 action.target);
         } else if (action.kind === 'lowerPrice') {
@@ -487,7 +503,9 @@ export function applyHail(world: World, peerId: string | undefined,
         }
         return;
     }
-    if (!target.components.has(ShipComponent) || action.target === found.uuid) {
+    if (!target.components.has(ShipComponent) || action.target === found.uuid
+        || action.kind === 'demandTribute'
+        || action.kind === 'releaseTribute') {
         return;
     }
     // ANOTHER PLAYER'S SHIP (#332): no hail may change it. Hailing a human

@@ -886,6 +886,29 @@ export const STATE_HASH_INTERVAL = 60;
 //    instead of in flight. The derived wire schema fingerprint changes
 //    (c2400d1f6cb2ce64 -> cf33a842962aab5c), and the join gate keeps
 //    older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): Demand Tribute, stellar defence fleets and
+//    domination (#353 sections 1 and 3; reference "Tribute (R18), wave
+//    39"). The hail record's HailAction gains two kinds, `demandTribute`
+//    and `releaseTribute` (encounters/hail_plugin.ts HailActionType, a
+//    stellar's uuid as `target`); three new serializer- and delta-
+//    registered components: StellarDefender (ship/stellar_defender.ts, a
+//    defence ship's stellar and assigned demander), DefenseFleet (travel/
+//    defense_fleet.ts, on a stellar's entity: its demanders, launched count
+//    and next launch) and DominatedStellars (player/dominated.ts, the
+//    pilot's dominated spöb ids); SystemHold's open reason enum gains
+//    'defense'; one new serializer-registered event, StellarDominatedEvent
+//    (spawn/defense_fleet_system.ts, display only). No input kind or
+//    message kind changes. Sim-rule changes alongside: a demand from a
+//    combat rating of 12,800 launches the stellar's fleet (shared by every
+//    demander, 6 up per demander and 18 at most, a new one as one dies,
+//    stood down when its demanders leave) or dominates a stellar with
+//    none, at -600 record each; its defeat dominates every demander;
+//    defence ships are never disabled, attack only demanders, their escorts
+//    and whoever provokes them, and their kills are charged to nobody. The
+//    derived wire schema fingerprint changes (cf33a842962aab5c ->
+//    FINGERPRINT_TBD), and the join gate keeps older and newer builds
+//    apart.
 
 export const PROTOCOL_VERSION = 8;
 

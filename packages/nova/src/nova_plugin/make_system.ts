@@ -6,8 +6,8 @@ import { useFixedTimestep } from "nova_ecs/plugins/time_plugin";
 import { fnv1a } from "nova_ecs/plugins/world_hash";
 import { World } from "nova_ecs/world";
 import {
-    buildNpcSpawnTables, installReinforcements, loadEntityGameData,
-    stageReinforcements,
+    buildNpcSpawnTables, DefenseFleetsResource, installReinforcements,
+    loadEntityGameData, stageDefenseFleets, stageReinforcements,
 } from "./spawn/index.js";
 import { configureSnapshotPolicies } from "./snapshot_policies.js";
 import { DEFAULT_MISSILE_GUIDANCE, MissileGuidanceResource } from "./combat/index.js";
@@ -214,11 +214,18 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
     // a ship starting an attack on a player, which a controlled
     // battlefield stages deliberately.
     const reinforcements = stageReinforcements(world, systemData);
-    const [govts, , , planetEntities, , , , systems, reinforcementFleet] =
+    // The stellars' defence fleets (spöb DefenseDude / DefCount;
+    // encounters/tribute.ts): launched by a demand for tribute, mid-step,
+    // so every düde's ships are staged here.
+    const defenseFleets = stageDefenseFleets(world, systemData);
+    const [govts, , , planetEntities, , , , systems, reinforcementFleet,
+        stagedDefenseFleets] =
         await Promise.all([govtEntries, ranks, links, planets,
-            asteroidTypes, npcTables, junks, allSystems, reinforcements]);
+            asteroidTypes, npcTables, junks, allSystems, reinforcements,
+            defenseFleets]);
 
     world.resources.set(GovtsResource, new Map(govts));
+    world.resources.set(DefenseFleetsResource, stagedDefenseFleets);
     world.resources.set(LegalGeographyResource,
         new LegalGeography(systems.map(lawSystemOf), govts));
     // The system's inherent sensor interference confuses Seeker 0x0008 missiles

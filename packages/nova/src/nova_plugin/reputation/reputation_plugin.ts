@@ -13,6 +13,7 @@ import { armorFullyRestored, DamagedEvent, DeathEvent, ZeroArmorEvent } from '..
 import { DisabledComponent } from '../ship/index.js';
 import { FiringGroupComponent } from '../ship/index.js';
 import { SourceComponent } from '../ship/index.js';
+import { isDefenceFleetShip } from '../ship/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { GovtComponent, SystemIdResource } from '../core/index.js';
 import { ArmorComponent, CloakDecloakOnHitSystem, ExplodingClearedSystem, KnockbackSystem, OutfitWeaponProvider } from '../ship/index.js';
@@ -150,6 +151,18 @@ export function crimeGeography(geography: LegalGeography | undefined,
             const govt = govts?.get(id) ?? gameData.data.Govt.getCached(id);
             return govt ? [[id, govt] as const] : [];
         }));
+}
+
+/**
+ * Whether the ship whose `components` these are belongs to a stellar's
+ * defence fleet (ship/stellar_defender.ts's isDefenceFleetShip: a defence
+ * ship, or a fighter launched from one): its kill and disable are charged
+ * to nobody.
+ */
+function defenceFleetVictim(components: Entity['components'],
+    entities: { get(uuid: string): Entity | undefined }): boolean {
+    return isDefenceFleetShip({ components } as Entity,
+        uuid => entities.get(uuid));
 }
 
 const DamagerQuery = new Query([Optional(FiringGroupComponent),
@@ -291,7 +304,10 @@ export const KillCreditSystem = new System({
         }
         const root = attribution?.root
             ? entities.get(attribution.root) : undefined;
-        if (!root) {
+        // A stellar's defence ship (or its bay fighter) is killed for
+        // nothing: no record change, no combat rating (MEASURED, reference
+        // "Tribute (R18), wave 39", finding 7; ship/stellar_defender.ts).
+        if (!root || defenceFleetVictim(components, entities)) {
             return;
         }
         const rating = root.components.get(CombatRatingComponent);
@@ -338,9 +354,10 @@ export const DisableCreditSystem = new System({
     args: [DamageAttributionComponent, Optional(DisabledComponent),
         Optional(ArmorComponent), Optional(GovtComponent), Entities,
         Optional(GovtsResource), SimulationGameDataResource,
-        Optional(LegalGeographyResource), Optional(SystemIdResource)] as const,
+        Optional(LegalGeographyResource), Optional(SystemIdResource),
+        GetEntity] as const,
     step(attribution, disabled, armor, govt, entities, govts, gameData,
-        geography, systemId) {
+        geography, systemId, { components }) {
         if (!disabled) {
             if (attribution.disableCredited) {
                 attribution.disableCredited = false;
@@ -365,7 +382,9 @@ export const DisableCreditSystem = new System({
         attribution.disableCredited = true;
         const root = attribution.root
             ? entities.get(attribution.root) : undefined;
-        if (!root || !govt) {
+        // A defence fleet's bay fighter (its ships are never disabled):
+        // no Disab, as no Kill (KillCreditSystem).
+        if (!root || !govt || defenceFleetVictim(components, entities)) {
             return;
         }
         const govtData = gameData.data.Govt.getCached(govt.id);

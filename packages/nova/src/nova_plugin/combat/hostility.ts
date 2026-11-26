@@ -20,6 +20,7 @@ import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
 import { ranksSuppressAggression } from '../ncb/index.js';
 import { ShipComponent } from '../ship/index.js';
 import { TargetComponent } from '../ship/index.js';
+import { defendsAgainst } from '../travel/index.js';
 
 /**
  * Tier 3 on its own (isAttackingPlayer) lives in npc/allegiance.ts, beside
@@ -178,9 +179,14 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
         ? gameData.data.Govt.getCached(playerGovtId) : undefined;
 
     // Tier 3: (a) and (b) are isAttackingPlayer, (c) the flock reading.
+    // A stellar's DEFENCE SHIP counts as attacking every player demanding
+    // tribute of its stellar (travel/defense_fleet.ts's defendsAgainst),
+    // whichever of them it is after right now: the whole fleet is their
+    // enemy, and only theirs (Matthew's ruling on #353).
     const attackingPlayer = isAttackingPlayer(targetUuid, targetEntity,
         playerUuid, playerEntity, now)
-        || isFightingPlayerFlock(targetEntity, playerUuid, getEntity);
+        || isFightingPlayerFlock(targetEntity, playerUuid, getEntity)
+        || defendsAgainst(targetEntity, playerUuid, getEntity);
 
     // The player's legal records (delta-synced): a criminal record in
     // THIS system makes the hunters of every govt that enforces its law

@@ -26,7 +26,7 @@ import { OutfitsStateComponent } from '../ship/index.js';
 import { ProvideFromCache } from '../core/index.js';
 import { ControlledByComponent, ShipControlEvent, ShipControlStateComponent } from '../player/index.js';
 import { ControlShipSystem } from '../travel/index.js';
-import { ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
+import { ShipDataComponent, ShipPhysicsComponent, StellarDefenderComponent } from '../ship/index.js';
 import {
     JumpComponent, JumpRouteComponent, JumpSequenceSystem, warpUpSound,
 } from '../travel/index.js';
@@ -137,7 +137,12 @@ export const ShipDisableSystem = new System({
         const fraction = shipData.disableArmorFraction;
 
         if (!disabled) {
-            if (!isBelowDisableThreshold(armor, fraction)) {
+            // A stellar's defence ship is never disabled (Matthew's ruling
+            // on #353: "Defence fleet ships can not be disabled (they
+            // ignore the disabledAt number)"); it fights on until its
+            // armor is gone. Its bay fighters are ordinary ships here.
+            if (!isBelowDisableThreshold(armor, fraction)
+                || entity.components.has(StellarDefenderComponent)) {
                 return;
             }
             entity.components.set(DisabledComponent, {

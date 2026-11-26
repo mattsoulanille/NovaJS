@@ -114,6 +114,10 @@ import { DisabledComponent } from '../ship/index.js';
  *                AI 3 ship). It is also how the traffic count tells the
  *                fleet from the system's traffic (npc_spawn_plugin's
  *                trafficCount).
+ *   'defense'    A stellar's DEFENCE SHIP (spawn/defense_fleet_system.ts,
+ *                #353): it stays until its fleet is beaten or stands down
+ *                (then it flies home and lands), and is not traffic
+ *                either.
  *
  * BELT AND BRACES ON THE 'rescue' SIDE, deliberately. A rescue target is
  * already pinned twice over — it spawns as a HULK, and a disabled ship
@@ -141,7 +145,7 @@ import { DisabledComponent } from '../ship/index.js';
  * so an unknown one is harmless once decoded.
  */
 export const SystemHoldReasonType = openEnum('SystemHoldReason',
-    ['shipOffer', 'rescue', 'missionGoal', 'reinforcement'] as const);
+    ['shipOffer', 'rescue', 'missionGoal', 'reinforcement', 'defense'] as const);
 export type SystemHoldReason = t.TypeOf<typeof SystemHoldReasonType>;
 export const SystemHoldType = t.type({
     /** Why this ship is staying (see the module comment). */

@@ -307,6 +307,27 @@ export function applyCrime(records: LegalRecords, geography: LegalGeography,
 }
 
 /**
+ * Adds a FIXED `delta` to the record in `systemId` and, scaled by 0.65 per
+ * hyperlink jump and truncated (scaledPenalty), in every system the walk
+ * reaches, whoever owns it: a tribute demand's -600 (reference "Tribute
+ * (R18), wave 39", finding 7: "every demand that is not laughed at costs
+ * -600 in the planet's system ... spread 0.65 per jump as usual"). GUESS:
+ * the spread was read in a rig whose linked systems all had the stellar's
+ * own owner, so the owner / ally / independent split of a crime
+ * (crimeRecordChange) was not exercised; this applies the plain scaled
+ * change everywhere. A delta that truncates to 0 materializes nothing.
+ */
+export function applyRecordSpread(records: LegalRecords,
+    geography: LegalGeography, systemId: string, delta: number): void {
+    for (const [target, jumps] of geography.jumpsFrom(systemId)) {
+        const change = scaledPenalty(delta, jumps);
+        if (change !== 0) {
+            geography.addRecord(records, target, change);
+        }
+    }
+}
+
+/**
  * Adds `delta` to the record in every system `govtId` owns: a mission's
  * failure / 0x0040 abort with its CompGovt (reference "A14 spread, wave
  * 14", finding 6: -500 in every system of gövt 338 and nowhere else).

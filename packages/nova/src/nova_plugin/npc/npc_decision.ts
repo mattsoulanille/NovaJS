@@ -65,6 +65,8 @@ import {
 } from './npc_shuttle.js';
 import { outOfAmmo } from './npc_out_of_ammo.js';
 import { Target, TargetComponent } from '../ship/index.js';
+import { StellarDefender, StellarDefenderComponent } from '../ship/index.js';
+import { DefenseFleetComponent } from '../travel/index.js';
 import { longestReachOfStates, WeaponsStateComponent } from '../ship/index.js';
 
 /**
@@ -322,6 +324,80 @@ function engage(uuid: string, npc: NpcState, target: Target,
     }
 }
 
+/** The NpcTargetsQuery row fields the defender brain reads. */
+type DefenderTargetRow = readonly [string, MovementState, unknown, unknown,
+    unknown, unknown, Parameters<typeof isTargetable>[0], unknown, unknown,
+    unknown, unknown, unknown];
+
+/**
+ * THE BRAIN OF A STELLAR'S DEFENCE SHIP (ship/stellar_defender.ts;
+ * encounters/tribute.ts). Matthew's ruling on #353: "Ships should only
+ * attack the dominating player and their escorts unless otherwise
+ * provoked, even if their govt would make them attack another player",
+ * and "an equal (if possible) number of ships should prioritize attacking
+ * each player that is dominating the planet".
+ *
+ *  - Assigned to a demander (`player`): it attacks whoever PROVOKED it
+ *    (its recorded aggressor, npc_targeting.ts's provoke: a hit aimed at
+ *    it, any hit from a player's side) while that one is a live, visible
+ *    target; otherwise the nearest of its own demander and his flock; and
+ *    failing those, the nearest of any demander of its stellar and their
+ *    flocks. Its government's politics play no part. With nothing to
+ *    fight it holds by its stellar.
+ *  - Not assigned (the fleet has stood down): it flies home, where the
+ *    fleet system lands it.
+ *
+ * It never departs, flees, patrols, plunders or scans. Synced state only,
+ * nearest-first with uuid tie-breaks (chooseNearest); no PRNG draw.
+ */
+export function defenderDecision(uuid: string, npc: NpcState, target: Target,
+    defender: StellarDefender, position: Position,
+    ships: readonly DefenderTargetRow[],
+    getEntity: (uuid: string) => Entity | undefined, emit: EmitFunction) {
+    const holdAtHome = () => {
+        target.target = undefined;
+        npc.destination = defender.planet;
+        if (npc.mode !== 'dwell' && npc.mode !== 'travel') {
+            npc.mode = 'travel';
+        }
+    };
+    const player = defender.player;
+    if (player === undefined) {
+        holdAtHome();
+        return;
+    }
+    const live = new Map<string, number>();
+    for (const [other, otherMovement, , , , , cloak, otherDisabled, , , ,
+        otherExploding] of ships) {
+        if (other === uuid || !isTargetable(cloak)
+            || otherDisabled !== undefined || otherExploding !== undefined) {
+            continue;
+        }
+        live.set(other, otherMovement.position.subtract(position)
+            .lengthSquared);
+    }
+    const nearest = (side: (other: string) => boolean) => chooseNearest(
+        [...live].filter(([other]) => side(other)));
+    const sideOf = (root: string) => (other: string) => other === root
+        || isInFlock(other, root, getEntity);
+    if (npc.aggressor !== undefined && !getEntity(npc.aggressor)) {
+        npc.aggressor = undefined;
+    }
+    let chosen = npc.aggressor !== undefined && live.has(npc.aggressor)
+        ? npc.aggressor : nearest(sideOf(player));
+    if (chosen === undefined) {
+        const demanders = getEntity(defender.planet)
+            ?.components.get(DefenseFleetComponent)?.demanders ?? [];
+        chosen = nearest(other => demanders.some(demander =>
+            sideOf(demander)(other)));
+    }
+    if (chosen === undefined) {
+        holdAtHome();
+        return;
+    }
+    engage(uuid, npc, target, chosen, emit);
+}
+
 /**
  * The per-NPC think step. Runs at NPC_DECISION_INTERVAL_MS (scaled by
  * the govt's SkillMult) and owns all mode transitions; the steering
@@ -401,6 +477,16 @@ export const NpcDecisionSystem = new System({
         const skillMult = Math.max(1, govtData?.skillMult ?? 100);
         npc.nextDecision = time.time
             + NPC_DECISION_INTERVAL_MS * 100 / skillMult;
+        // A STELLAR'S DEFENCE SHIP has a brain of its own (defenderDecision):
+        // ahead of the departure roll, so it never draws one (it never
+        // leaves) and no other NPC's draws shift.
+        const defender = entity.components.get(StellarDefenderComponent);
+        if (defender) {
+            defenderDecision(uuid, npc, target, defender,
+                Position.fromVectorLike(movement.position), ships,
+                id => entities.get(id), emit);
+            return;
+        }
         if (npc.departAt === undefined) {
             npc.departAt = rollDepartureTime(time.time, random,
                 npc.passingThrough);

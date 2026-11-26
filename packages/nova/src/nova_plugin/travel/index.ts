@@ -14,6 +14,7 @@ export * from './afterburner_plugin.js';
 export * from './gate_destination_resolver.js';
 export * from './gate_transit_plugin.js';
 export * from './make_planet.js';
+export * from './defense_fleet.js';
 export * from './transit_recovery.js';
 
 import { Domain, domainPlugin } from '../core/index.js';

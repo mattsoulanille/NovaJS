@@ -161,13 +161,13 @@ const WeightedShip = t.intersection([
     }),
 ]);
 
-const DudeSpawn = t.type({
+export const DudeSpawn = t.type({
     /** Düde AIType; 0 = each ship's InherentAI. */
     aiType: t.number,
     govt: t.union([t.string, t.null]),
     ships: t.array(WeightedShip),
 });
-type DudeSpawn = t.TypeOf<typeof DudeSpawn>;
+export type DudeSpawn = t.TypeOf<typeof DudeSpawn>;
 
 /** A flët as the spawner keeps it: what spawnFleet needs, staged. */
 export const FleetSpawn = t.type({
@@ -410,6 +410,30 @@ export async function stageFleetSpawn(world: World, fleet: FleetData)
             ({ id, min, max })),
         govt: fleet.govt,
     };
+}
+
+/**
+ * Stages a düde's every ship class (with its weapon closure) and its govt,
+ * and returns the spawner's form of it, for a spawn that draws from the
+ * düde directly: a stellar's defence fleet (spöb DefenseDude,
+ * encounters/tribute.ts). Undefined for a düde with no ship classes. Ship
+ * AppearOn is NOT applied: a stellar's defenders are its own, not the
+ * system's traffic. Genesis only.
+ */
+export async function stageDudeSpawn(world: World, dudeId: string)
+    : Promise<DudeSpawn | undefined> {
+    const gameData = world.resources.get(SimulationGameDataResource);
+    if (!gameData) {
+        throw new Error('Expected SimulationGameDataResource to exist');
+    }
+    const dude = await loadWithRetries(() => gameData.data.Dude.get(dudeId),
+        `düde ${dudeId}`);
+    await Promise.all(dude.ships.map(ship =>
+        stageShip(world, ship.id, dude.govt)));
+    const ships = dude.ships.filter(ship => ship.weight > 0)
+        .map(ship => ({ id: ship.id, weight: ship.weight }));
+    return ships.length > 0
+        ? { aiType: dude.aiType, govt: dude.govt, ships } : undefined;
 }
 
 /**
@@ -1115,9 +1139,10 @@ export function spawnNpc(world: World,
 
 /**
  * Inserts an NPC built by makeNpcShip, fully formed (see spawnNpc), with
- * a derelict govt's ships disabled (gövt Flags1 0x0800).
+ * a derelict govt's ships disabled (gövt Flags1 0x0800). Exported for the
+ * other in-sim spawners (a stellar's defence fleet, encounters/tribute.ts).
  */
-function insertNpc(world: World, gameData: SimulationGameDataInterface,
+export function insertNpc(world: World, gameData: SimulationGameDataInterface,
     uuid: string, entity: Entity): void {
     deriveEntityComponents(world, entity);
     applyStartsDisabled(entity, gameData);
@@ -1278,7 +1303,9 @@ const LiveNpcsQuery = new Query(
 /**
  * How many of `npcs` count as the system's TRAFFIC against its population
  * target: every NPC but a reinforcement fleet's ships (held with reason
- * 'reinforcement', reinforcements.ts). Reference "R19 reinforcement
+ * 'reinforcement', reinforcements.ts) and a stellar's defence ships
+ * ('defense', defense_fleet_system.ts: GUESS, the same footing as a
+ * reinforcement fleet). Reference "R19 reinforcement
  * fleets, wave 19": with AvgShips 2 a new trader arrived while the
  * three-ship fleet was still there, so the fleet does not fill the
  * system's slots.
@@ -1288,7 +1315,7 @@ export function trafficCount(
     : number {
     let count = 0;
     for (const [, hold] of npcs) {
-        if (hold?.reason !== 'reinforcement') {
+        if (hold?.reason !== 'reinforcement' && hold?.reason !== 'defense') {
             count++;
         }
     }

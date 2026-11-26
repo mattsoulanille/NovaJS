@@ -14,6 +14,7 @@
  */
 export * from './calendar.js';
 export * from './discovery.js';
+export * from './dominated.js';
 export * from './discovery_store.js';
 export * from './escort_command.js';
 export * from './mission_event_type.js';
