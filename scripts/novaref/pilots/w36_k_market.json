@@ -1,0 +1,19 @@
+{
+  "name": "novaref-w36-k-market",
+  "edits": {
+    "ship": 703,
+    "stellar": 2101,
+    "credits": 10000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "2100": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w36-k-market"
+  }
+}

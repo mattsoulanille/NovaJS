@@ -1,0 +1,19 @@
+{
+  "name": "novaref-w36-lapse-p72",
+  "edits": {
+    "ship": 703,
+    "stellar": 1918,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1368": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w36-lapse-p72"
+  }
+}

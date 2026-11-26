@@ -1,0 +1,27 @@
+{
+  "name": "novaref-w36-coast-raid",
+  "edits": {
+    "ship": 497,
+    "stellar": 1925,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1374": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w36-coast-raid",
+    "weapons": {
+      "128": 0,
+      "288": 1
+    },
+    "outfits": {
+      "128": 0,
+      "462": 1
+    }
+  }
+}

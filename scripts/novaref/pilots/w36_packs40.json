@@ -1,0 +1,27 @@
+{
+  "name": "novaref-w36-packs40",
+  "edits": {
+    "ship": 497,
+    "stellar": 1924,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1373": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w36-packs40",
+    "weapons": {
+      "128": 0,
+      "290": 1
+    },
+    "outfits": {
+      "128": 0,
+      "463": 1
+    }
+  }
+}

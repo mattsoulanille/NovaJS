@@ -541,6 +541,13 @@ and flët 318-320 (no mïsn); next free: sÿst 1365, spöb 1912 (spares 1495 /
 470, gövt 295 and below, flët 321, bits 9250. A flët placed by a system
 (DudeTypes -id) gives an NPC fight a fixed side; `scenarios/w35_space_early.json`
 records from before Enter Ship (a traffic fight's first seconds).
+Wave 36 used sÿst 1365-1375, spöb 1912-1928, shïp 574-575, düde 497-501,
+gövt 294-295 and flët 321-322 (no mïsn); next free: sÿst 1376, spöb 1929
+(spares 1495 / 1496 / 1499), shïp 576, düde 502, ränk 205, mïsn **none**,
+wëap 295, oütf 470, gövt 293 and below, flët 323, bits 9250. A flët with
+no escorts (counts 0) places a single ship; an UNARMED AI 3 hull of an
+always-hostile govt does not close on the player (arm it with a harmless
+gun). `scenarios/w36_board_take.json` is the slow-pass board with a take.
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they

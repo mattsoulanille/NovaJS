@@ -1,0 +1,73 @@
+{
+ "name": "w36_board_take",
+ "_comment": "Wave 36, boarding velocity after a TAKEN plunder (U9 velocity leftover): wave 7 board_pass_soft8 (pilot w7_bspeedsoft, Kit Crawler Soft crossing the immobile 50,000 Kit Hulk at about 8 px/s pressing b), but the plunder dialog gets Energy (a take: the Kit Hulk has no credits, board_take_b) and then Abort; 4 s more recorded so the hulk offset after the dialog shows whether the boarder kept its speed (analysis/magenta_track.mjs).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "speedPxS": 22,
+    "turnDegS": 87.1,
+    "near": 220,
+    "stepMs": 120,
+    "maxSteps": 40,
+    "pass": {
+     "fromPx": 45,
+     "overPx": 35,
+     "pressGapMs": 200,
+     "thrustMs": 230,
+     "speedPxS": 8
+    },
+    "dialogClicks": [
+     [
+      322,
+      325,
+      "energy"
+     ],
+     [
+      418,
+      380,
+      "abort"
+     ]
+    ],
+    "brakeMs": 1600
+   }
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

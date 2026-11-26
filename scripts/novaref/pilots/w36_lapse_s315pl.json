@@ -1,0 +1,19 @@
+{
+  "name": "novaref-w36-lapse-s315pl",
+  "edits": {
+    "ship": 703,
+    "stellar": 1914,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1366": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w36-lapse-s315pl"
+  }
+}

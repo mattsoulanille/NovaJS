@@ -307,8 +307,127 @@ export default {
         ...wave33Resources(),
         ...wave34Resources(),
         ...wave35Resources(),
+        ...wave36Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-36 experiments (docs/reference_experiments.md, "... wave 36").
+ * Nothing retired (no mïsn needed). sÿst 1365-1375, spöb 1912-1928, shïp
+ * 574-575, düde 497-501, gövt 294-295, flët 321-322. Map row y = -2460 (x
+ * -800 .. -400). The next free ids: sÿst 1376+, spöb 1929+ (spares 1495,
+ * 1496, 1499), shïp 576+, düde 502+, ränk 205+, mïsn NONE (retire an old kit
+ * mission to add one), gövt 293 and below, flët 323+, wëap 295+, oütf 470+,
+ * bits 9250+.
+ *
+ *  L   What picks a port's clearance clock (wave 35: the 250 px planet's
+ *      clearance holds about 24.63 s, the 315 x 200 station's about 24.42
+ *      s): as wave 31's Kit Land rigs (the pilot at rest on a decoration
+ *      at (0, 0), ONE landable port at (d, 0), its art cloned with the
+ *      clone's Type kept), with the flags SWAPPED: Kit Lapse P250 Station
+ *      230 (spöb 176's 250 px PLANET art with the station flags 0x11),
+ *      Kit Lapse S315 Planet 230 (spöb 311's 315 x 200 STATION art with
+ *      the planet flags 0x43), and a second art of each kind with its own
+ *      flags: Kit Lapse S100 150 (Spacedock III's 100 x 70 station art,
+ *      0x11; window 175) and Kit Lapse P72 120 (New England's 72 px planet
+ *      art, 0x43; window 126). sÿst 1365-1368, spöb 1912-1919.
+ *  R19 NPC-caused calls (wave 35's Kit Reinf Pair rigs: the Kit Ring Lancer
+ *      watching from the port at the centre, avgShips 2):
+ *      - the edge at exactly half: shïp 574 Kit RH Prey S5 Full (düde
+ *        497), sÿst 1369 Kit Reinf Pair 0.5 (Hunter Full 488 : Prey S5 50 :
+ *        50; one each is 5 against 10).
+ *      - MaxOdds: gövt 295 Kit Reinf Hunter M200 (MaxOdds 200, Enemies 294)
+ *        and gövt 294 Kit Reinf Prey M (Enemies 295), flët 321 Kit Reinf
+ *        Fleet M200 (flët 317's ships, gövt 295); düde 498 Kit RH Hunter
+ *        Full M200 (shïp 563, gövt 295), 499 / 500 Kit RH Prey S6 / S12
+ *        Full M (shïp 573 / 565, gövt 294); sÿst 1370 Kit Reinf M200 0.6
+ *        and 1371 Kit Reinf M200 1.2 (owner 295, ReinfFleet 321).
+ *      - a fleet member: flët 322 Kit Hunter Solo Full (shïp 563 alone, no
+ *        escorts, gövt 297); sÿst 1372 Kit Reinf Solo 0.6 (DudeTypes -322 :
+ *        wave 35's Prey S6 Full 496, 50 : 50: pair06's 6 against 10 with the
+ *        hunter placed as a fleet) and 1373 Kit Reinf Pack S40 (wave 35's
+ *        three-hunter pack -319 : wave 34's Strength-40 prey 485: 40 against
+ *        30, far above half).
+ *      Ports spöb 1920-1924 at the centres.
+ *  C   A second hull's coast (wave 25: tau 3.74 s at 34 px/s): shïp 575 Kit
+ *      Coast Fast Raider (the magenta pointer, unarmed AI 3 of the
+ *      always-hostile gövt 362, Speed / Accel 600), düde 501, the only
+ *      traffic of sÿst 1374 Kit Coast Raid Range (port spöb 1925).
+ *  L2  The drawing load: sÿst 1375 Kit Lapse S100 Heavy (the S100 150 rig
+ *      plus a Jupiter-art decoration on screen; spöb 1926-1928).
+ */
+function wave36Resources() {
+    const out = [];
+    const Y = -2460;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const decoration = (id, name, x = 0, y = 0) => spob(id, name, x, y, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] });
+    const artPort = (id, name, x, clone, flags) => spob(id, name, x, 0, clone, { flags, govt: -1, minStatus: -32767 });
+    let sid = 1365, pid = 1912;
+    const rig = (label, d, clone, flags) => {
+        out.push(system(sid, label, nextX(), Y, 363, [pid, pid + 1]), decoration(pid, `${label} Start`), artPort(pid + 1, label, d, clone, flags));
+        sid++;
+        pid += 2;
+    };
+    // --- L: sÿst 1365-1368, spöb 1912-1919.
+    rig("Kit Lapse P250 Station 230", 230, 176, 0x11);
+    rig("Kit Lapse S315 Planet 230", 230, 311, 0x43);
+    rig("Kit Lapse S100 150", 150, 136, 0x11);
+    rig("Kit Lapse P72 120", 120, 138, 0x43);
+    if (sid !== 1369 || pid !== 1920) throw new Error(`wave36: L ended at sÿst ${sid}, spöb ${pid}`);
+    // --- R19: shïp 574, düde 497-500, gövt 294-295, flët 321-322, sÿst 1369-1373, spöb 1920-1924.
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const mobile = { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10, crew: 10, flags: 0, flags2: 0 };
+    const escortGun = { weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] };
+    const full = { armor: 30000, shield: 30000, shieldRecharge: 30000 };
+    out.push(...shareRled(574, "Kit RH Prey S5 Full", 1972, 24, { ...mobile, ai: 3, ...full, strength: 5, ...escortGun }));
+    out.push(dude(497, "Kit RH Prey S5 Full", 3, 296, 574));
+    out.push(govt(295, "Kit Reinf Hunter M200", { maxOdds: 200, disabPenalty: 1, boardPenalty: 1, killPenalty: 1, crimeTol: 30000,
+        classes: [295, -1, -1, -1], enemies: [294, -1, -1, -1], mediumName: "Kit Reinf M" }));
+    out.push(govt(294, "Kit Reinf Prey M", { disabPenalty: 1, boardPenalty: 1, killPenalty: 1, crimeTol: 30000,
+        classes: [294, -1, -1, -1], enemies: [295, -1, -1, -1] }));
+    out.push(dude(498, "Kit RH Hunter Full M200", 3, 295, 563), dude(499, "Kit RH Prey S6 Full M", 3, 294, 573),
+        dude(500, "Kit RH Prey S12 Full M", 3, 294, 565));
+    const fleet = (id, name, lead, escorts, govtId, linkSyst) => ({ type: "flët", id, name, clone: "flët:128",
+        set: { "@0:i16": lead, "@2:i16x4": escorts.map((e) => e[0]), "@10:i16x4": escorts.map((e) => e[1]), "@18:i16x4": escorts.map((e) => e[2]),
+            "@26:i16": govtId, "@28:i16": linkSyst, "@30:str256": "", "@286:i16": -1, "@288:u16": 0 } });
+    out.push(fleet(321, "Kit Reinf Fleet M200", 472, [[473, 2, 2], [473, 0, 0], [473, 0, 0], [473, 0, 0]], 295, 1594));
+    out.push(fleet(322, "Kit Hunter Solo Full", 563, [[563, 0, 0], [563, 0, 0], [563, 0, 0], [563, 0, 0]], 297, 1594));
+    const hunt = (name, owner, dudes, reinfFleet) => {
+        const sys = system(sid, name, nextX(), Y, owner, [pid]);
+        sys.set = { ...sys.set, avgShips: 2, dudes: [...dudes, ...none8].slice(0, 8), dudeProbs: [50, 50, ...zero8].slice(0, 8),
+            reinfFleet, reinfTime: 150, reinfInterval: 0 };
+        out.push(sys, spob(pid, `${name} Port`, 0, 0, 138, { flags: 0x43 }));
+        sid++;
+        pid++;
+    };
+    hunt("Kit Reinf Pair 0.5", 297, [488, 497], 317);
+    hunt("Kit Reinf M200 0.6", 295, [498, 499], 321);
+    hunt("Kit Reinf M200 1.2", 295, [498, 500], 321);
+    hunt("Kit Reinf Solo 0.6", 297, [-322, 496], 317);
+    hunt("Kit Reinf Pack S40", 297, [-319, 485], 317);
+    if (sid !== 1374 || pid !== 1925) throw new Error(`wave36: R19 ended at sÿst ${sid}, spöb ${pid}`);
+    // --- C: a second hull's coast (added during the wave). shïp 575 Kit Coast Fast Raider: wave 25's magenta pointer
+    // trader made an UNARMED AI 3 hull of gövt 362 (0x0004, always attacks the player) with Speed / Accel 600 (180 px/s,
+    // five times wave 25's trader), 3000 / 3000 so one Kit Disable Gun hit disables it; düde 501, the only traffic of sÿst
+    // 1374 Kit Coast Raid Range (port spöb 1925 at the centre), avgShips 1.
+    out.push(...shareRled(575, "Kit Coast Fast Raider", 1959, 24, { accel: 600, speed: 600, turn: 60, mass: 50, freeMass: 100, cargo: 10,
+        strength: 50, crew: 10, flags: 0, flags2: 0, ai: 3, armor: 3000, shield: 3000 }), dude(501, "Kit Coast Fast Raider", 3, 362, 575));
+    const raid = system(1374, "Kit Coast Raid Range", nextX(), Y, 363, [1925]);
+    raid.set = { ...raid.set, avgShips: 1, dudes: [501, ...none8].slice(0, 8), dudeProbs: [100, ...zero8].slice(0, 8) };
+    out.push(raid, spob(1925, "Kit Coast Raid Range Port", 0, 0, 138, { flags: 0x43 }));
+    // --- L2 (added during the wave: the S100 station never docked down to 24.36 s, the P250 planet holds to 24.63 s:
+    // does the scene's drawing load stretch the clock?): sÿst 1375 Kit Lapse S100 Heavy, the S100 rig (decoration spöb
+    // 1926 at (0, 0), the 100 x 70 station 1927 at (150, 0)) with a decoration of Jupiter's 325 px art (spöb 159's Type,
+    // flags 0, spöb 1928) at (-120, 140), on screen beside the player.
+    out.push(system(1375, "Kit Lapse S100 Heavy", nextX(), Y, 363, [1926, 1927, 1928]), decoration(1926, "Kit Lapse S100 Heavy Start"),
+        artPort(1927, "Kit Lapse S100 Heavy", 150, 136, 0x11),
+        spob(1928, "Kit Lapse S100 Heavy Jupiter", -120, 140, 159, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] }));
+    return out;
+}
 
 /**
  * Wave-35 experiments (docs/reference_experiments.md, "... wave 35").

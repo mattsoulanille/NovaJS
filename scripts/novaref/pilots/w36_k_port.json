@@ -1,0 +1,23 @@
+{
+  "name": "novaref-w36-k-port",
+  "edits": {
+    "ship": 703,
+    "stellar": 2100,
+    "credits": 10000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "2100": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w36-k-port",
+    "outfits": {
+      "128": 0,
+      "455": 2
+    }
+  }
+}
