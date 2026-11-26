@@ -1495,8 +1495,10 @@ describe('the gate approach lines', () => {
     it('answers a wormhole\'s FIRST `l` at once: too far', async () => {
         const { world, ship, gate } = await atGate(SYNTHETIC.systems.ossory,
             OSSORY_RIFT);
-        // Nothing selected; the rift is the nearest port but far off.
-        place(ship, new Position(gate.position.x - 2000, gate.position.y));
+        // Nothing selected; the rift is the nearest port, 300 px off,
+        // outside its window (reference "Wormholes, wave 34": three `l`
+        // at 300 px, "too far" each, no clearance step).
+        place(ship, new Position(gate.position.x - 300, gate.position.y));
 
         const { lands, blocked } = pressLand(world);
 
@@ -1521,6 +1523,44 @@ describe('the gate approach lines', () => {
         expect(blocked.map(b => [b.reason, b.gateKind]))
             .toEqual([['tooFast', 'wormhole']]);
     }, 30_000);
+
+    // Reference "Wormholes, wave 34", finding 3: a far `l` (about 730 px
+    // from the only wormhole) selected nothing, one at 300 px selected it.
+    // NovaJS gives the wormhole the hypergate's 500 px circle (GUESS on the
+    // radius). Halden Refuge, the station in Ossory Shoal, is picked
+    // instead from beyond it, and with it gone `l` selects nothing.
+    it('selects a wormhole only inside the gates\' 500 px circle',
+        async () => {
+            const { world, ship, gate } = await atGate(
+                SYNTHETIC.systems.ossory, OSSORY_RIFT);
+            const REFUGE = `planet ${SYNTHETIC.planets.refuge}`;
+            const target = ship.components.get(PlanetTargetComponent)!;
+
+            // West of the rift, away from the station.
+            place(ship, new Position(gate.position.x - 499, gate.position.y));
+            const near = pressLand(world);
+            expect(target.target).toBe(gate.uuid);
+            expect(near.blocked.map(b => [b.reason, b.gateKind]))
+                .toEqual([['tooFar', 'wormhole']]);
+
+            selectPlanetTarget(target, undefined);
+            place(ship, new Position(gate.position.x - 501, gate.position.y));
+            pressLand(world);
+            expect(target.target).toBe(REFUGE);
+
+            selectPlanetTarget(target, undefined);
+            world.entities.delete(REFUGE);
+            place(ship, new Position(gate.position.x - 730, gate.position.y));
+            const far = pressLand(world);
+            expect(target.target).toBeUndefined();
+            expect([far.lands, far.blocked]).toEqual([[], []]);
+
+            // A wormhole already selected (a click, a number key) still
+            // answers from any distance.
+            target.target = gate.uuid;
+            expect(pressLand(world).blocked.map(b => b.reason))
+                .toEqual(['tooFar']);
+        }, 30_000);
 
     it('goes through a wormhole on the FIRST `l` in its window', async () => {
         const { world, ship, gate } = await atGate(SYNTHETIC.systems.ossory,

@@ -344,16 +344,21 @@ export function landingRequestForm(stellarId: string, pilotUuid: string,
 
 /**
  * How far out (px, centre to centre, EUCLIDEAN) `l` with nothing selected
- * picks a hypergate. Measured at rest (reference "Hypergate `l` range and
- * the request lines, wave 29"): selected at 490 px on the axis and at the
- * 467 px diagonal (330, 330); nothing at 500 px on the axis nor at the
- * 594 px diagonal (420, 420), whose larger coordinate is inside the 475 px
- * the axis selected, so the range is a CIRCLE, not a square like the
- * landing zone. GUESS on the exact radius inside the 490-500 bracket: a
- * gate is skipped at `distance >= 500`. Ports, stations and wormholes are
- * picked from any distance (a port and a station from 1,000 px, a port
- * from beyond the radar's edge: same section, and "R7 planet bribe
- * withdrawal, wave 29").
+ * picks a hypergate or a wormhole. Measured on a hypergate at rest
+ * (reference "Hypergate `l` range and the request lines, wave 29"):
+ * selected at 490 px on the axis and at the 467 px diagonal (330, 330);
+ * nothing at 500 px on the axis nor at the 594 px diagonal (420, 420),
+ * whose larger coordinate is inside the 475 px the axis selected, so the
+ * range is a CIRCLE, not a square like the landing zone. GUESS on the
+ * exact radius inside the 490-500 bracket: a gate is skipped at
+ * `distance >= 500`. A WORMHOLE gets the same circle
+ * (GUESS on its radius: reference "Wormholes, wave 34", finding 3, an `l`
+ * about 730 px from the only wormhole selected nothing, one at 290-300 px
+ * selected it; the range between is unmeasured, and a wormhole being a
+ * gate kind, it takes the hypergate's 500). Ports and stations are picked
+ * from any distance (a port and a station from 1,000 px, a port from
+ * beyond the radar's edge: same section, and "R7 planet bribe withdrawal,
+ * wave 29").
  */
 export const HYPERGATE_SELECT_RANGE = 500;
 
@@ -1040,9 +1045,10 @@ const AttemptLandingSystem = new System({
         // No stellar selected: target the nearest one that is a PORT at
         // all (landable.ts — Jupiter, scenery worlds and dead gates are
         // skipped, so 'l' never tries to land on Jupiter; a port may still
-        // deny landing, which is the clearance gate above). A hypergate
-        // counts only inside HYPERGATE_SELECT_RANGE (a circle, wave 29), so
-        // from farther out `l` picks a port or nothing at all. Unknown
+        // deny landing, which is the clearance gate above). A hypergate or
+        // a wormhole counts only inside HYPERGATE_SELECT_RANGE (a circle,
+        // wave 29; the wormhole's radius a GUESS, wave 34), so from farther
+        // out `l` picks a port or nothing at all. Unknown
         // planet data (provider not yet run) counts as landable, as
         // elsewhere. Ties break on the lexicographically smaller uuid so every peer
         // picks the same stellar regardless of entity-map iteration order
@@ -1057,9 +1063,12 @@ const AttemptLandingSystem = new System({
             }
             const distanceSquared =
                 planetPosition.subtract(position).lengthSquared;
-            // A hypergate is picked only inside a CIRCLE of
-            // HYPERGATE_SELECT_RANGE (wave 29); ports at any distance.
-            if (data?.gate?.kind === 'hypergate' && distanceSquared
+            // A gate (a hypergate or a wormhole) is picked only inside a
+            // CIRCLE of HYPERGATE_SELECT_RANGE (waves 29, 34); ports at
+            // any distance.
+            const gateKind = data?.gate?.kind;
+            if ((gateKind === 'hypergate' || gateKind === 'wormhole')
+                && distanceSquared
                 >= HYPERGATE_SELECT_RANGE * HYPERGATE_SELECT_RANGE) {
                 continue;
             }
