@@ -1,0 +1,25 @@
+{
+  "name": "novaref-w38-r13",
+  "edits": {
+    "ship": 703,
+    "stellar": 1943,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1389": 2,
+      "1390": 2,
+      "1391": 2,
+      "1392": 2,
+      "1393": 2,
+      "1394": 2
+    },
+    "missionBits": {
+      "9251": true
+    },
+    "nickname": "Probe",
+    "shipName": "w38-r13"
+  }
+}

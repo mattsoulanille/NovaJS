@@ -1,0 +1,44 @@
+{
+ "name": "w38_space_interactive",
+ "_comment": "Wave 38: Enter Ship, recording from the start at 30 fps, then hand-driven steps (loops/interactive.mjs, inbox ~/.local/share/novaref/inbox/w38.jsonl) until {\"done\":true}; the pilot is pulled at the end. Catalogue gaps: A9 a mission-placed 0x1000 pirate, U8 jump phases and fuel, R13 TravelStel -2, R18 tribute, wave-37 leftovers.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w38.jsonl",
+    "maxMs": 1800000
+   }
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

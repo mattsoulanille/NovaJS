@@ -309,8 +309,136 @@ export default {
         ...wave35Resources(),
         ...wave36Resources(),
         ...wave37Resources(),
+        ...wave38Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-38 experiments (docs/reference_experiments.md, "... wave 38"):
+ * catalogue gaps. RETIRED: wave 7's mïsn 1010-1018 (bits 9051-9059: the
+ * anchored Kit Bomb Carriers, the retreat tanks near / far, the J jam and
+ * J0 targets; their ships and düdes stay), 1019-1020 (bits 9060-9061, the
+ * ion threshold and the far neutral tank) and wave 6's 1001 (bit 9042, the
+ * Fed Carrier at Kit Port). Used: sÿst 1386-1399, spöb 1939-1954, shïp
+ * 590-592, düde 509-511, gövt 288-290, mïsn 1001 / 1010-1020, bits
+ * 9250-9254. Map row y = -2580 (x -800 .. -280). The next free ids: sÿst
+ * 1400+, spöb 1955+ (spares 1495, 1496, 1499), shïp 593+, düde 512+, ränk
+ * 205+, mïsn NONE (retire another old kit mission), gövt 287 and below,
+ * flët 324+, wëap 296+, oütf 470+, jünk 205+, bits 9255+.
+ *
+ * LESSONS: a gövt 0x1000 | 0x0004 warship was never hostile (it left);
+ * every stock pirate govt is xenophobic (0x0001), and 0x1000 | 0x0001
+ * attacked, disabled, plundered and left. The player's weapons are locked
+ * once `j` is pressed, so a self-disable cannot cut a jump short.
+ *
+ *  A9  A 0x1000 pirate placed by a MISSION (wave 37's traffic pirates never
+ *      engaged the player): mïsn 1010 "Kit A9 pirate at the port" (bit 9250,
+ *      AvailLoc 3 at spöb 1939) puts one wave-37 Kit Pirate (düde 502: AI 3,
+ *      gövt 293 0x1000 | 0x0004, shïp 578 with the Kit Escort Gun) on nav
+ *      default 1 (the port, ShipStart -1). sÿst 1386 Kit Pirate Board Range
+ *      (owner 363, no traffic), port spöb 1939 at the centre.
+ *  U8  Jump phases and fuel: sÿst 1387 Kit Jump A (port spöb 1940 at the
+ *      centre, decoration spöb 1941 at (2000, 0): a start point outside the
+ *      1000 px no-jump zone) linked to sÿst 1388 Kit Jump B (40 map units
+ *      east; port spöb 1942 at the centre). shïp 590 Kit Jump Lancer (the
+ *      Kit Lancer with Fuel 300: one jump is a third of the fuel bar) and
+ *      591 Kit Jump Self Disable (wave 37's Kit Self Disable, armor 2500, no
+ *      recharge, with Fuel 300: the Kit Big Blast disables it mid-jump).
+ *  R13 TravelStel -2: a chain sÿst 1389 Kit R13 Origin (port 1943) - 1390
+ *      N1 (1944) - 1391 N2 (1945) - 1392 N3 (1946, and 1947 an UNINHABITED
+ *      landable, flags 0x21) - 1393 N4 (1948) - 1394 N5 (1949), every port
+ *      0x43 at the centre, no traffic. mïsn 1011-1018 "R13 k <DST> (<DSY>)"
+ *      (bit 9251, the Origin port's mission computer, TravelStel -2): each
+ *      BBS row names its own random destination. Added during the wave:
+ *      gövt 288 Kit R13 Govt owns every chain stellar, and mïsn 1013-1018
+ *      draw TravelStel 10160 (a random stellar of gövt 288) instead.
+ *  R18 Tribute: gövt 290 Kit Tribute Govt; shïp 592 Kit Tribute Defender
+ *      (a red disc, AI 3, armor 25, no shield, Strength 20, the 1-damage
+ *      Kit Tickler: one Kit Escort Gun bolt kills it) and düde 509; sÿst
+ *      1395 Kit Tribute Range (owner 290, no traffic): spöb 1950 Kit Tribute
+ *      Six (Tribute 5000, DefenseDude 509, DefCount 1062: six ships in
+ *      waves of two) at the centre and spöb 1951 Kit Tribute None (Tribute
+ *      5000, no defence fleet) at (600, 0); sÿst 1396 Kit Tribute Big
+ *      (owner 290): spöb 1952 Kit Tribute Thirty (DefCount 1302: thirty in
+ *      waves of two) at the centre.
+ */
+function wave38Resources() {
+    const out = [];
+    const Y = -2580;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const port = (id, name, x = 0, y = 0, set = {}) => spob(id, name, x, y, 138, { flags: 0x43, ...set });
+    const decoration = (id, name, x = 0, y = 0) => spob(id, name, x, y, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] });
+    const linked = (sys, links) => { sys.set = { ...sys.set, links: [...links, ...none16].slice(0, 16) }; return sys; };
+    // --- A9: sÿst 1386, spöb 1939, mïsn 1010 (bit 9250).
+    out.push(system(1386, "Kit Pirate Board Range", nextX(), Y, 363, [1939]), port(1939, "Kit Pirate Board Port"));
+    // mïsn 1010 first put düde 502 (0x1000 | 0x0004) on spöb 1939 (a9_a: never hostile); RE-POINTED during the wave for the
+    // U8 abort: the xeno pirate (düde 510, below) on Kit Pirate Jump Port, 2000 px from sÿst 1397's centre (outside the
+    // no-jump zone), so the player can start a jump just before the pirate's fire disables him.
+    out.push(...misn(1010, "Kit A9 xeno pirate at the jump port", 9250, { availStel: 1953, shipCount: 1, shipDude: 510, shipGoal: -1,
+        shipBehav: -1, shipStart: -1, onAccept: "!b9250" }));
+    out.push(linked(system(1397, "Kit Pirate Jump Range", -360, Y, 363, [1953]), [1398]), port(1953, "Kit Pirate Jump Port", 2000, 0));
+    out.push(linked(system(1398, "Kit Pirate Jump Exit", -320, Y, 363, []), [1397]));
+    // Added during the wave: the 0x1000 | 0x0004 pirate came up with YELLOW brackets and left (a9_a). The stock Pirate govt
+    // (gövt 137, 0xf2b3) is xenophobic (0x0001) and never 0x0004, so: gövt 289 Kit Pirate Xeno (0x1000 | 0x0001) with düde 510
+    // (mïsn 1019, bit 9252), and the STOCK Pirate govt 137 itself with düde 511 (mïsn 1020, bit 9253); both the Kit Pirate hull.
+    out.push(govt(289, "Kit Pirate Xeno", { flags: 0x1000 | 0x0001 }));
+    out.push(dude(510, "Kit Pirate Xeno", 3, 289, 578), dude(511, "Kit Pirate Stock Govt", 3, 137, 578));
+    out.push(...misn(1019, "Kit A9 xeno pirate at the port", 9252, { availStel: 1939, shipCount: 1, shipDude: 510, shipGoal: -1, shipBehav: -1,
+        shipStart: -1, onAccept: "!b9252" }));
+    out.push(...misn(1020, "Kit A9 stock pirate at the port", 9253, { availStel: 1939, shipCount: 1, shipDude: 511, shipGoal: -1, shipBehav: -1,
+        shipStart: -1, onAccept: "!b9253" }));
+    // --- U8: sÿst 1387-1388, spöb 1940-1942, shïp 590-591.
+    out.push(linked(system(1387, "Kit Jump A", nextX(), Y, 363, [1940, 1941]), [1388]), port(1940, "Kit Jump A Port"),
+        decoration(1941, "Kit Jump A Start", 2000, 0));
+    out.push(linked(system(1388, "Kit Jump B", nextX(), Y, 363, [1942]), [1387]), port(1942, "Kit Jump B Port"));
+    out.push(...ship(590, "Kit Jump Lancer", 135, { accel: 2000, speed: 800, turn: 60, armor: 30000, shield: 30000, shieldRecharge: 1000,
+        mass: 50, freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, flags: 0, flags2: 0x00C8, fuel: 300 }));
+    out.push(...ship(591, "Kit Jump Self Disable", 135, { accel: 2000, speed: 800, turn: 60, armor: 2500, shield: 0, shieldRecharge: 0,
+        armorRecharge: 0, mass: 50, freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, flags: 0, flags2: 0x00C8,
+        fuel: 300 }));
+    // --- R13: sÿst 1389-1394 (a chain), spöb 1943-1949, mïsn 1011-1018 (bit 9251).
+    const chain = [[1389, "Kit R13 Origin", 1943], [1390, "Kit R13 N1", 1944], [1391, "Kit R13 N2", 1945], [1392, "Kit R13 N3", 1946],
+        [1393, "Kit R13 N4", 1948], [1394, "Kit R13 N5", 1949]];
+    chain.forEach(([sid, name, pid], i) => {
+        const links = [chain[i - 1]?.[0], chain[i + 1]?.[0]].filter((l) => l !== undefined);
+        const spobs = sid === 1392 ? [pid, 1947] : [pid];
+        // Every chain stellar belongs to gövt 288 Kit R13 Govt (added during the wave), the only stellars of that govt.
+        out.push(linked(system(sid, name, nextX(), Y, 363, spobs), links), port(pid, `${name} Port`, 0, 0, { govt: 288 }));
+    });
+    out.push(spob(1947, "Kit R13 N3 Rock", 600, 0, 132, { flags: 0x21, techLevel: 0, specialTech: [-1, -1, -1], govt: 288 }));
+    out.push(govt(288, "Kit R13 Govt"));
+    // Missions 1-2 draw TravelStel -2 (a random inhabited stellar: the first 40 draws came from the whole galaxy). Missions 3-8
+    // (changed during the wave) draw TravelStel 10160, "a random stellar of gövt 288": a pool of the chain alone, so the
+    // Bible's "more than two hyper jumps away" can show (N1 / N2 must never come up, N3-N5 may).
+    for (let k = 1; k <= 8; k++) {
+        out.push(...misn(1010 + k, `R13 ${k} <DST> (<DSY>)`, 9251, { availStel: 1943, availLoc: 0, travelStel: k <= 2 ? -2 : 10000 + 288 - 128,
+            payVal: 1000 }));
+    }
+    // --- A8 (wave-37 leftover, added during the wave): does a bought ship stay bought across a day? mïsn 1001 (bit 9254,
+    // retired from wave 6) puts wave 37's anchored Kit Bribe Warship (düde 508, gövt 304) on the port of sÿst 1399 Kit Bribe
+    // Mission Range (owner 304, NO traffic; port spöb 1954 with MinStatus -32767), so the only warship there is a mission ship.
+    out.push(system(1399, "Kit Bribe Mission Range", -280, Y, 304, [1954]),
+        port(1954, "Kit Bribe Mission Port", 0, 0, { govt: 304, minStatus: -32767 }));
+    out.push(...misn(1001, "Kit A8 anchored warship at the port", 9254, { availStel: 1954, shipCount: 1, shipDude: 508, shipGoal: -1,
+        shipBehav: -1, shipStart: -1, onAccept: "!b9254" }));
+    // --- R18: gövt 290, shïp 592, düde 509, sÿst 1395-1396, spöb 1950-1952.
+    out.push(govt(290, "Kit Tribute Govt"));
+    out.push({ type: "shïp", id: 592, name: "Kit Tribute Defender", clone: "shïp:128", set: { ...shipBase, shortName: "Kit Tribute Defender",
+        longName: "Kit Tribute Defender", commName: "Kit Tribute Defender", subtitle: "", accel: 300, speed: 300, turn: 30, mass: 50,
+        freeMass: 100, cargo: 10, crew: 5, flags: 0, flags2: 0, ai: 3, armor: 25, shield: 0, shieldRecharge: 0, armorRecharge: 0, strength: 20,
+        weapons: [361, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] } });
+    out.push({ type: "shän", id: 592, name: "Kit Tribute Defender", clone: "shän:128", set: { "@0:i16": 1971, "@2:i16": 1972, "@4:i16": 1,
+        "@6:i16": 24, "@8:i16": 24 } });
+    out.push(dude(509, "Kit Tribute Defender", 3, 290, 592));
+    // 1395 and 1396 are linked (added during the wave), so a pilot can leave in mid-demand and come back.
+    out.push(linked(system(1395, "Kit Tribute Range", nextX(), Y, 290, [1950, 1951]), [1396]),
+        port(1950, "Kit Tribute Six", 0, 0, { govt: 290, tribute: 5000, defenseDude: 509, defenseCount: 1062 }),
+        port(1951, "Kit Tribute None", 600, 0, { govt: 290, tribute: 5000 }));
+    out.push(linked(system(1396, "Kit Tribute Big", nextX(), Y, 290, [1952]), [1395]),
+        port(1952, "Kit Tribute Thirty", 0, 0, { govt: 290, tribute: 5000, defenseDude: 509, defenseCount: 1302 }));
+    return out;
+}
 
 /**
  * Wave-37 experiments (docs/reference_experiments.md, "... wave 37"):
@@ -4272,12 +4400,12 @@ function wave7Resources() {
     const carrierSet = { armor: 3000, shield: 3000, weaponCounts: [2, 1, 0, 0], weaponAmmo: [0, 4, 0, 0], ai: 3, strength: 100, crew: 40, speed: 0, accel: 0 };
     out.push(...ship(800, "Kit Bomb Carrier Anchored", 143, { ...carrierSet, weapons: [365, 371, -1, -1] }));
     out.push(dude(292, "Kit Bomb Carrier Anchored", 3, 362, 800));
-    out.push(...misn(1010, "Kit B anchored Kit Bomb Carrier", 9051, { shipCount: 1, shipDude: 292, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    // mïsn 1010 (bit 9051, this carrier at Kit Port) was retired in wave 38 for the A9 pirate mission (wave38Resources).
     out.push(...ship(801, "Kit Bomber 1", 167, { armor: 500, shield: 500, weapons: [243, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], ai: 3, strength: 20, crew: 1 }));
     out.push(weap(247, "Kit Bomber Bay 1", 149, { reload: 30, guidance: 99, ammoType: 801 }));
     out.push(...ship(802, "Kit Bomb Carrier Anchored 1", 143, { ...carrierSet, weapons: [365, 247, -1, -1] }));
     out.push(dude(293, "Kit Bomb Carrier Anchored 1", 3, 362, 802));
-    out.push(...misn(1011, "Kit B anchored Kit Bomb Carrier 1", 9052, { shipCount: 1, shipDude: 293, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    // mïsn 1011 (bit 9052) was retired in wave 38 for the R13 offers (wave38Resources).
 
     // --- U9: hulks at other prices, a big hulk, player hulls.
     const hulkSet = { ...shipBase, subtitle: "", armor: 300, shield: 0, accel: 0, speed: 0, turn: 0, mass: 50, freeMass: 100, cargo: 50, ai: 1, strength: 1, crew: 1, flags: 0, flags2: 0 };
@@ -4311,33 +4439,32 @@ function wave7Resources() {
     // --- A: gövt 0x0010 tank that always attacks the player.
     out.push(govt(368, "Kit Retreat Hostile", { flags: 0x0014 }));
     out.push(dude(299, "AI Tank 3 retreat hostile", 3, 368, 762));
-    out.push(...misn(1012, "Kit A hostile retreat tank near", 9053, { shipCount: 1, shipDude: 299, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
-    out.push(...misn(1013, "Kit A hostile retreat tank far", 9054, { availStel: 2152, shipCount: 1, shipDude: 299, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    // mïsn 1012 / 1013 (bits 9053 / 9054, the tank near / far) were retired in wave 38 for the R13 offers (wave38Resources).
     out.push(weap(248, "Kit Long Beam 50", 170, { reload: 15, duration: 4, armorDamage: 50, shieldDamage: 50, guidance: 3, beamLength: 1500 }));
     out.push(gun(451, "Kit Long Beam 50", 248));
     // Added during the wave: the waves 4-6 tank (düde 637, neutral gövt 383,
     // which only fights once provoked) at Kit Market, 900 px out, inside the
     // beam's 1500 px: mïsn 1020 (bit 9061). Beside the player it is wave 3's
     // mïsn 988 (bit 9029).
-    out.push(...misn(1020, "Kit A neutral retreat tank far", 9061, { shipCount: 1, shipDude: 637, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    // mïsn 1020 (bit 9061) was retired in wave 38 for the A9 stock-Pirate mission (wave38Resources).
 
     // --- J: InhJam on the hull's own govt; two different jammers; Interference 30/60; ion threshold.
     const j0 = { armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, ai: 1, strength: 1, crew: 1 };
     out.push(...ship(811, "Jam Target Inh", 136, { ...j0, govt: 364 }));
     out.push(dude(300, "Jam Target Inh", 1, 364, 811));
-    out.push(...misn(1014, "Kit J InhJam hull govt", 9055, { shipCount: 1, shipDude: 300, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    // mïsn 1014 (bit 9055) was retired in wave 38 for the R13 offers (wave38Resources).
     [[812, 301, 1015, 9056, [623, 626]], [813, 302, 1016, 9057, [626, 623]]].forEach(([id, did, mid, bit, outfits]) => {
         const name = `Jam Target ${outfits[0] === 623 ? "25+75" : "75+25"}`;
         out.push(...ship(id, name, 136, { ...j0, outfits: [...outfits, -1, -1], outfitCounts: [1, 1, 0, 0] }));
         out.push(dude(did, name, 1, 363, id));
-        out.push(...misn(mid, `Kit J ${name}`, bit, { shipCount: 1, shipDude: did, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+        // mïsn 1015 / 1016 (bits 9056 / 9057) were retired in wave 38 for the R13 offers (wave38Resources).
     });
     [[2028, "Kit Static 30", 30, 1017, 9058], [2030, "Kit Static 60", 60, 1018, 9059]].forEach(([sid, name, interference, mid, bit]) => {
         const s = system(sid, name, -1200 + 30 * (sid - 2000), -790, 363, [sid, sid + 1]);
         s.set = { ...s.set, interference };
         out.push(s, spob(sid, `${name} Port`, 0, 0, 138, { flags: 0x43 }),
             spob(sid + 1, `${name} Marker`, 900, 0, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
-        out.push(...misn(mid, `Kit ${name} J0 target`, bit, { availStel: sid, shipCount: 1, shipDude: 615, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+        // mïsn 1017 / 1018 (bits 9058 / 9059, the J0 targets) were retired in wave 38 for the R13 offers (wave38Resources).
     });
     out.push(...ship(814, "Kit Lancer Ion Slow", 135, {
         accel: 2000, speed: 800, turn: 60, armor: 30000, shield: 30000, shieldRecharge: 0, armorRecharge: 0, mass: 50, freeMass: 1000,
@@ -4349,7 +4476,7 @@ function wave7Resources() {
         weapons: [249, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] } });
     out.push({ type: "shän", id: 815, name: "Ion Target Green", clone: "shän:128", set: { "@0:i16": 1972, "@2:i16": 1973, "@4:i16": 1 } });
     out.push(dude(303, "Ion Target Green", 3, 362, 815));
-    out.push(...misn(1019, "Kit J ion threshold", 9060, { shipCount: 1, shipDude: 303, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    // mïsn 1019 (bit 9060) was retired in wave 38 for the A9 xenophobic-pirate mission (wave38Resources).
 
     // --- E: front-quadrant turret escorts.
     out.push(weap(250, "Kit Front Turret", 131, { reload: 20, duration: 60, armorDamage: 30, shieldDamage: 30, guidance: 7 }));
@@ -4436,7 +4563,7 @@ function wave6Resources() {
     }));
 
     // --- B: the stock Fed Carrier beside the player.
-    out.push(...misn(1001, "Kit B Fed Carrier at Kit Port", 9042, { shipCount: 1, shipDude: 278, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    // mïsn 1001 (bit 9042, the Fed Carrier at Kit Port) was retired in wave 38 for the A8 mission warship (wave38Resources).
     out.push({ type: "shïp", id: 790, name: "Kit Fed Carrier Anchored", clone: "shïp:143", set: {
         speed: 0, accel: 0, shortName: "Kit Fed Carrier Anchored", longName: "Kit Fed Carrier Anchored", commName: "Kit Fed Carrier Anchored" } });
     out.push({ type: "shän", id: 790, name: "Kit Fed Carrier Anchored", clone: "shän:143" });

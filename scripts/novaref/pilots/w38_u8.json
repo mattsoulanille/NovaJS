@@ -1,0 +1,19 @@
+{
+  "name": "novaref-w38-u8",
+  "edits": {
+    "ship": 590,
+    "stellar": 1941,
+    "credits": 1000000,
+    "fuel": 300,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1387": 2,
+      "1388": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w38-u8"
+  }
+}

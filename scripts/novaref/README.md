@@ -558,6 +558,18 @@ the anchored sÿst 1384 rig); an AI 3 armed only with a one-shot weapon
 escorts; `down:ctrl wait 200 up:ctrl` fires the secondary (`ctrl@120` did
 not). `scenarios/w37_space_interactive.json` / `w37_space_early.json`
 (inbox `w37.jsonl`).
+Wave 38 used sÿst 1386-1399, spöb 1939-1954, shïp 590-592, düde 509-511,
+gövt 288-290 and bits 9250-9254, and RETIRED wave 7's mïsn 1010-1020 and
+wave 6's mïsn 1001 for its own (1001 A8 mission warship, 1010 / 1019 / 1020
+A9 pirates, 1011-1018 R13 offers; the old ships and düdes stay); next free:
+sÿst 1400, spöb 1955 (spares 1495 / 1496 / 1499), shïp 593, düde 512, ränk
+205, mïsn **none** (retire another old kit mission), wëap 296, oütf 470,
+gövt 287 and below, flët 324, jünk 205, bits 9255. A pirate (gövt 0x1000)
+must be XENOPHOBIC (0x0001, as every stock pirate govt) to attack the
+player: 0x1000 | 0x0004 never did; place it by a mission on the player's
+port. Weapons are locked once `j` is pressed (a self-disable cannot cut a
+jump short). `scenarios/w38_space_interactive.json` / `w38_space_early.json`
+(inbox `w38.jsonl`).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they

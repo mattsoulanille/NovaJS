@@ -1,0 +1,27 @@
+{
+  "name": "novaref-w38-t25600",
+  "edits": {
+    "ship": 703,
+    "stellar": 1950,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1395": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w38-t25600",
+    "weapons": {
+      "128": 0,
+      "365": 1
+    },
+    "outfits": {
+      "128": 0,
+      "607": 1
+    },
+    "rating": 25600
+  }
+}
