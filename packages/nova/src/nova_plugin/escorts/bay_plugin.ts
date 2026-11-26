@@ -225,9 +225,22 @@ export function applyRefundFighter(world: World, peerId: string | undefined,
     return refundFighterToBay(carrier, refund.bayWeaponId, gameData);
 }
 
-/** Speed, in px/s, a fighter is pushed out of the bay at, on top of
- * the carrier's own velocity. */
-export const EXIT_KICK = 10;
+/**
+ * Speed, in px/s, a fighter is pushed out of the bay at, on top of the
+ * carrier's own velocity: the bay's own wëap Speed, read like a shot's
+ * (BaseWeaponData.shotSpeed, Speed / 100 px a 30 fps frame).
+ *
+ * MEASURED (reference "Bay fighter launch speed (E8), wave 40"): the
+ * stock Viper Bay's Speed 400 put a fighter out at about 1.5-2 px a frame
+ * and a Speed-1000 bay at up to about 10, each then braking to its
+ * station on its own AI. GUESS, the section's proposal: Speed / 100 px a
+ * frame (400 -> 4, 1000 -> 10), close to the readings once the frames of
+ * the fighter clearing the carrier's sprite are discounted. Was a
+ * constant 10 px/s for every bay.
+ */
+export function bayExitKick(bay: Pick<BayWeaponData, 'shotSpeed'>): number {
+    return bay.shotSpeed;
+}
 
 class BayWeaponEntry extends WeaponEntry {
     declare data: BayWeaponData;
@@ -293,9 +306,8 @@ class BayWeaponEntry extends WeaponEntry {
         if (sourceVelocity) {
             velocity = velocity.add(sourceVelocity);
         }
-        // Tracker issue: BayWeaponData carries no launch speed, so every
-        // bay uses the EXIT_KICK constant rather than its wëap's field.
-        velocity = velocity.add(angle.getUnitVector().scale(EXIT_KICK));
+        velocity = velocity.add(
+            angle.getUnitVector().scale(bayExitKick(this.data)));
 
         const ship = this.makeShip();
         ship.components.set(OwnerComponent, {owner});

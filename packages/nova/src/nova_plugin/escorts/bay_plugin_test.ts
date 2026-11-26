@@ -16,7 +16,7 @@ import { SoundEvent } from '../core/index.js';
 import { EscortCommandComponent, NO_DEAL } from '../player/index.js';
 import { FormationComponent, NpcComponent, RCS_ACCEL_FRACTION } from '../npc/index.js';
 import {
-    applyRefundFighter, BayFighterComponent, EXIT_KICK, FighterDockedEvent,
+    applyRefundFighter, bayExitKick, BayFighterComponent, FighterDockedEvent,
     startReturnHome,
 } from './bay_plugin.js';
 import { CollisionEvent, CollisionVulnerabilityComponent } from '../core/index.js';
@@ -40,6 +40,8 @@ import { WeaponsStateComponent } from '../ship/index.js';
 const CARRIER_ID = 'test:carrier';
 const FIGHTER_SHIP_ID = 'test:fighterShip';
 const BAY_ID = 'test:bay';
+/** The bay's wëap Speed 400 (the stock Viper Bay) as a shot speed, px/s. */
+const BAY_SHOT_SPEED = 400 * 3 / 10;
 const BAY_OUTFIT_ID = 'test:bayOutfit';
 // Two fighter outfits supplying the SAME bay, so the lowest-sorted-id
 // consume/refund policy is observable. 'A' sorts before 'B'.
@@ -71,6 +73,7 @@ async function makeTestWorld({ fighterCounts = { [FIGHTER_A_ID]: 2 },
         ammoType: ['weapon', BAY_ID],
         maxAmmo,
         fireGroup: 'secondary',
+        shotSpeed: BAY_SHOT_SPEED,
         // The shortest reload there is: WeaponsSystem floors it at one
         // original 30 fps frame, so a held trigger launches every SECOND
         // 60 Hz step (see launchOne).
@@ -389,8 +392,19 @@ describe('bay weapons', () => {
             const kick = launched.subtract(carrierVelocity);
             const rcsPerTick = fighter.components.get(ShipPhysicsComponent)!
                 .acceleration * RCS_ACCEL_FRACTION * SIMULATION_STEP_MS / 1000;
-            expect(Math.abs(kick.length - EXIT_KICK))
+            expect(Math.abs(kick.length - BAY_SHOT_SPEED))
                 .toBeLessThanOrEqual(2 * rcsPerTick + 1e-9);
+        });
+
+    it('kicks the fighter out at the bay\'s own wëap Speed (reference '
+        + '"Bay fighter launch speed (E8), wave 40")', () => {
+            // Speed / 100 px a 30 fps frame, the shot-speed reading
+            // (WEAP_SPEED_FACTOR 3 / 10): the stock Viper Bay's 400 is 4
+            // px a frame, the kit's 1000 is 10.
+            expect(bayExitKick({ shotSpeed: 400 * 3 / 10 }))
+                .toBeCloseTo(4 * 30, 9);
+            expect(bayExitKick({ shotSpeed: 1000 * 3 / 10 }))
+                .toBeCloseTo(10 * 30, 9);
         });
 
     it('re-derives the carrier\'s return_escorts vulnerability after the '
