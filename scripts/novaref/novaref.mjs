@@ -1093,7 +1093,10 @@ async function openPilot(name) {
     }
     const last = ssh(`strings ${rq(cfg.pilotsDir + "/Last Pilot")}/..namedfork/rsrc | head -3`,
         { allowFail: true }).stdout.split("\n");
-    const verified = last.includes(name);
+    // The alias stores the name as a Pascal string; `strings` keeps a length
+    // byte that is itself printable (12 = form feed) glued to the name, so a
+    // 12-character name came back as "...\fnovaref-r5-1" (wave 41).
+    const verified = last.includes(name) || last.some((l) => l.endsWith(String.fromCharCode(name.length) + name));
     return { ok: verified, cmd: "open_pilot", pilot: name, last_pilot_alias: last.filter(Boolean)[1] ?? null,
         ...(verified ? {} : { error: "Last Pilot does not name the requested pilot" }) };
 }
