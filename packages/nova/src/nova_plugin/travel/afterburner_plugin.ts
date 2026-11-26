@@ -17,11 +17,13 @@ import { getShipMovementPhysics, ShipPhysicsComponent } from '../ship/index.js';
 /**
  * How much an engaged afterburner multiplies a ship's top speed and
  * acceleration. The EVN Bible documents only the afterburner's fuel
- * burn (oütf ModType 15, units of fuel per second); the boost itself is
- * undocumented, so this matches the Nova engine's observed
- * roughly-double boost.
+ * burn (oütf ModType 15, units of fuel per second). MEASURED (reference
+ * "The player's afterburner (U4), wave 39"): about 1.5 x the top speed
+ * (6.1 against 4.05 px a frame, Kit Probe A, Speed 300). GUESS: a factor
+ * rather than an added constant (one hull cannot separate them), and the
+ * acceleration boosted by the same factor (not measured). Was 2.
  */
-export const AFTERBURNER_FACTOR = 2;
+export const AFTERBURNER_FACTOR = 1.5;
 
 /**
  * What strict play multiplies the player's top speed by. Measured on the
@@ -35,7 +37,7 @@ export const STRICT_PLAY_SPEED_FACTOR = 2 / 3;
 
 /**
  * How fast a ship sheds speed its cap no longer covers, as a multiple of
- * the ship's own (unboosted, un-ion-slowed) acceleration.
+ * the ship's own (unboosted, un-ionized) acceleration.
  *
  * Releasing the afterburner used to halve a ship's speed inside a single
  * tick, because the cap dropped to normal at once and MovementSystem
@@ -43,14 +45,16 @@ export const STRICT_PLAY_SPEED_FACTOR = 2 / 3;
  * The original coasts down instead. There is no drag term anywhere in the
  * movement integration to coast on, and the Bible documents only the
  * afterburner's fuel burn (oütf ModType 15), never its physics, so the
- * decay rate is a choice: the ship's own acceleration, the one number in
- * the data that says how quickly these engines change this hull's speed.
+ * decay is scaled by the ship's own acceleration, the one number in the
+ * data that says how quickly these engines change this hull's speed.
  *
- * At 1.0 the coast-down takes twice as long as the spin-up did, since the
- * burn accelerated at AFTERBURNER_FACTOR times acceleration — fast in,
- * slower out, which is how the slingshot reads in the original.
+ * MEASURED (reference "The player's afterburner (U4), wave 39"): the
+ * coast back down from the boosted 6.1 px a frame to the 4.0 top speed
+ * took about 2.5 s, about 25 px/s², roughly HALF the hull's own
+ * acceleration (its ramp from rest about 54 px/s²). GUESS from one hull:
+ * half the acceleration on every hull. Was 1.
  */
-export const OVERSPEED_DECAY_FACTOR = 1;
+export const OVERSPEED_DECAY_FACTOR = 0.5;
 
 /**
  * The speed cap to enforce this tick for a ship whose real cap is

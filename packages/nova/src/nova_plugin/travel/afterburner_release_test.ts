@@ -47,6 +47,12 @@ describe('afterburner release', () => {
         });
     });
 
+    it('boosts 1.5 x and coasts down at half the hull\'s acceleration '
+        + '(reference "The player\'s afterburner (U4), wave 39")', () => {
+            expect(AFTERBURNER_FACTOR).toBe(1.5);
+            expect(OVERSPEED_DECAY_FACTOR).toBe(0.5);
+        });
+
     async function makeAfterburnerWorld() {
         const gameData = new MockGameData();
         const shipData: ShipData = {
@@ -82,8 +88,8 @@ describe('afterburner release', () => {
         const { world, ship } = await makeAfterburnerWorld();
         ship.components.get(ShipControlStateComponent)!
             .set('afterburner', true);
-        // Boosted acceleration is 2x300, so 600 units of speed takes well
-        // under a second; 120 steps is two seconds of margin.
+        // Boosted acceleration is 1.5 x 300, so 450 units of speed takes
+        // about a second; 120 steps is two seconds.
         await stepWorld(world, 120);
         return { world, ship };
     }
@@ -118,8 +124,8 @@ describe('afterburner release', () => {
 
         let previous = speed(ship);
         const drops: number[] = [];
-        // The whole coast-down is BASE_SPEED of overspeed at
-        // ACCELERATION per second — one second, i.e. 60 steps.
+        // The whole coast-down is half of BASE_SPEED of overspeed at half
+        // of ACCELERATION per second — one second, i.e. 60 steps.
         for (let i = 0; i < 55; i++) {
             await stepWorld(world, 1);
             const current = speed(ship);
