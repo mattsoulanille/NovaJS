@@ -62,6 +62,18 @@ export const FORMATION_BRAKE_FRACTION = 0.5;
  * a circular orbit of its slot exactly one turning radius out, chasing a
  * correction that swings round as fast as it can turn. */
 export const FORMATION_TURN_CLOSING_FRACTION = 0.5;
+/**
+ * The slot dead band (px): within this distance of its slot a follower
+ * stops closing on it and only matches the leader's velocity, so it parks
+ * where it comes to rest. MEASURED (reference "F1c re-flow offsets, wave
+ * 36"): after a re-flow five escorts stopped 7.7-11.5 px short of their
+ * new slots, each on the straight line from its old one, and held there
+ * from 3 s to 90 s and at cruise. GUESS: a 12 px radius (the largest
+ * reading; the stop inside it comes from the braking) and a radius rather
+ * than a per-axis box. A follower that starts on its slot (a pilot-loaded
+ * escort, wave 22: 0.5 px rms) stays on it.
+ */
+export const FORMATION_SLOT_DEADBAND = 12;
 
 // --- RCS (reaction control) tuning ---
 //
@@ -432,11 +444,13 @@ export function formationSlotPosition(leaderPosition: Position,
  * The correction is the desired velocity (leader's, plus a pull toward the
  * slot — proportional to the distance, capped at a speed the follower can
  * brake from and turn onto: FORMATION_BRAKE_FRACTION,
- * FORMATION_TURN_CLOSING_FRACTION) minus the follower's. The target is
+ * FORMATION_TURN_CLOSING_FRACTION, and nothing inside
+ * FORMATION_SLOT_DEADBAND) minus the follower's. The target is
  * the slot ITSELF: the original holds escorts on the same slots at rest
  * and at full speed (reference F1), so there is no lead ahead of it; the
  * leader's velocity is fed forward so a follower can hold the slot of a
- * moving leader with zero position error. Pure so tests can check
+ * moving leader with zero position error, and an escort parked inside
+ * the dead band keeps its offset at cruise (wave 36). Pure so tests can check
  * convergence and that RCS never turns the ship.
  */
 export function steerFormation(movement: MovementState, leader: MovementState,
@@ -449,12 +463,13 @@ export function steerFormation(movement: MovementState, leader: MovementState,
     const error = slotPosition.subtract(movement.position);
     // Desired velocity: the leader's, plus a closing velocity toward the
     // slot, proportional to the distance but no faster than the follower
-    // can brake from or turn onto.
+    // can brake from or turn onto; none inside the slot dead band.
     const distance = error.length;
-    const closing = Math.min(distance * FORMATION_POSITION_GAIN,
-        Math.sqrt(2 * FORMATION_BRAKE_FRACTION * acceleration * distance),
-        FORMATION_TURN_CLOSING_FRACTION * turnRate * distance);
-    const desired = distance > 1e-9
+    const closing = distance <= FORMATION_SLOT_DEADBAND ? 0
+        : Math.min(distance * FORMATION_POSITION_GAIN,
+            Math.sqrt(2 * FORMATION_BRAKE_FRACTION * acceleration * distance),
+            FORMATION_TURN_CLOSING_FRACTION * turnRate * distance);
+    const desired = closing > 0
         ? Vector.fromVectorLike(leader.velocity)
             .add(error.normalize(closing))
         : Vector.fromVectorLike(leader.velocity);

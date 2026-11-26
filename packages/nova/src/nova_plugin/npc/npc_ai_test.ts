@@ -9,7 +9,7 @@ import { govtDisposition, effectiveStrength, oddsFavorable } from '../reputation
 import {
     chaserBlocksJump, chooseNearest, Formation, formationOffset,
     formationSlotPosition, FLEE_JUMP_BLOCK_RANGE,
-    FORMATION_MIN_SPACING, formationSpacing,
+    FORMATION_MIN_SPACING, FORMATION_SLOT_DEADBAND, formationSpacing,
     landingDestinations, nextFormationSlot, npcBoardArrived,
     npcPlunderEligible, npcPlundersHulks, NPC_BOARD_RADIUS, NPC_BOARD_SPEED,
     NPC_PLUNDER_TAKES_FROM_PLAYERS, PlanetEntry,
@@ -503,16 +503,17 @@ describe('steerFormation', () => {
         expect(follower.turning).toBe(0);
     });
 
-    it('converges on station under RCS with the heading never leaving ' +
-        'the leader alignment', () => {
+    it('holds inside the slot dead band under RCS: matches the leader\'s '
+        + 'velocity without closing, the heading never leaving the leader '
+        + 'alignment (reference "F1c re-flow offsets, wave 36")', () => {
             const leader = movement({
                 velocity: new Vector(40, 0),
                 rotation: new Angle(Math.PI / 2),
             });
             const slot = formationSlotPosition(
                 new Position(0, 0), new Angle(Math.PI / 2), 0, FORMATION_MIN_SPACING);
-            // Slightly off station and slow — a correction well under
-            // the RCS engage threshold.
+            // 10 px off station (inside the dead band) and slow — a
+            // correction well under the RCS engage threshold.
             const follower = movement({
                 position: new Position(slot.x - 8, slot.y + 6),
                 velocity: new Vector(30, 0),
@@ -538,10 +539,55 @@ describe('steerFormation', () => {
                 leader.position = leader.position
                     .add(leader.velocity.scale(DT)) as Position;
             }
-            expect(error()).toBeLessThan(2);
-            expect(error()).toBeLessThan(initialError);
+            // No closing inside the band: the gap only drifts while the
+            // velocities match (30 -> 40 px/s at the RCS budget).
+            expect(initialError).toBeCloseTo(10, 6);
+            expect(error()).toBeLessThan(FORMATION_SLOT_DEADBAND);
+            expect(Math.abs(error() - initialError)).toBeLessThan(1);
             expect(follower.velocity.subtract(leader.velocity).length)
                 .toBeLessThan(1);
+        });
+
+    it('closes from outside the dead band and parks inside it, short of '
+        + 'the slot on the line it came in on (reference "F1c re-flow '
+        + 'offsets, wave 36": 7.7-11.5 px short)', () => {
+            const leader = movement({ rotation: new Angle(Math.PI / 2) });
+            const slot = formationSlotPosition(
+                new Position(0, 0), new Angle(Math.PI / 2), 0,
+                FORMATION_MIN_SPACING);
+            const start = new Position(slot.x - 24, slot.y + 18);
+            const follower = movement({
+                position: start, rotation: new Angle(Math.PI / 2),
+            });
+            const state = formation();
+            for (let i = 0; i < 1800; i++) {
+                steerFormation(follower, leader, state, ACCEL, DT);
+                follower.position = follower.position
+                    .add(follower.velocity.scale(DT)) as Position;
+            }
+            const rest = slot.subtract(follower.position);
+            expect(rest.length).toBeLessThanOrEqual(FORMATION_SLOT_DEADBAND);
+            expect(rest.length).toBeGreaterThan(5);
+            // On the line from where it started.
+            const line = slot.subtract(start).normalize(1);
+            expect(Math.abs(rest.x * line.y - rest.y * line.x))
+                .toBeLessThan(0.5);
+            expect(follower.velocity.length).toBeLessThan(0.1);
+        });
+
+    it('stays exactly on a slot it starts on, as pilot-loaded escorts do '
+        + '(reference wave 22: 0.5 px rms)', () => {
+            const leader = movement({ rotation: new Angle(0.4) });
+            const slot = formationSlotPosition(new Position(0, 0),
+                new Angle(0.4), 3, FORMATION_MIN_SPACING);
+            const follower = movement({ position: slot,
+                rotation: new Angle(0.4) });
+            const state = formation({ slot: 3 });
+            for (let i = 0; i < 600; i++) {
+                steerFormation(follower, leader, state, ACCEL, DT);
+                expect(follower.velocity.length).toBe(0);
+                expect((follower.turnTo as Angle).angle).toBeCloseTo(0.4);
+            }
         });
 
     it('hysteresis: holds the current regime between the thresholds', () => {
@@ -617,6 +663,11 @@ describe('steerFormation flying a real hull (finite turn rate, 60 Hz)', () => {
         const formation: Formation = { leader: 'leader', slot: rank };
         const steps = Math.round(seconds / DT);
         let holdMax = 0;
+        /** The follower's offset from the leader over the hold window: a
+         * follower parked in its slot's dead band does not move in it. */
+        let holdFirst: Vector | undefined;
+        let holdDrift = 0;
+        const headings: number[] = [];
         for (let i = 0; i < steps; i++) {
             const leader: MovementState = {
                 accelerating: 0, position: leaderPosition, rotation,
@@ -647,6 +698,11 @@ describe('steerFormation flying a real hull (finite turn rate, 60 Hz)', () => {
                 holdMax = Math.max(holdMax, formationSlotPosition(
                     leaderPosition, rotation, rank, spacing)
                     .subtract(follower.position).length);
+                const offset = follower.position.subtract(leaderPosition);
+                holdFirst ??= offset;
+                holdDrift = Math.max(holdDrift,
+                    offset.subtract(holdFirst).length);
+                headings.push(follower.rotation.angle);
             }
         }
         const u = rotation.getUnitVector();
@@ -655,7 +711,9 @@ describe('steerFormation flying a real hull (finite turn rate, 60 Hz)', () => {
         return {
             along: d.x * u.x + d.y * u.y,
             across: d.x * u.y - d.y * u.x,
-            holdMax,
+            holdMax, holdDrift,
+            /** The heading's spread over the hold window (rad). */
+            headingSpread: Math.max(...headings) - Math.min(...headings),
         };
     }
 
@@ -676,11 +734,21 @@ describe('steerFormation flying a real hull (finite turn rate, 60 Hz)', () => {
     /** 24 px discs (a = 23.5) and 96 px frames (a = 56.6). */
     const SPACINGS = [formationSpacing(24), formationSpacing(96)];
 
-    it('holds the four measured slots at rest (reference F1/F1b)', () => {
+    /** A follower placed ON its slot (a pilot-loaded escort), moving with
+     * the leader. */
+    function onSlot(rank: number, a: number, velocity: Vector) {
+        const rotation = velocity.length > 0 ? velocity.angle : new Angle(0);
+        const slot = formationSlotPosition(new Position(0, 0), rotation,
+            rank, a);
+        return at(slot.x, slot.y, velocity.x, velocity.y, rotation.angle);
+    }
+
+    it('holds the four measured slots at rest (reference F1/F1b; '
+        + 'pilot-loaded escorts start on them, wave 22)', () => {
         for (const a of SPACINGS) {
             MEASURED.forEach(([along, across], rank) => {
                 const result = fly(TYPICAL, rank, new Vector(0, 0),
-                    at(60, 40), 40, 10, a);
+                    onSlot(rank, a, new Vector(0, 0)), 40, 10, a);
                 expect(result.along).withContext(`a ${a} rank ${rank}`)
                     .toBeCloseTo(along * a, 0);
                 expect(result.across).withContext(`a ${a} rank ${rank}`)
@@ -698,13 +766,34 @@ describe('steerFormation flying a real hull (finite turn rate, 60 Hz)', () => {
                         .scale(CRUISE);
                     MEASURED.forEach(([along, across], rank) => {
                         const result = fly(TYPICAL, rank, velocity,
-                            at(-80, 30, velocity.x, velocity.y), 40, 10, a);
+                            onSlot(rank, a, velocity), 40, 10, a);
                         const context = `a ${a} heading ${heading} rank ${rank}`;
                         expect(result.along).withContext(context)
                             .toBeCloseTo(along * a, 0);
                         expect(result.across).withContext(context)
                             .toBeCloseTo(across * a, 0);
                         expect(result.holdMax).toBeLessThan(1);
+                    });
+                }
+            }
+        });
+
+    it('flies in from off station and parks inside the slot dead band, '
+        + 'still, with a steady heading, at rest and at cruise (reference '
+        + '"F1c re-flow offsets, wave 36")', () => {
+            for (const a of SPACINGS) {
+                for (const velocity of [new Vector(0, 0),
+                    new Vector(CRUISE, 0)]) {
+                    MEASURED.forEach((_, rank) => {
+                        const result = fly(TYPICAL, rank, velocity,
+                            at(60, 40, velocity.x, velocity.y), 40, 10, a);
+                        const context = `a ${a} v ${velocity.x} rank ${rank}`;
+                        expect(result.holdMax).withContext(context)
+                            .toBeLessThanOrEqual(FORMATION_SLOT_DEADBAND);
+                        expect(result.holdDrift).withContext(context)
+                            .toBeLessThan(0.5);
+                        expect(result.headingSpread).withContext(context)
+                            .toBeLessThan(1e-6);
                     });
                 }
             }
@@ -719,8 +808,12 @@ describe('steerFormation flying a real hull (finite turn rate, 60 Hz)', () => {
                 new Vector(CARGO_DRONE.speed * 0.8, 0)]) {
                 const result = fly(CARGO_DRONE, 1, leaderVelocity,
                     at(0, 600, 0, CARGO_DRONE.speed), 90, 15);
-                expect(result.holdMax).withContext(
-                    `leader at ${leaderVelocity.x} px/s`).toBeLessThan(3);
+                // Parked inside the dead band, and still there.
+                const context = `leader at ${leaderVelocity.x} px/s`;
+                expect(result.holdMax).withContext(context)
+                    .toBeLessThanOrEqual(FORMATION_SLOT_DEADBAND);
+                expect(result.holdDrift).withContext(context)
+                    .toBeLessThan(0.5);
             }
         });
 
@@ -740,7 +833,10 @@ describe('steerFormation flying a real hull (finite turn rate, 60 Hz)', () => {
             const result = fly(pod, 0, new Vector(0, 0),
                 at(slot.x + 57.5, slot.y + 170, 89.2, -29.4, -0.315), 150,
                 15);
-            expect(result.holdMax).toBeLessThan(3);
+            // Parked inside the dead band, not circling.
+            expect(result.holdMax)
+                .toBeLessThanOrEqual(FORMATION_SLOT_DEADBAND);
+            expect(result.holdDrift).toBeLessThan(0.5);
         });
 });
 

@@ -172,7 +172,8 @@ export {
 } from './npc_plunder_board.js';
 export {
     FORMATION_SPACING_PER_FRAME_PX, FORMATION_MIN_SPACING,
-    FORMATION_MAX_SPACING, formationSpacing, RCS_ACCEL_FRACTION,
+    FORMATION_MAX_SPACING, FORMATION_SLOT_DEADBAND, formationSpacing,
+    RCS_ACCEL_FRACTION,
     RCS_ENGAGE_SPEED, RCS_DISENGAGE_SPEED, Formation, FormationComponent,
     nextFormationSlot, formationsIn, formationOffset, formationSlotPosition,
     steerFormation,

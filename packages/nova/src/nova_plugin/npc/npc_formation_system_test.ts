@@ -12,7 +12,9 @@ import { TimePlugin, useFixedTimestep } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import { SIMULATION_STEP_MS } from '../make_system.js';
 import { BayFighterComponent, ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
-import { FormationCell, FormationComponent, formationSpacing } from './npc_formation.js';
+import {
+    FormationCell, FormationComponent, FORMATION_SLOT_DEADBAND, formationSpacing,
+} from './npc_formation.js';
 import { FormationSystem } from './npc_formation_system.js';
 
 /**
@@ -78,17 +80,39 @@ async function formationWorld(leaderWidth: number, escortWidths: number[]) {
     return world;
 }
 
-/** Escort offsets from the leader: [astern, left of the heading]. */
-function offsets(world: World, count: number): Array<[number, number]> {
-    const out: Array<[number, number]> = [];
-    for (let slot = 0; slot < count; slot++) {
-        const { position } = world.entities.get(`escort-${slot}`)!
-            .components.get(MovementStateComponent)!;
-        // Facing up (0, -1): astern is +y, left is -x.
-        out.push([Math.round(position.y * 10) / 10,
-            Math.round(-position.x * 10) / 10]);
-    }
-    return out;
+/** Where escort `slot` sets off (formationWorld). */
+function startOf(slot: number): [number, number] {
+    return [30 * slot - 45, 80];
+}
+
+function positionOf(world: World, uuid: string): [number, number] {
+    const { position } = world.entities.get(uuid)!
+        .components.get(MovementStateComponent)!;
+    return [position.x, position.y];
+}
+
+/**
+ * Expects `uuid` parked for the station at [astern, left of the heading]
+ * (the leader at the origin facing up): inside the slot dead band,
+ * on the straight line from `from` (where it set off) to the station
+ * (reference "F1c re-flow offsets, wave 36": each escort stops 7.7-11.5 px
+ * short on the line from its old slot). The layouts' stations are 23.5 px
+ * or more apart, so a wrong one fails the band or the line.
+ */
+function expectParked(world: World, uuid: string, from: [number, number],
+    [back, left]: [number, number], context = uuid) {
+    const [x, y] = positionOf(world, uuid);
+    const station = [-left, back];
+    const rest = [station[0] - x, station[1] - y];
+    const line = [station[0] - from[0], station[1] - from[1]];
+    const lineLength = Math.hypot(line[0], line[1]);
+    expect(Math.hypot(rest[0], rest[1])).withContext(context)
+        .toBeLessThanOrEqual(FORMATION_SLOT_DEADBAND);
+    // Within 2 px of that line (a hull that sets off at rest facing away
+    // curves a little as it turns; a long run in may overshoot and settle
+    // back from the far side, still on the line).
+    expect(Math.abs(rest[0] * line[1] - rest[1] * line[0]) / lineLength)
+        .withContext(context).toBeLessThan(2);
 }
 
 function stepSeconds(world: World, seconds: number) {
@@ -105,43 +129,36 @@ describe('FormationSystem group spacing (reference F1b)', () => {
             stepSeconds(world, 30);
             const a = formationSpacing(96);
             expect(a).toBeCloseTo(56.6, 1);
-            const expected = [[a, a], [a, -a], [2 * a, 2 * a], [2 * a, -2 * a]];
-            offsets(world, 4).forEach(([back, left], slot) => {
-                expect(back).withContext(`slot ${slot}`)
-                    .toBeCloseTo(expected[slot][0], 0);
-                expect(left).withContext(`slot ${slot}`)
-                    .toBeCloseTo(expected[slot][1], 0);
-            });
+            const expected: Array<[number, number]> =
+                [[a, a], [a, -a], [2 * a, 2 * a], [2 * a, -2 * a]];
+            expected.forEach((station, slot) => expectParked(world,
+                `escort-${slot}`, startOf(slot), station));
         });
 
     it('counts the leader\'s frame too', async () => {
         const world = await formationWorld(200, [24, 24]);
         stepSeconds(world, 30);
-        expect(offsets(world, 2)).toEqual([[59.5, 59.5], [59.5, -59.5]]);
+        expect(formationSpacing(200)).toBeCloseTo(59.5, 1);
+        expectParked(world, 'escort-0', startOf(0), [59.5, 59.5]);
+        expectParked(world, 'escort-1', startOf(1), [59.5, -59.5]);
     });
 
     it('re-spaces the formation when its largest escort leaves', async () => {
         const world = await formationWorld(24, [24, 96]);
         stepSeconds(world, 30);
-        expect(offsets(world, 1)).toEqual([[56.6, 56.6]]);
+        expectParked(world, 'escort-0', startOf(0), [56.6, 56.6]);
+        const parked = positionOf(world, 'escort-0');
         world.entities.delete('escort-1');
         stepSeconds(world, 30);
-        expect(offsets(world, 1)).toEqual([[23.5, 23.5]]);
+        expectParked(world, 'escort-0', parked, [23.5, 23.5]);
     });
 });
 
-/** Where a follower should settle for `cell` at step `a`, in offsets()'s
- * [astern, left] frame (a cell's steps are to the RIGHT). */
+/** Where a follower's station is for `cell` at step `a`, in
+ * expectParked's [astern, left] frame (a cell's steps are to the RIGHT). */
 function expected(cell: FormationCell, a: number): [number, number] {
     return [Math.round(cell[0] * a * 10) / 10,
         Math.round(-cell[1] * a * 10) / 10 + 0];
-}
-
-function offsetOf(world: World, uuid: string): [number, number] {
-    const { position } = world.entities.get(uuid)!
-        .components.get(MovementStateComponent)!;
-    return [Math.round(position.y * 10) / 10,
-        Math.round(-position.x * 10) / 10 + 0];
 }
 
 describe('FormationSystem count layouts (reference F1c)', () => {
@@ -152,18 +169,16 @@ describe('FormationSystem count layouts (reference F1c)', () => {
         stepSeconds(world, 40);
         const nine: FormationCell[] = [[1, -1], [1, 1], [2, 0], [2, -2],
             [2, 2], [3, -1], [3, 1], [3, -3], [3, 3]];
-        nine.forEach((cell, slot) => {
-            const [back, left] = offsetOf(world, `escort-${slot}`);
-            const [eBack, eLeft] = expected(cell, a);
-            expect(back).withContext(`slot ${slot}`).toBeCloseTo(eBack, 0);
-            expect(left).withContext(`slot ${slot}`).toBeCloseTo(eLeft, 0);
-        });
+        nine.forEach((cell, slot) => expectParked(world, `escort-${slot}`,
+            startOf(slot), expected(cell, a)));
     });
 
     it('re-flows the whole group to the 8-layout when the centre escort '
         + 'leaves nine', async () => {
             const world = await formationWorld(24, Array(9).fill(24));
             stepSeconds(world, 40);
+            const before = new Map([0, 1, 3, 4, 5, 6, 7, 8].map(slot =>
+                [slot, positionOf(world, `escort-${slot}`)] as const));
             world.entities.delete('escort-2');
             stepSeconds(world, 40);
             // The eight left, in rank order (slot 2 gone), and the 8-layout:
@@ -173,11 +188,21 @@ describe('FormationSystem count layouts (reference F1c)', () => {
             const slots = [0, 1, 3, 4, 5, 6, 7, 8];
             const eight: FormationCell[] = [[1, -1], [1, 1], [2, -2], [2, 2],
                 [3, -1], [3, 1], [2, 0], [3, -3]];
+            // Each re-flowed escort parks short of its new station on the
+            // line from where it sat (wave 36); one whose station did not
+            // move (inside its band) stays put.
             slots.forEach((slot, rank) => {
-                const [back, left] = offsetOf(world, `escort-${slot}`);
-                const [eBack, eLeft] = expected(eight[rank]!, a);
-                expect(back).withContext(`slot ${slot}`).toBeCloseTo(eBack, 0);
-                expect(left).withContext(`slot ${slot}`).toBeCloseTo(eLeft, 0);
+                const uuid = `escort-${slot}`;
+                const station = expected(eight[rank]!, a);
+                const from = before.get(slot)!;
+                const moved = Math.hypot(-station[1] - from[0],
+                    station[0] - from[1]) > FORMATION_SLOT_DEADBAND;
+                if (moved) {
+                    expectParked(world, uuid, from, station);
+                } else {
+                    expect(positionOf(world, uuid)).withContext(uuid)
+                        .toEqual(from);
+                }
             });
         });
 
@@ -189,14 +214,11 @@ describe('FormationSystem count layouts (reference F1c)', () => {
             stepSeconds(world, 30);
             // Three followers: the hired slots 1 and 2 take row 1, the
             // fighter (slot 0) the centre behind them.
-            const near = (uuid: string, cell: FormationCell) => {
-                const [back, left] = offsetOf(world, uuid);
-                const [eBack, eLeft] = expected(cell, a);
-                expect(back).withContext(uuid).toBeCloseTo(eBack, 0);
-                expect(left).withContext(uuid).toBeCloseTo(eLeft, 0);
-            };
-            near('escort-1', [1, -1]);
-            near('escort-2', [1, 1]);
-            near('escort-0', [2, 0]);
+            const near = (slot: number, cell: FormationCell) =>
+                expectParked(world, `escort-${slot}`, startOf(slot),
+                    expected(cell, a));
+            near(1, [1, -1]);
+            near(2, [1, 1]);
+            near(0, [2, 0]);
         });
 });

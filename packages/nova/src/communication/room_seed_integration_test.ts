@@ -230,11 +230,17 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // genesis populations (their size, and every draw after the
             // removed roll) changed; and "P1 wave 17" stamps
             // NpcState.aggressorHitAt on each hit.
+            //
+            // Kestrel's stepped hash was re-pinned for the formation slot
+            // dead band ("F1c re-flow offsets, wave 36": a follower within
+            // FORMATION_SLOT_DEADBAND of its slot stops closing on it), so
+            // its fleet escorts park short of their slots. Genesis,
+            // Thessaly and both Random states did not move.
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
                 [THESSALY, '995fb3e5', '62533f82',
                     [2692022053, 1542226132, 2680743810, 396450618]],
-                [SYNTHETIC.systems.kestrel, '67bfe0b2', 'b8e7752c',
+                [SYNTHETIC.systems.kestrel, '67bfe0b2', '48188948',
                     [2312166265, 2407210324, 1413610751, 1491742322]],
             ];
             for (const [systemId, genesis, stepped, random] of pins) {
