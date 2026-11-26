@@ -493,8 +493,9 @@ export function tributeHeading(lines: TributeLines,
  * The answer to a Demand Tribute / Release press (#353), from the same
  * pure verdict the simulation applies (encounters/tribute.ts's
  * tributeDemandOutcome over the pilot's synced combat rating), and the
- * record to send, if any: a laugh changes nothing in the simulation and
- * sends nothing. `seed` picks the laugh or fleet line.
+ * record to send: every demand sends one, a laugh included, which costs
+ * one kill's record (reference "Tribute leftovers (R18), wave 40";
+ * tribute.ts's TRIBUTE_LAUGH_KILLS). `seed` picks the laugh or fleet line.
  *
  * GUESS (display only): "has a fleet" is PlanetData.defense here; the
  * simulation also needs the fleet's düde to name a ship class, which every
@@ -502,7 +503,7 @@ export function tributeHeading(lines: TributeLines,
  */
 export function tributePressAnswer(lines: TributeLines,
     kind: 'demand' | 'release', rating: number, seed: number):
-    TributePressAnswer & { record?: 'demandTribute' | 'releaseTribute' } {
+    TributePressAnswer & { record: 'demandTribute' | 'releaseTribute' } {
     if (kind === 'release') {
         return {
             answer: tributeReleasedText(lines.stellarStrings, lines.isStation),
@@ -517,7 +518,7 @@ export function tributePressAnswer(lines: TributeLines,
         heading: tributeHeading(lines,
             outcome === 'dominate' ? 'dominated' : 'hostile'),
         next: outcome === 'dominate' ? 'release' : 'demand',
-        ...(outcome !== 'laugh' ? { record: 'demandTribute' as const } : {}),
+        record: 'demandTribute',
     };
 }
 
@@ -1785,8 +1786,8 @@ export const HailDialogPlugin: Plugin = {
             },
             // Demand Tribute / Release at a stellar (#353): the stellar's
             // answer from the same pure verdict the simulation applies
-            // (tributePressAnswer), and the record, when there is one to
-            // send. A laugh sends nothing.
+            // (tributePressAnswer), and the record (a laugh's too: it
+            // costs record).
             tribute: (kind: 'demand' | 'release') => {
                 const lines = currentReplies.tribute;
                 if (!lines) {

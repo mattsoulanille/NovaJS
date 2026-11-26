@@ -59,13 +59,13 @@ describe('the stellar comm\'s tribute row', () => {
                 .toEqual(['bribe', 'release', 'close']);
         });
 
-    it('answers a demand from the pilot\'s rating: a laugh sends nothing, '
-        + 'the fleet and a surrender send the record', () => {
+    it('answers a demand from the pilot\'s rating, and every demand sends '
+        + 'the record (a laugh costs one kill\'s record: R18, wave 40)', () => {
             const laugh = tributePressAnswer(LINES, 'demand', 12_799, 2);
             expect(laugh).toEqual({
                 answer: 'line 7',
                 heading: 'Kit Tribute Six\n[Kit World]\nStatus: Hostile',
-                next: 'demand',
+                next: 'demand', record: 'demandTribute',
             });
             const fleet = tributePressAnswer(LINES, 'demand', 12_800, 1);
             expect(fleet).toEqual({

@@ -7,7 +7,7 @@ import {
     DominatedComponent, hasDominated, withDominated, withoutDominated,
 } from '../player/index.js';
 import {
-    applyRecordSpread, CombatRatingComponent, crimeGeography, GovtsResource,
+    applyCrime, CombatRatingComponent, Crime, crimeGeography, GovtsResource,
     LegalGeographyResource, LegalRecordsComponent,
 } from '../reputation/index.js';
 import {
@@ -34,9 +34,10 @@ import {
  *    already!  The planet agrees to pay you tribute." (25; a station's
  *    26), and the stellar is dominated; a stellar with no fleet gives in
  *    at once;
- *  - every demand that is not laughed at costs -600 legal record in the
- *    stellar's system (spread 0.65 per jump); the defenders' kills cost
- *    nothing and add no combat rating;
+ *  - every demand that is not laughed at costs six kills' record (-600
+ *    under a KillPenalty of 100), a laugh one kill's, spread like a kill
+ *    ("Tribute leftovers (R18), wave 40"; TRIBUTE_DEMAND_KILLS); the
+ *    defenders' kills cost nothing and add no combat rating;
  *  - a dominated stellar pays its Tribute (the field when 1 or more, else
  *    1,000 x TechLevel: PlanetData.domination.tribute, already decoded) at
  *    every day's advance, wherever the pilot is, until Release ("You
@@ -99,10 +100,27 @@ import {
  * reference "Tribute (R18), wave 38": 12,799 refused, 12,800 not). */
 export const TRIBUTE_COMBAT_RATING = 12_800;
 
-/** The legal-record change of a demand that is not laughed off, in the
- * stellar's system, spread 0.65 per jump (MEASURED, wave 39, finding 7;
- * GUESS that it is fixed, not 6 x KillPenalty). */
-export const TRIBUTE_DEMAND_RECORD = -600;
+/**
+ * What a demand costs, in KILLS of a ship of the stellar's govt: the
+ * record change is that many kills' (crime 'kill', the govt's
+ * KillPenalty), charged by the ordinary crime rule, so it spreads to
+ * every linked system 0.65 a jump with each system's OWN owner's view
+ * (system_records.ts crimeRecordChange: the stellar's govt and its allies'
+ * systems lose, a neutral owner's GAIN half its own scaled penalty, an
+ * independent's lose a quarter).
+ *
+ * MEASURED (reference "Tribute leftovers (R18), wave 40", gövt 290 with
+ * KillPenalty 100): a laugh cost -100 in the system, -65 / -42 one and two
+ * jumps out; an answered demand -600, -390, -252, and +78 / +48 / +30 /
+ * +18 in the kit-neutral systems 3-6 jumps out, the same for a four-ship
+ * and a six-ship fleet. Every value fits 6 x the scaled KillPenalty (390,
+ * not 4 x (Kill + Disab) = 388). GUESS: KillPenalty rather than a constant
+ * 100 (one govt measured); only the record moves (no rank is revoked);
+ * a stellar with no govt charges nothing, as a kill of a govt-less ship.
+ */
+export const TRIBUTE_LAUGH_KILLS = 1;
+/** See TRIBUTE_LAUGH_KILLS: an answered demand (fleet or surrender). */
+export const TRIBUTE_DEMAND_KILLS = 6;
 
 /** What a demand gets (see the module comment). */
 export type TributeOutcome = 'laugh' | 'fleet' | 'dominate';
@@ -202,18 +220,27 @@ export function dailyTribute(dominated: Iterable<string> | undefined,
 // --- The demand and the release (hail input records) ---
 
 /**
- * The tribute's record change through the world's staged geography (every
- * sÿst: makeSystem), or the current system alone without it.
+ * A demand's record change (TRIBUTE_LAUGH_KILLS / TRIBUTE_DEMAND_KILLS
+ * kills of a ship of the stellar's govt) through the world's staged
+ * geography (every sÿst: makeSystem), or the current system alone without
+ * it.
  */
-function chargeDemand(world: World, player: Entity, systemId: string) {
+function chargeDemand(world: World, player: Entity, systemId: string,
+    planetData: PlanetData, kills: number) {
     const records = player.components.get(LegalRecordsComponent);
     const gameData = world.resources.get(SimulationGameDataResource);
-    if (!records || !gameData) {
+    if (!records || !gameData || planetData.govt === null) {
         return;
     }
-    applyRecordSpread(records, crimeGeography(
+    const govts = world.resources.get(GovtsResource);
+    const govt = govts?.get(planetData.govt)
+        ?? gameData.data.Govt.getCached(planetData.govt);
+    if (!govt) {
+        return;
+    }
+    applyCrime(records, crimeGeography(
         world.resources.get(LegalGeographyResource), systemId, gameData,
-        world.resources.get(GovtsResource)), systemId, TRIBUTE_DEMAND_RECORD);
+        govts), systemId, govt, new Array<Crime>(kills).fill('kill'));
 }
 
 /** Records the domination of `planetId` on `player` (a new array). */
@@ -226,10 +253,12 @@ export function dominate(player: Entity, planetId: string) {
  * DEMAND TRIBUTE, from `player` (`playerUuid`) at the stellar entity
  * `planet` (`planetUuid`): the outcome re-derived from synced state
  * (tributeDemandOutcome), then
- *  - a laugh: nothing here (the channel alone turns hostile);
- *  - the fleet: -600, and the player joins the stellar's demanders (the
- *    fleet starts DEFENSE_FIRST_LAUNCH_MS later if it was not up);
- *  - giving in: -600, and the stellar is dominated.
+ *  - a laugh: one kill's record (TRIBUTE_LAUGH_KILLS), nothing else (the
+ *    channel alone turns hostile);
+ *  - the fleet: six kills' record (TRIBUTE_DEMAND_KILLS), and the player
+ *    joins the stellar's demanders (the fleet starts
+ *    DEFENSE_FIRST_LAUNCH_MS later if it was not up);
+ *  - giving in: six kills' record, and the stellar is dominated.
  * A stellar the player already dominates, or one that takes no demands,
  * ignores it.
  */
@@ -249,9 +278,11 @@ export function applyTributeDemand(world: World, player: Entity,
         player.components.get(CombatRatingComponent)?.kills ?? 0,
         staged !== undefined);
     if (outcome === 'laugh') {
+        chargeDemand(world, player, systemId, planetData,
+            TRIBUTE_LAUGH_KILLS);
         return;
     }
-    chargeDemand(world, player, systemId);
+    chargeDemand(world, player, systemId, planetData, TRIBUTE_DEMAND_KILLS);
     if (outcome === 'dominate') {
         dominate(player, planetId);
         return;

@@ -43,8 +43,8 @@ import { applyHail } from './hail_plugin.js';
 import {
     dailyTribute, TRIBUTE_ACCEPTED_PLANET_FALLBACK,
     TRIBUTE_ACCEPTED_STATION_FALLBACK, TRIBUTE_COMBAT_RATING,
-    TRIBUTE_DEMAND_RECORD, tributeDemandOutcome, tributeReleasedText,
-    tributeResponseText,
+    TRIBUTE_DEMAND_KILLS, TRIBUTE_LAUGH_KILLS, tributeDemandOutcome,
+    tributeReleasedText, tributeResponseText,
 } from './tribute.js';
 
 /**
@@ -55,7 +55,9 @@ import {
  * Reference "Tribute (R18), wave 39" (with wave 38's edge), and Matthew's
  * ruling on #353 where it differs (see tribute.ts): a demand below 12,800
  * is laughed off; from 12,800 a stellar with a fleet sends it and one
- * without gives in; every answered demand costs -600 in the system; the
+ * without gives in; every answered demand costs six kills' record (-600
+ * under the KillPenalty 100 here), a laugh one kill's, spread like a kill
+ * ("Tribute leftovers (R18), wave 40"); the
  * fleet is shared, capped at 6 up per demander (18 at most), respawns as
  * ships die, resets when its demanders leave, and its defeat dominates
  * every demander; a dominated stellar can be released.
@@ -63,7 +65,10 @@ import {
 
 const SYSTEM = 'test:system';
 const NEIGHBOUR = 'test:neighbour';
+/** Two jumps out, owned by NEUTRAL (the wave-40 rig's Kit Spread chain). */
+const FAR = 'test:far';
 const OWNER = 'test:owner';
+const NEUTRAL = 'test:neutral';
 const FORT = 'test:fort';
 const OPEN = 'test:open';
 const STATION = 'test:station';
@@ -92,7 +97,16 @@ function planet(id: string, more: Partial<PlanetData> = {}): PlanetData {
 
 async function build(count = 8) {
     const gameData = new MockGameData();
-    gameData.data.Govt.map.set(OWNER, { ...getDefaultGovtData(), id: OWNER });
+    // The wave-39/40 rig's gövt 290 Kit Tribute Govt (Kill 100, Disab 50),
+    // and a govt with no relation to it for the neutral systems.
+    gameData.data.Govt.map.set(OWNER, {
+        ...getDefaultGovtData(), id: OWNER, killPenalty: 100,
+        disablePenalty: 50,
+    });
+    gameData.data.Govt.map.set(NEUTRAL, {
+        ...getDefaultGovtData(), id: NEUTRAL, killPenalty: 100,
+        disablePenalty: 50,
+    });
     const hull = getDefaultShipData();
     gameData.data.Ship.map.set(DEFENDER_HULL, {
         ...hull, id: DEFENDER_HULL, strength: 500,
@@ -130,7 +144,11 @@ async function build(count = 8) {
     });
     gameData.data.System.map.set(NEIGHBOUR, {
         ...getDefaultSystemData(), id: NEIGHBOUR, govt: OWNER,
-        position: [100, 0], links: [SYSTEM],
+        position: [100, 0], links: [SYSTEM, FAR],
+    });
+    gameData.data.System.map.set(FAR, {
+        ...getDefaultSystemData(), id: FAR, govt: NEUTRAL,
+        position: [200, 0], links: [NEIGHBOUR],
     });
     const world = await makeSystem(SYSTEM, gameData, undefined,
         { npcs: false });
@@ -263,27 +281,35 @@ describe('tribute rules', () => {
 });
 
 describe('Demand Tribute in the sim', () => {
-    it('laughs off a pilot below 12,800: nothing launches, no record '
-        + 'change, nothing dominated (MEASURED, wave 39 tp6400)', async () => {
+    it('laughs off a pilot below 12,800: nothing launches, nothing '
+        + 'dominated, one kill\'s record (MEASURED, wave 39 tp6400 / wave 40 '
+        + 'tp6400_a: -100, -65 a jump out)', async () => {
             const { world, addPlayer } = await build();
             await addPlayer('a', PEER_A, 12_799);
             applyHail(world, PEER_A, { kind: 'demandTribute', target: FORT_UUID });
             advance(world, 5_000);
             expect(fleet(world)).toBeUndefined();
             expect(defenders(world).length).toBe(0);
-            expect(record(world, 'a')).toBe(0);
+            expect(TRIBUTE_LAUGH_KILLS).toBe(1);
+            expect(record(world, 'a')).toBe(-100);
+            expect(record(world, 'a', NEIGHBOUR)).toBe(-65);
             expect(dominatedBy(world, 'a')).toEqual([]);
         });
 
-    it('gives in at once where there is no fleet: dominated, -600 here, '
-        + 'spread 0.65 a jump', async () => {
+    it('gives in at once where there is no fleet: dominated, six kills\' '
+        + 'record spread like a kill, a neutral owner\'s system GAINING '
+        + '(MEASURED, wave 40 tpspread_a / tf_a)', async () => {
             const { world, addPlayer } = await build();
             await addPlayer('a', PEER_A, 12_800);
             applyHail(world, PEER_A, { kind: 'demandTribute', target: OPEN_UUID });
             expect(dominatedBy(world, 'a')).toEqual([OPEN]);
-            expect(TRIBUTE_DEMAND_RECORD).toBe(-600);
+            expect(TRIBUTE_DEMAND_KILLS).toBe(6);
             expect(record(world, 'a')).toBe(-600);
+            // 6 x trunc(100 x 0.65): 390, not 4 x (Kill + Disab) = 388.
             expect(record(world, 'a', NEIGHBOUR)).toBe(-390);
+            // Two jumps out in a neutral govt's system: + half its own
+            // scaled KillPenalty, per kill: 6 x trunc(42 / 2) = 126.
+            expect(record(world, 'a', FAR)).toBe(126);
             // A second demand of a dominated stellar does nothing.
             applyHail(world, PEER_A, { kind: 'demandTribute', target: OPEN_UUID });
             expect(record(world, 'a')).toBe(-600);
