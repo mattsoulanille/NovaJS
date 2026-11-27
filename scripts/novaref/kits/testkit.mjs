@@ -887,14 +887,14 @@ function wave51Resources() {
  * 9155, Kit A comp abort 338), 1083 (bit 9160, Kit A comp fail 338) and
  * 1084 (bit 9163, Kit S several finds), using them for its own. Used: sÿst
  * 1494-1499 / 1501, spöb 1216-1243, shïp 606-614, düde 552-554, wëap
- * 331-332, oütf 519-520, mïsn 967 / 1082-1084, bits 9336-9347, dësc
+ * 331-333, oütf 519-521, mïsn 967 / 1082-1084, bits 9336-9347, dësc
  * 11320-11321. Map: the MJ chain at x -840 .. -760, y -3440 .. -3360. The
  * next free ids: sÿst 1502+ (1494-1499 / 1501 used; check 1502-1504,
  * 1513+ against the kit), spöb 1244-1399 (and 518-999), shïp 615-625
  * (retire the rest of the E11 yard, wave 40, first), përs: override a stock
  * one (kits/w48_pers225.mjs), ränk 205+, mïsn NONE (retire another old kit
- * mission), düde 555+, gövt 283 and below, flët 324+, wëap 333+, oütf
- * 521+ (and 630 / 631), jünk 205+, bits 9348+ (not a stock bit: 9011-9015,
+ * mission), düde 555+, gövt 283 and below, flët 324+, wëap 334+, oütf
+ * 522+ (and 630 / 631), jünk 205+, bits 9348+ (not a stock bit: 9011-9015,
  * 9111, 9200-9208, 9215-9216, 9333-9334, 9500-9501, 9666, 9812, 9995,
  * 9998-9999), rlëD 1113+.
  *
@@ -924,12 +924,12 @@ function wave51Resources() {
  *      (bit 9344) puts on Kit Knock Grid's first moon (as wave 50's mïsn
  *      1078 does the tractor).
  *  MJ  The multi-jump: oütf 520 Kit Multi Jump 2 (ModType 32, ModVal 2:
- *      two extra jumps a press); sÿst 1494-1499 / 1501 Kit MJ Alpha .. Golf,
+ *      two extra jumps a press; added: oütf 521 Kit Multi Jump 3, ModVal 3); sÿst 1494-1499 / 1501 Kit MJ Alpha .. Golf,
  *      linked A-B-C-D-E-F-G in a U: A (-800, -3440), B 40 east, C 40 south
  *      of B, D 40 west of C (40 south of A, NOT linked to it), E 40 west of
  *      D, F 40 south of E, G 40 east of F. Every system has four landable
  *      ports (spöb 1216 + 4 k ..: East (1350, 0), West (-1350, 0), North (0,
- *      -1350), South (0, 1350), the 72 px planet art) where a jump arrives,
+ *      -1350), South (0, 1350), stock Jupiter's 325 px art: a 569 px landing window) where a jump arrives,
  *      so the port on screen at an arrival names the side, and the pilot can
  *      land and Leave to write itself. mïsn 1084 (bit 9345, offered at
  *      Alpha East) wants ONE anchored Kit Prey Bare (düde 528, no cloak)
@@ -965,8 +965,12 @@ function wave52Resources() {
         beamWidth: 2, coronaFalloff: 4, beamColor: 0x0000ff00, coronaColor: 0x00008000, decay: 0 }), gun(519, "Kit Plain Beam Turret", 331));
     out.push(weap(332, "Kit Fixed Red Beam", 170, { reload: 120, duration: 30, speed: 0, armorDamage: 1, shieldDamage: 1, guidance: 0,
         beamLength: 3000, beamWidth: 2, impact: 0, ionization: 0, flags: 0 }));
+    // Added during the wave (the NPC FIXED beam showed 16-18 frames, as the player's fixed and turret beams; the NPC tractor 30): wëap
+    // 333 Kit Turret Red Beam, wëap 332 as a TURRETED beam (Guidance 3), Impact 0; from run e10nt_a on the beamer carries it.
+    out.push(weap(333, "Kit Turret Red Beam", 170, { reload: 120, duration: 30, speed: 0, armorDamage: 1, shieldDamage: 1, guidance: 3,
+        beamLength: 3000, beamWidth: 2, impact: 0, ionization: 0, flags: 0 }));
     out.push(...ship(614, "Kit Fixed Beamer", 136, { armor: 30000, shield: 0, accel: 0, speed: 0, turn: 60, ai: 3, strength: 1, crew: 1,
-        weapons: [332, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
+        weapons: [333, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
     out.push(dude(554, "Kit Fixed Beamer", 3, 362, 614));
     out.push(...misn(1083, "Kit E10 fixed beamer on the grid", 9344, { availStel: 1170, shipCount: 1, shipDude: 554, shipGoal: -1,
         shipBehav: -1, shipStart: -2, onAccept: "!b9344" }));
@@ -974,6 +978,10 @@ function wave52Resources() {
     const mj = gun(520, "Kit Multi Jump 2", 0);
     mj.set = { ...mj.set, modType: 32, modVal: 2, max: 1 };
     out.push(mj);
+    // Added during the wave (ModVal 2 took a 3-hop route only to its SECOND system): oütf 521 Kit Multi Jump 3 (ModVal 3).
+    const mj3 = gun(521, "Kit Multi Jump 3", 0);
+    mj3.set = { ...mj3.set, modType: 32, modVal: 3, max: 1 };
+    out.push(mj3);
     const ids = [1494, 1495, 1496, 1497, 1498, 1499, 1501];
     const names = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf"];
     const pos = [[-800, -3440], [-760, -3440], [-760, -3400], [-800, -3400], [-840, -3400], [-840, -3360], [-800, -3360]];
@@ -982,7 +990,7 @@ function wave52Resources() {
         const ports = sides.map((_, j) => 1216 + 4 * k + j);
         const s = system(sid, `Kit MJ ${names[k]}`, pos[k][0], pos[k][1], 363, ports);
         s.set = { ...s.set, links: [...[ids[k - 1], ids[k + 1]].filter((v) => v !== undefined), ...none16].slice(0, 16) };
-        out.push(s, ...sides.map(([side, x, y], j) => spob(ports[j], `Kit MJ ${names[k]} ${side}`, x, y, 138, { flags: 0x03 })));
+        out.push(s, ...sides.map(([side, x, y], j) => spob(ports[j], `Kit MJ ${names[k]} ${side}`, x, y, 159, { flags: 0x03 })));
     });
     out.push(...misn(1084, "Kit MJ observe in Bravo", 9345, { availStel: 1216, shipCount: 1, shipSyst: 1495, shipDude: 528, shipGoal: 4,
         shipBehav: -1, shipStart: -1, returnStel: 1228, onAccept: "!b9345", onShipDone: "b9346", onSuccess: "b9347" }));
