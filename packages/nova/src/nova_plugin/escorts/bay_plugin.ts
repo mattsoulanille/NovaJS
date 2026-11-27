@@ -1,5 +1,6 @@
 import * as t from 'io-ts';
 import { BayWeaponData, WeaponData } from 'novadatainterface/weapon_data';
+import { ShipAccelerationConversionFactor } from 'novaparse/parsers/constants';
 import { Emit, Entities, GetEntity, GetWorld, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
@@ -268,6 +269,26 @@ export function bayExitKick(bay: Pick<BayWeaponData, 'shotSpeed'>): number {
  */
 export const BAY_LAUNCH_BRAKE = 200;
 
+/**
+ * A fighter with a STRONGER engine than this (px/s², shïp Accel 300)
+ * does not brake its kick at once: it coasts BAY_LAUNCH_COAST_S, then
+ * sheds the kick at BAY_LAUNCH_FAST_BRAKE.
+ *
+ * MEASURED (reference "Bay launch kicks under the fighter's top speed (E8
+ * leftover), wave 42"): the Kit Bay Disc Fast (Speed / Accel 1000) from
+ * the Speed-400 bay held the 4 px a frame kick for about 0.8 s (about 25
+ * frames, out to about 130 px), then stopped within about 8 frames (about
+ * 500 px/s²), about 145 px out; the Accel-300 Kit Bay Disc stops about 18
+ * / 35 px out from the Speed-200 / -400 bays (BAY_LAUNCH_BRAKE, at once).
+ * GUESS, the section's proposal: two fighters cannot pin the law, so a
+ * step at Accel 300 (the slow disc) between braking at once and a fixed
+ * 0.8 s coast with a 500 px/s² brake.
+ */
+export const BAY_LAUNCH_COAST_MIN_ACCEL =
+    300 * ShipAccelerationConversionFactor;
+export const BAY_LAUNCH_COAST_S = 0.8;
+export const BAY_LAUNCH_FAST_BRAKE = 500;
+
 class BayWeaponEntry extends WeaponEntry {
     declare data: BayWeaponData;
     protected pointDefenseRangeSquared;
@@ -389,13 +410,20 @@ class BayWeaponEntry extends WeaponEntry {
         // fighter one tick ahead of the live one's, and forked (#134).
         const [world] = this.runQuery(BayWorldQuery)[0];
         deriveEntityComponents(world, ship);
-        // A kick within the fighter's own top speed is braked off at once
-        // (BAY_LAUNCH_BRAKE, reference E8 wave 41); a faster one coasts.
-        const topSpeed = ship.components.get(ShipPhysicsComponent)?.speed;
-        if (topSpeed !== undefined
-            && bayExitKick(this.data) <= topSpeed) {
+        // A kick within the fighter's own top speed is braked off
+        // (BAY_LAUNCH_BRAKE, reference E8 wave 41), at once by a weak
+        // engine and after a coast by a strong one (BAY_LAUNCH_COAST_S,
+        // E8 wave 42); a faster kick coasts on.
+        const shipPhysics = ship.components.get(ShipPhysicsComponent);
+        if (shipPhysics !== undefined
+            && bayExitKick(this.data) <= shipPhysics.speed) {
             ship.components.set(BayFighterComponent,
-                { bayWeaponId: this.data.id, launchBrake: true });
+                shipPhysics.acceleration > BAY_LAUNCH_COAST_MIN_ACCEL
+                    ? {
+                        bayWeaponId: this.data.id, launchBrake: true,
+                        launchCoast: BAY_LAUNCH_COAST_S,
+                    }
+                    : { bayWeaponId: this.data.id, launchBrake: true });
         }
         this.entities.set(this.ids.next(`bay:${multiplayerOwner}`), ship);
         const ownerVuln = this.entities.get(source)?.components
@@ -433,7 +461,9 @@ const BayFormationQuery = new Query([FormationComponent] as const);
  * Sheds a freshly launched fighter's kick (BAY_LAUNCH_BRAKE): while its
  * BayFighter carries `launchBrake`, its velocity relative to its carrier
  * (SourceComponent) falls by BAY_LAUNCH_BRAKE x the tick, and the flag is
- * dropped the tick it matches the carrier's (or the carrier is gone).
+ * dropped the tick it matches the carrier's (or the carrier is gone). A
+ * strong-engined fighter's `launchCoast` first counts down untouched,
+ * and its brake is BAY_LAUNCH_FAST_BRAKE.
  * Runs whatever the fighter's AI is doing, after the formation keeper's
  * own velocity nudge and before the ship moves. Deterministic: synced
  * state and the tick's delta, the velocity replaced, never mutated.
@@ -450,15 +480,25 @@ export const BayLaunchBrakeSystem = new System({
             .get(MovementStateComponent);
         if (!carrier) {
             delete fighter.launchBrake;
+            delete fighter.launchCoast;
+            return;
+        }
+        // A strong engine's coast counts down to 0 and stays there (the
+        // field's presence marks the faster brake) until the kick is shed.
+        if (fighter.launchCoast !== undefined && fighter.launchCoast > 0) {
+            fighter.launchCoast = Math.max(0,
+                fighter.launchCoast - time.delta_s);
             return;
         }
         const carrierVelocity = Vector.fromVectorLike(carrier.velocity);
         const relative = Vector.fromVectorLike(movement.velocity)
             .subtract(carrierVelocity);
-        const shed = BAY_LAUNCH_BRAKE * time.delta_s;
+        const shed = (fighter.launchCoast !== undefined
+            ? BAY_LAUNCH_FAST_BRAKE : BAY_LAUNCH_BRAKE) * time.delta_s;
         if (relative.length <= shed) {
             movement.velocity = carrierVelocity;
             delete fighter.launchBrake;
+            delete fighter.launchCoast;
             return;
         }
         movement.velocity = Vector.fromVectorLike(movement.velocity)

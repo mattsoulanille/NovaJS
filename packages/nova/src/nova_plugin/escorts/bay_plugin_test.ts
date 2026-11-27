@@ -17,6 +17,7 @@ import { EscortCommandComponent, NO_DEAL } from '../player/index.js';
 import { FormationComponent, NpcComponent, RCS_ACCEL_FRACTION } from '../npc/index.js';
 import {
     applyRefundFighter, bayExitKick, BayFighterComponent, BAY_LAUNCH_BRAKE,
+    BAY_LAUNCH_COAST_MIN_ACCEL, BAY_LAUNCH_COAST_S, BAY_LAUNCH_FAST_BRAKE,
     FighterDockedEvent, startReturnHome,
 } from './bay_plugin.js';
 import { CollisionEvent, CollisionVulnerabilityComponent } from '../core/index.js';
@@ -769,7 +770,9 @@ describe('the lost-fighter refund (issue #258)', () => {
  * px a frame straight off screen.
  */
 describe('the bay launch kick (E8 wave 41)', () => {
-    async function launchFrom(baySpeed: number) {
+    /** The kit's Bay Disc, or (`fast`) the Bay Disc Fast of E8 wave 42:
+     * Speed / Accel 1000, Turn 60. */
+    async function launchFrom(baySpeed: number, fast = false) {
         const gameData = new MockGameData();
         gameData.data.Weapon.map.set(BAY_ID, {
             ...getDefaultBayWeaponData(), id: BAY_ID, shipID: FIGHTER_SHIP_ID,
@@ -785,7 +788,11 @@ describe('the bay launch kick (E8 wave 41)', () => {
         });
         gameData.data.Ship.map.set(FIGHTER_SHIP_ID, {
             ...getDefaultShipData(), id: FIGHTER_SHIP_ID,
-            physics: {
+            physics: fast ? {
+                ...getDefaultShipPhysics(), speed: 1000 * 1.5 * 30 / 100,
+                acceleration: 1000 * 30 * 30 / 5000,
+                turnRate: 180 * Math.PI / 180,
+            } : {
                 ...getDefaultShipPhysics(), speed: 135, acceleration: 54,
                 turnRate: 90 * Math.PI / 180,
             },
@@ -845,4 +852,47 @@ describe('the bay launch kick (E8 wave 41)', () => {
             expect(at13).toBeGreaterThan(330);
             expect((at13 - at03) / 30).toBeGreaterThan(9);
         });
+
+    it('brakes a Speed-200 kick about 18 px out (reference "Bay launch '
+        + 'kicks under the fighter\'s top speed (E8 leftover), wave 42")',
+        async () => {
+            // 2 px a frame shed at 200 px/s²: 9 px of travel, which with
+            // the original's frames of clearing the carrier's sprite
+            // (about 10 px, the section) reads about 18.
+            const { fighter, distanceAfter } = await launchFrom(200);
+            let peak = 0;
+            for (let frame = 0; frame < 15; frame++) {
+                peak = Math.max(peak, await distanceAfter(1));
+            }
+            expect(peak).toBeGreaterThan(6);
+            expect(peak).toBeLessThan(18);
+            expect(fighter.components.get(BayFighterComponent)!.launchBrake)
+                .toBeUndefined();
+        });
+
+    it('lets a strong-engined fighter coast a kick under its top speed '
+        + 'about 0.8 s, then brake fast: the Speed-1000 disc from the '
+        + 'Speed-400 bay stops about 145 px out (E8 wave 42)', async () => {
+            const { fighter, distanceAfter } = await launchFrom(400, true);
+            const state = () => fighter.components.get(BayFighterComponent)!;
+            expect(state().launchBrake).toBeTrue();
+            expect(state().launchCoast).toBeGreaterThan(0.7);
+            // Still at the kick's 4 px a frame at 0.6 s.
+            const at06 = await distanceAfter(18);
+            const at07 = await distanceAfter(3);
+            expect((at07 - at06) / 3).toBeGreaterThan(3.5);
+            expect(at07).toBeGreaterThan(70);
+            // Shed within about 8 frames of the coast's end.
+            const at12 = await distanceAfter(15);
+            expect(state().launchBrake).toBeUndefined();
+            expect(state().launchCoast).toBeUndefined();
+            expect(at12).toBeGreaterThan(90);
+            expect(at12).toBeLessThan(160);
+        });
+
+    it('coasts only a fighter stronger than Accel 300', () => {
+        expect(BAY_LAUNCH_COAST_MIN_ACCEL).toBeCloseTo(54, 9);
+        expect(BAY_LAUNCH_COAST_S).toBe(0.8);
+        expect(BAY_LAUNCH_FAST_BRAKE).toBe(500);
+    });
 });

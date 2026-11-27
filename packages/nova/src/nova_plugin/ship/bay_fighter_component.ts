@@ -32,6 +32,15 @@ export const BayFighter = t.intersection([t.type({
      * out faster than it can fly, which coasts on.
      */
     launchBrake: t.literal(true),
+    /**
+     * Seconds the fighter still coasts its kick before the brake starts
+     * (bay_plugin's BAY_LAUNCH_COAST_S, set only on a fighter whose
+     * engine is stronger than BAY_LAUNCH_COAST_MIN_ACCEL); counted down
+     * by BayLaunchBrakeSystem to 0, where it stays (marking the faster
+     * BAY_LAUNCH_FAST_BRAKE) until the kick is shed and both fields are
+     * dropped. Only ever present alongside `launchBrake`.
+     */
+    launchCoast: t.number,
 })]);
 export type BayFighter = t.TypeOf<typeof BayFighter>;
 export const BayFighterComponent =
