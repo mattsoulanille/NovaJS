@@ -1444,11 +1444,12 @@ function presetCondition(hull: Entity, levels: {
  *    (oütf 0x0004) move across and leave the old hull; everything else
  *    stays on the old hull.
  *  - BOTH HOLDS ARE LOST: the pilot's 10 t of food and the prize's 20 t
- *    were both gone (the new hull's HUD "Free: 80" of 80; the pilot file's
- *    cargo 0). GUESS, unmeasured: MISSION cargo is not part of either hold
- *    — the original keeps it with the mission, not in the commodity hold —
- *    so it stays with the pilot, aboard the new hull, whatever its size.
- *    The old hull, now an escort, keeps none.
+ *    were both gone (the pilot file's cargo 0; wave 45's HUD "Free: 80" was
+ *    the prize's own 30 t plus a hired Kit Trader escort's 50 t — the HUD
+ *    counts AI 1 escorts' holds, reference wave 49). MISSION cargo stays with
+ *    the pilot, aboard the new hull, whatever its size (measured, waves 48
+ *    and 49: 40 t of job cargo kept in a 30 t prize, HUD "Free: 0", the job
+ *    still active). The old hull, now an escort, keeps none.
  *  - THE SET STRINGS: the prize class's OnCapture and the OLD class's
  *    OnRetire both run (bits 9288 and 9290 set; the prize class's own
  *    OnRetire, 9289, not). Set strings are resolved on the owner's client
