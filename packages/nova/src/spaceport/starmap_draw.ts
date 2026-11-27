@@ -282,10 +282,9 @@ export function systemDotColor(explored: boolean,
     }
 }
 
+/** Draws one system dot, its ring `outColor` ({@link systemDotColor}). */
 export function drawSystem(graphics: PIXI.Graphics,
-    x: number, y: number, explored: boolean, inhabited: boolean,
-    refusal?: MapRefusal) {
-    const outColor = systemDotColor(explored, inhabited, refusal);
+    x: number, y: number, outColor: number) {
     graphics.lineStyle(1, outColor);
     graphics.beginFill(outColor);
     graphics.drawCircle(x, y, SYSTEM_RADIUS);

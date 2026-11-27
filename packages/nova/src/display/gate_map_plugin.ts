@@ -11,13 +11,21 @@ import {
 } from '../nova_plugin/core/index.js';
 import { DiscoveryStoreResource, MissionsComponent } from '../nova_plugin/player/index.js';
 import { MissionMapMark, missionMapMarks } from '../nova_plugin/missions/index.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
+import {
+    ActiveRanksComponent, ControlBitsComponent,
+} from '../nova_plugin/ncb/index.js';
 import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
+import {
+    OutfitsStateComponent, ShipDataComponent,
+} from '../nova_plugin/ship/index.js';
+import { StellarBribesComponent } from '../nova_plugin/travel/index.js';
 import { GateMap } from '../spaceport/gate_map.js';
+import { MapClearancePlayer } from '../spaceport/starmap.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import {
     ResizeEvent, ScreenSize, screenCentre,
 } from './screen_size_plugin.js';
+import { SimulationTimeResource } from './simulation_time.js';
 import { Stage } from './stage_resource.js';
 import { HYPERGATE_JUMP_CANCELLED_MESSAGE } from './status_bar_content.js';
 import { StatusLineResource } from './status_message_plugin.js';
@@ -42,6 +50,10 @@ export const LeaveGateMapEvent = new EcsEvent<{
 }>('LeaveGateMapEvent');
 
 const GateMapResource = new Resource<GateMap>('GateMapResource');
+/** The SIMULATION clock (the mirrored SimulationTimeResource, 0 before
+ * the first frame): bribe expiries are sim-clock stamps, as in
+ * starmap_plugin. */
+const GateMapSimClock = new Resource<() => number>('GateMapSimClock');
 /** The shared stellar/mission index, for the map's mission marks. */
 const GateMapUniverseResource =
     new Resource<MissionUniverse>('GateMapUniverseResource');
@@ -69,12 +81,34 @@ export function gateMapMissionMarks(ship: Entity,
         planetId => universe.systemIdOfPlanet(planetId, bits));
 }
 
+/**
+ * The DOCKED ship's landing-clearance inputs, for the gate map's orange /
+ * red dots: the components the star map reads through starmap_plugin's
+ * playerComponent, off the entity because it is out of the world, and the
+ * SIMULATION clock that bribe expiries are stamped on.
+ */
+export function gateMapClearancePlayer(ship: Entity, now: number)
+    : MapClearancePlayer {
+    const c = ship.components;
+    return {
+        records: c.get(LegalRecordsComponent),
+        shipData: c.get(ShipDataComponent),
+        outfits: c.get(OutfitsStateComponent),
+        bribes: c.get(StellarBribesComponent),
+        ranks: c.get(ActiveRanksComponent),
+        missions: c.get(MissionsComponent),
+        now,
+    };
+}
+
 const OpenGateMapSystem = new System({
     name: 'OpenGateMapSystem',
     events: [OpenGateMapEvent],
     args: [OpenGateMapEvent, GateMapResource, GateMapUniverseResource,
-        ScreenSize, Emit, SingletonComponent] as const,
-    step({ gateSpob, systemId, ship }, gateMap, universe, screen, emit) {
+        GateMapSimClock, ScreenSize, Emit, SingletonComponent] as const,
+    step({ gateSpob, systemId, ship }, gateMap, universe, simClock, screen,
+        emit) {
+        const now = simClock();
         const centre = screenCentre(screen);
         gateMap.container.position.x = centre.x;
         gateMap.container.position.y = centre.y;
@@ -87,6 +121,9 @@ const OpenGateMapSystem = new System({
                 ?? new Set<number>(),
             // And its records, for the column's Legal Status line.
             legalRecords: ship.components.get(LegalRecordsComponent),
+            // And what the dots' landing-clearance colours read: the gate
+            // map's dots are the star map's (orange / red included).
+            clearancePlayer: gateMapClearancePlayer(ship, now),
         }).then(({ destinationSpob }) =>
             emit(LeaveGateMapEvent, { ship, destinationSpob }));
     }
@@ -148,6 +185,8 @@ export const GateMapPlugin: Plugin = {
         const universe = MissionUniverse.shared(simulationData);
         void universe.load();
         world.resources.set(GateMapUniverseResource, universe);
+        world.resources.set(GateMapSimClock,
+            () => world.resources.get(SimulationTimeResource)?.time ?? 0);
         world.addSystem(OpenGateMapSystem);
         world.addSystem(GateMapResizeSystem);
         world.addSystem(GateMapCancelledSystem);
@@ -167,5 +206,6 @@ export const GateMapPlugin: Plugin = {
         world.removeSystem(GateMapCancelledSystem);
         world.resources.delete(GateMapResource);
         world.resources.delete(GateMapUniverseResource);
+        world.resources.delete(GateMapSimClock);
     }
 }

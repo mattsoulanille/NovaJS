@@ -1,7 +1,7 @@
 import "jasmine";
 import { getDefaultMissionData } from "novadatainterface/mission_data";
 import { MockGameData } from "novadatainterface/mock_game_data";
-import { getDefaultPlanetData } from "novadatainterface/planet_data";
+import { getDefaultPlanetData, PlanetData } from "novadatainterface/planet_data";
 import { getDefaultSystemData, SystemData } from "novadatainterface/system_data";
 import { Entity } from "nova_ecs/entity";
 import * as PIXI from "pixi.js";
@@ -24,6 +24,7 @@ import {
 import { installHeadlessPixi } from "./headless_pixi_fixture.js";
 import { HypergateNetwork } from "./hypergate_network.js";
 import { MissionUniverse } from "./mission_universe.js";
+import { mapDotRule } from "./starmap.js";
 
 describe('computeSelectableSystems', () => {
     it('maps each neighbor system to its destination gate spöb', () => {
@@ -580,11 +581,25 @@ describe('computeGateMapView', () => {
     });
 
     it('draws a gate-only system grey: a gate settles nothing', () => {
-        // The portSpobs the map passes are landable.ts isSettledPort ones,
-        // so a system whose only port is a gate is not inhabited
-        // (#c6c6c6, Kit Gate B1 / B2 on the original's gate map).
+        // The map's dots are the star map's (mapDotRule: landable.ts
+        // systemIsInhabited), so a system whose only port is a gate is
+        // not inhabited (#c6c6c6, Kit Gate B1 / B2 on the original's
+        // gate map).
+        const base = getDefaultPlanetData();
+        const port = (id: string, gate: boolean): PlanetData => ({
+            ...base, id,
+            flags: { ...base.flags, canLand: true, uninhabited: false },
+            ...(gate ? {
+                gate: {
+                    kind: 'hypergate', destinations: [],
+                    emergenceAngle: null,
+                },
+            } : {}),
+        });
+        const planets = new Map([port('a1', true), port('b1', true),
+            port('port', false)].map(p => [p.id, p]));
         const options = gateMapGraphOptions([], new Set(), [], undefined,
-            new Set(['port']));
+            mapDotRule(id => planets.get(id), new Map()));
         expect(options.isSystemInhabited!(system('A1', ['a1', 'port'])))
             .toBeTrue();
         expect(options.isSystemInhabited!(system('B1', ['b1']))).toBeFalse();

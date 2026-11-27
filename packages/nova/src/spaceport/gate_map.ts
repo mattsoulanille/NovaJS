@@ -1,13 +1,12 @@
+import { PlanetData } from "novadatainterface/planet_data";
 import { SystemData } from "novadatainterface/system_data";
 import * as PIXI from "pixi.js";
 import { Observable } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
+import { ControlEvent, landable } from '../nova_plugin/core/index.js';
 import {
-    ControlEvent, isSettledPort, landable,
-} from '../nova_plugin/core/index.js';
-import {
-    DISCOVERY_LANDED, DiscoveryLevel,
+    DISCOVERY_ENTERED, DISCOVERY_LANDED, DiscoveryLevel,
 } from "../nova_plugin/player/index.js";
 import { MissionMapMark } from "../nova_plugin/missions/index.js";
 import { LegalRecordsState } from "../nova_plugin/reputation/index.js";
@@ -19,6 +18,10 @@ import {
 import { Menu } from "./menu.js";
 import { MenuControls } from "./menu_controls.js";
 import { MissionUniverse } from "./mission_universe.js";
+import {
+    MapClearancePlayer, MapDotRule, mapDotRule, refusingSystems,
+} from "./starmap.js";
+import { MapRefusal } from "./starmap_draw.js";
 import { MISSION_MARK_ACTIVE_CICN } from "./starmap_marks.js";
 import {
     HAZARDS_VALUE_X, HAZARDS_Y, PORTS_LABEL_X, PORTS_VALUE_X, PORTS_Y,
@@ -61,6 +64,13 @@ export interface GateMapResult {
      * line. Passed in for the same reason as `missionMarks`. Omitted means
      * none (every system reads its status govt's InitialRec). */
     legalRecords?: LegalRecordsState;
+    /**
+     * The docked ship's landing-clearance inputs, for the ORANGE / RED
+     * dots: the same ones the star map reads (starmap.ts
+     * MapClearancePlayer, refusingSystems), passed in for the same reason
+     * as `missionMarks`. Omitted, no system is drawn orange or red.
+     */
+    clearancePlayer?: MapClearancePlayer;
 }
 
 /** The column's first caption once a destination is picked (reference
@@ -316,10 +326,13 @@ export function computeGateMapView(index: GateMapIndex,
 export function gateMapGraphOptions(gateLinks: [string, string][],
     selectable: Set<string>, missionMarks: MissionMapMark[] = [],
     missionMarkTexture?: PIXI.Texture,
-    /** Spöb global ids that SETTLE a system (landable.ts isSettledPort: a
-     * port that is not a gate), for the blue system dots. Omitted in tests,
-     * where the galaxy then draws grey. */
-    portSpobs?: ReadonlySet<string>,
+    /** How each dot is coloured: the star map's own rule (starmap.ts
+     * mapDotRule) — blue for a system a non-gate port settles, grey
+     * without one, orange / red where every port refuses the player.
+     * The original draws every gate-map dot as an ordinary map dot
+     * (reference "Gate map, wave 27"). Omitted in tests, where the galaxy
+     * then draws grey. */
+    dots?: MapDotRule,
     /** How much the player knows about each system (discovery.ts). The
      * transit map obeys the same visibility rule as the star map, except
      * that the gate's offered destinations are always drawn: an
@@ -339,12 +352,7 @@ export function gateMapGraphOptions(gateLinks: [string, string][],
         missionMarks,
         ...(playerBits ? { playerBits } : {}),
         ...(discoveryOf ? { discoveryOf } : {}),
-        ...(portSpobs
-            ? {
-                isSystemInhabited: (system: SystemData) =>
-                    system.planets.some(p => portSpobs.has(p)),
-            }
-            : {}),
+        ...(dots ?? {}),
         // The map draws active marks only; the green BBS-viewed marks
         // belong to the mission computer's map. Both slots take the one
         // texture because SystemGraph asks for the pair, and with no
@@ -394,12 +402,12 @@ export class GateMap extends Menu<GateMapResult> {
     /** Spöbs that cannot be landed on — the destroyed gates. Neither a
      * destination nor a hop in the network walk. */
     private unlandableSpobs = new Set<string>();
-    /** Spöbs that SETTLE a system (landable.ts isSettledPort) — what makes
-     * a system's dot blue on this map, exactly as on the star map. A gate
-     * does not: the gate-only Kit Gate systems are #c6c6c6 on the
-     * original's gate map ("Gate map, wave 24"), as VNP-001 is on its star
-     * map ("Map dot colours, wave 23"). */
-    private portSpobs = new Set<string>();
+    /** Every stellar in a system, by global id, for the dot colours: the
+     * star map's rule (starmap.ts mapDotRule), so a gate settles nothing —
+     * the gate-only Kit Gate systems are #c6c6c6 on the original's gate
+     * map ("Gate map, wave 24"), as VNP-001 is on its star map ("Map dot
+     * colours, wave 23"). */
+    private planets = new Map<string, PlanetData>();
     /** The server's hypergateTransitivity setting, read in build(). */
     private transitivity = DEFAULT_HYPERGATE_TRANSITIVITY;
     private systemGraph?: SystemGraph;
@@ -483,11 +491,9 @@ export class GateMap extends Menu<GateMapResult> {
             } catch {
                 return;
             }
+            this.planets.set(spob, planet);
             if (!landable(planet)) {
                 this.unlandableSpobs.add(spob);
-            }
-            if (isSettledPort(planet)) {
-                this.portSpobs.add(spob);
             }
             if (planet.gate?.kind === 'hypergate') {
                 this.gateDestinations.set(spob, planet.gate.destinations);
@@ -572,6 +578,25 @@ export class GateMap extends Menu<GateMapResult> {
         this.systemGraph?.clickSystem(systemId);
     }
 
+    /** The dots to draw orange / red for `player`: the star map's own
+     * {@link refusingSystems}, over the explored systems. */
+    private refusingSystems(player: MapClearancePlayer | undefined,
+        legalRecords: LegalRecordsState | undefined):
+        ReadonlyMap<string, MapRefusal> {
+        if (!player || !this.universe) {
+            return new Map();
+        }
+        return refusingSystems(this.systems, this.universe,
+            { ...player, records: legalRecords ?? player.records },
+            id => this.discoveryOf(id) >= DISCOVERY_ENTERED,
+            id => this.simulationData.data.Outfit.getCached(id)?.contribute);
+    }
+
+    /** The graph this showing draws, for specs and headless driving. */
+    get graph(): SystemGraph | undefined {
+        return this.systemGraph;
+    }
+
     /** The hypergate graph this map walks, as built in {@link build}. */
     private network(): HypergateNetwork {
         return { links: this.gateDestinations, unusable: this.unlandableSpobs };
@@ -604,7 +629,10 @@ export class GateMap extends Menu<GateMapResult> {
         this.systemGraph = new SystemGraph(this.systems, input.systemId,
             gateMapGraphOptions(view.gateLinks,
                 new Set(this.selectableSpobs.keys()), input.missionMarks,
-                this.missionMarkTexture, this.portSpobs,
+                this.missionMarkTexture,
+                mapDotRule(id => this.planets.get(id),
+                    this.refusingSystems(input.clearancePlayer,
+                        input.legalRecords)),
                 id => this.discoveryOf(id), playerBits, view.routes));
         // The original's opening scale, the star map's (Kit Gate A1 -> A2,
         // 120 map units, 212 px apart: "Gate map, wave 24").

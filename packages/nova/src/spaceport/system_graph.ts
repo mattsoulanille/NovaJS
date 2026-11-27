@@ -21,6 +21,7 @@ import {
     drawCurrentSystemCentre, drawGatePickOverlay, drawLinks,
     drawRouteOverlay, GATE_MAP_LANE_COLOR, LANE_COLOR,
     drawSystem, installLabelFont, labelFontReady, makeSystemLabel, MapRefusal,
+    systemDotColor,
 } from "./starmap_draw.js";
 import { drawTerritory, TerritoryOwner, TerritorySite } from "./starmap_borders.js";
 import { bindMapPointer } from "./starmap_input.js";
@@ -110,8 +111,9 @@ export interface SystemGraphOptions {
      * (starmap_draw.ts systemDotColor, landable.ts systemRefusesLanding);
      * undefined when the player may land somewhere there. Injected for the
      * same reason as {@link isSystemInhabited}; only the player's own maps
-     * pass it (it needs the player's records), so the rollback screen and
-     * the gate map default to "never".
+     * — the star map, the `h` minimap and the hypergate map, all through
+     * starmap.ts mapDotRule — pass it (it needs the player's records), so
+     * the rollback screen defaults to "never".
      */
     systemRefusal?: (system: SystemData) => MapRefusal | undefined;
     /**
@@ -327,9 +329,7 @@ export class SystemGraph {
         const labelContainer = new PIXI.Container();
         for (const { system, x, y } of this.clickTargets) {
             const discovered = this.discoveryOf(system.id) >= DISCOVERY_ENTERED;
-            drawSystem(circleGraphics, x, y, discovered,
-                this.isSystemInhabited(system),
-                discovered ? this.systemRefusal(system) : undefined);
+            drawSystem(circleGraphics, x, y, this.dotColorOf(system));
             // The original labels only the systems the player has entered:
             // in map_zoomed_out_showing_far_away_mission.png every dim
             // #424242 dot is nameless, and every named one is blue or
@@ -396,6 +396,23 @@ export class SystemGraph {
         }
         this.currentSystem = systemId;
         this.drawRoute();
+    }
+
+    /**
+     * The colour of a system's dot (starmap_draw.ts systemDotColor), from
+     * the injected rule (SystemGraphOptions.isSystemInhabited /
+     * systemRefusal) and the player's discovery: what this graph draws,
+     * and what specs and headless driving read back.
+     */
+    dotColorOf(system: SystemData | string): number {
+        const data = typeof system === 'string'
+            ? this.systems.get(system) : system;
+        if (!data) {
+            throw new Error(`System ${system} is not on this map`);
+        }
+        const explored = this.discoveryOf(data.id) >= DISCOVERY_ENTERED;
+        return systemDotColor(explored, this.isSystemInhabited(data),
+            explored ? this.systemRefusal(data) : undefined);
     }
 
     /** Whether `systemId` is drawn on this map (visible under its bits). */

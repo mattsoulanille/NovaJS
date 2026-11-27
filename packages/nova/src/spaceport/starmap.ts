@@ -138,6 +138,29 @@ export function refusingSystems(systems: readonly SystemData[],
     return refusing;
 }
 
+/** The two questions a player's map asks to colour each dot
+ * (starmap_draw.ts systemDotColor): is it inhabited, and does it refuse
+ * the player. */
+export type MapDotRule =
+    Required<Pick<SystemGraphOptions, 'isSystemInhabited' | 'systemRefusal'>>;
+
+/**
+ * The dot-colour rule every map of the player's galaxy draws with — the
+ * star map, the `h` minimap and the hypergate map alike (the original's
+ * gate map draws "an ordinary map dot", reference "Gate map, wave 27"):
+ * blue / grey by landable.ts systemIsInhabited over `getPlanet`, orange /
+ * red where `refusing` ({@link refusingSystems}) says every port refuses.
+ */
+export function mapDotRule(
+    getPlanet: Parameters<typeof systemIsInhabited>[1],
+    refusing: ReadonlyMap<string, MapRefusal>): MapDotRule {
+    return {
+        isSystemInhabited: system =>
+            systemIsInhabited(system.planets, getPlanet),
+        systemRefusal: system => refusing.get(system.id),
+    };
+}
+
 /** Extra per-open context for the starmap (see OpenStarmapResource). */
 export interface OpenStarmapOptions {
     /**
@@ -389,11 +412,9 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             viewedMarks,
             missionMarkTextures: this.missionMarkTextures,
             territoryOf: system => this.territoryOf(system),
-            isSystemInhabited: system => systemIsInhabited(system.planets,
-                id => this.universe.getPlanet(id)),
+            ...mapDotRule(id => this.universe.getPlanet(id), refusing),
             hasInhabitedStellar: system => systemHasInhabitedStellar(
                 system.planets, id => this.universe.getPlanet(id)),
-            systemRefusal: system => refusing.get(system.id),
             discoveryOf: id => this.discoveryOf(id),
         };
     }
