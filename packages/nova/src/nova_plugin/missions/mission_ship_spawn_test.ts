@@ -191,9 +191,10 @@ describe('buildMissionShipSpawns', () => {
         }
     });
 
-    it('holds every goal but chase-off and none in the system', async () => {
+    it('holds every goal but chase-off, observe and none in the system',
+        async () => {
         for (const goal of [GOAL_DESTROY, GOAL_DISABLE,
-            GOAL_BOARD, GOAL_ESCORT, GOAL_OBSERVE]) {
+            GOAL_BOARD, GOAL_ESCORT]) {
             const player = makePlayer(makeObjective({ goal, total: 1 }));
             const [ship] = await buildMissionShipSpawns(player, OWNER,
                 'nova:128', makeGameData(), makeUniverse());
@@ -512,6 +513,18 @@ describe('buildMissionShipSpawns', () => {
                 expect(ship.components.has(MissionShipComponent)).toBeTrue();
                 expect(countsTowardEscortCap(ship)).toBeFalse();
             }
+        });
+
+    it('does not hold an observe target: it leaves with its goal open '
+        + '(reference "A mission ship with an outstanding goal (A12), wave '
+        + '41")', async () => {
+            const player = makePlayer(makeObjective(
+                { goal: GOAL_OBSERVE, total: 1 }));
+            const [ship] = await buildMissionShipSpawns(player, OWNER,
+                'nova:128', makeGameData(), makeUniverse());
+            expect(ship.components.get(NpcComponent)?.departAt)
+                .not.toBe(MISSION_SHIP_NO_DEPART_MS);
+            expect(ship.components.get(SystemHoldComponent)).toBeUndefined();
         });
 
     it('keeps natural departure timers on chase-off targets', async () => {

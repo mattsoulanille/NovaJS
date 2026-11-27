@@ -9,7 +9,8 @@ import { FiringGroupComponent } from '../ship/index.js';
 import { auxShipsMatchSystem, SystemInfo } from './mission_ship_logic.js';
 import { MissionShipComponent } from '../player/index.js';
 import {
-    GOAL_CHASE_OFF, GOAL_ESCORT, GOAL_RESCUE, ShipObjective, shipsToSpawn, GOAL_NONE } from '../player/index.js';
+    GOAL_CHASE_OFF, GOAL_ESCORT, GOAL_RESCUE, ShipObjective, shipsToSpawn, GOAL_NONE,
+    GOAL_OBSERVE } from '../player/index.js';
 import { FormationComponent, NpcComponent } from '../npc/index.js';
 import {
     applyStartsDisabledData,
@@ -109,6 +110,17 @@ import { TargetComponent } from '../ship/index.js';
  * route a ship has out of a system under its own power. Chase-off targets
  * keep natural timers and flee behavior, since leaving is the point. Aux
  * ships are pure atmosphere and keep ordinary NPC behavior throughout.
+ *
+ * EXCEPT OBSERVE TARGETS (ShipGoal 4), MEASURED (reference "A mission
+ * ship with an outstanding goal (A12), wave 41"): an AI 1 observe target
+ * did not wait to be observed. It sat on the port about 18 s after the
+ * player's take-off, flew straight out and left the system about 40 s in,
+ * the mission still active (its ships come back on the next entry,
+ * shipsToSpawn). So an observe target keeps its AI's ordinary departure,
+ * like a chase-off one; a mission author keeps it around with its AI type
+ * or a ShipBehav. GUESS: the other goals stay held (only observe was
+ * measured; destroy / disable / board targets of AI 3/4 hunt or patrol
+ * anyway, so the hold matters mostly for AI 1/2 targets).
  *
  * The hold is released — by MissionShipTrackSystem — as soon as the
  * objective is complete or failed, so a boarded sample-carrier or a
@@ -412,7 +424,9 @@ async function buildShip(ctx: SpawnContext, missionId: string,
     // and nothing that would ever release a hold — they behave like any
     // other ship of their düde (review r14 M2). Chase-off ships must be
     // free to leave: leaving is the goal.
-    if (options.goal !== GOAL_CHASE_OFF && options.goal !== GOAL_NONE) {
+    // Observe targets leave like ordinary traffic (A12 wave 41, above).
+    if (options.goal !== GOAL_CHASE_OFF && options.goal !== GOAL_NONE
+        && options.goal !== GOAL_OBSERVE) {
         // Goal targets must stick around to be fought/boarded/observed.
         //
         // TWO MECHANISMS, because there are two ways out. Pushing
