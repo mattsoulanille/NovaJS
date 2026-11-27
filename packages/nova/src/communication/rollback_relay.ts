@@ -58,6 +58,18 @@ const STATE_HASH_SWEEP_TICKS = 600;
 const MAX_CLOCK_CATCHUP_TICKS = 600;
 
 /**
+ * How often the relay broadcasts its clock (`tickSync`). Besides pacing,
+ * each one CONFIRMS every record up to its tick to the peers that receive
+ * it (records are logged after the relay's current tick and forwarded on
+ * the same ordered channel): a peer publishes a checkpoint hash only once
+ * it is confirmed, and holds its stepping a rollback window past the
+ * confirmation (simulation_bridge_host.ts confirmedThrough). Four a
+ * second keeps the confirmation within ~15 ticks (1x) / ~30 (2x) of the
+ * relay's clock, well inside that window; a tickSync is a few bytes.
+ */
+const TICK_SYNC_INTERVAL_MS = 250;
+
+/**
  * Per-peer speedVote token bucket (#371): allows a short burst of 3 toggles
  * (instant for normal human Caps Lock taps or landing right after a toggle)
  * and coalesces any rapid flood to at most 4 updates/second (last one wins).
@@ -337,7 +349,7 @@ export class RollbackRelay {
             this.syncInterval = setInterval(() => {
                 this.room.sendMessage(
                     wrapRollbackMessage({ kind: 'tickSync', tick: this.tick }));
-            }, 1000);
+            }, TICK_SYNC_INTERVAL_MS);
         }
     }
 
@@ -843,15 +855,22 @@ export class RollbackRelay {
                     this.room.sendMessage(
                         wrapRollbackMessage({ kind: 'inputs', record }), others);
                 }
-                // A clamped record was retimed for the whole room —
-                // echo it to the sender too, who applied it at the
-                // stale tick and must move it, or the sender's own
-                // timeline silently forks from the log.
-                if (record.tick !== message.record.tick) {
-                    this.room.sendMessage(
-                        wrapRollbackMessage({ kind: 'inputs', record }),
-                        source);
-                }
+                // Echo every record to its sender, at the tick it was
+                // logged. A clamped record was retimed for the whole
+                // room, and the sender, who applied it at the stale
+                // tick, must move it or its timeline silently forks from
+                // the log. An unclamped echo tells the sender the same
+                // thing — this is the tick, final — and the sender holds
+                // its checkpoint hashes (and, past its rollback window,
+                // its stepping) until it knows that of every record it
+                // sent: when its uplink stalls, its records reach the
+                // relay late and are retimed, and hashes it had already
+                // published with them at their old ticks used to
+                // convict it (the 2026-11-27 nova:129 desyncs;
+                // simulation_bridge_host.ts confirmedThrough).
+                this.room.sendMessage(
+                    wrapRollbackMessage({ kind: 'inputs', record }),
+                    source);
                 break;
             }
             case 'joinRequest': {

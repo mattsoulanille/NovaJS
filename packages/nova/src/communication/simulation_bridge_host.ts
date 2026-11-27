@@ -60,6 +60,27 @@ const STATE_HASH_SETTLE_TICKS = 30;
  * rollback horizon intact when the room speeds up (R1 #371).
  */
 const ROLLBACK_HISTORY_CAPACITY = 240;
+/**
+ * How far the local tick may run past the relay-confirmed tick
+ * ({@link SimulationBridgeHost.confirmedThrough}) before step() holds.
+ * A record that arrives later still lands at or after the confirmed
+ * tick + 1, so rolling back to it needs the ring to reach back that
+ * far: the ring's 240 ticks less a margin.
+ *
+ * The confirmed tick trails the relay's own clock by one tickSync
+ * interval plus the link latency (at most ~15 + latency ticks at 1x,
+ * ~30 + latency at 2x), so a healthy peer never meets this limit; a
+ * peer whose room traffic stalls for longer than ~1.5 s (2x) / ~3 s
+ * (1x) pauses instead of stepping into ticks it could never correct.
+ */
+const MAX_UNCONFIRMED_TICKS = 200;
+/**
+ * A record of this peer's that the relay has not echoed although its
+ * clock went this far past the record's tick never reached the room's
+ * log (the relay echoes every record it logs): this peer applied an
+ * input the room does not have, so it resyncs.
+ */
+const ECHO_TIMEOUT_TICKS = 600;
 /** Minimum time between automatic desync recoveries. */
 const RESYNC_COOLDOWN_MS = 10_000;
 /**
@@ -234,6 +255,37 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     private nextSeq = 0;
     /** Where each published record was applied locally, by seq. */
     private sentRecords = new Map<number, number>();
+    /** step() is holding at the confirmed tick's limit (logged once per
+     * hold). */
+    private holdingForRelay = false;
+    /**
+     * THE RELAY-CONFIRMED TICK (the 2026-11-27 nova:129 desyncs): the
+     * latest relay clock reading — a tickSync, a roomSpeed notice, a
+     * catch-up reply — this peer has received. The relay stamps every
+     * record it logs AFTER its current tick and forwards it at once on
+     * the same ordered channel, so once a reading of tick R has arrived,
+     * every record for a tick at or before R has arrived before it. That
+     * makes R the horizon of what this peer KNOWS about the room, where
+     * the wall-clock pacing only says where the room probably is.
+     *
+     * Undefined until the first tickSync: a relay that runs no clock (the
+     * in-process specs drive theirs by hand) gives no confirmation, and
+     * the host then behaves as it always did.
+     */
+    private relayConfirmedTick?: number;
+    /** Relayed records still staging (integrateStaged): delivered, but not
+     * yet integrated — they hold the confirmed tick below their own. By
+     * the remoteInputsGeneration they were delivered in: a record from
+     * before a clear discards itself and holds nothing. */
+    private stagingRecords = new Map<InputRecord, number>();
+    /**
+     * This peer's published records the relay has not echoed back yet,
+     * by seq: the tick each was applied at here. The relay echoes every
+     * record it logs to its sender (a retimed one at its new tick), so an
+     * entry here is a record whose final tick this peer does not know —
+     * an uplink stall delays it, and the relay may yet retime it.
+     */
+    private unconfirmedRecords = new Map<number, number>();
     /** Tick of the last uploaded dump, for deduping the relay's
      * request fallback against our own unprompted push. */
     private lastDumpTick = -Infinity;
@@ -397,7 +449,10 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         if (communicator) {
             subscribeRollbackMessages(communicator, {
                 inputs: record => this.integrateStaged(record),
-                tickSync: tick => this.roomClock.sync(tick),
+                tickSync: tick => {
+                    this.roomClock.sync(tick);
+                    this.noteRelayClock(tick, { starts: true });
+                },
                 inputLog: records => {
                     for (const record of records) {
                         this.integrateStaged(record);
@@ -407,12 +462,15 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                     this.handleDesync(tick, hashes, canonical),
                 desyncDumpRequest: () => this.sendDesyncDump(),
                 inputRefused: notice => this.handleRefusal(notice),
-                roomSpeed: notice => this.roomClock.setSpeed({
-                    speed: notice.speed,
-                    atTick: notice.atTick,
-                    fastVotes: notice.fastVotes,
-                    totalVoters: notice.totalVoters,
-                }, notice.tick),
+                roomSpeed: notice => {
+                    this.roomClock.setSpeed({
+                        speed: notice.speed,
+                        atTick: notice.atTick,
+                        fastVotes: notice.fastVotes,
+                        totalVoters: notice.totalVoters,
+                    }, notice.tick);
+                    this.noteRelayClock(notice.tick, { starts: false });
+                },
             });
             // The identity this host starts under: no re-entry for it.
             this.noteIdentity();
@@ -552,6 +610,26 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         this.scheduleReinsertions();
         this.integrateRemoteInputs();
         for (let i = 0; i < count; i++) {
+            // Never step into ticks a record still on its way could not
+            // be rolled back to (see MAX_UNCONFIRMED_TICKS): hold, and
+            // let the pump's pacing catch up once the room's traffic
+            // arrives. A peer that played on used to apply such records
+            // past its rollback horizon — a certain fork, convicted at
+            // every checkpoint until the cooldown-gated resync ran.
+            // (Not while disconnected: a peer that lost its socket plays
+            // on alone, as it always did, until the reconnect re-enters.)
+            const confirmed = this.confirmedThrough();
+            if (confirmed !== undefined && this.wasConnected
+                && this.rollback.tick + 1 > confirmed + MAX_UNCONFIRMED_TICKS) {
+                if (!this.holdingForRelay) {
+                    this.holdingForRelay = true;
+                    this.logRollbackEvent('holdForRelay', {
+                        confirmed, unechoed: this.unconfirmedRecords.size,
+                    });
+                }
+                break;
+            }
+            this.holdingForRelay = false;
             // One tick's share of the queue: a press and its release
             // (a quick tap) never share a record, nor do two presses of
             // one key (tick_inputs.ts); the rest waits for the next tick.
@@ -598,7 +676,11 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 };
                 this.addRecord(tick, record);
                 this.sentRecords.set(record.seq!, tick);
-                this.publishInputs(record);
+                // (Only a record carrying our id can be recognised in
+                // its echo.)
+                if (this.publishInputs(record) && peerId !== undefined) {
+                    this.unconfirmedRecords.set(record.seq!, tick);
+                }
             }
             this.rollback.step();
         }
@@ -650,9 +732,16 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                     return stepped;
                 }
                 const chunk = Math.min(remaining, CATCH_UP_CHUNK_TICKS);
+                const before = this.rollback.tick;
                 this.step(chunk);
-                stepped += chunk;
+                const advanced = this.rollback.tick - before;
+                stepped += advanced;
                 remaining -= chunk;
+                if (advanced < chunk) {
+                    // Holding for the relay's confirmation (step()): the
+                    // pump's pacing takes the rest once it arrives.
+                    break;
+                }
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
         }
@@ -734,6 +823,12 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 // log (retimed where the relay retimed them);
                 // in-flight echoes must not move anything.
                 this.sentRecords.clear();
+                this.unconfirmedRecords.clear();
+                // The reply is a clock reading like a tickSync, and the
+                // catch-up log holds every record through its tick.
+                // (Replacing, not raising: a restarted relay's clock
+                // starts over.)
+                this.noteRelayClock(reply.tick, { starts: false });
                 // A new timeline: the room clock stamps from here.
                 this.lastRecordTick = -Infinity;
                 // The reply carries the relay's clock: seed the
@@ -838,7 +933,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             // arrived, which contains this record), drop it: pushing
             // after the clear would apply it twice.
             const generation = this.remoteInputsGeneration;
-            void (async () => {
+            const stage = async () => {
                 for (let attempt = 1; ; attempt++) {
                     try {
                         await this.stageRecords([record]);
@@ -876,6 +971,14 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 if (generation === this.remoteInputsGeneration) {
                     this.remoteInputs.push(record);
                 }
+            };
+            this.stagingRecords.set(record, generation);
+            void (async () => {
+                try {
+                    await stage();
+                } finally {
+                    this.stagingRecords.delete(record);
+                }
             })();
         } else {
             this.remoteInputs.push(record);
@@ -908,12 +1011,15 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         const communicator = this.world.resources.get(CommunicatorResource);
         let earliestCorrection: number | undefined;
         for (const record of records) {
-            // The relay echoes our own record back only when it
-            // retimed it: the room applies it at the echoed tick, so
-            // move our local application there or fork silently.
+            // The relay echoes every record back to its sender, at the
+            // tick it logged it: when it retimed one, the room applies it
+            // at the echoed tick, so move our local application there or
+            // fork silently. (An echo at the tick we used just confirms.)
             if (record.peerId !== undefined
                 && record.peerId === communicator?.uuid
                 && record.seq !== undefined) {
+                // Its final tick is known now, whichever branch below.
+                this.unconfirmedRecords.delete(record.seq);
                 const oldTick = this.sentRecords.get(record.seq);
                 if (oldTick === undefined) {
                     // An echo from before a resync: the catch-up log
@@ -1026,16 +1132,65 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * is the single fan-out, so peers never receive a record twice
      * (once directly, once relayed).
      */
-    private publishInputs(record: InputRecord) {
+    private publishInputs(record: InputRecord): boolean {
         const communicator = this.world.resources.get(CommunicatorResource);
         const server = relayServer(communicator);
         if (!communicator || !server) {
-            return;
+            return false;
         }
         communicator.sendMessage(wrapRollbackMessage({
             kind: 'inputs',
             record,
         }), server);
+        return true;
+    }
+
+    /**
+     * A relay clock reading arrived (see relayConfirmedTick). A tickSync
+     * `starts` the confirmation; the other readings only move one that a
+     * running relay clock has started.
+     *
+     * Also the echo timeout: the relay logs and echoes each record when
+     * it receives it, so a record of ours whose tick the relay's clock
+     * has long passed without an echo never made it into the room's log.
+     */
+    private noteRelayClock(tick: number, { starts }: { starts: boolean }) {
+        if (this.relayConfirmedTick === undefined && !starts) {
+            return;
+        }
+        this.relayConfirmedTick = tick;
+        for (const [seq, recordTick] of this.unconfirmedRecords) {
+            if (tick - recordTick > ECHO_TIMEOUT_TICKS) {
+                this.unconfirmedRecords.delete(seq);
+                this.logRollbackEvent('echoMissing', { seq, tick: recordTick });
+                void this.resync();
+            }
+        }
+    }
+
+    /**
+     * The last tick whose inputs this peer knows in full: the relay-
+     * confirmed tick, held below any relayed record still staging, and
+     * below any record of this peer's whose final tick the relay has not
+     * yet echoed. Undefined when no relay clock confirms anything.
+     */
+    private confirmedThrough(): number | undefined {
+        if (this.relayConfirmedTick === undefined) {
+            return undefined;
+        }
+        let confirmed = this.relayConfirmedTick;
+        for (const [record, generation] of this.stagingRecords) {
+            if (generation === this.remoteInputsGeneration) {
+                confirmed = Math.min(confirmed, record.tick - 1);
+            }
+        }
+        for (const record of this.remoteInputs) {
+            confirmed = Math.min(confirmed, record.tick - 1);
+        }
+        for (const tick of this.unconfirmedRecords.values()) {
+            confirmed = Math.min(confirmed, tick - 1);
+        }
+        return confirmed;
     }
 
     /**
@@ -1050,8 +1205,17 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         // real-time settle margin holds at 2x as well (R1 #371).
         const settleTicks = STATE_HASH_SETTLE_TICKS
             * this.roomClock.speedAt(this.rollback.tick);
+        // And never before the room's records for the checkpoint have all
+        // arrived (the 2026-11-27 nova:129 desyncs): a hash published on
+        // the settle window alone describes whatever this peer had heard
+        // by then. When its room traffic stalled for a second or two (a
+        // busy tab, a congested link, a stalled server), that was a
+        // timeline missing another peer's inputs, or holding its own at
+        // ticks the relay then moved them from — mismatches that convict
+        // an honest peer three checkpoints later.
+        const confirmed = this.confirmedThrough() ?? Infinity;
         for (const [tick, hash] of this.checkpointHashes) {
-            if (tick <= this.rollback.tick - settleTicks) {
+            if (tick <= this.rollback.tick - settleTicks && tick <= confirmed) {
                 this.checkpointHashes.delete(tick);
                 if (communicator && server) {
                     communicator.sendMessage(wrapRollbackMessage(

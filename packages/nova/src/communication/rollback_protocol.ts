@@ -1031,6 +1031,20 @@ export const STATE_HASH_INTERVAL = 60;
 //    unchanged (22e64bb746b73e86) and the join gate does NOT keep older
 //    and newer builds apart; a mixed room would desync at a player's
 //    disable.
+//    Also under 8, no further bump (the same standing ruling; no schema
+//    change at all, the fingerprint stays 22e64bb746b73e86): RELAY
+//    CONFIRMATION (the 2026-11-27 nova:129 desyncs). The relay echoes EVERY
+//    `inputs` record to its sender at the tick it logged it, not only a
+//    retimed one, and broadcasts `tickSync` four times a second instead of
+//    once. A peer treats each relay clock reading (tickSync, roomSpeed,
+//    catchUp) as confirming every record through its tick, and publishes a
+//    checkpoint's stateHash only once the checkpoint is confirmed and every
+//    record of its own at or before it has come back echoed; it holds its
+//    stepping 200 ticks past that point (simulation_bridge_host.ts
+//    confirmedThrough). Mixed builds are refused by the build handshake:
+//    an older peer ignores the extra echoes (same tick, nothing to move),
+//    but a newer peer under an older relay would never see its unretimed
+//    records confirmed.
 
 export const PROTOCOL_VERSION = 8;
 

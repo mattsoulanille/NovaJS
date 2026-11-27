@@ -54,8 +54,12 @@ describe('RollbackRelay', () => {
             kind: 'inputs',
             record: { peerId: 'a', tick: 5, inputs: CONTROL },
         });
-        // The sender does not get an echo.
-        expect(received(peerA).length).toBe(0);
+        // The sender gets the record back at the tick it was logged:
+        // unclamped here, the echo only confirms its tick.
+        expect(received(peerA)).toEqual([{
+            kind: 'inputs',
+            record: { peerId: 'a', tick: 5, inputs: CONTROL },
+        }]);
         expect(relay.inputLog.length).toBe(1);
     });
 

@@ -32,7 +32,9 @@ const PACING_MAX_SLEW = 0.05;
  * input landed that many ticks late.
  */
 const SYNC_WINDOW_MS = 4000;
-const SYNC_SAMPLES = 5;
+// Sixteen: the relay syncs four times a second (rollback_relay.ts
+// TICK_SYNC_INTERVAL_MS), and the window should still span its 4 s.
+const SYNC_SAMPLES = 16;
 /**
  * A sync this many ticks (scaled by speed) BELOW the estimate is not a
  * late message but a different clock: it replaces the history at once.

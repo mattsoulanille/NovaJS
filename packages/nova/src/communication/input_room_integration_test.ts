@@ -1555,4 +1555,166 @@ describe('Input-driven rooms', () => {
             wireSnapshotOfSnapshot(peerA.world, snapshotWorld(peerA.world))))
             .toEqual(JSON.stringify(wireSnapshotWorld(peerA.world)));
     }, 240_000);
+
+    describe('a peer whose room traffic arrives late (the 2026-11-27 nova:129 desyncs)', () => {
+        // The landed peer of that session received another peer's records
+        // seconds after their ticks, while its own clock (the wall-clock
+        // extrapolation of the relay's) kept it stepping. It published
+        // checkpoint hashes on the 0.5 s settle window alone — hashes of a
+        // timeline missing the records — and was convicted; records older
+        // than its 240-tick ring it applied late (lateRecord), a real fork
+        // it kept until the cooldown-gated resync. The flying peer's own
+        // convictions had the uplink form: its records reached the relay
+        // late, were retimed (a burst all logged at one tick), and the
+        // hashes it had published with them at their old ticks convicted
+        // it. Here one direction of peer A's traffic is held while a peer
+        // plays an input, then released in order. The relay clock is
+        // driven by hand; A gets the tickSyncs a running relay broadcasts
+        // (B gets none, so B paces as before).
+        async function run(holdTicks: number,
+            direction: 'inbound' | 'uplink' = 'inbound') {
+            const peerA = await makePeer('a');
+            const peerB = await makePeer('b');
+            const server = comms.get('server')!;
+            const realA = comms.get('a')!;
+            let holding = false;
+            const held: (() => void)[] = [];
+            if (direction === 'inbound') {
+                const gate = {
+                    uuid: 'a',
+                    messages: {
+                        next: (message: { source: string, message: unknown }) => {
+                            if (holding) {
+                                held.push(() => realA.messages.next(message));
+                            } else {
+                                realA.messages.next(message);
+                            }
+                        },
+                    },
+                };
+                server.mockPeers = new Map(comms);
+                server.mockPeers.set('a', gate as never);
+            } else {
+                const send = realA.sendMessage.bind(realA);
+                realA.sendMessage = (message, destination) => {
+                    if (holding) {
+                        held.push(() => send(message, destination));
+                    } else {
+                        send(message, destination);
+                    }
+                };
+            }
+            // The FIRST hash each peer reports to the relay per checkpoint:
+            // the one the relay compares. (A rollback across a published
+            // checkpoint re-reports it corrected, too late to matter.)
+            const reports = new Map<string, Map<number, string>>(
+                [['a', new Map()], ['b', new Map()]]);
+            server.messages.subscribe(({ source, message }) => {
+                const rollbackMessage = unwrapRollbackMessage(message);
+                const peerReports = reports.get(source);
+                if (rollbackMessage?.kind === 'stateHash' && peerReports
+                    && !peerReports.has(rollbackMessage.tick)) {
+                    peerReports.set(rollbackMessage.tick, rollbackMessage.hash);
+                }
+            });
+            const tickSync = () => server.sendMessage(wrapRollbackMessage(
+                { kind: 'tickSync', tick: relay.tick }), 'a');
+
+            await peerA.client.addEntity('ship a', await makePeerShip('a', peerA.world));
+            await peerB.client.addEntity('ship b', await makePeerShip('b', peerB.world));
+            const { TimeResource } = await import('nova_ecs/plugins/time_plugin');
+            const frame = (world: World) => world.resources.get(TimeResource)!.frame;
+            const tick = async (stepA = true, stepB = true) => {
+                relay.advanceTicks(1);
+                if (relay.tick % 15 === 0) {
+                    tickSync();
+                }
+                if (stepA) {
+                    peerA.host.step();
+                }
+                if (stepB) {
+                    peerB.host.step();
+                }
+                await new Promise(resolve => setImmediate(resolve));
+            };
+            for (let i = 0; i < 40; i++) {
+                await tick();
+            }
+            holding = true;
+            let maxLead = 0;
+            for (let i = 0; i < holdTicks; i++) {
+                if (i === 5) {
+                    (direction === 'inbound' ? peerB : peerA).host.controlEvents(
+                        [{ action: 'accelerate', state: 'start' }]);
+                }
+                await tick();
+                maxLead = Math.max(maxLead, frame(peerA.world) - relay.tick);
+            }
+            holding = false;
+            for (const deliver of held.splice(0)) {
+                deliver();
+            }
+            for (let i = 0; i < 200; i++) {
+                await tick();
+            }
+            // Bring both to one tick (A may have held back).
+            while (frame(peerA.world) !== frame(peerB.world)) {
+                await tick(frame(peerA.world) < frame(peerB.world),
+                    frame(peerB.world) < frame(peerA.world));
+            }
+            const log = (peerA.host as unknown as {
+                rollbackLog: { event: string }[],
+            }).rollbackLog.map(entry => entry.event);
+            return { peerA, peerB, reports, log, maxLead };
+        }
+
+        function expectAgreement(reports: Map<string, Map<number, string>>) {
+            const a = reports.get('a')!;
+            const b = reports.get('b')!;
+            const common = [...a.keys()].filter(t => b.has(t));
+            // The checkpoints through the hold and after it were compared.
+            expect(common.length).toBeGreaterThanOrEqual(4);
+            for (const t of common) {
+                expect(`${t}: ${a.get(t)}`).toEqual(`${t}: ${b.get(t)}`);
+            }
+        }
+
+        it('publishes no checkpoint hash before the records for it arrived', async () => {
+            // 100 ticks: within the rollback ring, so A corrects by
+            // rollback; what it must not do is REPORT the uncorrected
+            // checkpoints in the meantime.
+            const { peerA, peerB, reports, log } = await run(100);
+            expectAgreement(reports);
+            expect(log).not.toContain('lateRecord');
+            expect(hashWorld(peerA.world, PEER_LOCAL_COMPONENTS).hash)
+                .toEqual(hashWorld(peerB.world, PEER_LOCAL_COMPONENTS).hash);
+        }, 240_000);
+
+        it('holds its stepping rather than run past its rollback window', async () => {
+            // 320 ticks: past the 240-tick ring. A used to step on and
+            // apply B's record late (lateRecord, a fork until a resync).
+            const { peerA, peerB, reports, log, maxLead } = await run(320);
+            expect(log).not.toContain('lateRecord');
+            expect(log).not.toContain('resync');
+            expect(log).toContain('holdForRelay');
+            // It held within the window of the last confirmed tick.
+            expect(maxLead).toBeLessThanOrEqual(15 + 200);
+            expectAgreement(reports);
+            expect(hashWorld(peerA.world, PEER_LOCAL_COMPONENTS).hash)
+                .toEqual(hashWorld(peerB.world, PEER_LOCAL_COMPONENTS).hash);
+        }, 240_000);
+
+        it('reports no checkpoint holding its own record before the relay '
+            + 'has placed it', async () => {
+            // A's uplink stalls for 100 ticks right after it accelerates:
+            // its record reaches the relay behind the clock and is retimed.
+            // A's hashes for the checkpoints in between, queued behind it,
+            // used to arrive holding the input at its old tick.
+            const { peerA, peerB, reports, log } = await run(100, 'uplink');
+            expect(log).toContain('retimed');
+            expectAgreement(reports);
+            expect(hashWorld(peerA.world, PEER_LOCAL_COMPONENTS).hash)
+                .toEqual(hashWorld(peerB.world, PEER_LOCAL_COMPONENTS).hash);
+        }, 240_000);
+    });
 });
