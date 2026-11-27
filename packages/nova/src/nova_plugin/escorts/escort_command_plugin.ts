@@ -87,7 +87,9 @@ import { WeaponsStateComponent, WeaponState } from '../ship/index.js';
  * This framework REPLACES the old bay behavior ("launch at the current
  * target and attack it until it dies, then auto-dock"): fighters now
  * launch into formation like every other escort and fight only when
- * commanded; docking happens only on the returnToBay command.
+ * commanded; the PLAYER's own fighters dock only on the returnToBay
+ * command. A CARRIER ESCORT's wings dock on their own once its fight is
+ * over (EscortCommandPropagationSystem, reference EC wave 46).
  *
  * DEFEND ENDPOINT: attack-until-DISABLED. A defend engagement ends the
  * moment the intruder becomes disabled (DisabledComponent), and
@@ -230,15 +232,55 @@ export const EscortCommandInputSystem = new System({
 });
 
 /**
+ * Whether a carrier escort on `command` is in a fight its wings should be
+ * out for: an attack or defend order on a victim that is still in the
+ * system, not exploding and not DISABLED. A defend order's victim is the
+ * intruder EscortCommandBehaviorSystem engaged (it clears `target` when
+ * there is none); an attack order's is the player's pick. Pure over synced
+ * components.
+ */
+export function carrierEngaged(command: EscortCommandState,
+    entities: { get(uuid: string): Entity | undefined }): boolean {
+    if ((command.command !== 'attack' && command.command !== 'defend')
+        || command.target === undefined) {
+        return false;
+    }
+    const victim = entities.get(command.target);
+    return !!victim && victim.components.has(MovementStateComponent)
+        && !victim.components.has(DisabledComponent)
+        && !victim.components.has(ExplodingComponent);
+}
+
+/**
  * Carrier escorts mirror their own command to their wings (fighters
  * from THEIR bays) every tick: the indirect layer the player never
  * commands directly. Idempotent copy, so ordering within the tick
  * doesn't matter.
+ *
+ * A CARRIER ESCORT'S WINGS DOCK ON THEIR OWN when its fight is over
+ * (MEASURED, reference "The escort carrier's `d` with an intruder, and
+ * its fighters' return (EC leftover), wave 46": after `d` the stock Fed
+ * Carrier's fighters chased the intruder, and once it was DISABLED two of
+ * them flew back to the carrier and vanished into it within about 5-10 s,
+ * with no `c`; the carrier kept formation). So while the carrier is not
+ * engaged (carrierEngaged: no victim, or the victim disabled, exploding
+ * or gone) its bay-launched wings are given 'returnToBay' instead of the
+ * mirror, and EscortCommandBehaviorSystem flies them home to dock (each
+ * refunding its round to the bay). GUESSES: the same after `f` once the
+ * victim is disabled or dead (only the `d` case was watched), and the
+ * same for every order that is not a fight (formation, hold position).
+ * A recall is final, as for an NPC carrier's wings: a wing already
+ * flying home (ReturnComponent) is left alone even if the carrier fights
+ * again, and the carrier launches afresh, one per reload. The player's
+ * OWN bay fighters are not wings of a carrier escort and never come here
+ * (the player ship has no EscortCommandComponent): they keep formation
+ * until ordered home (reference R6).
  */
 const EscortCommandPropagationSystem = new System({
     name: 'EscortCommandPropagation',
     args: [EscortCommandComponent, UUID, GetEntity, Entities] as const,
     step(command, uuid, entity, entities) {
+        const engaged = carrierEngaged(command, entities);
         // Only escorts that CARRY fighters propagate; walk this
         // entity's one-hop followers.
         for (const [, other] of entities) {
@@ -249,10 +291,18 @@ const EscortCommandPropagationSystem = new System({
             if (escortParent(other) !== uuid) {
                 continue;
             }
-            if (otherCommand.command !== command.command
-                || otherCommand.target !== command.target) {
+            const bayWing = other.components.has(BayFighterComponent)
+                && other.components.has(ReturnWhenTargetRemovedComponent);
+            if (bayWing && other.components.has(ReturnComponent)) {
+                // Already flying home to dock: a recall is final.
+                continue;
+            }
+            const desired: EscortCommandState = bayWing && !engaged
+                ? { command: 'returnToBay' } : command;
+            if (otherCommand.command !== desired.command
+                || otherCommand.target !== desired.target) {
                 other.components.set(EscortCommandComponent,
-                    { ...command });
+                    { ...desired });
             }
         }
     },
@@ -785,8 +835,15 @@ export const EscortCommandBehaviorSystem = new System({
             }
         };
         const fireAt = (victim: string) => {
-            const victimMovement = entities.get(victim)?.components
+            const victimEntity = entities.get(victim);
+            const victimMovement = victimEntity?.components
                 .get(MovementStateComponent);
+            // A DISABLED victim (an attack order outlives the disable)
+            // is no fight for the wings: they are recalled
+            // (carrierEngaged), so the hangar stays shut rather than
+            // launching fighters only to dock them again.
+            const victimDisabled =
+                !!victimEntity?.components.has(DisabledComponent);
             const distanceSquared = victimMovement === undefined
                 ? Infinity
                 : victimMovement.position.subtract(movement.position)
@@ -816,8 +873,13 @@ export const EscortCommandBehaviorSystem = new System({
                 // player's own fighters fight only when ordered (R6), and
                 // only a mission protector keeps its bays shut (Q4; such
                 // ships run the NPC AI and never get here). In formation
-                // (below) the hangar stays shut.
+                // (below) the hangar stays shut, and so it does at a
+                // disabled victim (victimDisabled).
                 weapon.target = victim;
+                if (victimDisabled && weaponData.type === 'BayWeaponData') {
+                    weapon.firing = false;
+                    continue;
+                }
                 // The flat ESCORT_FIRE_RANGE is fine for a weapon whose
                 // wasted shot costs a round of ammo. A SUICIDE weapon
                 // (wëap AmmoType -999) spends the ship, so it is held

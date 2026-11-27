@@ -16,8 +16,8 @@ import {
     PlayerEscortComponent,
 } from '../player/index.js';
 import {
-    FiringGroupComponent, makeShip, OutfitsStateComponent, TargetComponent,
-    WeaponsStateComponent,
+    DisabledComponent, FiringGroupComponent, makeShip, OutfitsStateComponent,
+    TargetComponent, WeaponsStateComponent,
 } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { BayFighterComponent, ReturnComponent } from './bay_plugin.js';
@@ -36,8 +36,10 @@ import { sweepableEscorts } from './player_escort_plugin.js';
  * launches one skiff per reload at the victim, like an NPC carrier of the
  * same hull fighting the same ship (npc_carrier_integration_test); the
  * skiffs are the player's (escort-owned) fighters: they take the
- * carrier's order, fall back into formation on it, follow the player out
- * of the system, and dock on the returnToBay order.
+ * carrier's order, follow the player out of the system, dock on the
+ * returnToBay order, and dock ON THEIR OWN once the carrier's fight is over
+ * (reference "The escort carrier's `d` with an intruder, and its fighters'
+ * return (EC leftover), wave 46").
  */
 
 const WARDEN = SYNTHETIC.ships.warden;
@@ -213,8 +215,20 @@ describe('A carrier escort (synthetic data)', () => {
                 .toBe('raider');
         });
 
-    it('brings its skiffs back into formation on itself when the victim '
-        + 'is gone, and docks them on returnToBay', async () => {
+    /** Steps until no skiff is left out; returns whether they all docked
+     * within `seconds`. */
+    function stepUntilDocked(seconds = 30): boolean {
+        for (let i = 0; i < 60 * seconds; i++) {
+            step(1);
+            if (wings().length === 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    it('docks its skiffs on its own once the victim is gone (reference EC '
+        + 'wave 46; GUESS for `f`)', async () => {
             const carrier = await setUp();
             carrier.components.set(EscortCommandComponent,
                 { command: 'attack', target: 'raider' });
@@ -224,16 +238,89 @@ describe('A carrier escort (synthetic data)', () => {
             step(2);
             expect(carrier.components.get(EscortCommandComponent))
                 .toEqual({ command: 'formation' });
+            // No `c`, no Alt+C: the fight is over, so the wings fly home.
             for (const [, wing] of wings()) {
                 expect(wing.components.get(EscortCommandComponent)?.command)
-                    .toBe('formation');
-                expect(wing.components.get(FormationComponent)?.leader)
-                    .toBe('carrier');
+                    .toBe('returnToBay');
+                expect(wing.components.has(ReturnComponent)).toBeTrue();
             }
+            expect(stepUntilDocked()).withContext('both skiffs docked')
+                .toBeTrue();
+            expect(magazine(carrier)).toBe(2);
             // Formation does not re-open the hangar.
             step(180);
-            expect(wings().length).toBe(2);
+            expect(wings().length).toBe(0);
+        });
 
+    it('after `d`, docks its skiffs on its own once the intruder is '
+        + 'DISABLED, and keeps formation itself (reference EC wave 46)',
+        async () => {
+            const carrier = await setUp(ship => {
+                ship.components.set(NpcComponent, { aiType: 3 });
+                ship.components.set(TargetComponent, { target: undefined });
+            });
+            carrier.components.set(EscortCommandComponent,
+                { command: 'defend' });
+            expect(launchBoth().length).withContext('both skiffs out')
+                .toBe(2);
+            step(2);
+            for (const [, wing] of wings()) {
+                expect(wing.components.get(EscortCommandComponent))
+                    .toEqual({ command: 'defend', target: 'raider' });
+            }
+
+            // The intruder goes Disabled (a hulk, so nothing repairs it).
+            world.entities.get('raider')!.components.set(DisabledComponent,
+                { repairAt: null, hulk: true });
+            step(3);
+            // The carrier's defend order stands, with no intruder.
+            expect(carrier.components.get(EscortCommandComponent)?.command)
+                .toBe('defend');
+            expect(carrier.components.get(EscortCommandComponent)?.target)
+                .toBeUndefined();
+            for (const [, wing] of wings()) {
+                expect(wing.components.has(ReturnComponent))
+                    .withContext('flying home').toBeTrue();
+            }
+            expect(stepUntilDocked()).withContext('both skiffs docked')
+                .toBeTrue();
+            expect(magazine(carrier)).toBe(2);
+            // Nothing left to defend against: the hangar stays shut.
+            step(180);
+            expect(wings().length).toBe(0);
+        });
+
+    it('after `f`, recalls its skiffs once the victim is disabled and does '
+        + 'not launch again at the hulk (GUESS)', async () => {
+            const carrier = await setUp();
+            carrier.components.set(EscortCommandComponent,
+                { command: 'attack', target: 'raider' });
+            expect(launchBoth().length).toBe(2);
+            world.entities.get('raider')!.components.set(DisabledComponent,
+                { repairAt: null, hulk: true });
+            step(2);
+            // The attack order outlives the disable (the carrier's guns
+            // stay on the hulk), but the wings are recalled.
+            expect(carrier.components.get(EscortCommandComponent))
+                .toEqual({ command: 'attack', target: 'raider' });
+            for (const [, wing] of wings()) {
+                expect(wing.components.has(ReturnComponent)).toBeTrue();
+            }
+            expect(stepUntilDocked()).withContext('both skiffs docked')
+                .toBeTrue();
+            step(300);
+            expect(carrier.components.get(WeaponsStateComponent)!
+                .get(SKIFF_BAY)!.firing).toBeFalse();
+            expect(wings().length).toBe(0);
+            expect(magazine(carrier)).toBe(2);
+        });
+
+    it('docks its skiffs on Alt+C mid-fight, and a recall is final',
+        async () => {
+            const carrier = await setUp();
+            carrier.components.set(EscortCommandComponent,
+                { command: 'attack', target: 'raider' });
+            expect(launchBoth().length).toBe(2);
             // Alt+C reaches the carrier (a direct escort), which mirrors
             // it to its wings: they fly home and dock, restocking the bay.
             carrier.components.set(EscortCommandComponent,
@@ -242,13 +329,16 @@ describe('A carrier escort (synthetic data)', () => {
             for (const [, wing] of wings()) {
                 expect(wing.components.has(ReturnComponent)).toBeTrue();
             }
-            let docked = false;
-            for (let i = 0; i < 60 * 30 && !docked; i++) {
-                step(1);
-                docked = wings().length === 0;
+            // `f` again before they are home: the ones flying home keep
+            // going (a recall is final).
+            carrier.components.set(EscortCommandComponent,
+                { command: 'attack', target: 'raider' });
+            step(2);
+            for (const [, wing] of wings()) {
+                expect(wing.components.get(EscortCommandComponent)?.command)
+                    .toBe('returnToBay');
+                expect(wing.components.has(ReturnComponent)).toBeTrue();
             }
-            expect(docked).withContext('both skiffs docked').toBeTrue();
-            expect(magazine(carrier)).toBe(2);
         });
 
     it('takes its launched skiffs along when the player jumps out',
