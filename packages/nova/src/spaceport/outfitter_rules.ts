@@ -17,6 +17,7 @@ import { ShipData } from 'novadatainterface/ship_data';
 import { WeaponData } from 'novadatainterface/weapon_data';
 import { DiscoveryAccess } from '../nova_plugin/player/index.js';
 import {
+    PlayerContributeSources, playerContribute as sharedPlayerContribute,
     resolveNumberedResource, setStringPrefix, systemDiscoveryOperators,
 } from '../nova_plugin/missions/index.js';
 import { evaluateNCBTest, NCBParseError } from '../nova_plugin/ncb/index.js';
@@ -92,14 +93,15 @@ export interface OutfitterContext {
      */
     planet?: OutfitterStellar;
     /**
-     * The union of the active ranks' Contribute sets (rank_logic.ts's
-     * rankContribute). The EVN Bible's rank Contribute is "Another 64 bits
-     * of Contribute values that kick in when the rank is active [which] can
-     * be used to prevent the player from buying certain items ... until
-     * achieving a certain rank", so it joins the ship + outfit set for the
-     * Require test. Absent means "no ranks", the pre-rank behaviour.
+     * The player's Contribute sources beyond the hull and the outfits (which
+     * this context carries itself, as the shop's working copy): the active
+     * ränks and the crön states, with their lookups. Both join the ship +
+     * outfit set for the Require test (missions/player_contribute.ts, the
+     * one union every Require gate reads). Absent means "no ranks, no
+     * crons".
      */
-    rankContribute?: bigint;
+    contributeSources?: Pick<PlayerContributeSources,
+        'ranks' | 'getRank' | 'cronStates' | 'getCron'>;
     /**
      * The five STR# 2002 fragments the launcher sell refusal is composed
      * from, read out of the loaded game data by the Outfitter menu.
@@ -593,18 +595,17 @@ function hardpoints(context: OutfitterContext,
 }
 
 /**
- * The union of the Contribute flag sets of the player's ship and all
- * owned outfits.
+ * The player's Contribute set as this shop sees it: the context's hull and
+ * owned outfits (the working copy, so a purchase counts at once) with the
+ * ranks and active crons (missions/player_contribute.ts).
  */
 export function playerContribute(context: OutfitterContext): bigint {
-    let contribute = BigInt(context.shipData.contribute ?? '0x0')
-        | (context.rankContribute ?? 0n);
-    for (const [outfit, count] of ownedOutfits(context)) {
-        if (count > 0) {
-            contribute |= BigInt(outfit.contribute ?? '0x0');
-        }
-    }
-    return contribute;
+    return sharedPlayerContribute({
+        ...context.contributeSources,
+        ship: context.shipData.contribute,
+        outfits: [...ownedOutfits(context)]
+            .map(([outfit]) => outfit.contribute),
+    });
 }
 
 /**

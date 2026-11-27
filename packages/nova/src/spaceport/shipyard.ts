@@ -372,6 +372,7 @@ export class Shipyard extends Menu<Entity> {
             currentShipData: this.currentShipData,
             getOutfit: id => this.allOutfits.get(id),
             getRank: id => universe.getRank(id),
+            getCron: id => universe.getCron(id),
         });
     }
 

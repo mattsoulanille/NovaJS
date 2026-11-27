@@ -100,6 +100,7 @@ describe('ränk PriceMod at real stock stellars', () => {
             stellarId: planet.id,
             getOutfit: () => undefined,
             getRank: id => universe.getRank(id),
+            getCron: id => universe.getCron(id),
         }).priceMod;
     }
 

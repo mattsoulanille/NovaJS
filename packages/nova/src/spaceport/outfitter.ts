@@ -11,9 +11,11 @@ import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_
 import { ControlEvent } from "../nova_plugin/core/index.js";
 import {
     NCBParseError, ControlBits, makeDescTextContext, playerGender,
-    resolveConditionalBlocks, rankContribute,
+    resolveConditionalBlocks,
 } from '../nova_plugin/ncb/index.js';
-import { playerDiscovery, dayNumber, GameDateComponent } from '../nova_plugin/player/index.js';
+import {
+    playerDiscovery, dayNumber, CronStatesComponent, GameDateComponent,
+} from '../nova_plugin/player/index.js';
 import { cleanRecords, LegalRecords } from "../nova_plugin/reputation/index.js";
 import { ShipComponent, CargoComponent, cargoUsed } from '../nova_plugin/ship/index.js';
 import {
@@ -215,15 +217,20 @@ export class Outfitter extends Menu<Entity> {
     }
 
     /**
-     * The union of the active ranks' Contribute sets, for the Require test
-     * (see outfitter_rules' playerContribute). Read off the working rank
-     * set so a rank granted by an OnPurchase set string takes effect on
-     * the very next grid refresh, before the visit is released.
+     * The ränks and crons the Require test unions with the hull and the
+     * outfits (see outfitter_rules' playerContribute). The ranks are the
+     * working set, so a rank granted by an OnPurchase set string takes
+     * effect on the very next grid refresh, before the visit is released;
+     * the crön states are the entity's (only a date advance moves them).
      */
-    private rankContribute(): bigint {
-        const ranks = this.missionSession?.state.ranks;
+    private contributeSources(): OutfitterContext['contributeSources'] {
         const universe = MissionUniverse.shared(this.simulationData);
-        return rankContribute(ranks, id => universe.getRank(id));
+        return {
+            ranks: this.missionSession?.state.ranks,
+            getRank: id => universe.getRank(id),
+            cronStates: this.input?.components.get(CronStatesComponent),
+            getCron: id => universe.getCron(id),
+        };
     }
 
     /**
@@ -657,7 +664,7 @@ export class Outfitter extends Menu<Entity> {
             // resolution uses, and independent of what has been fetched.
             outfitExists: this.outfitExists(),
             bits: this.controlBits,
-            rankContribute: this.rankContribute(),
+            contributeSources: this.contributeSources(),
             credits: this.credits.credits,
             // Resolved against the outfits the player owns, because a
             // deployed fighter names only its bay weapon and has to be

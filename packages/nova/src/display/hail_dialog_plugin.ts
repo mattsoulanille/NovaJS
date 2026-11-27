@@ -819,7 +819,7 @@ export function commClassName(ship: Pick<ShipData, 'name' | 'commName'>):
  * those hulls, so the same two gates apply. This calls the SHIPYARD's own
  * {@link shipStockGatesPass} with NO planet context, which is exactly:
  *
- *   Require    met by the player's Contribute (hull + outfits + ranks);
+ *   Require    met by the player's Contribute (hull, outfits, ranks, crons);
  *   Availability   its control-bit test passes;
  *   TechLevel  NOT applied — `ctx.planet` undefined means "no shipyard",
  *              which stocks everything.
@@ -1050,6 +1050,7 @@ export async function computeContext(world: World,
                             player.entity.components.get(ShipDataComponent),
                         getOutfit: id => gameData.data.Outfit.getCached(id),
                         getRank: id => gameData.data.Rank.getCached(id),
+                        getCron: id => gameData.data.Cron.getCached(id),
                     }), gameData)
                 : undefined;
             const escort: EscortManagement = {

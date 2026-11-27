@@ -75,8 +75,8 @@ export interface ShipyardContext {
     /** The player's control bits (ControlBitsComponent). */
     bits: ReadonlySet<number>;
     /**
-     * The union of the Contribute flag sets of the player's current ship
-     * and every outfit it carries (see playerContribute below).
+     * The player's Contribute set: hull, outfits, ranks and active crons
+     * (missions/player_contribute.ts, through ship_gate_context.ts).
      */
     contribute: bigint;
     /**
@@ -92,21 +92,6 @@ export interface ShipyardContext {
      * shows the same ships either way, they are just priced differently.
      */
     priceMod?: number;
-}
-
-/**
- * The shipyard's counterpart to the outfitter's playerContribute: the
- * union of the contributing ship+outfit flag sets the player currently has.
- * In the shipyard the player always owns a ship, so this is the current
- * hull's contribute or'd with the contribute of each owned outfit.
- */
-export function playerContribute(shipContribute: string,
-    outfits: ReadonlyMap<string, string>): bigint {
-    let contribute = BigInt(shipContribute ?? '0x0');
-    for (const value of outfits.values()) {
-        contribute |= BigInt(value ?? '0x0');
-    }
-    return contribute;
 }
 
 /**

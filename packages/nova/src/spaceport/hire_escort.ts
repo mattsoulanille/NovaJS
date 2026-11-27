@@ -378,9 +378,9 @@ export class HireEscortDialog {
             }
         }
         // The shared universe (the spaceport's own instance) supplies
-        // rank Contribute; load() is idempotent and already resolved by
-        // the time the bar is open, but awaiting it keeps the hire pool
-        // correct even on the very first opening.
+        // rank and crön Contribute; load() is idempotent and already
+        // resolved by the time the bar is open, but awaiting it keeps the
+        // hire pool correct even on the very first opening.
         const universe = MissionUniverse.shared(this.simulationData);
         await universe.load().catch(() => { });
         return shipGateContext(player.entity, {
@@ -389,6 +389,7 @@ export class HireEscortDialog {
             currentShipData,
             getOutfit: id => outfits.get(id),
             getRank: id => universe.getRank(id),
+            getCron: id => universe.getCron(id),
             bits: player.bits,
         });
     }

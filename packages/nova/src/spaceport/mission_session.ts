@@ -13,7 +13,8 @@ import {
 import {
     abortMission, failExpiredMissions, failMission, MissionContext, MissionEvent,
     MissionMachineryContext, MissionWorkingState, outfitsAfterShipChange,
-    processLanding, rehullShip, runCronsForDays, runMissionSetString,
+    playerContribute, processLanding, rehullShip, runCronsForDays,
+    runMissionSetString,
     runPendingAutoAborts, runPendingShipDone, runQueuedAutoAbortOnAborts,
     startMissionById, stellarInfoOf,
 } from '../nova_plugin/missions/index.js';
@@ -340,7 +341,8 @@ export class MissionSession {
         } catch {
             // Unknown ship: the ship-govt ranges simply don't match.
         }
-        // The ship + outfit Contribute mask gates the mïsn Require field.
+        // The player's Contribute (hull, outfits, ranks, active crons)
+        // gates the mïsn Require field.
         const playerContribute =
             await computePlayerContribute(entity, gameData);
         // The escorts' hull prices, so a DatePostInc settled at commit can
@@ -651,58 +653,47 @@ export async function computeCargoCapacity(entity: Entity,
 }
 
 /**
- * The player's combined Contribute mask: the ship's Contribute OR'd
- * with each owned outfit's Contribute (per the EVN Bible's shared
- * Contribute/Require mechanic). Used to gate crön Require. Contribute
- * fields are stored as hex strings; a malformed one is treated as 0. An
- * outfit that fails to load contributes nothing (and is logged); the rest,
- * and the ranks, still count (#130).
+ * The player's Contribute set (missions/player_contribute.ts: hull,
+ * outfits, ranks and active crons), for the mïsn Require test. Loads what
+ * it needs; anything that fails to load contributes nothing (and an outfit
+ * that fails is logged) while the rest still count (#130).
+ *
+ * `crons: false` leaves the crons out — for the crons' own run
+ * (runCronsForDays), which folds in each day's active crons itself, so a
+ * snapshot here would keep a cron that ends mid-run contributing.
  */
 export async function computePlayerContribute(entity: Entity,
-    gameData: SimulationGameDataInterface): Promise<bigint> {
-    const parseMask = (hex: string | undefined): bigint => {
-        try {
-            return BigInt(hex ?? '0x0');
-        } catch {
-            return 0n;
-        }
-    };
-    let contribute = 0n;
+    gameData: SimulationGameDataInterface,
+    { crons = true }: { crons?: boolean } = {}): Promise<bigint> {
     try {
         const shipId = entity.components.get(ShipComponent)?.id ?? 'default';
-        contribute = parseMask((await gameData.data.Ship.get(shipId))
-            .contribute);
-        const outfitsState = entity.components.get(OutfitsStateComponent);
-        if (outfitsState) {
-            for (const [outfitId, { count }] of outfitsState) {
-                if (count > 0) {
-                    const outfit = await loadOrSkip('Player contribute',
-                        'outfit', outfitId, id => gameData.data.Outfit.get(id));
-                    contribute |= parseMask(outfit?.contribute);
-                }
-            }
-        }
-        // rank Contribute: "Another 64 bits of Contribute values that kick
-        // in when the rank is active. These can be used to prevent the player
-        // from buying certain items or doing certain missions until achieving
-        // a certain rank" (EVN Bible). Decimal, and per-plug-in namespaced by
-        // novaparse exactly as outfit Contribute is, so it ORs straight in.
+        const ship = await gameData.data.Ship.get(shipId)
+            .then(data => data.contribute, () => undefined);
+        const outfits = await Promise.all(
+            [...entity.components.get(OutfitsStateComponent) ?? []]
+                .filter(([, { count }]) => count > 0)
+                .map(([outfitId]) => loadOrSkip('Player contribute',
+                    'outfit', outfitId, id => gameData.data.Outfit.get(id))));
         const ranks = entity.components.get(ActiveRanksComponent);
-        if (ranks) {
-            for (const rankId of ranks) {
-                try {
-                    contribute |=
-                        BigInt((await gameData.data.Rank.get(rankId))
-                            .contribute);
-                } catch {
-                    // Unknown rank: contributes nothing.
-                }
-            }
-        }
+        const rankData = new Map(await Promise.all([...ranks ?? []]
+            .map(async id => [id, await gameData.data.Rank.get(id)
+                .catch(() => undefined)] as const)));
+        const cronStates = crons
+            ? entity.components.get(CronStatesComponent) : undefined;
+        const cronData = new Map(await Promise.all(
+            [...cronStates ?? []].filter(([, state]) => state.phase === 'active')
+                .map(async ([id]) => [id, await gameData.data.Cron.get(id)
+                    .catch(() => undefined)] as const)));
+        return playerContribute({
+            ship,
+            outfits: outfits.map(outfit => outfit?.contribute),
+            ranks, getRank: id => rankData.get(id),
+            cronStates, getCron: id => cronData.get(id),
+        });
     } catch (e) {
         console.warn('Failed to compute player contribute:', e);
+        return 0n;
     }
-    return contribute;
 }
 
 /**
@@ -801,10 +792,12 @@ export async function advanceEntityDate(entity: Entity, days: number,
     // after one is charged its day once, not twice).
     try {
         await universe.load();
-        // The player's ship + outfit Contribute mask gates cron Require
-        // (needs game data; without it crons see no contributions).
+        // The player's Contribute gates cron Require (needs game data;
+        // without it crons see no contributions). The crons' own share is
+        // added day by day by runCronsForDays.
         const contribute = gameData
-            ? await computePlayerContribute(entity, gameData)
+            ? await computePlayerContribute(entity, gameData,
+                { crons: false })
             : 0n;
         // Escort wages need the hull prices, so the payroll's ship classes
         // are fetched first. Without game data (the bare callers) there are

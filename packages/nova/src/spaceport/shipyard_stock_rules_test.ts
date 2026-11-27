@@ -1,10 +1,10 @@
 import 'jasmine';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
+import { playerContribute } from '../nova_plugin/missions/index.js';
 import {
     buyRandomDayRoll,
     canBuyShip,
     compareShipIds,
-    playerContribute,
     shipAvailabilityPasses,
     shipAvailableForSale,
     shipBuyRandomPasses,
@@ -95,8 +95,9 @@ describe('shipRequirementsMet', () => {
     it('unions the ship and outfit Contribute sets', () => {
         // The player flies a hull contributing bit 4 and carries an outfit
         // contributing bit 5; together they meet Require bits 4,5.
-        const contribute = playerContribute('0x10',
-            new Map([['nova:200', '0x20']]));
+        const contribute = playerContribute({
+            ship: '0x10', outfits: ['0x20'],
+        });
         expect(shipRequirementsMet('0x30', contribute)).toBeTrue();
         expect(shipRequirementsMet('0x80', contribute)).toBeFalse();
     });

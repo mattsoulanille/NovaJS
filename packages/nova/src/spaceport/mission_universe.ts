@@ -470,6 +470,13 @@ export class MissionUniverse {
         return this.ranksById.get(id);
     }
 
+    /** A crön's data by global id, for the active crons' Contribute
+     * (player_contribute.ts). A scan of `crons`, which is short and which
+     * callers may replace or extend. */
+    getCron(id: string): CronData | undefined {
+        return this.crons.find(cron => cron.id === id);
+    }
+
     /** Every rank, for the player-info Honors page. */
     ranks(): Iterable<readonly [string, RankData]> {
         return this.ranksById;

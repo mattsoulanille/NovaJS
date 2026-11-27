@@ -33,6 +33,7 @@ export * from './mission_set_strings.js';
 export * from './mission_accept_offer.js';
 export * from './mission_transitions.js';
 export * from './mission_landing.js';
+export * from './player_contribute.js';
 export * from './cron_logic.js';
 export * from './mission_ship_change.js';
 export * from './mission_ship_release.js';

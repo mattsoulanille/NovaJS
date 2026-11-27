@@ -9,6 +9,7 @@ import {
     ownsOutfit, resolveNumberedResource, setStringPrefix,
     systemDiscoveryOperators,
 } from './mission_ids.js';
+import { activeCronContribute, contributeMask } from './player_contribute.js';
 import { DiscoveryAccess, DiscoveryNCBOperators } from '../player/index.js';
 
 /**
@@ -232,22 +233,13 @@ function enableOnPasses(cron: CronData, bits: Set<number>,
     }
 }
 
-/** Parses a 64-bit Contribute/Require decimal string, 0n on garbage. */
-function mask(decimal: string): bigint {
-    try {
-        return BigInt(decimal);
-    } catch {
-        return 0n;
-    }
-}
-
 /**
  * Whether the player's combined Contribute mask covers the cron's
  * Require mask (each 1-bit in Require must be set in `contribute`). An
  * all-zero Require is always satisfied.
  */
 function requireMet(cron: CronData, contribute: bigint): boolean {
-    const require = mask(cron.require);
+    const require = contributeMask(cron.require);
     return (require & contribute) === require;
 }
 
@@ -325,23 +317,6 @@ function stepCron(cron: CronData, state: CronState, day: number,
 }
 
 /**
- * The player's combined Contribute mask for the crons currently in
- * their active phase, OR'd onto the base (ship + outfit) contribute.
- * Recomputed each day so a cron that activated today contributes to the
- * Require checks of others.
- */
-function activeCronContribute(crons: CronData[], states: CronStates,
-    base: bigint): bigint {
-    let contribute = base;
-    for (const cron of crons) {
-        if (states.get(cron.id)?.phase === 'active') {
-            contribute |= mask(cron.contribute);
-        }
-    }
-    return contribute;
-}
-
-/**
  * The namespace a bare resource number inside this crön's own scripting is
  * scoped to: the plug-in that WROTE it (mission_logic's setStringPrefix),
  * which is not its id's prefix when the crön overrides a stock one.
@@ -354,8 +329,9 @@ function cronPrefix(cron: CronData): string {
  * Advances the cron state machines from `fromDay` (exclusive) to
  * `toDay` (inclusive), mutating `states`, `bits`, and — when the caller
  * supplies them in `options` — the active ranks and the owned outfits.
- * `baseContribute` is the player's ship + outfit Contribute mask (the
- * active crons' own Contribute is folded in per day); default 0n means no
+ * `baseContribute` is the player's Contribute mask WITHOUT the crons
+ * (player_contribute.ts with no crön source: hull, outfits, ranks); the
+ * active crons' own Contribute is folded in per day. Default 0n means no
  * contributions.
  */
 export function runCronsForDays(crons: CronData[], states: CronStates,
@@ -404,6 +380,7 @@ export function runCronsForDays(crons: CronData[], states: CronStates,
                         mode)),
             }];
         }));
+    const cronsById = new Map(crons.map(cron => [cron.id, cron]));
     for (let day = fromDay + 1; day <= toDay; day++) {
         for (const cron of crons) {
             let state = states.get(cron.id);
@@ -411,8 +388,11 @@ export function runCronsForDays(crons: CronData[], states: CronStates,
                 state = { phase: 'idle', phaseStart: 0, nextEligible: 0 };
                 states.set(cron.id, state);
             }
-            const contribute =
-                activeCronContribute(crons, states, baseContribute);
+            // The active crons' own Contribute (player_contribute.ts),
+            // recomputed each day so a cron that started today counts
+            // toward the others' Require and one that ended does not.
+            const contribute = baseContribute
+                | activeCronContribute(states, id => cronsById.get(id));
             stepCron(cron, state, day, bits, contribute, random,
                 setContexts.get(cron) ?? {}, ownedOutfits);
         }

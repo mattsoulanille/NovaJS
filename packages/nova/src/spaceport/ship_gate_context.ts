@@ -2,10 +2,14 @@ import { Entity } from 'nova_ecs/entity';
 import { getDefaultGameDate } from 'novadatainterface/player_start_data';
 import { OutfitData } from 'novadatainterface/outfit_data';
 import { ShipData } from 'novadatainterface/ship_data';
-import { dayNumber, GameDateComponent } from '../nova_plugin/player/index.js';
-import { numericId } from '../nova_plugin/missions/index.js';
 import {
-    ActiveRanksComponent, ControlBitsComponent, RankLookup, rankContribute,
+    CronStatesComponent, dayNumber, GameDateComponent,
+} from '../nova_plugin/player/index.js';
+import {
+    CronLookup, numericId, playerContribute,
+} from '../nova_plugin/missions/index.js';
+import {
+    ActiveRanksComponent, ControlBitsComponent, RankLookup,
 } from '../nova_plugin/ncb/index.js';
 import { OutfitsStateComponent } from '../nova_plugin/ship/index.js';
 import { stellarPriceMod } from './price_mod.js';
@@ -16,7 +20,7 @@ import { ShipyardContext, ShipyardStellar } from './shipyard_stock_rules.js';
  *
  * Both ship shops — the shipyard's grid and the bar's hire-escort pool —
  * gate on the same four things (the docked stellar's tech rules, the
- * player's control bits, the player's 64-bit Contribute set, and the game
+ * player's control bits, the player's Contribute set, and the game
  * day). This module assembles that context once so the two venues can
  * never read it differently; the gates themselves live in
  * shipyard_stock_rules.ts.
@@ -38,6 +42,8 @@ export interface ShipGateSources {
     getOutfit(id: string): OutfitData | undefined;
     /** Rank lookup, for the Contribute of the player's active ranks. */
     getRank: RankLookup;
+    /** Crön lookup, for the Contribute of the player's active crons. */
+    getCron: CronLookup;
     /**
      * Control bits to use instead of the entity's own — the bar hands in
      * its MissionSession working copy, so a bit set by a mission accepted
@@ -47,26 +53,22 @@ export interface ShipGateSources {
 }
 
 /**
- * The player's 64-bit Contribute set: their active ranks' Contribute, or'd
- * with their current hull's, or'd with every owned outfit's (EVN Bible,
- * shïp/oütf Contribute).
+ * The player's Contribute set (missions/player_contribute.ts): their
+ * current hull's, every owned outfit's, their active ranks' and their
+ * active crons'.
  */
 export function playerContributeOf(entity: Entity | undefined,
     sources: ShipGateSources): bigint {
-    let contribute = rankContribute(
-        entity?.components.get(ActiveRanksComponent), sources.getRank);
-    contribute |= sources.currentShipData
-        ? BigInt(sources.currentShipData.contribute ?? '0x0') : 0n;
     const outfits = entity?.components.get(OutfitsStateComponent);
-    if (outfits) {
-        for (const [id, { count }] of outfits) {
-            if (count > 0) {
-                contribute |= BigInt(
-                    sources.getOutfit(id)?.contribute ?? '0x0');
-            }
-        }
-    }
-    return contribute;
+    return playerContribute({
+        ship: sources.currentShipData?.contribute,
+        outfits: [...outfits ?? []].filter(([, { count }]) => count > 0)
+            .map(([id]) => sources.getOutfit(id)?.contribute),
+        ranks: entity?.components.get(ActiveRanksComponent),
+        getRank: sources.getRank,
+        cronStates: entity?.components.get(CronStatesComponent),
+        getCron: sources.getCron,
+    });
 }
 
 /** The full stock-gate context for the player standing at this stellar. */
