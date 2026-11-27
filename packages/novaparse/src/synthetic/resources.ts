@@ -76,7 +76,7 @@ function spob(def: SpobDef): number[] {
         .uint16(def.flags2)
         .int16(0).int16(0) // Animation delay, frame-0 bias.
         .int16s(8, def.hyperlinks, NONE)
-        .string("", 255).string("", 255) // OnDominate, OnRelease.
+        .string(def.onDominate ?? "", 255).string(def.onRelease ?? "", 255)
         .int32(def.landingFee)
         .int16(0) // Gravity.
         .int16(NONE) // Weapon.

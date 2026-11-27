@@ -109,6 +109,9 @@ export const BITS = {
     musterOffered: 111,
     /** Set by both answers to the Muster Call; the refusal also sets 113. */
     musterAnswered: 112, musterJoined: 113,
+    /** Port Amberline's spöb OnDominate sets it; its OnRelease clears it
+     * and sets 115. */
+    portDominated: 114, portReleased: 115,
     /** The Require bit the Warrant Seal outfit asks for (a Contribute bit index). */
     warrantHolder: 3,
 } as const;
@@ -416,6 +419,9 @@ export interface SpobDef {
     landingFee: number;
     landingDesc: string;
     barDesc?: string;
+    /** spöb OnDominate / OnRelease set strings; empty when absent. */
+    onDominate?: string;
+    onRelease?: string;
 }
 
 export const SPOBS: SpobDef[] = [
@@ -433,6 +439,8 @@ export const SPOBS: SpobDef[] = [
             + "you anything with a hull.",
         barDesc: "The Ferrule is a low room under the cargo cranes where "
             + "pilots trade rumours for drinks.",
+        onDominate: `b${BITS.portDominated}`,
+        onRelease: `!b${BITS.portDominated} b${BITS.portReleased}`,
     },
     {
         id: SPOB.moon, name: "Sallow Moon", system: SYST.thessaly,
