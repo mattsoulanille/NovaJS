@@ -19,13 +19,13 @@ import {
 } from '../display/screen_size_plugin.js';
 import { CameraFocus } from '../display/space_resource.js';
 import { StatusBarResource } from '../display/status_bar_resource.js';
-import { BeamStateComponent } from '../nova_plugin/combat/beam_plugin.js';
+import { BeamStateComponent } from '../nova_plugin/combat/index.js';
 import {
     AsteroidComponent, ExplosionDataComponent, ProjectileComponent,
     ProjectileDataComponent,
 } from '../nova_plugin/core/index.js';
-import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
-import { PlanetComponent } from '../nova_plugin/travel/planet_plugin.js';
+import { ShipComponent } from '../nova_plugin/ship/index.js';
+import { PlanetComponent } from '../nova_plugin/travel/index.js';
 
 /** How far past the view's edge (world units) still counts as on
  * screen: about half the biggest sprites, so a capital ship whose centre
