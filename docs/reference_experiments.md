@@ -25376,6 +25376,95 @@ shot and both pilots read back).
 `sg_b/` (window shots `05-grant-sel.png` .. `16-left.png`, the
 `pilot-after/` files), `sg_a.ask.log`, `sg_b.ask.log`.
 
+### A tractor beam's pull frame by frame, its Impact scaling and the brake's Mass gate (the hub's item 3, the KB leftover), wave 51: the pull builds STEADILY for the beam's whole ~1 s (about 345 px/s² on a 50 t hull at Impact 20, about 705 at Impact 40: in proportion to Impact), about 30 x |Impact| / Mass px/s a 1/30 s unit, the push law itself; the NPC tractor's Count-30 beam shows for about 1 s (30 units a second) while the player's Count-30 beam in the same system shows for 17 frames (wave 41's Count / 56); the near brake does take a LIGHTER moving hull (29 -> 10 -> 0 px/s at about 350 px) and did not touch a heavier one (wave 50's `trm_b`, 300 t at 357 px) (2026-11-27)
+
+**Question** (the hub's item 3): wave 50's pull (300-325 px/s² on 50 t
+over about 1 s) against NovaJS delivering a Count-30 beam's units over
+30 / 56 s; how the pull builds within one firing (a velocity per frame),
+and whether the near brake is gated by the firer's Mass too (wave 50's fix
+GUESSES it is).
+
+**Rig.** Wave 50's Kit Tractor Beamer 20 (düde 548: immobile, Impact -20,
+Count 30, Reload 120: one shot every 7.15 s) on Kit Knock Grid's first
+moon (mïsn 1078), 500 px from the port on the -143 deg diagonal; and
+(added) shïp 777 Kit Tractor Beamer 40, the same hull with an Impact -40
+beam (wëap 330, mïsn 968, bit 9335). The pulled hull is Kit Probe B (701:
+50 t, inertial, Speed 600, a 262 px/s per-axis cap, so a whole shot of
+Impact 20 stays under it), at rest on the port at the Leave (`trb_a`,
+`trb_c`: Impact 20; `trb40_c`, `trb40_d`: Impact 40). The near brake: Kit
+Probe A (50 t) on Kit Tractor Range 350's port, a 0.6 s Up pulse sends it
+west at 28.5 px/s toward the beamer 350 px away (`tr350m_a`, `tr350m_b`,
+pilot `w50_tr350`). Places on the grid per frame (`tools/padsum.sh`), the
+velocity over +-5 frames (`tools/trtrace.py`), the beam's frames by its
+red line (`tools/redcount.py`).
+
+| run | beam (s, video) | the hull's speed toward the beamer, every 0.1 s from the beam's start | after |
+|---|---|---|---|
+| trb_c (Impact 20) | 33.43-34.43 | 27, 57, 80, 114, 149, 194, 228, 264, 296, 317, 328 | **330** at -142 deg (x 261: the cap just reached; y 203) |
+| trb_a (Impact 20) | 34.70-35.67 | 12, 46, 82, 105, 139, 165, 241, 282, 284, 313 (the grid jumps +-30 here) | 330 (x 263, y 203) |
+| trb40_c (Impact 40) | 32.30-33.30 | 27, 55, 116, 188, 267, 324 (x at its cap), 358, 372 (y at its cap) | 372 = both axes at 262 (-135 deg) |
+| trb40_d (Impact 40) | 32.07-33.03 | 8, 40, 92, 162, 237, 296, 343 (x at its cap), 363, 374 | 372 (-135 deg) |
+| tr350m_a (Probe A coasting 28.5 px/s toward a beamer 350 px off) | 44.67-45.63, 51.83-52.80 | first shot: 29 -> 20 -> 10 over the beam | **10**, then 0 at the second shot (held there, 103 px from the beamer) |
+| tr350m_b (the same) | 41.97-42.93, 49.13-50.10 | 28.5 -> 9 | 9, then 0 |
+
+**Findings.**
+1. **The pull builds steadily for the whole beam**: from the first beam
+   frame the speed toward the beamer grows about 33-35 px/s every 0.1 s
+   (345 px/s² at Impact 20 on 50 t) until the beam goes out after about
+   1.0 s, then holds (330 px/s on trb_c, the x axis just at its 262 cap):
+   one unit of pull a 1/30 s frame for the beam's 30 frames, about 11.5
+   px/s each, i.e. **about 30 x |Impact| / Mass a unit, the push law's own
+   30** (wave 50's 0.86 came from per-axis-capped Probe A readings).
+2. **It is in proportion to Impact**: Impact 40 built 707 and 657 px/s²
+   (two runs, 0.1-0.4 s: 55 -> 267, 40 -> 237), 1.97 x Impact 20's 345,
+   until each axis met the 262 cap (x at 0.5 s, y at 0.7-0.8 s: 372 px/s
+   at -135 deg).
+3. **The NPC tractor's beam lasts about 1 s for Count 30** (29-31 frames
+   of red line in every beamer shot of waves 50-51), and the pull lasts as
+   long; the PLAYER's Count-30 Kit Plain Beam (wave 40's fixed beam, wëap
+   301) shows for **17 and 17 frames on the same Kit Knock Grid** (`e10g_a`,
+   F12 reading 56 fps there) and 16 and 16 at Kit Port (`e10p_a`): wave
+   41's Count / 56 s. So it is not the system's drawing rate: the NPC (or
+   turret, the tractor is Guidance 3) beam counts its units at about 30 a
+   second, the player's fixed beam at about 56.
+4. **The near brake takes a lighter MOVING hull**: Probe A coasting at
+   28.5 px/s toward the beamer 185 px off lost 19 px/s over one shot
+   (to 9-10) and stopped at the next, twice, exactly wave 48's ktm_a (30 ->
+   10.9 -> 0); still hulls there never moved (wave 50). Wave 50's `trm_b`
+   (Kit Mass Hull 300, 300 t against the 175 t beamer) coasted at 40.8 px/s
+   357-360 px from the beamer through a whole shot (40.27-41.23 s) and kept
+   all of it: **the brake is gated by Mass too** (at least for a hull
+   heavier than the beamer; the 175-300 t gap is unread).
+
+**NovaJS (main ff820fb6):** the pull beyond `TRACTOR_PULL_RANGE` is
+`TRACTOR_PULL_PER_IMPACT` = 0.86 x 30 a unit with the per-axis cap
+(`N/nova_plugin/ship/death_plugin.ts:430`, `:449`, `:460-468`), a beam's units landing
+over Count / `BEAM_COUNT_RATE` (56) s (`P/parsers/constants.ts:13`,
+`P/parsers/weapon_parse.ts:349-352`, `N/nova_plugin/combat/beam_plugin.ts:195`,
+`:550-566`): **matches** the shape (one push-law unit a beam unit, in
+proportion to Impact, the per-axis cap: findings 1-2 to within 14 %) and
+the brake's Mass gate and rate (finding 4; `tractoredVelocity`,
+`TRACTOR_BRAKE_PER_IMPACT` 1.6, `:404-418`; the Mass gate `:514`); **mismatch** in the clock (a
+Count-30 shot pulls for 0.54 s at about 580 px/s² where the original
+pulls for 1.0 s at 345) and in the size (0.86 against about 1.0 x the
+push law: 310 against 330-345 px/s a shot). **Proposed:**
+`TRACTOR_PULL_PER_IMPACT` = `KNOCKBACK_PER_IMPACT` (30), and an NPC
+beam's Count (life, damage and pull units) at 30 a second, the player's
+fixed beam keeping `BEAM_COUNT_RATE` 56 (GUESS which of NPC / turret
+decides it: a player turret beam and an NPC fixed beam are unread). Confidence: high for the steady build and the Impact scaling
+(two clean runs at Impact 40, one clean and one jumpy at Impact 20), high
+for the two beam lives (every shot of two waves against four player
+taps in two systems), medium for the 1.0 x (the x axis met its cap in
+the last 0.1 s of the Impact-20 shot), high for the brake's Mass gate on a
+heavier hull (one run, a whole shot unchanged).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w51/trb_a/`,
+`trb_c/`, `trb40_c/`, `trb40_d/`, `tr350m_a/`, `tr350m_b/`, `e10g_a/`, `e10p_a/`
+(`recording.mp4`), `e10*_a.green.txt`, `*.pos.txt`, `tools/trtrace.py`;
+`~/.local/share/novaref/evidence/20261127-w50/trm_b/`, `trm_b.pos.txt`
+(the 300 t hull); `trb40_a/`, `trb40_b/` are the stock-bit failures (see
+the reliability notes).
+
 ### Reliability notes (for anyone running the reference)
 
 - **A stock hull's red markings defeat `redcount.py` (wave 50 `tre_a`):**
