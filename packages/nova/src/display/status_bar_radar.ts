@@ -24,7 +24,7 @@ import {
 import { ActiveRanksComponent } from "../nova_plugin/ncb/index.js";
 import { styleForTarget } from "../nova_plugin/combat/index.js";
 import { PlanetComponent, PlanetDataComponent, stellarClearanceFor, StellarBribesComponent } from "../nova_plugin/travel/index.js";
-import { PlayerShipSelector, MissionsComponent } from '../nova_plugin/player/index.js';
+import { DominatedComponent, PlayerShipSelector, MissionsComponent } from '../nova_plugin/player/index.js';
 import { SimulationTimeResource } from "./simulation_time.js";
 import { StatusBarResource } from "./status_bar_resource.js";
 import { MurkOutfitSystem } from "./system_environment_plugin.js";
@@ -707,6 +707,7 @@ export const DrawRadar = new System({
             const shipData = entity.components.get(ShipDataComponent);
             const planetRanks = entity.components.get(ActiveRanksComponent);
             const planetMissions = entity.components.get(MissionsComponent);
+            const planetDominated = entity.components.get(DominatedComponent);
             const planetColors = new Map<string, number>();
             for (const [uuid, , planetData, planet] of planets) {
                 const isLandable = landable(planetData);
@@ -715,6 +716,7 @@ export const DrawRadar = new System({
                         planetData, gameData, records: planetRecords,
                         shipData, outfits: playerOutfits, bribes,
                         ranks: planetRanks, missions: planetMissions,
+                        dominated: planetDominated,
                         // Bribe expiries are SIM-clock stamps (0-based
                         // logical time); this world's TimeResource is the
                         // wall clock, ~50 years past every expiry.

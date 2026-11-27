@@ -71,8 +71,8 @@ import {
 import { AggressionComponent, isIffHostile } from '../combat/index.js';
 import { contrabandDetectedBy, letGo, shipLeavesWhenLettingGo, ShootAllWeaponsComponent } from '../npc/index.js';
 import {
-    ControlledByComponent, CreditsComponent, GameDateComponent, MissionsComponent,
-    PlayerEscortComponent,
+    ControlledByComponent, CreditsComponent, DominatedComponent,
+    GameDateComponent, MissionsComponent, PlayerEscortComponent,
 } from '../player/index.js';
 import { GovtsResource, LegalRecordsComponent } from '../reputation/index.js';
 import { findControlledEntity } from '../player/index.js';
@@ -367,6 +367,7 @@ function planetBribeTerms(world: World, player: Entity, playerUuid: string,
         outfits: player.components.get(OutfitsStateComponent),
         ranks: player.components.get(ActiveRanksComponent),
         missions: player.components.get(MissionsComponent),
+        dominated: player.components.get(DominatedComponent),
         bribes: player.components.get(StellarBribesComponent),
         planetId, now,
         systemId: world.resources.get(SystemIdResource),

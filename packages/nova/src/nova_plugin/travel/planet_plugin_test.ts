@@ -45,6 +45,9 @@ import {
 import { landable, SimulationGameDataResource } from '../core/index.js';
 import { applyShipChange } from '../missions/index.js';
 import { StoredShipsComponent } from '../player/index.js';
+import {
+    alwaysDominatedStellars, DominatedComponent, releaseStellar,
+} from '../player/index.js';
 import { ShipComponent, ShipDataComponent } from '../ship/index.js';
 import { buildPurchasedShip } from '../../spaceport/shipyard_rules.js';
 import { swapWithStored } from '../../spaceport/ship_storage.js';
@@ -781,6 +784,143 @@ describe('AttemptLandingSystem landing clearance', () => {
                 systemId: SOL,
                 now: 0,
             }).cleared).toBeTrue();
+        }, 30_000);
+});
+
+/**
+ * Matthew's ruling (2026-11-27): "Players should always be able to land on
+ * planets they've dominated." The landing gate reads the pilot's OWN
+ * DominatedComponent (synced state on the ship), so the override is per
+ * player: an undominated pilot at the same port is refused as before.
+ */
+describe('AttemptLandingSystem at a dominated stellar', () => {
+    const PORT = `planet ${SYNTHETIC.planets.coldharbour}`;
+    const PORT_ID = SYNTHETIC.planets.coldharbour;
+
+    /** The ship over Coldharbour, at rest and selected, with a hostile
+     * record far below its MinStatus of 0. */
+    async function hostileHarness() {
+        const { world, ship } = await makeHarness();
+        const stellar = stellars(world).find(p => p.uuid === PORT)!;
+        ship.components.get(PlanetTargetComponent)!.target = stellar.uuid;
+        place(ship, stellar.position);
+        ship.components.set(LegalRecordsComponent,
+            new Map([[SYSTEM, -30000]]));
+        return { world, ship, stellar };
+    }
+
+    /** Two presses: the first clears, the second lands. */
+    function clearsAndLands(world: World) {
+        const first = pressLand(world);
+        expect(first.blocked).toEqual([]);
+        const second = pressLand(world);
+        expect(second.blocked).toEqual([]);
+        expect(second.lands.map(l => l.id)).toEqual([PORT_ID]);
+    }
+
+    /** The clearance ANOTHER pilot, with `ship`'s record and hull but no
+     * domination of his own, gets at the port, read the way the gate
+     * reads it. */
+    function otherPilotClearance(world: World, ship: Entity) {
+        const port = world.entities.get(PORT)!;
+        return stellarClearanceFor({
+            planetData: port.components.get(PlanetDataComponent)!,
+            gameData: world.resources.get(SimulationGameDataResource)!,
+            govts: world.resources.get(GovtsResource),
+            records: ship.components.get(LegalRecordsComponent),
+            shipData: ship.components.get(ShipDataComponent),
+            planetId: PORT_ID, systemId: SYSTEM, now: simNow(world),
+        });
+    }
+
+    it('lands the dominating pilot despite a hostile record', async () => {
+        const { world, ship } = await hostileHarness();
+        expect(pressLand(world).blocked.map(b => b.reason))
+            .toEqual(['denied']);
+
+        ship.components.set(DominatedComponent, [PORT_ID]);
+        clearsAndLands(world);
+        expect(otherPilotClearance(world, ship))
+            .toEqual({ cleared: false, reason: 'hostile' });
+    }, 30_000);
+
+    it('lands the dominating pilot at a MinStatus 32767 port', async () => {
+        const { world, ship } = await hostileHarness();
+        const port = world.entities.get(PORT)!;
+        port.components.set(PlanetDataComponent, {
+            ...port.components.get(PlanetDataComponent)!,
+            minStatus: 32767,
+        });
+        ship.components.set(LegalRecordsComponent, new Map([[SYSTEM, 0]]));
+        expect(pressLand(world).blocked.map(b => b.reason))
+            .toEqual(['denied']);
+        expect(otherPilotClearance(world, ship))
+            .toEqual({ cleared: false, reason: 'forbidden' });
+
+        ship.components.set(DominatedComponent, [PORT_ID]);
+        clearsAndLands(world);
+    }, 30_000);
+
+    it('lands the dominating pilot without the owner\'s travel permit',
+        async () => {
+            const { world, ship } = await hostileHarness();
+            ship.components.set(LegalRecordsComponent,
+                new Map([[SYSTEM, 0]]));
+            // A per-world copy: the cached govt data is shared. Bit 62 is
+            // a Contribute bit no synthetic hull or outfit carries.
+            const govts = world.resources.get(GovtsResource)!;
+            const id = SYNTHETIC.govts.compact;
+            govts.set(id, { ...govts.get(id)!,
+                require: (1n << 62n).toString() });
+            expect(pressLand(world).blocked.map(b => b.reason))
+                .toEqual(['denied']);
+            expect(otherPilotClearance(world, ship))
+                .toEqual({ cleared: false, reason: 'permit' });
+
+            ship.components.set(DominatedComponent, [PORT_ID]);
+            clearsAndLands(world);
+        }, 30_000);
+
+    it('sells no bribe at a dominated port: it is already open', async () => {
+        const { world, ship } = await hostileHarness();
+        ship.components.set(CreditsComponent, { credits: 100_000 });
+        ship.components.set(DominatedComponent, [PORT_ID]);
+
+        applyHail(world, undefined, { kind: 'bribe', target: PORT });
+
+        expect(ship.components.get(CreditsComponent)!.credits)
+            .toEqual(100_000);
+        expect(ship.components.has(StellarBribesComponent)).toBeFalse();
+    }, 30_000);
+
+    it('clears a Flags2 0x0020 always-dominated stellar (the list a new '
+        + 'pilot is seeded with)', async () => {
+            const { world, ship } = await hostileHarness();
+            const data = world.entities.get(PORT)!
+                .components.get(PlanetDataComponent)!;
+            const always = alwaysDominatedStellars([
+                { id: PORT_ID, domination: { ...data.domination,
+                    alwaysDominated: true } },
+                { id: 'other', domination: { ...data.domination,
+                    alwaysDominated: false } },
+            ]);
+            expect(always).toEqual([PORT_ID]);
+            ship.components.set(DominatedComponent, always);
+            clearsAndLands(world);
+        }, 30_000);
+
+    it('puts a RELEASED stellar back under the ordinary rules, even with '
+        + 'its clearance still held', async () => {
+            const { world, ship } = await hostileHarness();
+            ship.components.set(DominatedComponent, [PORT_ID]);
+            expect(pressLand(world).blocked).toEqual([]);
+            expect(holdsClearance(ship.components.get(PlanetTargetComponent),
+                simNow(world))).toBeTrue();
+
+            expect(releaseStellar(ship, PORT_ID, undefined)).toBeTrue();
+            const { lands, blocked } = pressLand(world);
+            expect(lands).toEqual([]);
+            expect(blocked.map(b => b.reason)).toEqual(['denied']);
         }, 30_000);
 });
 

@@ -12,7 +12,8 @@ import {
 } from '../nova_plugin/core/index.js';
 import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DiscoveryLevel, DiscoveryStoreResource,
-    PlayerShipSelector, GameDateComponent, MissionsComponent,
+    DominatedComponent, PlayerShipSelector, GameDateComponent,
+    MissionsComponent,
 } from '../nova_plugin/player/index.js';
 import {
     OutfitsStateComponent, ShipDataComponent,
@@ -271,6 +272,7 @@ export const StarmapPlugin: Plugin = {
                 bribes: playerComponent(world, StellarBribesComponent),
                 ranks: playerComponent(world, ActiveRanksComponent),
                 missions: playerComponent(world, MissionsComponent),
+                dominated: playerComponent(world, DominatedComponent),
                 now: world.resources.get(SimulationTimeResource)?.time ?? 0,
             }));
         let opening = false;

@@ -224,6 +224,14 @@ describe('the map\'s dot for a travel-permit refusal', () => {
             { records: new Map(), now: 0 }, () => true, () => undefined);
         expect([...refusing]).toEqual([['kit:both', 'clean']]);
     });
+
+    it('un-colours a port the player has dominated (it lets him land)',
+        () => {
+            const refusing = refusingSystems(systems, universe,
+                { records: new Map(), dominated: [permitPicky.id], now: 0 },
+                () => true, () => undefined);
+            expect([...refusing]).toEqual([]);
+        });
 });
 
 /**

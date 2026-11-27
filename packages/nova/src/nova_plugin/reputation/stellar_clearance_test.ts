@@ -150,6 +150,52 @@ describe('the mission-destination override', () => {
         });
 });
 
+describe('the domination override (Matthew, 2026-11-27: "Players should '
+    + 'always be able to land on planets they\'ve dominated.")', () => {
+    const inhabited = { uninhabited: false };
+    const never = { flags: inhabited, minStatus: MIN_STATUS_NEVER };
+    const picky = { flags: inhabited, minStatus: 100 };
+    const open = { flags: inhabited, minStatus: MIN_STATUS_IGNORED };
+
+    it('clears a MinStatus 32767 "never" port for the pilot who dominated '
+        + 'it, and not for another pilot', () => {
+            expect(stellarClearance(never, { record: 0, dominated: true }))
+                .toEqual({ cleared: true });
+            expect(stellarClearance(never, { record: 0 }))
+                .toEqual({ cleared: false, reason: 'forbidden' });
+        });
+
+    it('clears a record below MinStatus for the dominating pilot only', () => {
+        expect(stellarClearance(picky, { record: -900, dominated: true }))
+            .toEqual({ cleared: true });
+        expect(stellarClearance(picky, { record: -900 }))
+            .toEqual({ cleared: false, reason: 'hostile' });
+    });
+
+    it('clears a missing travel permit for the dominating pilot only', () => {
+        expect(stellarClearance(open,
+            { record: 0, govtRequire: '4', contribute: 0n, dominated: true }))
+            .toEqual({ cleared: true });
+        expect(stellarClearance(open,
+            { record: 0, govtRequire: '4', contribute: 0n }))
+            .toEqual({ cleared: false, reason: 'permit' });
+    });
+
+    it('clears all three at once, and threads through planetClearance', () => {
+        const args = {
+            planet: stellar({ minStatus: MIN_STATUS_NEVER }),
+            planetGovt: govt({ require: '4' }),
+            records: new Map([['nova:130', -30000]]) as LegalRecords,
+            systemId: 'nova:130', contribute: 0n,
+        };
+        expect(planetClearance(args).cleared).toBeFalse();
+        expect(planetClearance({ ...args, dominated: true }))
+            .toEqual({ cleared: true });
+        expect(planetClearance({ ...args, dominated: false }).cleared)
+            .toBeFalse();
+    });
+});
+
 describe('stellarClearance govt Require (travel permits)', () => {
     // EVN Bible, gövt Require: "If for each 1 bit in the Require fields there
     // is not a matching 1 bit in one or more of the Contribute fields then you

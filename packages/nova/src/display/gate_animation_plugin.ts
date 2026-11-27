@@ -18,7 +18,7 @@ import { ActiveRanksComponent } from '../nova_plugin/ncb/index.js';
 import {
     OutfitsStateComponent, ShipComponent, ShipDataComponent,
 } from '../nova_plugin/ship/index.js';
-import { MissionsComponent } from '../nova_plugin/player/index.js';
+import { DominatedComponent, MissionsComponent } from '../nova_plugin/player/index.js';
 import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import { defaultSimulationTime, SimulationTimeResource } from './simulation_time.js';
 import { AnimationGraphicComponent, AnimationGraphicInsert, ObjectDrawSystem } from './animation_graphic_plugin.js';
@@ -245,7 +245,8 @@ const ShipArrivedAtGateSystem = new System({
 const ShipTargetQuery = new Query([PlanetTargetComponent,
     Optional(LegalRecordsComponent), Optional(ShipDataComponent),
     Optional(OutfitsStateComponent), Optional(StellarBribesComponent),
-    Optional(ActiveRanksComponent), Optional(MissionsComponent)] as const);
+    Optional(ActiveRanksComponent), Optional(MissionsComponent),
+    Optional(DominatedComponent)] as const);
 
 export const GateAnimationSystem = new System({
     name: 'GateAnimationSystem',
@@ -275,7 +276,7 @@ export const GateAnimationSystem = new System({
         // or while an arrival through this gate is pending/fresh.
         let wantOpen = false;
         for (const [target, records, shipData, outfits, bribes, ranks,
-            missions] of runQuery(ShipTargetQuery)) {
+            missions, dominated] of runQuery(ShipTargetQuery)) {
             if (target.target !== uuid) {
                 continue;
             }
@@ -291,7 +292,7 @@ export const GateAnimationSystem = new System({
             // mirrored sim clock, never this world's wall clock.
             const cleared = !records || !gameData || stellarClearanceFor({
                 planetData, gameData, records, shipData, outfits, bribes,
-                ranks, missions, planetId: planet.id,
+                ranks, missions, dominated, planetId: planet.id,
                 systemId: world.resources.get(SystemIdResource),
                 now: simTime?.time ?? 0,
             }).cleared;

@@ -13,7 +13,7 @@ import {
     systemRefusesLanding,
 } from '../nova_plugin/core/index.js';
 import {
-    DISCOVERY_ENTERED, DISCOVERY_LANDED, DiscoveryLevel, Missions,
+    DISCOVERY_ENTERED, DISCOVERY_LANDED, DiscoveryLevel, Dominated, Missions,
 } from "../nova_plugin/player/index.js";
 import { MissionMapMark } from "../nova_plugin/missions/index.js";
 import { ActiveRanks } from "../nova_plugin/ncb/index.js";
@@ -72,6 +72,8 @@ export interface MapClearancePlayer {
     bribes?: StellarBribes;
     ranks?: ActiveRanks;
     missions?: Missions;
+    /** The stellars the player has dominated (DominatedComponent). */
+    dominated?: Dominated;
     /** The simulation clock, which bribe expiries are stamped on. */
     now: number;
 }
@@ -92,9 +94,9 @@ export interface MapClearancePlayer {
  * it. A ränk 0x0200 of the owner un-colours the port it opens: MEASURED
  * ("Map dot colours, wave 28": Kit Map Picky's MinStatus-100 port, orange
  * #ff6300 for a clean pilot, turned #0000ff once offer 958 gave ränk 204
- * Flags 0x0200, and the port then took him). The bribe and
- * mission-destination overrides still un-colour a port they open (GUESS:
- * unmeasured).
+ * Flags 0x0200, and the port then took him). The bribe,
+ * mission-destination and domination overrides still un-colour a port they
+ * open (GUESS: unmeasured).
  */
 export function refusingSystems(systems: readonly SystemData[],
     universe: Pick<MissionUniverse, 'getPlanet' | 'getGovt'
@@ -120,6 +122,7 @@ export function refusingSystems(systems: readonly SystemData[],
                 lookups, records: player.records, shipData: player.shipData,
                 outfits: player.outfits, bribes: player.bribes,
                 ranks: player.ranks, missions: player.missions,
+                dominated: player.dominated,
                 sameStellar: (a, b) => universe.sameStellar(a, b),
                 planetId, systemId: system.id, now: player.now,
                 // A missing travel permit refuses the landing ("Landing

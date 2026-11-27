@@ -9,7 +9,7 @@ import { SingletonComponent } from 'nova_ecs/world';
 import {
     ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource,
 } from '../nova_plugin/core/index.js';
-import { DiscoveryStoreResource, MissionsComponent } from '../nova_plugin/player/index.js';
+import { DiscoveryStoreResource, DominatedComponent, MissionsComponent } from '../nova_plugin/player/index.js';
 import { MissionMapMark, missionMapMarks } from '../nova_plugin/missions/index.js';
 import {
     ActiveRanksComponent, ControlBitsComponent,
@@ -97,6 +97,7 @@ export function gateMapClearancePlayer(ship: Entity, now: number)
         bribes: c.get(StellarBribesComponent),
         ranks: c.get(ActiveRanksComponent),
         missions: c.get(MissionsComponent),
+        dominated: c.get(DominatedComponent),
         now,
     };
 }

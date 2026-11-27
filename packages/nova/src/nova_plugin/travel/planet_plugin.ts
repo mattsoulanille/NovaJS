@@ -39,6 +39,7 @@ import { GovtsResource, LegalRecordsComponent } from '../reputation/index.js';
 import { ActiveRanks, ActiveRanksComponent } from '../ncb/index.js';
 import { ranksAllowLanding } from '../ncb/index.js';
 import { Missions, MissionsComponent } from '../player/index.js';
+import { Dominated, DominatedComponent } from '../player/index.js';
 import {
     avalanche, contributeBits, hashString, isMissionDestination,
     planetClearance, StellarClearance,
@@ -766,6 +767,8 @@ export function stellarClearanceFor(opts: {
      * has MissionUniverse, may pass one.
      */
     sameStellar?: (a: string, b: string) => boolean,
+    /** The stellars the player has dominated (DominatedComponent). */
+    dominated?: Dominated,
     planetId: string,
     /**
      * The system the stellar is in — the player's current system, whose
@@ -811,9 +814,9 @@ export interface ClearanceLookups {
 /**
  * {@link stellarClearanceFor} with its id lookups injected: the ONE
  * assembly of a clearance decision (records, status govt, Contribute bits,
- * ränk 0x0200, mission destination, bribe) from the player's components,
- * so the landing gate, the hail dialog, the radar blip and the star map's
- * red dot all read the player the same way.
+ * ränk 0x0200, mission destination, domination, bribe) from the player's
+ * components, so the landing gate, the hail dialog, the radar blip and the
+ * star map's red dot all read the player the same way.
  */
 export function stellarClearanceWith(opts: {
     planetData: PlanetData,
@@ -825,6 +828,12 @@ export function stellarClearanceWith(opts: {
     ranks?: ActiveRanks,
     missions?: Missions,
     sameStellar?: (a: string, b: string) => boolean,
+    /**
+     * The stellars THIS player has dominated (DominatedComponent, seeded
+     * by spöb Flags2 0x0020): a dominated stellar clears past every denial
+     * (stellar_clearance.ts, the domination override).
+     */
+    dominated?: Dominated,
     planetId: string,
     systemId: string | undefined,
     now: number,
@@ -863,6 +872,7 @@ export function stellarClearanceWith(opts: {
         rankLandingOverride,
         missionDestination: isMissionDestination(opts.missions?.values(),
             opts.planetId, opts.sameStellar),
+        dominated: opts.dominated?.includes(opts.planetId) === true,
         ignoreTravelPermit: opts.ignoreTravelPermit,
     });
 }
@@ -881,10 +891,10 @@ const AttemptLandingSystem = new System({
         Optional(ActiveRanksComponent), Optional(MissionsComponent),
         SimulationGameDataResource, Optional(GovtsResource),
         Optional(TimeResource), Optional(SystemIdResource),
-        Optional(JumpComponent)] as const,
+        Optional(JumpComponent), Optional(DominatedComponent)] as const,
     step(planets, playerUuid, { position, velocity }, planetTarget,
         controls, emit, records, shipData, outfits, bribes, ranks, missions,
-        gameData, govts, time, systemId, jump) {
+        gameData, govts, time, systemId, jump, dominated) {
         if (controls.get('land') !== 'start') {
             return;
         }
@@ -904,7 +914,7 @@ const AttemptLandingSystem = new System({
         const cleared = (id: string, planetData: PlanetData) =>
             stellarClearanceFor({
                 planetData, gameData, govts, records, shipData, outfits,
-                bribes, ranks, missions,
+                bribes, ranks, missions, dominated,
                 planetId: id, systemId, now,
             }).cleared;
 
@@ -1218,10 +1228,11 @@ export const StellarAutoClearanceSystem = new System({
         Optional(OutfitsStateComponent), Optional(StellarBribesComponent),
         Optional(ActiveRanksComponent), Optional(MissionsComponent),
         SimulationGameDataResource, Optional(GovtsResource),
-        Optional(TimeResource), Optional(SystemIdResource)] as const,
+        Optional(TimeResource), Optional(SystemIdResource),
+        Optional(DominatedComponent)] as const,
     step(planets, shipUuid, { position }, planetTarget, emit, records,
         shipData, outfits, bribes, ranks, missions, gameData, govts, time,
-        systemId) {
+        systemId, dominated) {
         if (planetTarget.requested === undefined) {
             return;
         }
@@ -1246,7 +1257,7 @@ export const StellarAutoClearanceSystem = new System({
             }
             if (!stellarClearanceFor({
                 planetData, gameData, govts, records, shipData, outfits,
-                bribes, ranks, missions,
+                bribes, ranks, missions, dominated,
                 planetId: id, systemId, now,
             }).cleared) {
                 return;

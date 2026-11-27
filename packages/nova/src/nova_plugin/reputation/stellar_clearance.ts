@@ -6,7 +6,7 @@ import { LegalRecords, recordIn } from './reputation.js';
 /**
  * ============================================================================
  * Landing clearance — the ONE predicate (EVN Bible, spöb MinStatus, gövt
- * Require, ränk 0x0200, and the mission-destination override)
+ * Require, ränk 0x0200, and the mission-destination and domination overrides)
  * ============================================================================
  *
  * Whether a stellar will let THIS player land, and — when it won't — WHY.
@@ -80,6 +80,23 @@ import { LegalRecords, recordIn } from './reputation.js';
  *    an exact id match. In the sim that is what runs — a documented narrowing,
  *    and a conservative one: the worst case is that the override does not fire
  *    for a hidden duplicate, never that it fires when it should not.
+ *
+ *  - THE DOMINATION OVERRIDE. A stellar the player has DOMINATED
+ *    (player/dominated.ts DominatedComponent: a demand it gave in to, the
+ *    defeat of its defence fleet, or spöb Flags2 0x0020 "always dominated",
+ *    which seeds a new pilot's list) lets THAT player land no matter what,
+ *    exactly as a mission destination does: not the record, not a 32767
+ *    "never", not a missing travel permit. Matthew's ruling (2026-11-27):
+ *    "Players should always be able to land on planets they've dominated."
+ *    Domination is per player (#306 / #353), so the override is per player
+ *    too: another pilot in the same system is judged by the ordinary rules.
+ *    The sim reads the dominated list off the player's synced ship
+ *    (DominatedComponent is delta-registered and follows the pilot across
+ *    hull changes), never client-only state. A RELEASED stellar leaves the
+ *    list (releaseStellar) and goes back to the ordinary rules on the same
+ *    tick. It does not reach a stellar that is no port at all (landable.ts:
+ *    the can-land bit, a stellar that must be destroyed first): that is the
+ *    landing gate's earlier, separate test, and no surface is no surface.
  *
  * "YOUR RECORD IN THE CURRENT SYSTEM": legal records are kept PER SYSTEM, as
  * on the original (ruling #380), seeded from the InitialRec of the system's
@@ -173,6 +190,12 @@ export interface ClearancePlayer {
      */
     missionDestination?: boolean;
     /**
+     * True when THIS player has dominated this stellar (DominatedComponent,
+     * which spöb Flags2 0x0020 "always dominated" seeds). Overrides every
+     * denial reason, like `missionDestination` — see the module comment.
+     */
+    dominated?: boolean;
+    /**
      * True when the player holds an active ränk affiliated with this
      * stellar's owning government carrying Flags 0x0200, "All planets of the
      * affiliated government will let the player land when he has this rank,
@@ -264,6 +287,11 @@ export function stellarClearance(stellar: ClearanceStellar,
     if (player.missionDestination) {
         return CLEARED;
     }
+    // A dominated stellar is open to the pilot who dominated it, whatever
+    // the port would otherwise say (Matthew's ruling, 2026-11-27).
+    if (player.dominated) {
+        return CLEARED;
+    }
     // A paid bribe buys clearance past EVERY denial reason for as long as it
     // lasts — the stock bribe lines are explicit that this is what the money
     // buys ("We'll let you slip by the security barrier if you pay us.",
@@ -335,6 +363,8 @@ export function planetClearance(opts: {
     rankLandingOverride?: boolean,
     /** An active mission sends the player here; see ClearancePlayer. */
     missionDestination?: boolean,
+    /** The player has dominated this stellar; see ClearancePlayer. */
+    dominated?: boolean,
     /** Leave out the gövt Require travel-permit test (as if the govt
      * required nothing); see stellarClearanceWith. */
     ignoreTravelPermit?: boolean,
@@ -350,5 +380,6 @@ export function planetClearance(opts: {
         bribed,
         rankLandingOverride: opts.rankLandingOverride,
         missionDestination: opts.missionDestination,
+        dominated: opts.dominated,
     });
 }

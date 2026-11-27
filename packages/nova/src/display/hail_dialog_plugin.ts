@@ -59,7 +59,7 @@ import { PersComponent } from '../nova_plugin/spawn/index.js';
 import {
     MissionShipComponent, PlayerShipSelector, CreditsComponent, MissionsComponent,
     ControlledByComponent, GameDateComponent,
-    escortDealOf, escortProvenance, hasDominated,
+    DominatedComponent, escortDealOf, escortProvenance, hasDominated,
 } from '../nova_plugin/player/index.js';
 import { targetIdentity } from './target_identity.js';
 import {
@@ -258,6 +258,7 @@ function playerStellarClearance(world: World, player: Entity,
         bribes: player.components.get(StellarBribesComponent),
         ranks: player.components.get(ActiveRanksComponent),
         missions: player.components.get(MissionsComponent),
+        dominated: player.components.get(DominatedComponent),
         // Bribe expiries are SIM-clock stamps; the display world's
         // own TimeResource is the wall clock and would judge every
         // paid bribe already expired.
