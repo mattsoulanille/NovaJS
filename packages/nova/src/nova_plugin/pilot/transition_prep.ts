@@ -3,7 +3,8 @@ import { clearCarriedAggressionForTransition } from '../combat/index.js';
 import { clearPlunderRecord } from '../ship/index.js';
 import { clearContrabandScan, NpcComponent } from '../npc/index.js';
 import {
-    PlanetTargetComponent, StellarHaggleComponent, SystemVisitComponent,
+    endPlanetBribes, PlanetTargetComponent, StellarHaggleComponent,
+    SystemVisitComponent,
 } from '../travel/index.js';
 import { TargetComponent } from '../ship/index.js';
 
@@ -126,6 +127,10 @@ export function prepareCarriedEntitiesForFreshWorld(player: Entity,
     // crossing (reference "R7 planet bribe withdrawal, wave 29": a jump out
     // and back ended it; travel/planet_plugin.ts's StellarHaggleComponent).
     player.components.delete(StellarHaggleComponent);
+    // ...and a paid planet bribe ends with the visit (reference "How long
+    // an accepted planet bribe lasts (R8), wave 41"; a landing ends it
+    // too, encounters/boarding_plugin.ts).
+    endPlanetBribes(player);
     // ...and it is a new VISIT, by which a planet's fresh bribe refusal is
     // drawn (reference "R7 planet bribe withdrawal, wave 30": a fresh
     // refusal held through re-hails and a landing a day later; GUESS that

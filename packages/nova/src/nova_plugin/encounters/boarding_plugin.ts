@@ -25,7 +25,7 @@ import {
     captureTripsSelfDestruct,
 } from '../ship/index.js';
 import { AggressionComponent } from '../combat/index.js';
-import { GateDepartureSystem, LandEvent } from '../travel/index.js';
+import { endPlanetBribes, GateDepartureSystem, LandEvent } from '../travel/index.js';
 import { SelfDestructSystem } from './disabled_plugin.js';
 import {
     MissionCargoRetrievedEvent, MissionCargoRetrievedEventType, rescueBoard,
@@ -1713,6 +1713,10 @@ const BoardingLandingResetSystem = new System({
     step(entity) {
         clearPlunderRecord(entity);
         endContrabandHostility(entity);
+        // A paid planet bribe ends at the pilot's next landing, anywhere
+        // (reference "How long an accepted planet bribe lasts (R8), wave
+        // 41"; travel/planet_plugin.ts's STELLAR_BRIBE_NO_EXPIRY).
+        endPlanetBribes(entity);
     },
     // #237 pin (shared: *): among the LandEvent handlers, after travel's
     // gate departure.

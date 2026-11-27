@@ -55,7 +55,7 @@ import {
 } from '../reputation/index.js';
 import {
     PlanetComponent, PlanetDataComponent, stellarClearanceFor,
-    StellarBribesComponent, STELLAR_BRIBE_MS, StellarHaggleComponent,
+    StellarBribesComponent, STELLAR_BRIBE_NO_EXPIRY, StellarHaggleComponent,
     SystemVisitComponent,
 } from '../travel/index.js';
 import { ActiveRanksComponent } from '../ncb/index.js';
@@ -443,7 +443,8 @@ function applyPlanetBribe(world: World, player: Entity, playerUuid: string,
         player.components.set(StellarHaggleComponent, rest);
     }
     const bribes = new Map(player.components.get(StellarBribesComponent));
-    bribes.set(planetId, now + STELLAR_BRIBE_MS);
+    // Until the next landing or system exit (R8 wave 41).
+    bribes.set(planetId, STELLAR_BRIBE_NO_EXPIRY);
     player.components.set(StellarBribesComponent, bribes);
 }
 

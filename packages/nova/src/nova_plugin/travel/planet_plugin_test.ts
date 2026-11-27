@@ -28,7 +28,7 @@ import {
     landingDistance, landingRange,
     LandingRequest, LandingRequestEvent, landingRequestForm,
     PlanetComponent, selectPlanetTarget,
-    PlanetDataComponent, PlanetTargetComponent, StellarBribesComponent, STELLAR_BRIBE_MS, stellarClearanceFor,
+    PlanetDataComponent, PlanetTargetComponent, StellarBribesComponent, STELLAR_BRIBE_NO_EXPIRY, stellarClearanceFor,
     stellarLandingRange, StellarHaggleComponent, SystemVisitComponent,
 } from './planet_plugin.js';
 import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data';
@@ -824,6 +824,9 @@ describe('planet bribes', () => {
             const { lands, blocked } = pressLand(world);
             expect(blocked).toEqual([]);
             expect(lands.length).toBe(1);
+            // ...and the landing ends the bribe (reference "How long an
+            // accepted planet bribe lasts (R8), wave 41").
+            expect(ship.components.has(StellarBribesComponent)).toBeFalse();
         }, 30_000);
 
     it('expires: the same stellar refuses again once the reprieve lapses',
@@ -836,10 +839,27 @@ describe('planet bribes', () => {
                 new Map([[PORT_ID, -1]]));
 
             expect(pressLand(world).blocked[0].reason).toEqual('denied');
-            // ...and the reprieve really was STELLAR_BRIBE_MS long.
+            // ...but a paid bribe has no clock: it lasts until the next
+            // landing or system exit (R8 wave 41; time alone a GUESS).
             applyHail(world, undefined, { kind: 'bribe', target: PORT });
             expect(ship.components.get(StellarBribesComponent)!.get(PORT_ID))
-                .toBeGreaterThanOrEqual(STELLAR_BRIBE_MS);
+                .toBe(STELLAR_BRIBE_NO_EXPIRY);
+        }, 30_000);
+
+    it('ends at a landing anywhere, and with the system visit (reference '
+        + '"How long an accepted planet bribe lasts (R8), wave 41")',
+        async () => {
+            const { world, ship } = await shutOutHarness();
+            applyHail(world, undefined, { kind: 'bribe', target: PORT });
+            expect(ship.components.has(StellarBribesComponent)).toBeTrue();
+            // Time in flight changes nothing (no clock; GUESS).
+            for (let i = 0; i < 60; i++) {
+                world.step();
+            }
+            expect(pressLand(world)).toEqual({ lands: [], blocked: [] });
+            // The crossing into another system ends it too.
+            prepareCarriedEntitiesForFreshWorld(ship, SHIP_UUID, []);
+            expect(ship.components.has(StellarBribesComponent)).toBeFalse();
         }, 30_000);
 
     it('will not sell clearance the player already has', async () => {

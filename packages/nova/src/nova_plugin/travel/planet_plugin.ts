@@ -1,3 +1,4 @@
+import { Entity } from 'nova_ecs/entity';
 import * as t from 'io-ts';
 import { GovtData } from "novadatainterface/govt_data";
 import { PlanetData } from "novadatainterface/planet_data";
@@ -544,14 +545,29 @@ export const SystemVisitType = t.number;
 export const SystemVisitComponent = new Component<number>('SystemVisit');
 
 /**
- * How long a bribe keeps a stellar's landing pad open, in ms. TUNABLE /
- * ASSUMPTION: the Bible quantifies neither the price nor the duration of a
- * planet bribe. Two minutes (once the ship-bribe reprieve's, which since
- * wave 37 holds for the visit) — long enough to fly in and land, short
- * enough that the clearance has to be re-bought on a later visit. The legal record is
- * unchanged by a bribe, exactly as a ship bribe leaves it alone.
+ * The expiry a paid planet bribe is written with: a sim time that never
+ * arrives (a large finite number, not Infinity, so it survives JSON
+ * codecs). A bribe has no clock: it lasts until the pilot next LANDS
+ * anywhere or leaves the system (endPlanetBribes, called from the
+ * landing reset and the system crossing). MEASURED (reference "How long
+ * an accepted planet bribe lasts (R8), wave 41"): the bribe cleared the
+ * player at once, and after a landing at the system's other port about
+ * 45 s later the bribed port denied him again, Hostile on the comm and
+ * offering a new bribe (twice). GUESS: time alone does not end it (a
+ * 3-minute wait in flight would tell). Was a 2-minute clock. The legal
+ * record is unchanged by a bribe, exactly as a ship bribe leaves it alone.
  */
-export const STELLAR_BRIBE_MS = 120_000;
+export const STELLAR_BRIBE_NO_EXPIRY = 1e15;
+
+/**
+ * Ends every paid planet bribe the pilot holds: at his landing (any
+ * stellar, the bribed one included) and at a crossing into another
+ * system. Removes the component (the map is shared by reference, never
+ * edited in place).
+ */
+export function endPlanetBribes(player: Entity): void {
+    player.components.delete(StellarBribesComponent);
+}
 
 registerSimulationBridgeEvent({ event: LandingBlockedEvent });
 registerSimulationBridgeEvent({ event: LandingClearedEvent });
