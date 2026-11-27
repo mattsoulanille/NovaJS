@@ -969,7 +969,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    (route, fuel, disabled and a jump under way still do), so a jump key
 //    held through the arrival still chains once the client has shown the
 //    new system. No input kind or message kind changes. The derived wire
-//    schema fingerprint changes (a7b47d05196b53ff -> FPNEW), and
+//    schema fingerprint changes (a7b47d05196b53ff -> e384c60c7fd52926), and
 //    the join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
