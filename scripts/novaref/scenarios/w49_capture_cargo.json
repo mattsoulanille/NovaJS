@@ -1,0 +1,169 @@
+{
+ "name": "w49_capture_cargo",
+ "_comment": "Wave 49 CU leftover (mission cargo across Use As My Ship): as w46_capture_use, but after accepting the prize mission (mïsn 1054) it takes the Mission BBS job mïsn 1075 (90 t of Medical Supplies to Kit Port; BBS at window 182,430, first row 213,238, Accept 476,384) then a hand-driven break (inbox w49.jsonl) for the Leave (a BBS dialog may need its own Return); then the disable, the board and Capture Ship; then hand-driven steps (inbox w49.jsonl): m, the rename alert, the landing and the Leave. Pilot pulled at the end.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "keys": "l wait 1200 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "accepted",
+   "window": true
+  },
+  {
+   "click": [
+    182,
+    430
+   ],
+   "win": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "bbs",
+   "window": true
+  },
+  {
+   "click": [
+    213,
+    238
+   ],
+   "win": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "bbsrow",
+   "window": true
+  },
+  {
+   "click": [
+    476,
+    384
+   ],
+   "win": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "bbsaccepted",
+   "window": true
+  },
+  {
+   "move": true
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w49.jsonl",
+    "maxMs": 900000
+   }
+  },
+  {
+   "shot": "launched",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "script": "../loops/disable.mjs",
+   "args": {
+    "target": "tab",
+    "maxTaps": 12,
+    "waitMs": 1700
+   }
+  },
+  {
+   "shot": "disabled",
+   "window": true
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "speedPxS": 44,
+    "turnDegS": 87.1,
+    "near": 220,
+    "stepMs": 120,
+    "maxSteps": 40,
+    "dialogClicks": [
+     [
+      463,
+      353,
+      "capture"
+     ]
+    ],
+    "retarget": 3,
+    "fineBelowPx": 30,
+    "fineStepMs": 50,
+    "sweep": {
+     "atPx": 4,
+     "startOnSilent": true,
+     "repeat": 1,
+     "turnMs": 60,
+     "presses": 70,
+     "stopAfter": 1,
+     "clickTimes": 1
+    }
+   }
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "after",
+   "window": true
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w49.jsonl",
+    "maxMs": 1800000
+   }
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

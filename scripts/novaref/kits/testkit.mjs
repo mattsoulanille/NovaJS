@@ -320,6 +320,7 @@ export default {
         ...wave46Resources(),
         ...wave47Resources(),
         ...wave48Resources(),
+        ...wave49Resources(),
     ].map(wave15Patches).map(wave46Patches).map(withoutRunningLights),
 };
 
@@ -586,6 +587,95 @@ function wave48Resources() {
     out.push(dude(548, "Kit Tractor Beamer 20", 3, 362, 843));
     out.push(...misn(1073, "Kit KT tractor beamer on the marker", 9318, { availStel: 1144, shipCount: 1, shipDude: 548, shipGoal: -1,
         shipBehav: -1, shipStart: -2, onAccept: "!b9318" }));
+    return out;
+}
+
+/**
+ * Wave-49 experiments (docs/reference_experiments.md, "... wave 49"): the
+ * wave-48 leftovers and the asteroid rock-vs-ship question. RETIRED: wave
+ * 13's mïsn 1074 / 1075 (bits 9139 / 9140, N ally hater / escort ally
+ * classed) and 1076 / 1077 (bits 9143 / 9144, G self hater shooter /
+ * victim), wave 14's 1079 (bit 9145, A comp reward 338), their ships and
+ * düdes staying; wave 4's shïp 771 / 772 (Kit Crawler Slowbrake / 200).
+ * Used: sÿst 1490, spöb 1170-1184, shïp 771 / 772, düde 550-551, wëap 325,
+ * mïsn 1074-1077 / 1079, bits 9319-9327. Map row y = -3240 (x -800). The
+ * next free ids: sÿst 1491+, spöb 1185-1399 (and 518-999), shïp NONE
+ * (retire an old kit hull: wave 4's 773-775 Jam Target T2-T4 are old
+ * one-off rigs), düde 328 / 552+, përs: override a stock one
+ * (kits/w48_pers225.mjs), ränk 205+, mïsn NONE (retire another old kit
+ * mission: wave 14's 1078 / 1080-1084 are one-off rigs), gövt 283 and
+ * below, flët 324+, wëap 326+, oütf 512+, jünk 205+, bits 9328+, rlëD
+ * 1113+.
+ *
+ *  EC  A lone intruder, so that nothing draws the escort carrier's
+ *      fighters on after an `f` kill: mïsn 1074 (bit 9319) puts wave 45's
+ *      always-hostile red disc (düde 541: shïp 891 Kit Tough Red, AI 3 of
+ *      gövt 362, 3000 / 3000) on wave 48's Kit Blast Small 40 marker (sÿst
+ *      1489, no traffic; ShipStart -2), offered on landing at its port
+ *      (spöb 1168).
+ *  CU  Mission cargo bigger than the new hull's hold: mïsn 1075 Kit CU big
+ *      cargo job, wave 48's 1063 with 90 t of Medical Supplies (the Kit
+ *      Capture Boarder holds 100 t, the Kit Prize Hull showed 80 free):
+ *      a Mission BBS job at Kit Prize Port (spöb 1102) to Kit Port (spöb
+ *      2100), availability bit 9320, OnAccept b9321, OnFailure b9322,
+ *      OnAbort b9323, OnSuccess b9324.
+ *  KS  The 100 t edge of the ship-explosion push: mïsn 1076 (bit 9325)
+ *      puts wave 28's live Kit Hulk Pointer 99 (düde 472: shïp 541, 99 t,
+ *      armor 300, DeathDelay 10) and mïsn 1077 (bit 9326) shïp 772 Kit
+ *      Hulk Pointer 100 (the same at 100 t, düde 550) on the Kit Blast
+ *      Small 40 marker (40 px from the port).
+ *  KB  The push's direction from a MOVING shooter: sÿst 1490 Kit Knock
+ *      Grid, a port (spöb 1170) at the centre and 14 moon decorations
+ *      (spöb 1171-1184) on Kit Accel Pad's 200 x 300 px grid (x -400 ..
+ *      400, y -300 .. 300); mïsn 1079 (bit 9327, offered on landing) puts
+ *      shïp 771 Kit Knock Runner (the red disc, AI 3 of the
+ *      always-hostile gövt 362, Speed / Accel 300, Turn 30, 30000 armor;
+ *      düde 551) on the first moon (ShipStart -2). Its wëap 325 Kit Knock
+ *      Slow 100: a SLOW 1-damage turret bolt (Speed 300, about 90 px/s;
+ *      Count 450; Reload 90) of Impact 100, so the shooter moves far while
+ *      its bolt flies: the push along the bolt's travel and along the
+ *      shooter-to-ship line part.
+ */
+function wave49Resources() {
+    const out = [];
+    const Y = -3240;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const decoration = (id, name, x = 0, y = 0) => spob(id, name, x, y, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] });
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const RLED = { pointer: 1959, red: 1971 };
+    // --- EC: mïsn 1074 (wave 13's, retired), bit 9319.
+    out.push(...misn(1074, "Kit EC lone intruder", 9319, { availStel: 1168, shipCount: 1, shipDude: 541, shipGoal: -1, shipBehav: -1,
+        shipStart: -2, onAccept: "!b9319" }));
+    // --- CU: mïsn 1075 (wave 13's, retired), bits 9320-9324.
+    out.push(...misn(1075, "Kit CU big cargo job", 9320, { availStel: 1102, availLoc: 0, dispWeight: 30000, travelStel: 2100, cargoType: 2,
+        cargoQty: 90, pickupMode: 0, dropoffMode: 0, onAccept: "!b9320 b9321", onFailure: "b9322", onAbort: "b9323", onSuccess: "b9324" }));
+    // --- KS: shïp 772 (wave 4's, retired), düde 550, mïsn 1076 / 1077 (wave 13's, retired), bits 9325-9326.
+    out.push(...shareRled(772, "Kit Hulk Pointer 100", RLED.pointer, 24, { armor: 300, shield: 0, accel: 0, speed: 0, turn: 0, mass: 100,
+        freeMass: 100, cargo: 50, ai: 1, strength: 1, crew: 1, flags: 0, flags2: 0, cost: 50000, deathDelay: 10 }));
+    const hulk100 = dude(550, "Kit Hulk Pointer 100", 4, 363, 772);
+    hulk100.set = { ...hulk100.set, flags: 0x0041 };
+    out.push(hulk100);
+    [[1076, "Kit KS blast hulk 99 t", 9325, 472], [1077, "Kit KS blast hulk 100 t", 9326, 550]].forEach(([mid, name, bit, did]) =>
+        out.push(...misn(mid, name, bit, { availStel: 1168, onAccept: `!b${bit}`, shipCount: 1, shipSyst: -1, shipDude: did, shipGoal: -1,
+            shipBehav: -1, shipStart: -2 })));
+    // --- KB: sÿst 1490, spöb 1170-1184, wëap 325, shïp 771 (wave 4's, retired), düde 551, mïsn 1079 (wave 14's, retired), bit 9327.
+    const grid = [];
+    for (const y of [-300, 0, 300]) for (const x of [-400, -200, 0, 200, 400]) if (x || y) grid.push([x, y]);
+    out.push(system(1490, "Kit Knock Grid", nextX(), Y, 363, [1170, ...grid.map((_, k) => 1171 + k)]),
+        spob(1170, "Kit Knock Grid Port", 0, 0, 138, { flags: 0x43 }),
+        ...grid.map(([x, y], k) => decoration(1171 + k, `Kit Knock Grid ${x},${y}`, x, y)));
+    out.push(weap(325, "Kit Knock Slow 100", 131, { reload: 90, duration: 450, speed: 300, armorDamage: 1, shieldDamage: 1, guidance: 4,
+        impact: 100, ionization: 0, flags: 0 }));
+    out.push(...shareRled(771, "Kit Knock Runner", RLED.red, 24, { armor: 30000, shield: 0, shieldRecharge: 0, accel: 300, speed: 300, turn: 30,
+        mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 1, crew: 1, flags: 0, flags2: 0, weapons: [325, -1, -1, -1],
+        weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
+    out.push(dude(551, "Kit Knock Runner", 3, 362, 771));
+    out.push(...misn(1079, "Kit KB knock runner", 9327, { availStel: 1170, shipCount: 1, shipDude: 551, shipGoal: -1, shipBehav: -1,
+        shipStart: -2, onAccept: "!b9327" }));
     return out;
 }
 
@@ -4729,7 +4819,8 @@ function wave14Resources() {
         out.push(s, port(id, `${name} Port`));
     }
     // CompReward: a goal-less mission for gövt 338, accepted and completed at Kit Port.
-    out.push(...misn(1079, "Kit A comp reward 338", 9145, { compGovt: 338, compReward: 1000, returnStel: 2100, onAccept: "!b9145", onSuccess: "b9146" }));
+    // mïsn 1079 (bit 9145, A comp reward 338: CompGovt 338, CompReward 1000, ReturnStel 2100, OnSuccess b9146) was retired in
+    // wave 49 (wave49Resources: KB the knock runner).
 
     // --- S: contraband.
     out.push(...misn(1078, "Kit S rebel food drop copy", 9147, { availStel: 2069, travelStel: 2068, returnStel: 2069, cargoType: 0, cargoQty: 10, pickupMode: 0, dropoffMode: 0,
@@ -4903,9 +4994,9 @@ function wave13Resources() {
     out.push(...shareRled(879, "Kit Hater", 1971, 24, { ...anchored, armor: 30000, shield: 30000, ...armed(287) }));
     out.push(dude(365, "Kit Ally Hater", 3, 349, 879));
     out.push(dude(366, "Kit Ally Classed", 3, 348, 873));
-    out.push(...misn(1074, "Kit N ally hater", 9139, { availStel: 2047, shipCount: 1, shipDude: 365, shipGoal: -1, shipBehav: -1, shipStart: -3, onAccept: "!b9139" }));
-    out.push(...misn(1075, "Kit N escort ally classed", 9140, { availStel: 2047, availLoc: 0, shipCount: 1, shipDude: 366, shipGoal: 3, shipBehav: 1, shipStart: -1,
-        returnStel: 2047, onAccept: "!b9140", onSuccess: "b9142", onFailure: "b9141", dispWeight: 30000 }));
+    // mïsn 1074 (bit 9139, N ally hater: düde 365 at the far mark, ShipStart -3) and 1075 (bit 9140, N escort ally classed: the
+    // BBS job, düde 366, ShipGoal 3 / ShipBehav 1, OnSuccess b9142 / OnFailure b9141) were retired in wave 49 (wave49Resources:
+    // EC the lone intruder, CU the 90 t cargo job); düde 365 / 366 stay.
 
     // --- R: stock mïsn 394 "Rescue Raczak" moved to Kit Port (added during
     // the wave: in Heraan Astra the Moash fleet killed the UFS Excalibur
@@ -4952,8 +5043,8 @@ function wave13Resources() {
     out.push(govt(339, "Kit Self Hater", { classes: [339, -1, -1, -1], enemies: [339, -1, -1, -1] }));
     out.push(dude(367, "Kit Self Hater Shooter", 3, 339, 874));
     out.push(dude(368, "Kit Self Hater Victim", 3, 339, 875));
-    out.push(...misn(1076, "Kit G self hater shooter", 9143, { availStel: 2047, shipCount: 1, shipDude: 367, shipGoal: -1, shipBehav: -1, shipStart: -3, onAccept: "!b9143" }));
-    out.push(...misn(1077, "Kit G self hater victim", 9144, { availStel: 2047, availLoc: 0, shipCount: 1, shipDude: 368, shipGoal: -1, shipBehav: -1, shipStart: -2, onAccept: "!b9144", dispWeight: 30000 }));
+    // mïsn 1076 (bit 9143, G self hater shooter, ShipStart -3) and 1077 (bit 9144, G self hater victim, the BBS job on the near
+    // mark) were retired in wave 49 (wave49Resources: KS the 99 t / 100 t hulks); düde 367 / 368 stay.
 
     // --- A: the A14 reward rule with odd owner penalties.
     out.push(govt(345, "Kit Odd Owner", { disabPenalty: 11, boardPenalty: 3, killPenalty: 25, classes: [345, -1, -1, -1] }));
@@ -6105,7 +6196,7 @@ function wave6Resources() {
  *      Landing speed gate: shïp 771 Kit Crawler Slowbrake (inertialess,
  *      Speed 100, Accel 60) and 772 Kit Crawler Slowbrake 200 (Speed 200,
  *      Accel 120) brake slowly under Down, so `l` pressed while braking
- *      samples the gate.
+ *      samples the gate (both retired in wave 49).
  *  A   mïsn 991 (bit 9032): FOUR AI 1 subjects (düde 630) at Kit Port, for
  *      unprovoked departure times.
  *  E   wëap 368 Kit Fixed Gun (guidance -1, the Kit Escort Gun otherwise),
@@ -6124,18 +6215,9 @@ function wave4Resources() {
         out.push(system(id, name, -1080, -620 + 30 * i, 363, [id]));
         out.push(spob(id, `${name} Port`, 0, 0, clone, { flags: 0x43 }));
     });
-    // Speed 100 (44 px/s) with Accel 60 (about 11 px/s^2): Down brakes it
-    // over about 4 s, so `l` pressed while braking samples the speed gate.
-    out.push(...ship(771, "Kit Crawler Slowbrake", 135, {
-        accel: 60, speed: 100, turn: 30, armor: 3000, shield: 3000, shieldRecharge: 0, mass: 50, freeMass: 1000,
-        cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, flags: 0, flags2: 0x00C8,
-    }));
-    // The same at Speed 200 (87 px/s), Accel 120: is the speed gate absolute
-    // or a share of the hull's top speed?
-    out.push(...ship(772, "Kit Crawler Slowbrake 200", 135, {
-        accel: 120, speed: 200, turn: 30, armor: 3000, shield: 3000, shieldRecharge: 0, mass: 50, freeMass: 1000,
-        cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, flags: 0, flags2: 0x00C8,
-    }));
+    // shïp 771 Kit Crawler Slowbrake (inertialess, Speed 100, Accel 60) and 772 Kit Crawler Slowbrake 200 (Speed 200, Accel
+    // 120), the landing speed gate's hulls (pilots w4_brake*.json), were retired in wave 49 (wave49Resources: KB the knock
+    // runner, KS the 100 t hulk).
     out.push(...misn(991, "Kit AI 1 subjects x4", 9032, { shipCount: 4, shipDude: 630, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
     // The Kit Escort Gun (wëap 365, clone of 131) with another guidance.
     const escortGun = { reload: 20, duration: 60, armorDamage: 30, shieldDamage: 30 };
