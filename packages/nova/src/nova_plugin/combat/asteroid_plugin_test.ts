@@ -17,7 +17,7 @@ import {
     AsteroidFieldComponent,
     AsteroidPlugin,
     DebrisComponent,
-    MAX_ASTEROID_SPEED,
+    MAX_ASTEROID_AXIS_SPEED,
     spawnAsteroids,
 } from './asteroid_plugin.js';
 import { TumbleAnimationComponent } from '../core/index.js';
@@ -155,6 +155,22 @@ describe('spawnAsteroids', () => {
         await spawnAsteroids(world, { asteroids: 0, asteroidTypes: [] });
         expect(asteroidEntities(world).length).toBe(0);
         expect(world.entities.has('asteroid field')).toBeFalse();
+    });
+
+    it('draws every drift inside the per-axis box, unclamped', async () => {
+        // The drift is 10-50 px/s in a random direction, so no component
+        // can reach the +-58 box (reference wave 48 RP): the clamp never
+        // reshapes a freshly drawn field.
+        const world = await makeAsteroidWorld(7);
+        await spawnAsteroids(world, TEST_SYSTEM);
+        for (const [, entity] of asteroidEntities(world)) {
+            const velocity = Vector.fromVectorLike(
+                entity.components.get(MovementStateComponent)!.velocity);
+            expect(velocity.length).toBeGreaterThanOrEqual(10 - 1e-9);
+            expect(velocity.length).toBeLessThanOrEqual(50 + 1e-9);
+            expect(Math.abs(velocity.x)).toBeLessThan(MAX_ASTEROID_AXIS_SPEED);
+            expect(Math.abs(velocity.y)).toBeLessThan(MAX_ASTEROID_AXIS_SPEED);
+        }
     });
 
     it('spawns only the system\'s configured types, inside the field', async () => {
@@ -344,30 +360,47 @@ describe('AsteroidDamageSystem', () => {
         expect(debrisEntities(world).length).toBe(0);
     });
 
-    it('caps a huge knockback impulse, preserving its direction', async () => {
+    it('clamps each axis of a huge knockback impulse to +-58', async () => {
         const world = await makeBreakupWorld(5);
         const direction = new Angle(1);
-        // impact 1e6 on a mass-300 röid: 1e6 * 30 / 300 = 100,000 px/s.
+        // impact 1e6 on a mass-300 röid: 1e6 * 30 / 300 = 100,000 px/s,
+        // far past the box on both axes (reference wave 48 RP).
         knock(world, 1e6, direction);
 
         const velocity = rockVelocity(world);
-        expect(velocity.length).toBeCloseTo(MAX_ASTEROID_SPEED, 9);
-        const expected = direction.getUnitVector().scale(MAX_ASTEROID_SPEED);
-        expect(velocity.x).toBeCloseTo(expected.x, 9);
-        expect(velocity.y).toBeCloseTo(expected.y, 9);
+        const unit = direction.getUnitVector();
+        expect(MAX_ASTEROID_AXIS_SPEED).toBe(58);
+        expect(velocity.x).toBe(Math.sign(unit.x) * MAX_ASTEROID_AXIS_SPEED);
+        expect(velocity.y).toBe(Math.sign(unit.y) * MAX_ASTEROID_AXIS_SPEED);
     });
 
-    it('stays at the cap however many impulses land', async () => {
+    it('clamps only the axis a push drives past the box', async () => {
+        // Wave 48 rps1200_a: a rock at (-26.5, 23.9) pushed hard along
+        // -y came out at (-26.5, -58.1): the pushed component stops at
+        // the box, the untouched one keeps its value.
+        const world = await makeBreakupWorld(5);
+        world.entities.get('rock')!.components.get(MovementStateComponent)!
+            .velocity = new Vector(-26.5, 23.9);
+        // Angle 0 points straight up the screen (-y): no x component.
+        knock(world, 1e6, new Angle(0));
+        const velocity = rockVelocity(world);
+        expect(velocity.x).toBeCloseTo(-26.5, 9);
+        expect(velocity.y).toBe(-MAX_ASTEROID_AXIS_SPEED);
+    });
+
+    it('stays inside the box however many impulses land', async () => {
         const world = await makeBreakupWorld(5);
         for (let i = 0; i < 200; i++) {
             // Shoved from slightly different angles, as a real fight
             // would; nothing bleeds the accumulated speed off between
             // hits, which is what made asteroids run away.
             knock(world, 20_000, new Angle(1 + (i % 3) * 0.1));
-            expect(rockVelocity(world).length)
-                .toBeLessThanOrEqual(MAX_ASTEROID_SPEED + 1e-9);
+            const velocity = rockVelocity(world);
+            expect(Math.abs(velocity.x))
+                .toBeLessThanOrEqual(MAX_ASTEROID_AXIS_SPEED);
+            expect(Math.abs(velocity.y))
+                .toBeLessThanOrEqual(MAX_ASTEROID_AXIS_SPEED);
         }
-        expect(rockVelocity(world).length).toBeCloseTo(MAX_ASTEROID_SPEED, 9);
     });
 
     it('leaves ordinary knockback alone', async () => {
@@ -411,13 +444,12 @@ describe('AsteroidDamageSystem', () => {
         }
     });
 
-    it('still caps a huge blast impulse', async () => {
+    it('still clamps a huge blast impulse per axis', async () => {
         const world = await makeBreakupWorld(5);
         boom(world, 1e6, new Position(10, -80));
         const velocity = rockVelocity(world);
-        expect(velocity.length).toBeCloseTo(MAX_ASTEROID_SPEED, 9);
         expect(velocity.x).toBeCloseTo(0, 9);
-        expect(velocity.y).toBeCloseTo(MAX_ASTEROID_SPEED, 9);
+        expect(velocity.y).toBe(MAX_ASTEROID_AXIS_SPEED);
     });
 
     it('pushes along the damager\'s facing for a non-blast hit', async () => {
@@ -446,23 +478,25 @@ describe('AsteroidDamageSystem', () => {
         expect(velocity.y).toBe(0);
     });
 
-    it('caps fragments that inherit a fast parent velocity', async () => {
+    it('clamps fragments that inherit a fast parent velocity', async () => {
         const world = await makeBreakupWorld(5);
         const movement = world.entities.get('rock')!
             .components.get(MovementStateComponent)!;
-        // A parent already at the cap; fragments add an ejection speed
-        // on top of the inherited velocity.
-        movement.velocity = new Angle(1).getUnitVector()
-            .scale(MAX_ASTEROID_SPEED);
+        // A parent at the box's corner; fragments add an ejection speed
+        // (up to 60 px/s) on top of the inherited velocity.
+        movement.velocity = new Vector(
+            MAX_ASTEROID_AXIS_SPEED, -MAX_ASTEROID_AXIS_SPEED);
         hit(world, BIG_ROID.strength);
 
         const fragments = asteroidEntities(world);
         expect(fragments.length).toBeGreaterThan(0);
         for (const [, entity] of fragments) {
-            const velocity = Vector.fromVectorLike(entity.components
-                .get(MovementStateComponent)!.velocity);
-            expect(velocity.length)
-                .toBeLessThanOrEqual(MAX_ASTEROID_SPEED + 1e-9);
+            const velocity = entity.components
+                .get(MovementStateComponent)!.velocity;
+            expect(Math.abs(velocity.x))
+                .toBeLessThanOrEqual(MAX_ASTEROID_AXIS_SPEED);
+            expect(Math.abs(velocity.y))
+                .toBeLessThanOrEqual(MAX_ASTEROID_AXIS_SPEED);
         }
     });
 });

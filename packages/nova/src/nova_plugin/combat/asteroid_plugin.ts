@@ -81,47 +81,42 @@ const RESPAWN_INTERVAL_MS = 5000;
 const ASTEROID_MIN_SPEED = 10;
 const ASTEROID_MAX_SPEED = 50;
 /**
- * Ceiling on an asteroid's speed, px/s.
+ * Ceiling on each screen-axis component of an asteroid's velocity, px/s:
+ * every rock is held inside a +-58 px/s box (reference wave 48 RP).
  *
- * Why one is needed: an asteroid has no MovementPhysicsComponent, so
- * the top-speed cap that stops a knocked-around *ship* from running away
- * (knockedVelocity in KnockbackSystem, ship/death_plugin.ts) never
- * applies to it, and
- * AsteroidMotionSystem's drift has no drag. Every knockback impulse
- * (AsteroidDamageSystem below) therefore accumulates forever. A beam is
- * the worst case, because BeamDamageSystem re-emits DamagedEvent every
- * step the beam dwells on its target: a Thunderhead Lance (wëap
- * nova:166, impact 50) held on a Dust Small (röid nova:136, mass 100)
- * adds 50 * 30 * 30 / 100 = 450 px/s for every second of contact
- * (KNOCKBACK_PER_IMPACT, ship/death_plugin.ts; 75 at the old x 5), with
- * nothing to bound it. Fragments inherit their parent's velocity, so a
- * runaway rock also breaks into runaway fragments.
+ * Measured: Impact 1200 on a 150 t rock (240 px/s by the push law) left
+ * every pushed component at 57.7-58.2 px/s and the untouched component
+ * as it was, and over four 80 s runs no rock was read faster than 58-62
+ * px/s on either axis. 58 px/s is 2 px a tick at the original's 29.1 Hz
+ * (GUESS for why). The drift draw (ASTEROID_MIN_SPEED-ASTEROID_MAX_SPEED
+ * in a random direction, so at most 50 on either axis) sits inside the
+ * box; fragments (a parent's velocity plus an ejection of up to 60 px/s)
+ * can leave it and are clamped at birth.
  *
- * The value: the top speed of the fastest ship in the stock game, so a
- * capped asteroid can always be outrun. Excluding the Escape Pod (shïp
- * nova:895, Speed 2000 -> 900 px/s; not a ship anyone flies), the
- * fastest of the 288 stock shïp resources is the Manta (shïp nova:315,
- * Speed 660). shïp Speed is 1.5 * Speed / 100 px per frame at the
- * original engine's 30 fps (#316), which ship_parse converts with
- * ShipSpeedConversionFactor = 1.5 * FPS / 100 = 0.45 into the px/s that
- * MovementState.velocity and asteroid drift both use: 660 * 0.45 = 297
- * px/s.
- *
- * Hardcoded rather than derived at runtime: the sim must not vary with
- * which plug-ins happen to be installed (see the fixture note in
- * simulation_test_fixture.ts). asteroid_plugin_test.ts pins the
- * derivation against real Nova Files data.
+ * Also why one is needed: an asteroid has no MovementPhysicsComponent
+ * and its drift has no drag, so every knockback impulse (a beam
+ * re-emits DamagedEvent every step it dwells) would otherwise
+ * accumulate forever.
  */
-export const MAX_ASTEROID_SPEED = 297;
+export const MAX_ASTEROID_AXIS_SPEED = 58;
+
+function clampAxis(value: number): number {
+    return value > MAX_ASTEROID_AXIS_SPEED ? MAX_ASTEROID_AXIS_SPEED
+        : value < -MAX_ASTEROID_AXIS_SPEED ? -MAX_ASTEROID_AXIS_SPEED
+            : value;
+}
 
 /**
- * Clamps an asteroid velocity to MAX_ASTEROID_SPEED, preserving
- * direction. Pure and allocation-free below the cap: Vector's
- * shortenToLength returns the receiver untouched when it is already
- * short enough, and only rescales (one new Vector) when it is not.
+ * Clamps each component of an asteroid velocity to
+ * +-MAX_ASTEROID_AXIS_SPEED independently (a pushed component stops at
+ * the box's edge, the other keeps its value). Returns the receiver
+ * untouched when it is already inside.
  */
 function capAsteroidSpeed(velocity: Vector): Vector {
-    return velocity.shortenToLength(MAX_ASTEROID_SPEED);
+    const x = clampAxis(velocity.x);
+    const y = clampAxis(velocity.y);
+    return x === velocity.x && y === velocity.y
+        ? velocity : new Vector(x, y);
 }
 /** Fragment ejection speed range, px/s (added to the parent velocity). */
 const FRAGMENT_MIN_SPEED = 15;
@@ -571,12 +566,10 @@ export const AsteroidDamageSystem = new System({
                 movement.position, damagerMovement,
                 Boolean(damagerParts?.[3]));
             if (direction) {
-                // Capped: nothing else bounds an asteroid's speed (no
-                // MovementPhysicsComponent, no drag), so without this
-                // the impulses accumulate without limit. See
-                // MAX_ASTEROID_SPEED. The ships' law (KNOCKBACK_PER_IMPACT
-                // x Impact / Mass, measured on hulls, wave 46) on the
-                // röid's Mass: GUESS, no rock was measured.
+                // The ships' law (KNOCKBACK_PER_IMPACT x Impact / Mass)
+                // on the röid's Mass, measured on rocks too (reference
+                // wave 48 RP: about 29 x over an 8 x range of Mass), then
+                // each axis clamped (MAX_ASTEROID_AXIS_SPEED).
                 movement.velocity = capAsteroidSpeed(movement.velocity.add(
                     direction.scale(damage.knockback * scale
                         * KNOCKBACK_PER_IMPACT / data.mass)));
