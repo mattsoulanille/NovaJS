@@ -314,8 +314,92 @@ export default {
         ...wave40Resources(),
         ...wave41Resources(),
         ...wave42Resources(),
+        ...wave43Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-43 experiments (docs/reference_experiments.md, "... wave 43"): the
+ * wave-42 leftovers. RETIRED: wave 12's mïsn 1049 (bit 9097, Kit D shooter
+ * bolt) and 1050 (bit 9098, Kit D shooter blast); their ships and düdes
+ * stay. Used: sÿst 1450-1455, spöb 1011-1033, shïp 699 / 719 / 727, düde
+ * 537-538, mïsn 1049-1050, bits 9284-9285, rlëD 1109 / 1111. Map row y =
+ * -2880 (x -800 .. -600). The next free ids: sÿst 1456+, spöb 1034-1399
+ * (and 518-999), shïp 728-729 / 738-739 / 761 / 766-768 / 791 / 888-894
+ * (and 416-419), düde 539+, përs NONE the base pilot marks alive (a sÿst
+ * Person slot places a kit përs: see R16), ränk 205+, mïsn NONE (retire
+ * another old kit mission), gövt 283 and below, flët 324+, wëap 312+, oütf
+ * 492+, jünk 205+, bits 9286+, rlëD 1113+ (odd ids 1001-1107 too).
+ *
+ *  U4  sÿst 1450 Kit Ruler Start (a decoration start, spöb 1011, 2,000 px
+ *      east of the centre: outside the 1,000 px no-jump zone) linked to
+ *      1451 Kit Ruler, 40 map units EAST: a jump from 1450 arrives about
+ *      1,350 px WEST of 1451's centre heading east along y = 0, at top
+ *      speed. 1451 holds 15 moon decorations (spöb 1012-1026, Type 132) at
+ *      x = -1200 .. 5800 every 500 px, y = 80 (off the ship's path): a
+ *      ruler for the player's own speed that does not use the star field.
+ *      shïp 699 Kit Probe E: Kit Probe A at Speed 1000 (Accel 300).
+ *  U7  sÿst 1452 Kit Gravity 5 Near: spöb 1027 the well (Gravity 5, the 40
+ *      px planet art 143) at the centre; moon decoration starts spöb 1028 /
+ *      1029 / 1030 at (300, 0) / (150, 0) / (80, 0). The well is on screen
+ *      all the way in, so its blob gives the ship's distance per frame.
+ *  A13 sÿst 1453 Kit Stray Fire (port spöb 1031): mïsn 1049 (bit 9284) puts
+ *      shïp 719 Kit Stray Ghost (a 100 px magenta disc, rlëD 1109, immobile
+ *      AI 1, Armor 1, Shield 0, Flags2 0x0004 "can't be targeted"; düde 537)
+ *      ON the port (ShipStart -1), where the player takes off: every shot he
+ *      fires starts inside it. mïsn 1050 (bit 9285) the control, shïp 727
+ *      Kit Stray Plain (the same, cyan, rlëD 1111, no 0x0004; düde 538).
+ *  K8  sÿst 1454 Kit Radar Arrow: one port, spöb 1032, at (4000, 0) and
+ *      nothing at the centre: is the centre arrow drawn while a stellar is
+ *      on the radar, and when does it appear flying away from it?
+ *  R16 sÿst 1455 Kit Pers Slot: port spöb 1033, no traffic, and the kit's
+ *      përs 1151 in the system's first Person slot at 100% (the Bible: "Want
+ *      to make a 'pers' type ship always appear? Put its ID into one of the
+ *      Person fields"): wave 42's draw from twenty fillers competed with the
+ *      23 stock persons that may appear in any kit system.
+ */
+function wave43Resources() {
+    const out = [];
+    const Y = -2880;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const port = (id, name, set = {}) => spob(id, name, 0, 0, 138, { flags: 0x43, ...set });
+    const linked = (sys, links) => { sys.set = { ...sys.set, links: [...links, ...none16].slice(0, 16) }; return sys; };
+    const decoration = (id, name, x = 0, y = 0) => spob(id, name, x, y, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] });
+    const still = { accel: 0, speed: 0, turn: 0, mass: 50, freeMass: 100, cargo: 10, crew: 5, flags: 0, flags2: 0, ai: 1, shieldRecharge: 0,
+        armorRecharge: 0, strength: 10 };
+    // --- U4: sÿst 1450-1451, spöb 1011-1026, shïp 699.
+    const rulerX = Array.from({ length: 15 }, (_, k) => -1200 + 500 * k);
+    out.push(linked(system(1450, "Kit Ruler Start", nextX(), Y, 363, [1011]), [1451]), decoration(1011, "Kit Ruler Start Deco", 2000, 0));
+    out.push(linked(system(1451, "Kit Ruler", nextX(), Y, 363, rulerX.map((_, k) => 1012 + k)), [1450]),
+        ...rulerX.map((x, k) => decoration(1012 + k, `Kit Ruler ${x}`, x, 80)));
+    out.push(...ship(699, "Kit Probe E", 128, { accel: 300, speed: 1000, turn: 10, armor: 30000, shield: 30000, mass: 50, freeMass: 500, cargo: 50,
+        maxGuns: 8, maxTurrets: 8, ai: 1, strength: 10, flags: 0, flags2: 0x0088 }));
+    // --- U7: sÿst 1452, spöb 1027-1030.
+    out.push(system(1452, "Kit Gravity 5 Near", nextX(), Y, 363, [1027, 1028, 1029, 1030]),
+        spob(1027, "Kit Gravity 5 Near Well", 0, 0, 143, { flags: 0x01, gravity: 5 }),
+        decoration(1028, "Kit Gravity 5 Start 300", 300, 0), decoration(1029, "Kit Gravity 5 Start 150", 150, 0),
+        decoration(1030, "Kit Gravity 5 Start 80", 80, 0));
+    // --- A13: sÿst 1453, spöb 1031, shïp 719 / 727, düde 537-538, mïsn 1049-1050 (wave 12's retired), rlëD 1109 / 1111.
+    const big = (id, name, rledId, rgb, set) => discShip(id, name, rledId, rgb, set, 100, 98).map((r) =>
+        (r.type === "shän" ? { ...r, set: { ...r.set, "@6:i16": 100, "@8:i16": 100 } } : r));
+    const fragile = { ...still, armor: 1, shield: 0, strength: 1 };
+    out.push(...big(719, "Kit Stray Ghost", 1109, DISC_COLOURS.magenta, { ...fragile, flags2: 0x0004 }));
+    out.push(...big(727, "Kit Stray Plain", 1111, DISC_COLOURS.cyan, { ...fragile }));
+    out.push(dude(537, "Kit Stray Ghost", 1, 363, 719), dude(538, "Kit Stray Plain", 1, 363, 727));
+    out.push(system(1453, "Kit Stray Fire", nextX(), Y, 363, [1031]), port(1031, "Kit Stray Fire Port"));
+    out.push(...misn(1049, "Kit A13 stray ghost", 9284, { availStel: 1031, shipCount: 1, shipDude: 537, shipGoal: -1, shipBehav: -1,
+        shipStart: -1, onAccept: "!b9284" }));
+    out.push(...misn(1050, "Kit A13 stray plain", 9285, { availStel: 1031, shipCount: 1, shipDude: 538, shipGoal: -1, shipBehav: -1,
+        shipStart: -1, onAccept: "!b9285" }));
+    // --- K8: sÿst 1454, spöb 1032.
+    out.push(system(1454, "Kit Radar Arrow", nextX(), Y, 363, [1032]), spob(1032, "Kit Radar Arrow Port", 4000, 0, 138, { flags: 0x43 }));
+    // --- R16: sÿst 1455, spöb 1033; the kit përs 1151 (wave 42) in the first Person slot at 100%.
+    const pers = system(1455, "Kit Pers Slot", nextX(), Y, 363, [1033]);
+    pers.set = { ...pers.set, persons: [1151, 225, ...none8].slice(0, 8), personProbs: [100, 100, ...zero8].slice(0, 8) };
+    out.push(pers, port(1033, "Kit Pers Slot Port"));
+    return out;
+}
 
 /**
  * Wave-42 experiments (docs/reference_experiments.md, "... wave 42"): the
@@ -4382,8 +4466,8 @@ function wave12Resources() {
     out.push(dude(340, "Kit Duel Shooter Blast", 4, 355, 858));
     out.push(dude(341, "Kit Duel Shooter Beam", 4, 355, 857));
     const duelShooter = { availStel: 2047, shipCount: 1, shipGoal: -1, shipBehav: 0, shipStart: -3 };
-    out.push(...misn(1049, "Kit D shooter bolt", 9097, { ...duelShooter, shipDude: 339, onAccept: "!b9097" }));
-    out.push(...misn(1050, "Kit D shooter blast", 9098, { ...duelShooter, shipDude: 340, onAccept: "!b9098" }));
+    // mïsn 1049 (bit 9097, the bolt shooter) and 1050 (bit 9098, the blast shooter) were retired in wave 43
+    // (wave43Resources: A13 stray fire); düde 339 / 340 stay.
     out.push(...misn(1051, "Kit D shooter beam", 9099, { ...duelShooter, shipDude: 341, onAccept: "!b9099" }));
     out.push(...misn(1052, "Kit D duellist", 9100, { availStel: 2047, availLoc: 0, shipCount: 1, shipDude: 338, shipGoal: 1, shipBehav: 0, shipStart: -2,
         returnStel: 2047, onAccept: "!b9100", onSuccess: "b9101", onFailure: "b9102", dispWeight: 30000 }));
