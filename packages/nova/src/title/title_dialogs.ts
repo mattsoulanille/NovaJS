@@ -11,7 +11,8 @@
 
 import {
     bindControl, ControlsOverride, DisplaySettings, GameSettingsOverride,
-    PilotProfile, primaryControlBinding,
+    loadPerfStatsEnabled, PilotProfile, primaryControlBinding,
+    savePerfStatsEnabled,
 } from './client_prefs.js';
 import {
     formatScale, MAX_SCALE, MIN_SCALE, SCALE_STEP,
@@ -784,6 +785,8 @@ export function showPreferencesDialog(baseControls: Record<string, unknown>,
         // The scales the dialog opened with, so Cancel can undo a live
         // preview. Untouched (and unrestored) when there is no handle.
         const scalesOnOpen = displayScale?.get();
+        // Likewise "Send performance stats", which also applies at once.
+        const perfStatsOnOpen = loadPerfStatsEnabled();
 
         const tabNames = ['Game Settings', ...CONTROL_TABS.map(t => t.name),
             'Display'];
@@ -876,6 +879,9 @@ export function showPreferencesDialog(baseControls: Record<string, unknown>,
             // moves, so Cancel has to put the opening values back.
             if (scalesOnOpen) {
                 displayScale?.set(scalesOnOpen);
+            }
+            if (loadPerfStatsEnabled() !== perfStatsOnOpen) {
+                savePerfStatsEnabled(perfStatsOnOpen);
             }
             cleanup();
             resolve();
@@ -1192,8 +1198,50 @@ function buildFullscreenRow(): HTMLDivElement {
 }
 
 /**
- * The Display tab: the Fullscreen button, the two scale sliders, then the
- * hotkeys that move them.
+ * The Display tab's "Send performance stats" box (client/perf_telemetry.ts,
+ * docs/perf_stats.md), with one line saying what goes. Machine-local and
+ * live, like the scales: it is saved the moment it changes, and Cancel
+ * puts it back.
+ */
+function buildPerfStatsRow(): HTMLElement {
+    const wrap = document.createElement('div');
+    Object.assign(wrap.style, {
+        margin: '8px 0 2px',
+    } as Partial<CSSStyleDeclaration>);
+    const row = document.createElement('label');
+    Object.assign(row.style, {
+        display: 'flex', alignItems: 'center', cursor: 'pointer',
+        color: '#111', whiteSpace: 'nowrap',
+    } as Partial<CSSStyleDeclaration>);
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.dataset.testid = 'prefs-perf-stats';
+    Object.assign(box.style, {
+        width: '14px', height: '14px', margin: '0 5px 0 0',
+        accentColor: '#3b99fc',
+    } as Partial<CSSStyleDeclaration>);
+    box.checked = loadPerfStatsEnabled();
+    box.addEventListener('change', () => {
+        savePerfStatsEnabled(box.checked);
+    });
+    row.appendChild(box);
+    row.appendChild(document.createTextNode('Send performance stats'));
+    wrap.appendChild(row);
+    const hint = document.createElement('div');
+    hint.dataset.testid = 'prefs-perf-stats-hint';
+    hint.textContent = 'Frame rates, what is on screen, browser and GPU, '
+        + 'to help fix slowdowns. No pilot name, chat or address.';
+    Object.assign(hint.style, {
+        color: '#777', fontSize: '11px', marginLeft: '19px',
+        whiteSpace: 'normal',
+    } as Partial<CSSStyleDeclaration>);
+    wrap.appendChild(hint);
+    return wrap;
+}
+
+/**
+ * The Display tab: the Fullscreen button, the two scale sliders, "Send
+ * performance stats", then the hotkeys that move the scales.
  *
  * The sliders apply LIVE (the point of a display setting is seeing what
  * it does), and the client persists each move; Cancel restores whatever
@@ -1214,6 +1262,7 @@ function buildDisplayTab(displayScale: DisplayScaleHandle | undefined,
         none.textContent = 'Display scaling is unavailable.';
         none.style.color = '#aaa';
         wrap.appendChild(none);
+        wrap.appendChild(buildPerfStatsRow());
         return wrap;
     }
 
@@ -1269,6 +1318,8 @@ function buildDisplayTab(displayScale: DisplayScaleHandle | undefined,
     slider('Global Scale', 'prefs-global-scale', 'globalScale',
         'Everything, including the flight view — a bigger view shows '
         + 'less of the system.');
+
+    wrap.appendChild(buildPerfStatsRow());
 
     const note = document.createElement('div');
     note.textContent = 'These are saved for this browser, not for this '
