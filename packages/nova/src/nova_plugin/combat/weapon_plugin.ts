@@ -558,14 +558,17 @@ export const ControlPlayerWeapons = new System({
         let secondary: WeaponState | undefined;
         let secondaryIndex = 0;
         if (activeSecondary.secondary) {
-            // has-guarded: WeaponsState is a DefaultMap, and a bare
-            // get() for a STALE active secondary (a saved selection
-            // for a weapon this loadout no longer owns) would CREATE
-            // a phantom hashed entry. Worlds that later wire-restore
-            // re-derive WeaponsState phantom-free, but a world that
-            // never restores (the server's archive) keeps it forever
-            // — the archive-vs-everyone desync class, finally caught
-            // by the archive_state instrumentation.
+            // has-guarded: WeaponsState WAS a DefaultMap on a live
+            // world, and a bare get() for a STALE active secondary (a
+            // saved selection for a weapon this loadout no longer owns)
+            // CREATED a phantom hashed entry. Worlds that later
+            // restore hold the codec's plain Map, but a world that
+            // never restores (the server's archive) kept it forever —
+            // the archive-vs-everyone desync class, finally caught by
+            // the archive_state instrumentation. The deriver now
+            // returns a plain Map (outfit_plugin.ts, after the same
+            // class recurred through the plunder ammo lookup); the
+            // guard stays as documentation of intent.
             secondary = weaponsState.has(activeSecondary.secondary)
                 ? weaponsState.get(activeSecondary.secondary) : undefined;
             secondaryIndex = secondaryWeapons.indexOf(activeSecondary.secondary);

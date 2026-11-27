@@ -10,10 +10,9 @@ import { MovementPhysics, MovementType } from 'nova_ecs/plugins/movement_plugin'
 import { ProvideFromCache } from '../core/index.js';
 import { registerEntityDeriver } from '../core/index.js';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
-import { DefaultMap } from '../../common/default_map.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { Stat } from '../core/index.js';
-import { WeaponsStateComponent, WeaponState } from './weapons_state.js';
+import { WeaponsState, WeaponsStateComponent, WeaponState } from './weapons_state.js';
 import { weaponReach } from './weapon_range.js';
 
 const OutfitState = t.type({
@@ -98,12 +97,21 @@ export function applyOutfitPhysics(basePhysics: ShipPhysics,
     });
 }
 
+/**
+ * WeaponsState from an outfit loadout. Returns a PLAIN Map, never a
+ * DefaultMap: the same component decoded from a rollback snapshot, a wire
+ * baseline or a save is a plain Map (the io-ts `map` codec), so a live
+ * DefaultMap made the object's behaviour depend on whether this world had
+ * restored since the derive. A bare `.get()` for an unmounted weapon then
+ * CREATED a hashed {count: 0, firing: false} entry on a never-restored
+ * world (the server's archive) and returned undefined everywhere else —
+ * the 2026-11-27 nova:479 desync, where opening a plunder session
+ * (ammoPlunderInputs looking up the victim's ammo weapons on the
+ * boarder) left the archive alone with phantom entries.
+ */
 function deriveWeaponsState(outfits: OutfitsState,
-    gameData: SimulationGameDataInterface) {
-        const weaponsState = new DefaultMap<string, WeaponState>(() => ({
-            count: 0,
-            firing: false,
-        }));
+    gameData: SimulationGameDataInterface): WeaponsState | undefined {
+        const weaponsState: WeaponsState = new Map<string, WeaponState>();
 
         for (const [id, state] of outfits) {
             const outfit = gameData.data.Outfit.getCached(id);
@@ -121,7 +129,11 @@ function deriveWeaponsState(outfits: OutfitsState,
                     if (!weapon) {
                         return undefined;
                     }
-                    const weaponState = weaponsState.get(weaponId);
+                    let weaponState = weaponsState.get(weaponId);
+                    if (!weaponState) {
+                        weaponState = { count: 0, firing: false };
+                        weaponsState.set(weaponId, weaponState);
+                    }
                     weaponState.count += count * state.count;
                     weaponState.fireGroup = weapon.fireGroup;
                     const reach = weaponReach(weapon);

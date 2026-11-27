@@ -399,6 +399,47 @@ describe('boarding in a live world', () => {
             const policies = world.resources.get(SnapshotPoliciesResource)!;
             expect([...policies.unhandled]).toEqual([]);
         });
+
+        /**
+         * The 2026-11-27 nova:479 desync. Opening a plunder session sizes
+         * the Ammo booty (ammoPlunderInputs), which looks up each of the
+         * victim's ammo weapons in the BOARDER's WeaponsState. A live
+         * world held the derived DefaultMap there, so that lookup CREATED
+         * a hashed {count: 0, firing: false} entry for every weapon the
+         * boarder doesn't mount; a world that had restored since (every
+         * rolling-back client, every replay) held the codec's plain Map
+         * and created nothing. Only the never-restored server archive
+         * kept the phantoms, and it was outvoted on the next checkpoint.
+         */
+        it('opens a session on a hulk carrying ammo for an unmounted '
+            + 'weapon identically on a live and a restored world', async () => {
+            const { world, boarder } = await boardingWorld({
+                targetOutfits: [[SYNTHETIC.outfits.missileAmmo, 10]],
+            });
+            const missile = SYNTHETIC.weapons.missile;
+            const before = snapshotWorld(world);
+            const run = () => {
+                press(world, BOARDER, 'board');
+                const entity = world.entities.get(BOARDER)!;
+                expect(entity.components.has(BoardingComponent)).toBeTrue();
+                const hashes = [hashWorld(world).hash];
+                for (let i = 0; i < 10; i++) {
+                    world.step();
+                    hashes.push(hashWorld(world).hash);
+                }
+                return hashes;
+            };
+            // The live boarder's WeaponsState is the one its deriver made.
+            expect(boarder.components.get(WeaponsStateComponent)!.has(missile))
+                .toBeFalse();
+            const live = run();
+            expect(world.entities.get(BOARDER)!.components
+                .get(WeaponsStateComponent)!.has(missile)).toBeFalse();
+
+            restoreWorld(world, before, deriveEntityComponents);
+            const restored = run();
+            expect(restored).toEqual(live);
+        });
     });
 
     /**

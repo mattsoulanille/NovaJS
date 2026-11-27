@@ -117,10 +117,10 @@ describe('beam fire cadence and damage on the original frame clock', () => {
 
     /** Staged in setUp, so the cache read is the contract. */
     async function holdFire(world: World, shooter: Entity, id: string) {
-        const state = shooter.components.get(WeaponsStateComponent)!.get(id)!;
-        state.count = 1;
-        state.fireGroup = 'primary';
-        state.firing = true;
+        // WeaponsState is a plain Map (outfit_plugin.ts): mount the
+        // weapon explicitly rather than relying on a lookup creating it.
+        shooter.components.get(WeaponsStateComponent)!.set(id,
+            { count: 1, fireGroup: 'primary', firing: true });
     }
 
     function beamUuids(world: World): string[] {

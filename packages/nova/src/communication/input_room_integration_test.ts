@@ -88,10 +88,11 @@ describe('Input-driven rooms', () => {
         // Each peer inserts its own ship (an input record, relayed).
         // Ship a carries a STALE saved secondary selection (a weapon
         // its loadout does not own): looking it up must never create
-        // a phantom WeaponsState entry — WeaponsState is a DefaultMap,
-        // and a created-on-lookup entry is hashed state that survives
-        // only on worlds that never wire-restore (the archive), the
-        // archive-vs-everyone desync class.
+        // a phantom WeaponsState entry — WeaponsState used to be a
+        // DefaultMap on a live world (it is derived as a plain Map now,
+        // outfit_plugin.ts), and a created-on-lookup entry is hashed
+        // state that survives only on worlds that never wire-restore
+        // (the archive), the archive-vs-everyone desync class.
         const shipA = await makePeerShip('a', peerA.world);
         const { ActiveSecondaryWeapon } =
             await import('../nova_plugin/combat/index.js');
