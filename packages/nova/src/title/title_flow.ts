@@ -29,7 +29,7 @@ import { isMuted } from '../client/mute.js';
 import { isTextEntryActive } from '../input_focus.js';
 import { resetDiscovery, sanitizePlayerName, sanitizeShipName } from '../nova_plugin/player/index.js';
 import { ControlAction, ControlEvent } from '../nova_plugin/core/index.js';
-import { combatRatingName } from '../nova_plugin/reputation/index.js';
+import { combatRatingName, statusGovtOf } from '../nova_plugin/reputation/index.js';
 import { loadSave } from '../nova_plugin/pilot/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
@@ -56,6 +56,7 @@ import {
     ABOUT_TEXT, DisplayScaleHandle, fillAboutPlaceholders, PilotDialogActions,
     PilotEntry, showNewPilotDialog, showOpenPilotDialog, showPreferencesDialog,
 } from './title_dialogs.js';
+import { TitleLegalSave, titleLegalStatus } from './title_legal_status.js';
 import { TitleMusic } from './title_music.js';
 import { shipClassLines, TitleScreen, TitleStatus } from './title_screen.js';
 
@@ -179,6 +180,24 @@ async function originalPilotContext(runtime: ClientRuntime):
 }
 
 /**
+ * The title's legal word for `save` (titleLegalStatus): the record in the
+ * saved system against its status govt. '—' when the system or govt
+ * cannot be read.
+ */
+async function savedLegalStatus(runtime: ClientRuntime,
+    save: TitleLegalSave): Promise<string> {
+    try {
+        const { data } = runtime.gameData;
+        const system = await data.System.get(save.system);
+        const govt = await data.Govt.get(statusGovtOf(system.govt));
+        return titleLegalStatus(save, system.govt,
+            id => id === govt.id ? govt : undefined) ?? '—';
+    } catch {
+        return '—';
+    }
+}
+
+/**
  * Builds the bottom status readout for the title screen from the
  * current save + pilot profile. A pure read; never mutates state.
  */
@@ -189,7 +208,8 @@ async function computeTitleStatus(runtime: ClientRuntime):
     const empty: TitleStatus = {
         pilotName: profile?.name ?? '—',
         shipName: '—', shipClass: '—', shipSubtitle: '',
-        legalStatus: 'Citizen', combatRating: combatRatingName(0),
+        // No save, no current system to have a record in.
+        legalStatus: '—', combatRating: combatRatingName(0),
         date: '—',
     };
     if (!save) {
@@ -216,7 +236,7 @@ async function computeTitleStatus(runtime: ClientRuntime):
         shipName,
         shipClass,
         shipSubtitle,
-        legalStatus: 'Citizen',
+        legalStatus: await savedLegalStatus(runtime, save),
         combatRating: combatRatingName(kills),
         // The original prints the map's date format here too
         // ("Nov. 27th, 1177 NC", title_screen/title_screen.png).
