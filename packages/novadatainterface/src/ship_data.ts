@@ -532,6 +532,14 @@ export interface ShipData extends SpaceObjectData {
      * launch the most, 10.
      */
     podCount: number;
+    /**
+     * shïp Flags2 0x0004 (EVN Bible): "Can't be targeted". MEASURED
+     * (reference "shïp Flags2 0x0004 'can't be targeted' (A13), wave 41"):
+     * an enemy AI 3 never fired at such a ship, and the player's Tab
+     * skips it. NPC target choice and the player's Tab / `r` / click
+     * leave it out (the last two a GUESS).
+     */
+    untargetable: boolean;
 };
 
 export function getDefaultShipData(): ShipData {
@@ -589,5 +597,6 @@ export function getDefaultShipData(): ShipData {
         turretBlindSpots: getDefaultTurretBlindSpots(),
         aiFlags: getDefaultShipAIFlags(),
         podCount: 0,
+        untargetable: false,
     }
 }

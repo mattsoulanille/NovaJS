@@ -434,7 +434,10 @@ export abstract class WeaponEntry {
                     || entity.components.has(DisabledComponent)
                     || !isTargetable(
                         entity.components.get(CloakActiveComponent),
-                        myScanner)) {
+                        myScanner)
+                    // shïp Flags2 0x0004 (A13 wave 41; GUESS for PD).
+                    || entity.components.get(ShipDataComponent)
+                        ?.untargetable) {
                     continue;
                 }
             }

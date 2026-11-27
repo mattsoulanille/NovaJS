@@ -18,7 +18,7 @@ import {
 import { LegalRecordsComponent } from '../reputation/index.js';
 import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
 import { ranksSuppressAggression } from '../ncb/index.js';
-import { ShipComponent } from '../ship/index.js';
+import { ShipComponent, ShipDataComponent } from '../ship/index.js';
 import { TargetComponent } from '../ship/index.js';
 import { defendsAgainst } from '../travel/index.js';
 
@@ -419,6 +419,11 @@ export function selectNearestHostile(
             continue;
         }
         if (!isTargetable(components.get(CloakActiveComponent), myScanner)) {
+            continue;
+        }
+        // shïp Flags2 0x0004 "Can't be targeted" (A13 wave 41; GUESS for
+        // `r`, the Tab cycle measured).
+        if (components.get(ShipDataComponent)?.untargetable) {
             continue;
         }
         if (components.has(ExplodingComponent)) {

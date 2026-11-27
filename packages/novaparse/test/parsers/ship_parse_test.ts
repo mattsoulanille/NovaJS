@@ -71,6 +71,11 @@ describe("ShipParse", () => {
             });
     });
 
+    it("reads Flags2 0x0004 as untargetable (A13 wave 41)", async () => {
+        expect((await parse({ flags2N: 0x0004 })).untargetable).toBe(true);
+        expect((await parse({ flags2N: 0x0008 })).untargetable).toBe(false);
+    });
+
     describe("Holds (EVN Bible ~:2346)", () => {
         it("keeps a positive hold as written and allows mass expansions",
             async () => {

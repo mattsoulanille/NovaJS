@@ -1,3 +1,4 @@
+import { Entity } from "nova_ecs/entity";
 import { Emit, Entities, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { DeleteEvent, EcsEvent } from "nova_ecs/events";
@@ -19,7 +20,7 @@ import { isInFlock } from "./flock.js";
 import { SimulationGameDataResource, SystemIdResource } from "../core/index.js";
 import { selectNearestHostile } from "./hostility.js";
 import { PlayerShipSelector } from "../player/index.js";
-import { ShipComponent } from "../ship/index.js";
+import { ShipComponent, ShipDataComponent } from "../ship/index.js";
 import { CloakControlSystem, Target, TargetComponent } from "../ship/index.js";
 import { ReturnToQueueSystem } from "../core/index.js";
 import { AggressionSweepSystem } from "./aggression_plugin.js";
@@ -38,6 +39,18 @@ export const TargetIndexProvider = Provide({
 });
 
 export const CycleTargetEvent = new EcsEvent<Target>('CycleTargetEvent');
+
+/**
+ * Whether `entity` is a ship whose hull sets shïp Flags2 0x0004 "Can't be
+ * targeted" (ShipData.untargetable). MEASURED (reference "shïp Flags2
+ * 0x0004 'can't be targeted' (A13), wave 41"): the player's Tab skips
+ * it and an enemy AI 3 never fires at it. Left out of the Tab cycle, of
+ * `r` and (GUESS) of a click; the escort-target cycle (the player's own
+ * flock) keeps it.
+ */
+export function untargetableShip(entity: Entity | undefined): boolean {
+    return entity?.components.get(ShipDataComponent)?.untargetable === true;
+}
 
 const TargetsQuery = new Query([UUID, MovementStateComponent,
     Optional(OwnerComponent), ShipComponent, Optional(CloakActiveComponent),
@@ -156,12 +169,14 @@ export const ChooseTargetSystem = new System({
         //   UNLESS a flock member is disabled (hiddenFromCycle)
         // Not cloaked (unless a cloak scanner allows it)
         // Not exploding (death sequence started)
+        // Not a shïp Flags2 0x0004 "can't be targeted" hull (A13 wave 41)
         const cycleable = ([targetUuid, _targetMovement, targetOwner, _targetShip,
             targetCloak, targetExploding]: typeof ships[number]) =>
             targetUuid !== uuid
             && !hiddenFromCycle(targetUuid, targetOwner?.owner)
             && isTargetable(targetCloak, myScanner)
-            && targetExploding === undefined;
+            && targetExploding === undefined
+            && !untargetableShip(getEntity(targetUuid));
 
         // Step once, then keep stepping past ships that can't be cycled
         // to. Reaching -1 (a full lap with nothing cycleable) clears the
@@ -206,7 +221,9 @@ export function applySetTarget(world: World, peerId: string | undefined,
         || targetUuid === found.uuid
         || !targetEntity.components.has(ShipComponent)
         // Exploding ships are untargetable everywhere.
-        || targetEntity.components.has(ExplodingComponent)) {
+        || targetEntity.components.has(ExplodingComponent)
+        // ...and so are shïp Flags2 0x0004 hulls (GUESS for a click).
+        || untargetableShip(targetEntity)) {
         return;
     }
     const cloak = targetEntity.components.get(CloakActiveComponent);

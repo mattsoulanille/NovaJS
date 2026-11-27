@@ -565,6 +565,8 @@ export async function ShipParse(ship: ShipResource,
         },
         // shïp PodCount: decorative escape pods; data only.
         podCount: ship.podCount,
+        // shïp Flags2 0x0004 "Can't be targeted" (A13 wave 41).
+        untargetable: Boolean(ship.flags2N & 0x0004),
         ...base
     }
 }

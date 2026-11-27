@@ -325,7 +325,8 @@ function engage(uuid: string, npc: NpcState, target: Target,
 }
 
 /** The NpcTargetsQuery row fields the defender brain reads. */
-type DefenderTargetRow = readonly [string, MovementState, unknown, unknown,
+type DefenderTargetRow = readonly [string, MovementState, unknown,
+    { readonly untargetable: boolean },
     unknown, unknown, Parameters<typeof isTargetable>[0], unknown, unknown,
     unknown, unknown, unknown];
 
@@ -367,9 +368,9 @@ export function defenderDecision(uuid: string, npc: NpcState, target: Target,
         return;
     }
     const live = new Map<string, number>();
-    for (const [other, otherMovement, , , , , cloak, otherDisabled, , , ,
-        otherExploding] of ships) {
-        if (other === uuid || !isTargetable(cloak)
+    for (const [other, otherMovement, , otherData, , , cloak, otherDisabled,
+        , , , otherExploding] of ships) {
+        if (other === uuid || !isTargetable(cloak) || otherData.untargetable
             || otherDisabled !== undefined || otherExploding !== undefined) {
             continue;
         }
@@ -612,8 +613,11 @@ export const NpcDecisionSystem = new System({
         for (const [otherUuid, otherMovement, , otherData, otherGovt,
             otherShield, cloak, otherDisabled, otherRecords,
             otherSuppressGovts, otherScanned, otherExploding] of ships) {
+            // A shïp Flags2 0x0004 hull is never a target (reference
+            // "shïp Flags2 0x0004 'can't be targeted' (A13), wave 41": an
+            // enemy AI 3 never fired at one), nor a scan or a prize.
             if (otherUuid === uuid || !isTargetable(cloak)
-                || otherExploding !== undefined) {
+                || otherExploding !== undefined || otherData.untargetable) {
                 continue;
             }
             if (otherUuid === pacifiedFrom) {
