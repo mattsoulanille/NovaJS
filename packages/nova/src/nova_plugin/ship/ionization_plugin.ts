@@ -6,6 +6,7 @@ import { Optional } from "nova_ecs/optional";
 import { Plugin } from "nova_ecs/plugin";
 import { SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { System } from "nova_ecs/system";
+import { FPS } from "novaparse/parsers/constants";
 import { IonizationComponent, IonizationRechargeSystem } from "./health_plugin.js";
 
 
@@ -26,12 +27,12 @@ import { IonizationComponent, IonizationRechargeSystem } from "./health_plugin.j
  * decays to that line or below — however it got there. While it holds,
  * the wëap IonizeColor tint is painted (ship_animation_plugin reads
  * IsIonizedComponent) and wëap Flags 0x0020 weapons can't fire. The
- * turn cut (ionSlowdown) is a function of the charge alone, in three
- * steps: one with the first point of charge, one at the ionized (tint)
- * line, and the full cut above a second line (ION_NO_TURN_FRACTION, two
- * thirds); the acceleration instead slides with the charge from the
- * first point down to its full cut at that second line (waves 47 / 48,
- * re-mapped onto the charge read in wave 50).
+ * movement cuts (ionSlowdown) do not look at that line: they are
+ * functions of the charge share q, held at ION_CHARGE_HOLD, from the
+ * first point of charge (wave 51): the turn to whole degrees a frame,
+ * floor(Turn / 10 x (1 - q)), so it is cut per hull (a slow hull stops at
+ * the first hit, a fast one still turns when saturated); the thrust
+ * 1 - q.
  *
  * MAINTAINER RULING #153 restored the level test (over #124's full-charge
  * / full-dissipate hysteresis) at HALF of IonizeMax; the line has since
@@ -51,7 +52,7 @@ import { IonizationComponent, IonizationRechargeSystem } from "./health_plugin.j
  * IonizationRechargeSystem). MEASURED (reference "Ionization's cap and
  * the afterburner (E6 leftovers), wave 40"): a Deionize-50 hull hit for
  * about 14 s was still fully ionized 150 s later. The slowdown saturates
- * at IonizeMax (ionSlowdown); the extra charge only makes it last.
+ * at ION_CHARGE_HOLD (ionSlowdown); the extra charge only makes it last.
  *
  * RULING (Bible silent): a hull with IonizeMax <= 0 has no ion capacity
  * and is never ionized. Two plug-in hulls ship that value (arpia:599,
@@ -61,91 +62,112 @@ import { IonizationComponent, IonizationRechargeSystem } from "./health_plugin.j
  */
 
 /**
- * How ionization slows a ship, MEASURED at a full charge (reference
- * "Ionization (E6), wave 39"): a player ionized to (or past) IonizeMax
- * does not turn at all (0 deg/s in every hold, the control 87.8 deg/s),
- * accelerates about a third as fast (0 -> top speed in 3-3.4 s against
- * 1.1 s) and keeps its top speed. This replaces ruling #153's 0.6 on all
- * three (the pre-#124 value, never measured). Both full cuts hold from
- * the second line (ION_NO_TURN_FRACTION) up: the turn's at once (wave
- * 42 / 50), the acceleration's at the end of its slide (wave 48 / 50,
- * ION_ACCELERATION_SLOPE).
- *
- * The acceleration's full cut was re-read on a pad of moons (reference
- * "Acceleration under ionization (E6 leftover), wave 44"): a hull charged
- * past the no-turn line thrust at 19.6 and 22.3 px/s² against the
- * uncharged control's 52.0 and 49.8 for the same 0.57 s Up pulse, about
- * 0.4 (0.39-0.45). Was 1/3 (wave 39's star-field reading).
+ * The share of IonizeMax past which the charge's cut stops growing: the
+ * charge share q = charge / IonizeMax counts only up to this (both cuts
+ * below are in min(q, ION_CHARGE_HOLD)), however far past it the pile
+ * goes. MEASURED bracket, GUESS value (reference "The ion turn cut on
+ * every hull (Matthew's question, E6), wave 51", finding 1 / 4, and "The
+ * saturated thrust cut on two Accels (Matthew's question, E6), wave 51",
+ * finding 2): six 30-point hits (q up to 1.75) turned exactly as three on
+ * Turn 60 / 100 / 200, and the saturated thrust (0.28 / 0.32) puts the
+ * hold on wave 50's slide at 0.68-0.72. The turn readings cannot tell
+ * floor() with a hold at 0.7 from "strictly below" with a hold at 2/3; 0.7
+ * is the GUESS inside the 2/3-0.72 bracket that one law in min(q, hold)
+ * fits for both cuts (a saturated Turn-95 hull would decide it: 2 against
+ * 3 degrees a frame). Replaces wave 50's no-turn line (two thirds, a line
+ * for every hull) and its 0.9 acceleration slope.
  */
-export const ION_FULL_TURN_FACTOR = 0;
-export const ION_FULL_ACCELERATION_FACTOR = 0.4;
+export const ION_CHARGE_HOLD = 0.7;
+
+/**
+ * The thrust multiplier at the hold: 1 - ION_CHARGE_HOLD, about 0.3.
+ * MEASURED (wave 51, the saturated thrust section): 14.6 of 51.7 px/s²
+ * on Accel 300 (0.28) and 47.6 of 146.8 on Accel 900 (0.32) at q about
+ * 1.7, a FRACTION of the hull's thrust, not a fixed subtraction. Was 0.4
+ * (wave 44's hull, only just past two thirds), a third before that (wave
+ * 39's star-field reading). The top speed is never cut ("Ionization
+ * (E6), wave 39").
+ */
+export const ION_FULL_ACCELERATION_FACTOR = 1 - ION_CHARGE_HOLD;
 
 /**
  * The share of IonizeMax above which a ship is IONIZED (tinted, its
- * Flags 0x0020 weapons silent, its turn cut to a third). MEASURED
- * (reference "The ion charge read directly (E6, the hub's item 2), wave
- * 50", finding 2): a single 30-point hit on IonizeMax 100 never tinted;
- * two 30-point hits tinted until the drain (0.01 x Deionize a frame,
- * DEIONIZE_FRAME_RATE) took them to 33.0; 5-point ticks tinted at the
- * 9th hit (35.5) and not the 8th (31.4), and a slower feed at its 10th
- * (35.2) and not its 9th (32.0): 33.0 +- 1, a third. Wave 42's
- * recount (finding 4) agrees. Was 0.16 (wave 42, which had missed the
- * take-off's hits), 0.3 (wave 41) and half before that (ruling #153).
+ * Flags 0x0020 weapons silent). A VISUAL line only, not a turn line
+ * (wave 51 finding 3: Turn 200 changed its turn at q 0.35 and 0.30,
+ * nothing at 1/3 itself). MEASURED (reference "The ion charge read
+ * directly (E6, the hub's item 2), wave 50", finding 2): a single
+ * 30-point hit on IonizeMax 100 never tinted; two 30-point hits tinted
+ * until the drain (0.01 x Deionize a frame, DEIONIZE_FRAME_RATE) took
+ * them to 33.0; 5-point ticks tinted at the 9th hit (35.5) and not the
+ * 8th (31.4), and a slower feed at its 10th (35.2) and not its 9th
+ * (32.0): 33.0 +- 1, a third. Wave 42's recount (finding 4) agrees. Was
+ * 0.16 (wave 42, which had missed the take-off's hits), 0.3 (wave 41) and
+ * half before that (ruling #153).
  */
 export const ION_IONIZED_FRACTION = 1 / 3;
 
 /**
- * The share of IonizeMax above which an ionized ship does not turn at
- * all (the turn's full cut, ION_FULL_TURN_FACTOR), and where the
- * acceleration's slide reaches its own (ION_FULL_ACCELERATION_FACTOR).
- * MEASURED, the same section, findings 3-4: 58.9 still turned at a third;
- * a 5-point rise still turned at a third at 65.4; six 30-point hits never
- * turned; wave 42's recount puts its last turning charge at 64.2 and its
- * first stopped one at 67.2. GUESS two thirds inside that 64-67 bracket
- * (the section's proposal). Was 0.38 (wave 42, missed hits).
+ * One whole degree a 1/30 s game frame, in the rad/s MovementPhysics
+ * turn rates are kept in: Turn 10 (ShipTurnRateConversionFactor's 30
+ * deg/s). The original turns an ionized ship in whole degrees a frame
+ * (29.15 deg/s a step at the reference machine's 29.15 Hz tick, every
+ * wave-51 reading a whole multiple of it); NovaJS's frame is the nominal
+ * 30 fps (FPS, the #316 ruling), so a step here is 30 deg/s.
  */
-export const ION_NO_TURN_FRACTION = 2 / 3;
+export const ION_TURN_STEP = FPS * Math.PI / 180;
 
 /**
- * How much of the full cut (ION_FULL_*) each step of the charge applies:
- * MEASURED on the turn (wave 42: about two thirds of the turn, 60 of 87.8
- * deg/s, for any untinted charge; about a third, 30 deg/s, once tinted;
- * none above the second line), two identical runs and wave 41's
- * Deionize-0 dips (58 deg/s just after a 20-point hit); wave 50 again
- * (58.4 deg/s under one 30-point hit, about 30 once tinted, the control
- * 87.6). These shares are the TURN's.
+ * The thrust multiplier at a charge share `q` of IonizeMax: 1 - min(q,
+ * ION_CHARGE_HOLD), from the first point of charge. MEASURED (wave 50,
+ * finding 5: wave 48's twelve pulses on the measured charge fit 1.03 -
+ * 1.01 q, i.e. a slope of 1; wave 51: about 0.3 at saturation on two
+ * Accels). Was max(0.4, 1 - 0.9 q). Pure.
  */
-export const ION_UNTINTED_SEVERITY = 1 / 3;
-export const ION_TINTED_SEVERITY = 2 / 3;
+function accelerationFactor(q: number): number {
+    return 1 - Math.min(q, ION_CHARGE_HOLD);
+}
 
 /**
- * The acceleration multiplier lost per unit of charge fraction q (the
- * charge over IonizeMax): the thrust is max(ION_FULL_ACCELERATION_FACTOR,
- * 1 - ION_ACCELERATION_SLOPE x q), ONE line from full thrust at no charge
- * to the full cut's 0.4 at the no-turn line (two thirds), with no
- * separate untinted level and no step at either line.
+ * The turn multiplier at a charge share `q` on a ship whose uncharged
+ * turn is `baseTurnRate` rad/s. MEASURED (reference "The ion turn cut on
+ * every hull (Matthew's question, E6), wave 51", findings 1-2; "A Turn
+ * that is not a multiple of 10 (the E6 follow-up), wave 51", finding 2):
+ * an ionized ship turns floor(d x (1 - min(q, ION_CHARGE_HOLD))) WHOLE
+ * degrees a frame, d its uncharged turn in degrees a frame (Turn / 10;
+ * the charge cuts this raw value, not an already-truncated one). So
+ * the turn is cut per hull, not in thirds: Turn 10 never turns from the
+ * first point of charge; Turn 20 turns 1 a frame while q <= 1/2; Turn 30
+ * steps 2 -> 1 -> 0 at 1/3 and 2/3 (the old "thirds" were this
+ * staircase's Turn-30 case); at the hold Turn 60 / 100 / 200 still turn
+ * 1 / 3 / 6 a frame (29.2 / 87.5 / 174.5 deg/s read), Turn 30 and below
+ * none. Turn 200 under a draining two-hit charge climbs 8 -> 15 a frame
+ * one step at a time, each where this puts it.
  *
- * MEASURED, re-mapped (reference "The ion charge read directly (E6, the
- * hub's item 2), wave 50", finding 5): wave 48's twelve Up pulses under
- * the Ionization-5 tick (0.97 - 0.0103 x t in time, "The ion thrust
- * slide's ends (E6), wave 48"), put on the charge with wave 50's drain
- * (about 1.10 x t + 2.5), fit 1.03 - 1.01 x q, reaching 0.4 at q = 0.62.
- * GUESS 0.9, the section's proposal: the same line pinned to 1 at no
- * charge and to 0.4 at the no-turn line, (1 - 0.4) / (2 / 3). Was 0.96
- * untinted, then 0.85 at the tint line sliding through 0.6 at the
- * no-turn line to 0.4 at 0.556 (waves 47 / 48 on a GUESSED time-to-charge
- * mapping), steps of 0.93 / 0.71 (wave 45) and 7/9 / 5/9 (GUESS) before.
+ * The UNCHARGED turn is NOT truncated here (it stays Turn x
+ * ShipTurnRateConversionFactor): wave 51 found an uncharged Turn-25 hull
+ * turning as Turn 20 (whole degrees a frame then too), but that rests on
+ * one hull and would move 102 stock hulls; it waits for the next old-Mac
+ * wave. Until then a hull whose turn is not a whole number of degrees a
+ * frame has a step at the first point of charge that the original lacks
+ * at that size: Turn 25 drops from 75 deg/s (72.9 on the reference clock)
+ * to 2 a frame, 60 deg/s (58.3), the moment it is hit, where in the
+ * original it already turned 2 a frame uncharged.
+ *
+ * The degrees a frame are snapped to a 1e-9 grid first, so the rad/s
+ * round trip does not leave a Turn-20 hull at 1.9999999999999998 (and
+ * floor it to 0 at q = 1/2); a nudge on the product instead would hand a
+ * hull its whole turn back at a charge of a trillionth. A ship with no
+ * turn keeps its (zero) turn. Pure.
  */
-export const ION_ACCELERATION_SLOPE = 0.9;
-
-/**
- * The thrust multiplier at a charge `fraction` of IonizeMax: the slide
- * (ION_ACCELERATION_SLOPE), floored at ION_FULL_ACCELERATION_FACTOR,
- * which it reaches at ION_NO_TURN_FRACTION. Pure.
- */
-function accelerationFactor(fraction: number): number {
-    return Math.max(ION_FULL_ACCELERATION_FACTOR,
-        1 - ION_ACCELERATION_SLOPE * fraction);
+function turnFactor(q: number, baseTurnRate: number): number {
+    const degreesPerFrame =
+        Math.round(baseTurnRate / ION_TURN_STEP * 1e9) / 1e9;
+    if (!(degreesPerFrame > 0)) {
+        return 1;
+    }
+    const kept = Math.floor(
+        degreesPerFrame * (1 - Math.min(q, ION_CHARGE_HOLD)));
+    return Math.max(0, kept) / degreesPerFrame;
 }
 
 /** Multipliers ionization puts on a ship's movement physics. */
@@ -159,40 +181,26 @@ export const NO_ION_SLOWDOWN: Readonly<IonSlowdown> =
     { maxVelocity: 1, acceleration: 1, turnRate: 1 };
 
 /**
- * The slowdown of a ship whose ion charge is `ionization`. The turn comes
- * in three steps (MEASURED, references "Ion charge against the turn, in
- * 5-point steps (E6), wave 42" and "The ion charge read directly (E6, the
- * hub's item 2), wave 50"; see ION_*_SEVERITY): none at no charge; a
- * third of the full cut for any charge up to the ionized line (a third
- * of IonizeMax); two thirds of it from there to ION_NO_TURN_FRACTION (two
- * thirds); the measured full cut (no turn) above. The acceleration SLIDES
- * with the charge from the first point, 1 - 0.9 q, down to the full
- * cut's 0.4 at the no-turn line (waves 47 / 48 / 50; see
- * ION_ACCELERATION_SLOPE). The top speed is never cut. A pure function of
- * the synced charge.
+ * The slowdown of a ship whose ion charge is `ionization` and whose
+ * uncharged turn is `baseTurnRate` rad/s (the turn's cut depends on the
+ * hull: turnFactor). Both cuts are in the charge share q = charge /
+ * IonizeMax held at ION_CHARGE_HOLD (wave 51): the turn to whole degrees
+ * a frame, floor(Turn / 10 x (1 - q)); the thrust 1 - q, about 0.3 at
+ * the hold. The top speed is never cut. Nothing at no charge. A pure
+ * function of the synced charge and the ship's physics.
  */
 export function ionSlowdown(
     ionization: { current: number, max: number } | undefined,
+    baseTurnRate: number,
 ): IonSlowdown {
     if (!ionization || ionization.max <= 0 || !(ionization.current > 0)) {
         return NO_ION_SLOWDOWN;
     }
-    const { current, max } = ionization;
-    const acceleration = accelerationFactor(current / max);
-    if (current > max * ION_NO_TURN_FRACTION) {
-        return {
-            maxVelocity: 1,
-            acceleration,
-            turnRate: ION_FULL_TURN_FACTOR,
-        };
-    }
-    const tinted = current > max * ION_IONIZED_FRACTION;
-    const severity = tinted ? ION_TINTED_SEVERITY : ION_UNTINTED_SEVERITY;
+    const q = ionization.current / ionization.max;
     return {
         maxVelocity: 1,
-        acceleration,
-        // A blend of the turn's full cut, so its steps are exact thirds.
-        turnRate: (1 - severity) + severity * ION_FULL_TURN_FACTOR,
+        acceleration: accelerationFactor(q),
+        turnRate: turnFactor(q, baseTurnRate),
     };
 }
 

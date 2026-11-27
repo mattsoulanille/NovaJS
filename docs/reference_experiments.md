@@ -25210,6 +25210,28 @@ Turn 20 / 60 / 100 / 200 all where the formula puts them).
 (the saturated Turn-200 ring over a moon: the misreads),
 `tools/turnrun.sh`, `tools/hough.py`, `tools/rrate.py`, `tools/incr.py`.
 
+
+**Applied 2026-11-27**: `ionSlowdown` (`N/nova_plugin/ship/ionization_plugin.ts`)
+now takes the ship's uncharged turn rate and cuts it to floor(d x (1 -
+min(q, `ION_CHARGE_HOLD`))) whole degrees a frame, d the uncharged degrees
+a 1/30 s frame (`ION_TURN_STEP`, 30 deg/s a step at the nominal clock);
+`ION_CHARGE_HOLD` 0.7 (GUESS inside the 2/3-0.72 bracket: floor at 0.7,
+not "strictly below" at 2/3; a saturated Turn-95 hull, 2 against 3 a
+frame, decides it). `ION_NO_TURN_FRACTION`, `ION_FULL_TURN_FACTOR` and the
+thirds' `ION_*_SEVERITY` are gone (nothing outside the plug-in read them:
+no AI decision or status text used the no-turn line); the tint line
+(`ION_IONIZED_FRACTION` 1/3) is unchanged and is now only the tint and the
+Flags 0x0020 gate. The UNCHARGED turn is left continuous (the Turn-25
+section below; deferred to the next wave), so a hull whose turn is not a
+whole number of degrees a frame steps down at the first point of charge
+(Turn 25: 75 to 60 deg/s, 72.9 to 58.3 on the reference clock), noted at
+`turnFactor`. Specs: Turn 10 never turns from the first point (5 or 30);
+Turn 20 turns 1 a frame from q 1/2 down; Turn 30's steps at 1/3 and 2/3;
+Turn 60 at 1/6, 1/3, 1/2, 2/3; Turn 100 at 0.3 / 0.4 / 0.5; every stage of
+the table within 4 deg/s; Turn 200's two-hit drain 8 -> 9 -> ... -> 19 ->
+20 a frame, each read window on its step; Turn 60 / 100 / 200 saturated at
+1 / 3 / 6 a frame (three hits and six alike), Turn 10 / 20 / 30 at none.
+
 ### The saturated thrust cut on two Accels (Matthew's question, E6), wave 51: a FRACTION, not a fixed amount: about 0.3 of the hull's thrust on both (Accel 300: 14.6 of 51.7 px/s², 0.28; Accel 900: 47.6 of 146.8, 0.32), below NovaJS's 0.4 floor; with wave 50's slide (1.03 - 1.01 q) the thrust reads as Accel x (1 - q) held at about q = 0.7, the same hold as the turn's (2026-11-27)
 
 **Question** (the hub's item 1): is the acceleration cut at saturation a
@@ -25260,6 +25282,15 @@ third (0.28 / 0.32 +- 0.03).
 **Evidence:** `~/.local/share/novaref/evidence/20261127-w51/a6_pion/`,
 `c6_pion/`, `a6_p900/`, `c6_p900/` (`recording.mp4`), `*.pos.txt`
 (`tools/padsum.sh`, `tools/pulses.py`).
+
+
+**Applied 2026-11-27**: the thrust is 1 - min(q, `ION_CHARGE_HOLD` 0.7)
+from the first point of charge (`ION_ACCELERATION_SLOPE` 0.9 gone,
+`ION_FULL_ACCELERATION_FACTOR` = 1 - the hold, 0.3). Specs: 0.3 saturated
+on Accel 300 and 900 (within 0.03 of 0.28 / 0.32); the 1 - q slide lies
+within 0.03 of wave 50's free fit; waves 47 / 48's twelve pulses now sit
+within 0.12 (rms 0.051, was 0.1 / 0.05 for 1 - 0.9 q: the 39.6 s pulse's
+0.63 is the farthest).
 
 ### A Turn that is not a multiple of 10 (the E6 follow-up), wave 51: the UNCHARGED turn is whole degrees a frame too: Turn 25 turns 58.5 deg/s (2 a frame, as Turn 20), not 72.9; under charge it keeps floor(2.5 x (1 - q)) = 1 a frame from q 0.57 down to 0.43, so the truncation applies to Turn / 10 x (1 - q), not to an already-truncated turn (2026-11-27)
 
