@@ -25261,6 +25261,76 @@ third (0.28 / 0.32 +- 0.03).
 `c6_pion/`, `a6_p900/`, `c6_p900/` (`recording.mp4`), `*.pos.txt`
 (`tools/padsum.sh`, `tools/pulses.py`).
 
+### A self-granting outfit (the hub's item 2), wave 51: one Buy of an oütf whose OnPurchase is `G<self>` gives TWO for one price; at Max 3 holding 2 a Buy gives FOUR (past Max, kept across the Leave) and then Buy greys ("Can't have any more!"); an OnSell `D<self>` takes TWO for one refund; a plain Sell of the over-Max unit refunds one and leaves 3 (2026-11-27)
+
+**Question** (the hub's item 2): a plug-in's oütf 579 has OnPurchase
+"G579 G565 G571". Does one Buy give 2 in the original? At Max 3 holding
+2, does a Buy give 4 (past Max) or 3? Does an OnSell "D<self>" remove 2
+for one refund?
+
+**Rig** (`wave51Resources` "SG"). sÿst 1493 Kit Self Grant, port spöb
+1215 (land and outfitter only, SpecialTech 9510) selling oütf 514 Kit SG
+Grant (OnPurchase `G514`), 515 Kit SG Drop (OnSell `D515`), 516 Kit SG
+Both (`G516` / `D516`), 517 Kit SG Giver (`G518`) and 518 Kit SG Gift (no
+strings); each Max 3, Cost 1,000, Mass 0, ModType 2 (+1 t of cargo, so the
+HUD's Free counts them too). Kit Probe A with 1,000,000 credits, Free 50.
+`sg_a` (pilot `w51_sg`, nothing held) and `sg_b` (pilot `w51_sg2`, holding
+2 of 514 / 515 / 516 from the pilot: pre-owned): land, `o`, a window shot
+after every click on the grid / Buy / Sell, Done, Leave; the pilot written
+at the Leave is read back (`outfitCount`).
+
+| run, step | count after | credits | Free | Buy |
+|---|---|---|---|---|
+| sg_a: Grant, Buy (from 0) | **2** | 999,000 (one price) | 52 | live |
+| sg_a: Grant, Buy again (holding 2, Max 3) | **4** | 998,000 | 54 | **greyed, "Can't have any more!"** |
+| sg_a: Grant, Sell (holding 4) | 3 | 999,000 (+1,000: bought this visit) | 53 | still greyed (3 = Max) |
+| sg_a: Giver, Buy | Giver 1, **Gift 1** | 998,000 | 55 | |
+| sg_a: Drop, Buy, Buy | 2 | 996,000 | 57 | |
+| sg_a: Drop, Sell (holding 2) | **0** | 997,000 (**one** refund, 1,000) | 55 | |
+| sg_a: Both, Buy (from 0) | **2** | 996,000 | 57 | |
+| sg_a: Both, Sell (holding 2) | **0** | 997,000 (one refund) | 55 | |
+| sg_a pilot at the Leave | Grant 3, Giver 1, Gift 1 | 997,000 | | |
+| sg_b: Grant, Buy (holding 2 pre-owned) | **4** | 999,000 | 58 | greyed |
+| sg_b: Drop, Sell (holding 2 pre-owned) | **0** | 999,500 (**one** half-price refund) | 56 | |
+| sg_b: Both, Sell (holding 2 pre-owned) | **0** | 1,000,000 (one half-price refund) | 54 | |
+| sg_b pilot at the Leave | **Grant 4** | 1,000,000 | | |
+
+**Findings.**
+1. **A Buy of an outfit whose OnPurchase grants itself gives two for one
+   price**: the bought unit, then the `G` adds one more, and the `G`
+   ignores Max (2 -> 4 at Max 3, from a same-visit 2 or a pre-owned 2,
+   and the 4 survives the Leave into the pilot).
+2. **The Buy gate is the count before the purchase against Max**: holding
+   2 of Max 3 the Buy is live (and ends at 4); holding 3 or 4 it is greyed
+   with the usual "Can't have any more!". Selling the 4th back to 3 keeps
+   it greyed.
+3. **An OnSell `D<self>` removes a second unit with no second refund**:
+   2 -> 0 for one refund, full price for units bought this visit, half
+   (500) for pre-owned ones, for `D` alone and with `G` (Both).
+4. `G<other>` in an OnPurchase grants that outfit (Gift 1 from a Giver Buy).
+
+**NovaJS (main ff820fb6):** `applyBuy` adds the bought unit, charges one
+price and then runs the OnPurchase (`N/spaceport/outfitter.ts:790-843`),
+whose `Gxxx` hook adds one unit with no purchase check
+(`N/nova_plugin/ncb/ncb.ts:920-923`); the Buy gate refuses at `owned >=
+effectiveMax` (`N/spaceport/outfitter_rules.ts:969-971`, the window's
+caption "Can't have any more!", `N/spaceport/outfitter.ts:951-954`);
+`applySell` refunds one unit (`sellRefund`, full for a same-visit unit
+past the entry count, else the resale value,
+`N/spaceport/outfitter_rules.ts:521-534`), removes it and runs the OnSell,
+whose `Dxxx` removes one more with no refund (`outfitter.ts:912-921`,
+`ncb.ts:924-932`): **matches** 1-4 by reading the code (not run here): two Buys of Grant
+leave 4 units on 2 receipts, so the 4 -> 3 Sell is a full refund (above
+the entry count with a receipt left), as in `sg_a`; a pre-owned Drop pair
+sells for one resale value, as in `sg_b`. **Proposed:** no change; a
+regression test of these four steps (`G<self>` 0 -> 2 and 2 -> 4 at Max 3,
+`D<self>` 2 -> 0 for one refund) would pin it. Confidence: high (every step on a window
+shot and both pilots read back).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w51/sg_a/`,
+`sg_b/` (window shots `05-grant-sel.png` .. `16-left.png`, the
+`pilot-after/` files), `sg_a.ask.log`, `sg_b.ask.log`.
+
 ### Reliability notes (for anyone running the reference)
 
 - **A stock hull's red markings defeat `redcount.py` (wave 50 `tre_a`):**
