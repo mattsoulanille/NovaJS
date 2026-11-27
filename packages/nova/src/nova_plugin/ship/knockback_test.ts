@@ -14,10 +14,11 @@ import { getSyntheticGameData } from '../../communication/simulation_test_fixtur
 import { makeSystem } from '../make_system.js';
 import { completeEntity } from '../spawn/index.js';
 import {
+    BEAM_KNOCKBACK_TOP_SPEED_FRACTION,
     DamagedEvent, DisabledComponent, DISABLED_COAST_TIME_CONSTANT_S,
     DISABLED_REST_SPEED, KNOCKBACK_PER_IMPACT, knockedVelocity, makeShip,
     ShipDataComponent,
-    ShipPhysicsComponent,
+    ShipPhysicsComponent, SourceComponent, tractoredVelocity,
 } from './index.js';
 
 describe('knockedVelocity', () => {
@@ -234,6 +235,247 @@ describe('knockback law (reference KB, wave 46)', () => {
             expect(45 * INERTIALESS_SHED_PER_ACCELERATION)
                 .toBeLessThanOrEqual(210);
         });
+});
+
+/**
+ * Reference "A beam on a fast light hull (the KB leftover), wave 48": a
+ * beam's push stops at 0.72 x the victim's top speed.
+ */
+describe('a beam\'s push cap (reference KB, wave 48)', () => {
+    const TARGET = 'target';
+    const SHOOTER = 'shooter';
+
+    async function probe(speed: number) {
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            'worker', { npcs: false });
+        const shipData = (await gameData.data.Ship.get(
+            SYNTHETIC.ships.skiff))!;
+        const ship = makeShip(shipData);
+        await completeEntity(world, ship);
+        ship.components.set(ShipDataComponent, {
+            ...ship.components.get(ShipDataComponent)!,
+            physics: {
+                ...shipData.physics, mass: 50, speed, acceleration: 45,
+                inertialess: false,
+            },
+        });
+        ship.components.delete(ShipPhysicsComponent);
+        world.entities.set(TARGET, ship);
+        const shooter = new Entity(SHOOTER);
+        shooter.components.set(MovementStateComponent, {
+            position: new Position(0, -250), velocity: new Vector(0, 0),
+            rotation: new Angle(Math.PI), turning: 0, turnBack: false,
+            accelerating: 0,
+        });
+        world.entities.set(SHOOTER, shooter);
+        const movement = ship.components.get(MovementStateComponent)!;
+        movement.position = new Position(0, 0);
+        movement.velocity = new Vector(0, 0);
+        movement.rotation = new Angle(Math.PI / 2);
+        movement.accelerating = 0;
+        world.step();
+        return { world, movement };
+    }
+
+    /** One Count-30 Impact-20 shot (360 px/s by the law on 50 t), its
+     * units shared over 32 ticks as BeamDamageSystem's `scale` does. */
+    function shot(world: World, beam: boolean) {
+        for (let i = 0; i < 32; i++) {
+            world.emit(DamagedEvent, {
+                damage: {
+                    shield: 0, armor: 0, ionization: 0,
+                    ionizationColor: DEFAULT_IONIZE_COLOR,
+                    passThroughShield: 0, knockback: 20,
+                    disableOnly: false,
+                },
+                damager: SHOOTER, scale: 30 / 32,
+                ...(beam ? { beam } : {}),
+            }, [TARGET]);
+            world.step();
+        }
+    }
+
+    it('is 0.72', () => {
+        expect(BEAM_KNOCKBACK_TOP_SPEED_FRACTION).toBe(0.72);
+    });
+
+    it('throws Kit Probe A (131 px/s) to 94.6 and later beams add '
+        + 'nothing', async () => {
+            const { world, movement } = await probe(131);
+            shot(world, true);
+            expect(movement.velocity.length).toBeCloseTo(0.72 * 131, 6);
+            expect(Math.abs(movement.velocity.length - 94.6))
+                .toBeLessThan(0.5);
+            expect(movement.velocity.x).toBeCloseTo(0, 6);
+            for (let i = 0; i < 2; i++) {
+                for (let s = 0; s < 420; s++) {
+                    world.step();
+                }
+                shot(world, true);
+                expect(movement.velocity.length)
+                    .toBeCloseTo(0.72 * 131, 6);
+            }
+        }, 60_000);
+
+    it('throws Kit Probe B (262 px/s) to 189.4', async () => {
+        const { world, movement } = await probe(262);
+        shot(world, true);
+        expect(movement.velocity.length).toBeCloseTo(0.72 * 262, 6);
+        expect(Math.abs(movement.velocity.length - 189.4))
+            .toBeLessThan(1);
+    }, 60_000);
+
+    it('leaves the same push from bolts capped at the FULL top speed '
+        + '(wave 46)', async () => {
+            const { world, movement } = await probe(131);
+            shot(world, false);
+            expect(movement.velocity.length).toBeCloseTo(131, 6);
+        }, 60_000);
+});
+
+/**
+ * Reference "A tractor beam (the KB leftover), wave 48": a negative
+ * Impact brakes the target toward its firer's velocity, never past it.
+ */
+describe('a tractor beam (reference KB, wave 48)', () => {
+    const TARGET = 'target';
+    const BEAMER = 'beamer';
+    const BEAM = 'beam';
+
+    async function hull(inertialess = false) {
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            'worker', { npcs: false });
+        const shipData = (await gameData.data.Ship.get(
+            SYNTHETIC.ships.skiff))!;
+        const ship = makeShip(shipData);
+        await completeEntity(world, ship);
+        ship.components.set(ShipDataComponent, {
+            ...ship.components.get(ShipDataComponent)!,
+            physics: {
+                ...shipData.physics, mass: 50, speed: 131,
+                acceleration: 45, inertialess,
+            },
+        });
+        ship.components.delete(ShipPhysicsComponent);
+        world.entities.set(TARGET, ship);
+        // The beamer 250 px west; its beam entity holds no velocity of
+        // its own and names the beamer as its Source, as a fired beam
+        // does.
+        const beamer = new Entity(BEAMER);
+        beamer.components.set(MovementStateComponent, {
+            position: new Position(-250, 0), velocity: new Vector(0, 0),
+            rotation: new Angle(Math.PI / 2), turning: 0, turnBack: false,
+            accelerating: 0,
+        });
+        world.entities.set(BEAMER, beamer);
+        const beam = new Entity(BEAM);
+        beam.components.set(MovementStateComponent, {
+            position: new Position(-250, 0), velocity: new Vector(0, 0),
+            rotation: new Angle(Math.PI / 2), turning: 0, turnBack: false,
+            accelerating: 0,
+        });
+        beam.components.set(SourceComponent, BEAMER);
+        world.entities.set(BEAM, beam);
+        const movement = ship.components.get(MovementStateComponent)!;
+        movement.position = new Position(0, 0);
+        movement.velocity = new Vector(0, 0);
+        movement.rotation = new Angle(Math.PI / 2);
+        movement.accelerating = 0;
+        world.step();
+        return { world, beamer, movement };
+    }
+
+    function tractor(world: World, impact: number, scale = 1) {
+        world.emit(DamagedEvent, {
+            damage: {
+                shield: 0, armor: 0, ionization: 0,
+                ionizationColor: DEFAULT_IONIZE_COLOR, passThroughShield: 0,
+                knockback: impact, disableOnly: false,
+            },
+            damager: BEAM, scale, beam: true,
+        }, [TARGET]);
+        world.step();
+    }
+
+    it('never moves a hull at rest (kta_a: four shots, 0 px)',
+        async () => {
+            const { world, movement } = await hull();
+            const start = movement.position;
+            for (let shot = 0; shot < 4; shot++) {
+                for (let i = 0; i < 32; i++) {
+                    tractor(world, -20, 30 / 32);
+                }
+                for (let s = 0; s < 420; s++) {
+                    world.step();
+                }
+            }
+            expect(movement.velocity.length).toBe(0);
+            expect(movement.position.x).toBe(start.x);
+            expect(movement.position.y).toBe(start.y);
+        }, 60_000);
+
+    it('brakes a hull flying TOWARD the beamer, then holds it still '
+        + '(ktm_a), never reversing it', async () => {
+            const { world, movement } = await hull();
+            movement.velocity = new Vector(-30, 0);
+            // Impact -20 on 50 t: 12 px/s a unit by the law.
+            tractor(world, -20);
+            expect(movement.velocity.x).toBeCloseTo(-18, 9);
+            expect(movement.velocity.y).toBeCloseTo(0, 9);
+            tractor(world, -20);
+            expect(movement.velocity.x).toBeCloseTo(-6, 9);
+            tractor(world, -20);
+            expect(movement.velocity.length).toBe(0);
+            // Not pulled on toward the beamer: it stays put.
+            const at = movement.position;
+            for (let i = 0; i < 3; i++) {
+                tractor(world, -20);
+            }
+            for (let s = 0; s < 120; s++) {
+                world.step();
+            }
+            expect(movement.position.x).toBe(at.x);
+            expect(movement.velocity.length).toBe(0);
+        }, 60_000);
+
+    it('brakes toward the BEAMER\'s velocity, not to a stop', async () => {
+        const { world, beamer, movement } = await hull();
+        beamer.components.get(MovementStateComponent)!.velocity =
+            new Vector(0, 20);
+        movement.velocity = new Vector(30, 20);
+        tractor(world, -20);
+        expect(movement.velocity.x).toBeCloseTo(18, 9);
+        expect(movement.velocity.y).toBeCloseTo(20, 9);
+        for (let i = 0; i < 4; i++) {
+            tractor(world, -20);
+        }
+        // Latched to the beamer's motion, no overshoot.
+        expect(movement.velocity.x).toBeCloseTo(0, 9);
+        expect(movement.velocity.y).toBeCloseTo(20, 9);
+    }, 60_000);
+
+    it('leaves an inertialess hull alone (the Bible; ktg_a)', async () => {
+        const { world, movement } = await hull(true);
+        // Cruising east along its heading at 30 px/s.
+        movement.velocity = new Vector(30, 0);
+        movement.targetSpeed = 30;
+        for (let i = 0; i < 5; i++) {
+            tractor(world, -20);
+        }
+        expect(movement.velocity.x).toBeCloseTo(30, 9);
+        expect(movement.velocity.y).toBeCloseTo(0, 9);
+    }, 60_000);
+
+    it('tractoredVelocity never passes the firer\'s velocity', () => {
+        const toward = new Vector(5, 5);
+        expect(tractoredVelocity(new Vector(6, 5), toward, 100))
+            .toBe(toward);
+        const v = tractoredVelocity(new Vector(15, 5), toward, 4);
+        expect(v.x).toBeCloseTo(11, 12);
+        expect(v.y).toBeCloseTo(5, 12);
+    });
 });
 
 /**

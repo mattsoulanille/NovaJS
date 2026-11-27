@@ -15,6 +15,7 @@ import { BlastDamageComponent } from './blast_data.js';
 import { ArmorComponent, IonizationColorComponent, IonizationComponent, ShieldComponent } from './health_plugin.js';
 import { ProjectileComponent } from '../core/index.js';
 import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from './ship_plugin.js';
+import { SourceComponent } from './weapon_components.js';
 import { nonLethalArmor, nonLethalArmorFloor } from './ship_explosion.js';
 import { ControlledByComponent } from '../player/index.js';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -44,6 +45,9 @@ export const ZeroArmorEvent = new EcsEvent<Time>('ZeroArmorEvent');
 export const DamagedEvent = new EcsEvent<{
     damage: WeaponDamage, damager: string, scale?: number,
     nonLethal?: boolean,
+    /** Set by BeamDamageSystem: the push is a beam's (knockedVelocity's
+     * lower BEAM_KNOCKBACK_TOP_SPEED_FRACTION cap). */
+    beam?: boolean,
 }>('DamagedEvent');
 
 registerSimulationBridgeEvent({ event: DeathEvent });
@@ -310,7 +314,8 @@ export function knockbackDirection(targetPosition: Position,
  * Mass `M` tons adds KNOCKBACK_PER_IMPACT x I / M px/s along the shot (a
  * blast: away from its centre; knockbackDirection), before the top-speed
  * cap (knockedVelocity). A beam lands it once per Count unit
- * (BeamDamageSystem's `scale`).
+ * (BeamDamageSystem's `scale`), capped lower
+ * (BEAM_KNOCKBACK_TOP_SPEED_FRACTION).
  *
  * MEASURED (reference "Knockback (the hub's KNOCKBACK), wave 46", finding
  * 1): 30. Fifteen clean bolt hits over three Impact / Mass pairs (20 / 50:
@@ -323,8 +328,9 @@ export function knockbackDirection(targetPosition: Position,
  * ship's final explosion (SHIP_EXPLOSION_KNOCKBACK, ship_explosion.ts: one
  * fixed impact of 737 through KnockbackSystem, MEASURED as 1 / the
  * victim's mass, reference "The ship-explosion push", wave 47) and the
- * push on an asteroid
- * (AsteroidDamageSystem; GUESS, the same law on a röid's Mass).
+ * push on an asteroid (AsteroidDamageSystem: the same law on a röid's
+ * Mass, MEASURED at about 29 x, reference "The asteroid push", wave 48).
+ * A negative Impact (a tractor) brakes instead (tractoredVelocity).
  */
 export const KNOCKBACK_PER_IMPACT = 30;
 
@@ -364,22 +370,83 @@ export function knockedVelocity(velocity: Vector, impulse: Vector,
     return velocity.add(impulse).shortenToLength(limit);
 }
 
-const MovementQuery = new Query([MovementStateComponent, Optional(BlastDamageComponent)] as const);
+/**
+ * The fraction of the victim's top speed that a BEAM's push stops at
+ * (a bolt's stops at the full top speed; knockedVelocity's `topSpeed`).
+ *
+ * MEASURED (reference "A beam on a fast light hull (the KB leftover),
+ * wave 48"): the Count-30 Impact-20 beam (360 px/s by the law) threw Kit
+ * Probe A (top speed 131 px/s) to 94.6 px/s, the same to 0.1 px/s in two
+ * runs, and Kit Probe B (262) to 189.4: 0.721 / 0.722. Later beams that
+ * reached the Probe added nothing (the cap, not a lost hold). Bolts reach
+ * the full top speed (wave 46: 134 on a 131 px/s disc), so the lower cap
+ * is the beam's alone.
+ */
+export const BEAM_KNOCKBACK_TOP_SPEED_FRACTION = 0.72;
+
+/**
+ * A velocity after a TRACTOR hit (a negative Impact): moved toward the
+ * firer's velocity `toward` by `amount` px/s, never past it. Pure.
+ */
+export function tractoredVelocity(velocity: Vector, toward: Vector,
+    amount: number): Vector {
+    const relative = velocity.subtract(toward);
+    const remaining = relative.length - amount;
+    if (remaining <= 0) {
+        return toward;
+    }
+    return toward.add(relative.shortenToLength(remaining));
+}
+
+const MovementQuery = new Query([MovementStateComponent,
+    Optional(BlastDamageComponent), Optional(SourceComponent)] as const);
+const FirerMovementQuery = new Query([MovementStateComponent] as const);
 export const KnockbackSystem = new System({
     name: 'KnockbackSystem',
     events: [DamagedEvent],
     args: [DamagedEvent, MovementStateComponent, MovementPhysicsComponent,
         Optional(ShipPhysicsComponent), RunQuery] as const,
-    step({ damage, damager, scale = 1 }, movementState, movementPhysics, shipPhysics, runQuery) {
+    step({ damage, damager, scale = 1, beam }, movementState, movementPhysics,
+        shipPhysics, runQuery) {
+        if (!damage.knockback) {
+            return;
+        }
         const val = runQuery(MovementQuery, damager);
         if (!val[0]) {
             return;
         }
-        const [otherMovement, isBlast] = val[0];
+        const [otherMovement, isBlast, source] = val[0];
 
         let targetMass = 1;
         if (shipPhysics) {
             targetMass = shipPhysics.mass || 1;
+        }
+        const strength = Math.abs(damage.knockback) * scale / targetMass
+            * KNOCKBACK_PER_IMPACT;
+
+        if (damage.knockback < 0) {
+            // A tractor (negative Impact) does NOT pull: it brakes the
+            // target's velocity toward its FIRER's, never past it
+            // (reference "A tractor beam (the KB leftover)", wave 48:
+            // Kit Probe A at rest never moved under four shots; coasting
+            // at 30 px/s it was slowed and then stopped dead, and stayed
+            // put). Inertialess hulls are exempt (the Bible: "inertialess
+            // ships are not affected"; the glide hull at rest did not
+            // move either). The rate: GUESS, the push law's magnitude
+            // (the reading was about 20 px/s a Count-30 shot of Impact
+            // -20 on 50 t, low confidence; the law gives 360).
+            if (movementPhysics.movementType === MovementType.INERTIALESS) {
+                return;
+            }
+            // A beam entity holds no velocity of its own: its firer's
+            // (SourceComponent) is the one to match.
+            const firer = source !== undefined
+                ? runQuery(FirerMovementQuery, source)[0]?.[0] : undefined;
+            const toward = Vector.fromVectorLike(
+                (firer ?? otherMovement).velocity);
+            movementState.velocity = tractoredVelocity(
+                movementState.velocity, toward, strength);
+            return;
         }
 
         const direction = knockbackDirection(
@@ -387,14 +454,16 @@ export const KnockbackSystem = new System({
         if (!direction) {
             return;
         }
-        // Capped at the hull's top speed (knockedVelocity). maxVelocity is
-        // this tick's effective cap (EffectiveMovementPhysicsSystem: the
-        // ion / strict / afterburner / jump-burn ceiling, or the speed
-        // already held while an overspeed bleeds off).
+        // Capped at the hull's top speed (knockedVelocity), a beam's at
+        // BEAM_KNOCKBACK_TOP_SPEED_FRACTION of it. maxVelocity is this
+        // tick's effective cap (EffectiveMovementPhysicsSystem: the ion /
+        // strict / afterburner / jump-burn ceiling, or the speed already
+        // held while an overspeed bleeds off).
         movementState.velocity = knockedVelocity(movementState.velocity,
-            direction.scale(damage.knockback * scale / targetMass
-                * KNOCKBACK_PER_IMPACT),
-            movementPhysics.maxVelocity);
+            direction.scale(strength),
+            beam ? movementPhysics.maxVelocity
+                * BEAM_KNOCKBACK_TOP_SPEED_FRACTION
+                : movementPhysics.maxVelocity);
     },
     // #237 pin (shared: *): the DamagedEvent handlers run damage first,
     // knockback second.

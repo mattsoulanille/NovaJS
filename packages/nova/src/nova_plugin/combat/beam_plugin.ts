@@ -566,7 +566,9 @@ export const BeamDamageSystem = new System({
         const scale = beamData.shotDuration * BEAM_COUNT_RATE / 1000
             / windowTicks;
 
-        emitNow(DamagedEvent, { damage: beamData.damage, damager: uuid, scale }, [beamState.targetHit]);
+        emitNow(DamagedEvent, {
+            damage: beamData.damage, damager: uuid, scale, beam: true,
+        }, [beamState.targetHit]);
     },
     // TimeSystem listed explicitly (determinism rule 4): computes damage
     // from time and delta_ms. after: [CollisionSystem] already pins it

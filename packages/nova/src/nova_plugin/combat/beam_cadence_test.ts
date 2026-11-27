@@ -55,7 +55,9 @@ const VICTIM_AHEAD = 30;
  * inside the Needle Beam's 200 px reach.
  */
 describe('beam fire cadence and damage on the original frame clock', () => {
-    let damaged: Array<{ uuid: string, damager: string, scale: number }>;
+    let damaged: Array<{
+        uuid: string, damager: string, scale: number, beam?: boolean,
+    }>;
 
     type GameData = Awaited<ReturnType<typeof getSyntheticGameData>>;
 
@@ -68,8 +70,8 @@ describe('beam fire cadence and damage on the original frame clock', () => {
             name: 'BeamCadenceDamageRecorder',
             events: [DamagedEvent],
             args: [DamagedEvent, UUID] as const,
-            step({ damager, scale }, uuid) {
-                damaged.push({ uuid, damager, scale: scale ?? 1 });
+            step({ damager, scale, beam }, uuid) {
+                damaged.push({ uuid, damager, scale: scale ?? 1, beam });
             },
         }));
         return { gameData, world };
@@ -168,6 +170,10 @@ describe('beam fire cadence and damage on the original frame clock', () => {
             expect(frameDamages('victim'))
                 .withContext('frame-equivalents of damage in 1 s')
                 .toBeCloseTo(30, 6);
+            // Marked as a beam's, for KnockbackSystem's lower cap
+            // (BEAM_KNOCKBACK_TOP_SPEED_FRACTION, reference KB wave 48).
+            expect(damaged.length).toBeGreaterThan(0);
+            expect(damaged.every(d => d.beam === true)).toBeTrue();
         }, 120_000);
 
     it('Wide Lance: on screen for its 15 units, damaging for all of them '
