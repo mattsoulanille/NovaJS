@@ -483,11 +483,14 @@ R: "Stock Sol, wave 16" and "Stock traffic, wave 17" measured three stock
 systems filling to exactly AvgShips (6 / 6, 4 / 4, 4 / 4, never above in
 any census) and freezing there with nothing arriving. Applied: the
 population target is AvgShips (N/nova_plugin/spawn/npc_spawn_plugin.ts
-`populationTarget`), refilled one ship every 15 s while below it. Still
+`populationTarget`), refilled one ship at a time while below it. Still
 GUESSES:
 
-1. **The refill rate** (`NPC_RESPAWN_INTERVAL_MS` 15 s): the censuses were
-   minutes apart, so arrival timing below that is unmeasured.
+1. **The refill rate**: MEASURED (R: "Traffic respawn (A11), wave 41": the
+   next trader 4.5-11 s after each departure, median about 7 s); applied
+   2026-11-26 as a uniform 4-10 s draw per shortfall
+   (`NPC_RESPAWN_MIN_MS` / `NPC_RESPAWN_MAX_MS`; the distribution is a
+   GUESS).
 2. **A fleet arrives whole** and can overshoot AvgShips by its escorts
    until ships leave: MEASURED (R: "Traffic wave 19": five ships of one
    fleet, and two fleets at once, with avgShips 2; NovaJS matches). Open:

@@ -138,8 +138,35 @@ import { TargetComponent } from '../ship/index.js';
  * weapons, AI, per-frame snapshot encoding), so populations are capped
  * well below the asteroid cap. */
 export const MAX_NPC_POPULATION = 12;
-/** How often the system replaces a departed/destroyed NPC. */
-export const NPC_RESPAWN_INTERVAL_MS = 15_000;
+/**
+ * How soon the system replaces a departed or destroyed NPC: a delay drawn
+ * uniformly from [NPC_RESPAWN_MIN_MS, NPC_RESPAWN_MAX_MS) the first tick
+ * the population is seen below its target, the replacement spawning when
+ * it runs out (one ship per draw; a second shortfall draws again after
+ * it).
+ *
+ * MEASURED (reference "Traffic respawn (A11), wave 41"): in an AvgShips-2
+ * system the next trader showed on the radar 4.5-11 s after each departure
+ * (median about 7 s, seven gaps), the population holding at AvgShips. The
+ * gap includes the newcomer's flight from its jump-in point into radar
+ * view, so the spawn itself can come a little earlier than the dot. GUESS:
+ * uniform 4-10 s (median 7 s; a random delay and a clock checked every few
+ * seconds are not separable from seven gaps). Was a fixed 15 s clock that
+ * ran from the previous spawn, so a ship leaving long after it was
+ * replaced at once.
+ */
+export const NPC_RESPAWN_MIN_MS = 4_000;
+export const NPC_RESPAWN_MAX_MS = 10_000;
+/** NpcSpawner.nextSpawn while no replacement is owed (the population is at
+ * its target): the next shortfall draws a fresh delay. */
+export const NPC_RESPAWN_NONE_PENDING = -1;
+
+/** The replacement delay for a shortfall first seen now, drawn from the
+ * world's Random (one draw). */
+export function npcRespawnDelay(random: Random): number {
+    return NPC_RESPAWN_MIN_MS
+        + random.next() * (NPC_RESPAWN_MAX_MS - NPC_RESPAWN_MIN_MS);
+}
 /** Initial spawns scatter within this half-size box (the region where
  * planets and gameplay live; matches the asteroid field). */
 export const INITIAL_SPAWN_HALF_SIZE = 2000;
@@ -253,7 +280,8 @@ export const NpcSpawnerType = t.intersection([t.type({
     targetCount: t.number,
     /** The weighted spawn table (see the module comment). */
     entries: t.array(NpcSpawnEntry),
-    /** Sim time (ms) after which the spawner may add a ship. */
+    /** Sim time (ms) at which the owed replacement spawns, or
+     * NPC_RESPAWN_NONE_PENDING (negative) while none is owed. */
     nextSpawn: t.number,
 }), t.partial({
     /** The people eligible to appear here (see the module comment).
@@ -1287,7 +1315,7 @@ export async function spawnNpcs(world: World, systemId: string,
         .addComponent(NpcSpawnerComponent, {
             targetCount,
             entries,
-            nextSpawn: 0,
+            nextSpawn: NPC_RESPAWN_NONE_PENDING,
             persEntries,
             // Only a gated table can need it (latchSpawnBits).
             ...(gated ? { avgShips: systemData.avgShips } : {}),
@@ -1369,6 +1397,10 @@ export function latchSpawnBits(spawner: NpcSpawnerType,
         && effectiveNpcSpawnEntries(spawner.entries,
             latchedSpawnBits(spawner)).length > 0) {
         spawner.targetCount = populationTarget(spawner.avgShips);
+        // A population the latch has just admitted is not a departure:
+        // its first ship is due at once (as before the drawn respawn
+        // delay), the rest one delay apart.
+        spawner.nextSpawn = 0;
     }
 }
 
@@ -1472,11 +1504,24 @@ export const NpcRespawnSystem = new System({
             return;
         }
         latchSpawnBits(spawner, entrants);
-        if (time.time < spawner.nextSpawn
-            || trafficCount(liveNpcs) >= spawner.targetCount) {
+        if (trafficCount(liveNpcs) >= spawner.targetCount) {
+            // Nothing owed. Written only on the change, so a full system's
+            // spawner state stays still.
+            if (spawner.nextSpawn !== NPC_RESPAWN_NONE_PENDING) {
+                spawner.nextSpawn = NPC_RESPAWN_NONE_PENDING;
+            }
             return;
         }
-        spawner.nextSpawn = time.time + NPC_RESPAWN_INTERVAL_MS;
+        if (spawner.nextSpawn < 0) {
+            // A shortfall first seen: the replacement comes after a drawn
+            // delay (NPC_RESPAWN_MIN_MS..MAX_MS, reference A11 wave 41).
+            spawner.nextSpawn = time.time + npcRespawnDelay(random);
+            return;
+        }
+        if (time.time < spawner.nextSpawn) {
+            return;
+        }
+        spawner.nextSpawn = NPC_RESPAWN_NONE_PENDING;
         spawnNpc(world, gameData, ids, random, spawner.entries, true,
             spawner.persEntries ?? [], latchedSpawnBits(spawner));
     },

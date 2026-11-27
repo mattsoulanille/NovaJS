@@ -6,7 +6,11 @@ import { FiringGroupComponent } from '../ship/index.js';
 import { GovtComponent } from '../core/index.js';
 import { makeSystem } from '../make_system.js';
 import { FormationComponent, NpcComponent } from './npc_ai_plugin.js';
-import { NpcSpawnerComponent, spawnNpc } from '../spawn/index.js';
+import {
+    NPC_RESPAWN_MAX_MS, NPC_RESPAWN_MIN_MS, NPC_RESPAWN_NONE_PENDING,
+    NpcSpawnerComponent, spawnNpc,
+} from '../spawn/index.js';
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { IdFactoryResource } from '../core/index.js';
 import { ShipComponent } from '../ship/index.js';
 import { Entity } from 'nova_ecs/entity';
@@ -160,6 +164,41 @@ describe('NPC spawning in a parsed system', () => {
             expect(movement.position.length).toBeGreaterThan(900);
         }
     }, 120_000);
+
+    it('replaces a departure after a drawn 4-10 s delay, not a fixed '
+        + 'clock (reference "Traffic respawn (A11), wave 41")', async () => {
+            const gameData = await getSyntheticGameData();
+            const world = await makeSystem(THESSALY, gameData);
+            const spawner = world.entities.get('npc spawner')!
+                .components.get(NpcSpawnerComponent)!;
+            const time = () => world.resources.get(TimeResource)!.time;
+            // A full system owes nothing.
+            world.step();
+            const before = npcs(world).map(([uuid]) => uuid);
+            spawner.targetCount = before.length;
+            world.step();
+            expect(spawner.nextSpawn).toBe(NPC_RESPAWN_NONE_PENDING);
+
+            world.entities.delete(before[0]);
+            world.step();
+            const departedAt = time();
+            // The shortfall draws its delay at once...
+            const delay = spawner.nextSpawn - departedAt;
+            expect(delay).toBeGreaterThanOrEqual(NPC_RESPAWN_MIN_MS - 20);
+            expect(delay).toBeLessThan(NPC_RESPAWN_MAX_MS);
+            // ...and nothing arrives before it runs out.
+            while (time() < spawner.nextSpawn - 20) {
+                world.step();
+                expect(npcs(world).length).toBe(before.length - 1);
+            }
+            for (let i = 0; i < 3; i++) {
+                world.step();
+            }
+            expect(npcs(world).length).toBeGreaterThanOrEqual(before.length);
+            // Back at the target: nothing owed again.
+            world.step();
+            expect(spawner.nextSpawn).toBe(NPC_RESPAWN_NONE_PENDING);
+        }, 120_000);
 
     it('fleet escorts spawn in formation on their leader', async () => {
         const gameData = await getSyntheticGameData();
