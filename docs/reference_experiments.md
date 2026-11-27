@@ -25062,6 +25062,25 @@ two geometries).
 (the yank), `fr_tra/m2.png` (the pull back), `fr_kta/`,
 `tools/redcount.py`.
 
+**Applied 2026-11-27**: in `KnockbackSystem`
+(`N/nova_plugin/ship/death_plugin.ts`) a negative Impact first skips an
+inertialess target and one not strictly lighter than its firer (the
+beam's `SourceComponent` hull's Mass; GUESS, applied to the brake as
+well; a firer with no hull Mass does not gate). Then, by where the
+target is when each hit (each beam unit) lands: beyond
+`TRACTOR_PULL_RANGE` 450 px (GUESS) of the firer it is pulled toward the
+firer by `TRACTOR_PULL_PER_IMPACT` (0.86 x 30 = 25.8) x |Impact| / Mass,
+each velocity axis held at the hull's own top speed (`pulledVelocity`;
+an axis already faster keeps its speed); within it the wave-48 brake
+toward the firer's velocity is unchanged. They never mix within one
+unit: a hull pulled in is braked once inside, one that coasts back out is
+pulled again. The per-shot totals match (310 px/s of pull on 50 t, cut
+to the per-axis cap, 103 on 150 t), but NovaJS lands a Count-30 beam's
+units over 30 / 56 s (`BEAM_COUNT_RATE`), so its pull runs at about
+580 px/s² on 50 t where the original read 300-325 over about 1 s: the
+beam's unit clock and this rate do not agree, unresolved. Asteroids hit
+by a negative Impact still take the reversed push (unmeasured).
+
 ### Not reached in wave 50: CD's parked craft, A13's spells, R18's surviving guards, KB's thrusting excess on a second hull, the tractor's Impact scaling (2026-11-27)
 
 - **CD**: wave 46's parked craft (a rig with idle fighters at the kill).

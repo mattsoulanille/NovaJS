@@ -330,7 +330,8 @@ export function knockbackDirection(targetPosition: Position,
  * victim's mass, reference "The ship-explosion push", wave 47) and the
  * push on an asteroid (AsteroidDamageSystem: the same law on a röid's
  * Mass, MEASURED at about 29 x, reference "The asteroid push", wave 48).
- * A negative Impact (a tractor) brakes instead (tractoredVelocity).
+ * A negative Impact (a tractor) brakes instead (tractoredVelocity), or
+ * beyond TRACTOR_PULL_RANGE pulls at TRACTOR_PULL_PER_IMPACT.
  */
 export const KNOCKBACK_PER_IMPACT = 30;
 
@@ -388,7 +389,9 @@ export const BEAM_KNOCKBACK_TOP_SPEED_FRACTION = 0.72;
  * A TRACTOR's (negative Impact's) brake, in the push law's form: one hit
  * of wëap Impact -I on a hull of Mass M moves its velocity toward the
  * firer's by TRACTOR_BRAKE_PER_IMPACT x I / M px/s (a beam: once per
- * Count unit), never past it (tractoredVelocity).
+ * Count unit), never past it (tractoredVelocity), for a target within
+ * TRACTOR_PULL_RANGE of the firer and lighter than it (beyond the range
+ * it is pulled instead, TRACTOR_PULL_PER_IMPACT).
  *
  * GUESS, fitted to one run (reference "A tractor beam (the KB leftover),
  * wave 48", ktm_a): the Count-30 Impact -20 beam took about 19 px/s off
@@ -414,9 +417,60 @@ export function tractoredVelocity(velocity: Vector, toward: Vector,
     return toward.add(relative.shortenToLength(remaining));
 }
 
+/**
+ * The distance from its firer beyond which a tractor hit PULLS the target
+ * toward the firer instead of braking it (tractoredVelocity).
+ *
+ * GUESS 450 px, between the readings (reference "A tractor beam's rate
+ * with Mass and distance (the KB leftover), wave 50", finding 2): a still
+ * Kit Probe A 500 px out (diagonal) was pulled at once; at 425, 350 and
+ * 250 px (on the axis) it never moved. A range, not a law in the
+ * distance, on one far geometry.
+ */
+export const TRACTOR_PULL_RANGE = 450;
+
+/**
+ * The tractor's pull beyond TRACTOR_PULL_RANGE, in the push law's form:
+ * one hit of wëap Impact -I on a hull of Mass M adds TRACTOR_PULL_PER_IMPACT
+ * x I / M px/s toward the firer (a beam: once per Count unit), each
+ * velocity axis capped at the hull's top speed (pulledVelocity).
+ *
+ * MEASURED (the same section, finding 1; medium confidence, two hulls):
+ * the Count-30 Impact -20 beam took a still 50 t Kit Probe A from rest at
+ * about 300-325 px/s² until its x axis held at its top speed (128-136 of
+ * 131 px/s) and then y caught up, ending at 181-185 px/s on the diagonal
+ * (two runs alike); a 150 t Star Liner (87.5 px/s) reached about 100 px/s
+ * at about 115 px/s², its x axis held at 85-90. About 15,000 / Mass px/s²
+ * for Impact 20, i.e. 0.86 of the push law's 30 x |Impact| / Mass a 1/30 s
+ * tick: 25.8 x 20 x 30 / 150 = 103 px/s a shot on the Liner, 310 on the
+ * Probe (cut to its per-axis cap). GUESS that it scales with Impact like
+ * the push (only Mass was varied).
+ */
+export const TRACTOR_PULL_PER_IMPACT = 0.86 * KNOCKBACK_PER_IMPACT;
+
+/**
+ * A velocity after a tractor's PULL `impulse`: the sum, with EACH AXIS
+ * held to the hull's top speed (`topSpeed`), or to the speed that axis
+ * already had when that was higher (an overspeed is not cut by the pull
+ * itself). MEASURED (reference "A tractor beam's rate with Mass and
+ * distance (the KB leftover), wave 50", finding 1): the pulled Probe's x
+ * and y each stopped at its 131 px/s top speed, 1.4 x it on the diagonal,
+ * as the asteroids' per-axis clamp (wave 48). Pure; no trigonometry.
+ */
+export function pulledVelocity(velocity: Vector, impulse: Vector,
+    topSpeed: number): Vector {
+    const axis = (now: number, add: number) => {
+        const limit = Math.max(Math.abs(now), topSpeed);
+        return Math.min(limit, Math.max(-limit, now + add));
+    };
+    return new Vector(axis(velocity.x, impulse.x),
+        axis(velocity.y, impulse.y));
+}
+
 const MovementQuery = new Query([MovementStateComponent,
     Optional(BlastDamageComponent), Optional(SourceComponent)] as const);
-const FirerMovementQuery = new Query([MovementStateComponent] as const);
+const FirerQuery = new Query([MovementStateComponent,
+    Optional(ShipPhysicsComponent)] as const);
 export const KnockbackSystem = new System({
     name: 'KnockbackSystem',
     events: [DamagedEvent],
@@ -437,34 +491,72 @@ export const KnockbackSystem = new System({
         if (shipPhysics) {
             targetMass = shipPhysics.mass || 1;
         }
-        const strength = Math.abs(damage.knockback) * scale / targetMass
-            * (damage.knockback < 0
-                ? TRACTOR_BRAKE_PER_IMPACT : KNOCKBACK_PER_IMPACT);
-
         if (damage.knockback < 0) {
-            // A tractor (negative Impact) does NOT pull: it brakes the
-            // target's velocity toward its FIRER's, never past it
-            // (reference "A tractor beam (the KB leftover)", wave 48:
-            // Kit Probe A at rest never moved under four shots; coasting
-            // at 30 px/s it was slowed and then stopped dead, and stayed
-            // put). Inertialess hulls are exempt (the Bible: "inertialess
-            // ships are not affected"; the glide hull at rest did not
-            // move either). The rate: TRACTOR_BRAKE_PER_IMPACT (GUESS,
-            // fitted to about 19 px/s a Count-30 shot of Impact -20 on
-            // 50 t).
+            // A tractor (negative Impact). Inertialess hulls are exempt
+            // (the Bible: "inertialess ships are not affected"; waves 48 /
+            // 50: the glide hull and Kit Plain Ring never moved, at 250
+            // and 500 px).
             if (movementPhysics.movementType === MovementType.INERTIALESS) {
                 return;
             }
-            // A beam entity holds no velocity of its own: its firer's
-            // (SourceComponent) is the one to match.
-            const firer = source !== undefined
-                ? runQuery(FirerMovementQuery, source)[0]?.[0] : undefined;
-            const toward = Vector.fromVectorLike(
-                (firer ?? otherMovement).velocity);
+            // A beam entity holds no velocity, place or Mass of its own:
+            // its firer's (SourceComponent) are the ones that count.
+            const [firerMovement, firerPhysics] = (source !== undefined
+                ? runQuery(FirerQuery, source)[0] : undefined)
+                ?? [otherMovement, undefined];
+            // Only hulls LIGHTER than the firer are moved (the Bible's
+            // "smaller ships"; wave 50, finding 3: 50 and 150 t were
+            // pulled by the 175 t beamer, 255 and 300 t never moved, at
+            // rest or coasting). GUESS: strictly lighter, and for the
+            // brake below too (its one measured hull, wave 48's, was 50
+            // t). A firer with no hull Mass (none in the data fires a
+            // tractor) does not gate it.
+            if (firerPhysics && !(targetMass < (firerPhysics.mass || 1))) {
+                return;
+            }
+            const scaled = Math.abs(damage.knockback) * scale / targetMass;
+            const toFirer = Vector.fromVectorLike(
+                firerMovement.position.subtract(movementState.position));
+            if (toFirer.lengthSquared
+                > TRACTOR_PULL_RANGE * TRACTOR_PULL_RANGE) {
+                // Beyond TRACTOR_PULL_RANGE it PULLS toward the firer,
+                // each axis held at the top speed (reference "A tractor
+                // beam's rate with Mass and distance (the KB leftover)",
+                // wave 50: a still 50 t Probe 500 px out went to 181-185
+                // px/s toward the beamer in one shot).
+                // The cap is the hull's own (outfitted) top speed, not
+                // this tick's effective maxVelocity: that one rises to
+                // meet an overspeed while it bleeds off, so the pull's own
+                // diagonal 1.4 x would lift every later axis cap with it.
+                movementState.velocity = pulledVelocity(
+                    movementState.velocity,
+                    toFirer.normalize(scaled * TRACTOR_PULL_PER_IMPACT),
+                    shipPhysics?.speed ?? movementPhysics.maxVelocity);
+                return;
+            }
+            // Within it, it does NOT pull: it brakes the target's
+            // velocity toward its FIRER's, never past it (reference "A
+            // tractor beam (the KB leftover)", wave 48: Kit Probe A at
+            // rest 250 px out never moved under four shots; coasting at
+            // 30 px/s 40-60 px from the beamer it was slowed and then
+            // stopped dead, and stayed put; wave 50: still at 350 and 425
+            // px too). The rate: TRACTOR_BRAKE_PER_IMPACT (GUESS, fitted
+            // to about 19 px/s a Count-30 shot of Impact -20 on 50 t).
+            // The two never mix: each hit (each beam unit) either pulls or
+            // brakes, by where the target is when it lands, so a hull
+            // pulled in from afar is braked to the firer's velocity once
+            // it comes inside the range, and one that coasts back out is
+            // pulled in again (wave 50's tra_a, flung past the beamer and
+            // pulled back).
             movementState.velocity = tractoredVelocity(
-                movementState.velocity, toward, strength);
+                movementState.velocity,
+                Vector.fromVectorLike(firerMovement.velocity),
+                scaled * TRACTOR_BRAKE_PER_IMPACT);
             return;
         }
+
+        const strength = Math.abs(damage.knockback) * scale / targetMass
+            * KNOCKBACK_PER_IMPACT;
 
         const direction = knockbackDirection(
             movementState.position, otherMovement, Boolean(isBlast));

@@ -18,7 +18,8 @@ import {
     DamagedEvent, DisabledComponent, DISABLED_COAST_TIME_CONSTANT_S,
     DISABLED_REST_SPEED, KNOCKBACK_PER_IMPACT, knockedVelocity, makeShip,
     ShipDataComponent,
-    ShipPhysicsComponent, SourceComponent, TRACTOR_BRAKE_PER_IMPACT,
+    pulledVelocity, ShipPhysicsComponent, SourceComponent,
+    TRACTOR_BRAKE_PER_IMPACT, TRACTOR_PULL_PER_IMPACT, TRACTOR_PULL_RANGE,
     tractoredVelocity,
 } from './index.js';
 
@@ -493,6 +494,229 @@ describe('a tractor beam (reference KB, wave 48)', () => {
         const v = tractoredVelocity(new Vector(15, 5), toward, 4);
         expect(v.x).toBeCloseTo(11, 12);
         expect(v.y).toBeCloseTo(5, 12);
+    });
+});
+
+/**
+ * Reference "A tractor beam's rate with Mass and distance (the KB
+ * leftover), wave 50": beyond about 450 px the tractor PULLS a hull
+ * lighter than the beamer toward it, each velocity axis held at the
+ * hull's top speed; within that it brakes (wave 48, above); heavier and
+ * inertialess hulls never move. Wave 48's Kit Tractor Beamer 20: the
+ * stock Terrapin's 175 t, immobile, a Count-30 Impact -20 beam.
+ */
+describe('a tractor beam\'s pull (reference KB, wave 50)', () => {
+    const TARGET = 'target';
+    const BEAMER = 'beamer';
+    const BEAM = 'beam';
+    const BEAMER_MASS = 175;
+
+    async function rig(options: {
+        mass: number, speed: number, inertialess?: boolean,
+        beamerAt: Position, velocity?: Vector,
+    }) {
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            'worker', { npcs: false });
+        const shipData = (await gameData.data.Ship.get(
+            SYNTHETIC.ships.skiff))!;
+        const ship = makeShip(shipData);
+        await completeEntity(world, ship);
+        ship.components.set(ShipDataComponent, {
+            ...ship.components.get(ShipDataComponent)!,
+            physics: {
+                ...shipData.physics, mass: options.mass,
+                speed: options.speed, acceleration: 45,
+                inertialess: options.inertialess ?? false,
+            },
+        });
+        ship.components.delete(ShipPhysicsComponent);
+        world.entities.set(TARGET, ship);
+        // The immobile beamer, with a hull's Mass; its beam entity names
+        // it as Source and holds nothing of its own that counts.
+        const beamer = new Entity(BEAMER);
+        beamer.components.set(MovementStateComponent, {
+            position: options.beamerAt, velocity: new Vector(0, 0),
+            rotation: new Angle(0), turning: 0, turnBack: false,
+            accelerating: 0,
+        });
+        beamer.components.set(ShipPhysicsComponent, {
+            ...shipData.physics, mass: BEAMER_MASS,
+        });
+        world.entities.set(BEAMER, beamer);
+        const beam = new Entity(BEAM);
+        beam.components.set(MovementStateComponent, {
+            position: options.beamerAt, velocity: new Vector(0, 0),
+            rotation: new Angle(0), turning: 0, turnBack: false,
+            accelerating: 0,
+        });
+        beam.components.set(SourceComponent, BEAMER);
+        world.entities.set(BEAM, beam);
+        const movement = ship.components.get(MovementStateComponent)!;
+        movement.position = new Position(0, 0);
+        movement.velocity = options.velocity ?? new Vector(0, 0);
+        movement.rotation = new Angle(Math.PI / 2);
+        movement.accelerating = 0;
+        if (options.inertialess) {
+            movement.targetSpeed = movement.velocity.length;
+        }
+        world.step();
+        return { world, movement };
+    }
+
+    /** One Count-30 Impact -20 shot, its units shared over 32 ticks as
+     * BeamDamageSystem shares them. */
+    function shot(world: World) {
+        for (let i = 0; i < 32; i++) {
+            world.emit(DamagedEvent, {
+                damage: {
+                    shield: 0, armor: 0, ionization: 0,
+                    ionizationColor: DEFAULT_IONIZE_COLOR,
+                    passThroughShield: 0, knockback: -20,
+                    disableOnly: false,
+                },
+                damager: BEAM, scale: 30 / 32, beam: true,
+            }, [TARGET]);
+            world.step();
+        }
+    }
+
+    // tra_a / tra_b: the beamer on the first moon, 500 px up-left.
+    const DIAGONAL_500 = new Position(-400, -300);
+
+    it('pulls at 0.86 x the push law beyond 450 px', () => {
+        expect(TRACTOR_PULL_RANGE).toBe(450);
+        expect(TRACTOR_PULL_PER_IMPACT).toBeCloseTo(0.86 * 30, 12);
+        // About 15,000 / Mass px/s² for Impact 20 at 30 units a second.
+        expect(TRACTOR_PULL_PER_IMPACT * 20 * 30 / 50).toBeCloseTo(310, -1);
+        expect(TRACTOR_PULL_PER_IMPACT * 20 * 30 / 150)
+            .toBeCloseTo(103, 0);
+    });
+
+    it('pulls a still 50 t Kit Probe A 500 px out toward the beamer to '
+        + 'its top speed on EACH axis in one shot (tra_a / tra_b: 181-185 '
+        + 'px/s, about -135 deg, 1.4 x its 131 px/s)', async () => {
+            const { world, movement } = await rig({
+                mass: 50, speed: 131, beamerAt: DIAGONAL_500,
+            });
+            shot(world);
+            const { x, y } = movement.velocity;
+            // Toward the beamer (up-left), both axes at the cap, less
+            // whatever the overspeed bled meanwhile.
+            expect(x).toBeLessThan(-120);
+            expect(y).toBeLessThan(-120);
+            expect(x).toBeGreaterThanOrEqual(-131);
+            expect(y).toBeGreaterThanOrEqual(-131);
+            expect(movement.velocity.length).toBeGreaterThan(170);
+            expect(movement.velocity.length).toBeLessThan(186);
+            expect(Math.abs(Math.abs(x) - Math.abs(y))).toBeLessThan(10);
+        }, 60_000);
+
+    it('pulls a still 150 t Star Liner to about 100 px/s a shot (trs_a)',
+        async () => {
+            const { world, movement } = await rig({
+                mass: 150, speed: 87.5, beamerAt: DIAGONAL_500,
+            });
+            shot(world);
+            const { x, y } = movement.velocity;
+            expect(movement.velocity.length).toBeGreaterThan(95);
+            expect(movement.velocity.length).toBeLessThan(106);
+            // Along the line to the beamer (-0.8, -0.6), x under its
+            // 87.5 cap (read 85-90).
+            expect(x).toBeLessThan(0);
+            expect(y).toBeLessThan(0);
+            expect(y / x).toBeCloseTo(0.75, 1);
+            expect(x).toBeGreaterThanOrEqual(-87.5);
+        }, 60_000);
+
+    it('never moves a hull heavier than the beamer, at rest or coasting '
+        + '(tre_a 255 t, trm_a / trm_b 300 t)', async () => {
+            const still = await rig({
+                mass: 255, speed: 100, beamerAt: DIAGONAL_500,
+            });
+            shot(still.world);
+            shot(still.world);
+            expect(still.movement.velocity.length).toBe(0);
+            const coasting = await rig({
+                mass: 300, speed: 100, beamerAt: DIAGONAL_500,
+                velocity: new Vector(40.8, 0),
+            });
+            shot(coasting.world);
+            shot(coasting.world);
+            expect(coasting.movement.velocity.x).toBeCloseTo(40.8, 9);
+            expect(coasting.movement.velocity.y).toBeCloseTo(0, 9);
+        }, 60_000);
+
+    it('does not brake a heavier hull inside the range either (GUESS)',
+        async () => {
+            const { world, movement } = await rig({
+                mass: 300, speed: 100, beamerAt: new Position(-100, 0),
+                velocity: new Vector(-30, 0),
+            });
+            shot(world);
+            expect(movement.velocity.x).toBeCloseTo(-30, 9);
+        }, 60_000);
+
+    it('never moves an inertialess hull 500 px out (trg_a)', async () => {
+        const { world, movement } = await rig({
+            mass: 50, speed: 131, inertialess: true,
+            beamerAt: DIAGONAL_500,
+        });
+        for (let i = 0; i < 3; i++) {
+            shot(world);
+        }
+        expect(movement.velocity.length).toBe(0);
+    }, 60_000);
+
+    it('holds a still hull at 425 and 350 px (tr425_a, tr350_a)',
+        async () => {
+            for (const distance of [425, 350]) {
+                const { world, movement } = await rig({
+                    mass: 50, speed: 131,
+                    beamerAt: new Position(-distance, 0),
+                });
+                shot(world);
+                shot(world);
+                expect(movement.velocity.length).withContext(`${distance}`)
+                    .toBe(0);
+            }
+        }, 60_000);
+
+    it('pulls just beyond the range edge and not just inside it',
+        async () => {
+            const outside = await rig({
+                mass: 50, speed: 131, beamerAt: new Position(-460, 0),
+            });
+            shot(outside.world);
+            // Pulled in across the edge during the shot, the last units
+            // brake it toward the beamer's (zero) velocity: less than a
+            // whole shot's pull, still well under way.
+            expect(outside.movement.velocity.x).toBeLessThan(-50);
+            expect(outside.movement.velocity.y).toBeCloseTo(0, 9);
+            const inside = await rig({
+                mass: 50, speed: 131, beamerAt: new Position(-440, 0),
+            });
+            shot(inside.world);
+            expect(inside.movement.velocity.length).toBe(0);
+        }, 60_000);
+
+    it('pulledVelocity holds each axis at the top speed, never cutting '
+        + 'an axis already over it', () => {
+        const v = pulledVelocity(new Vector(0, 0), new Vector(-248, -186),
+            131);
+        expect(v.x).toBe(-131);
+        expect(v.y).toBe(-131);
+        const under = pulledVelocity(new Vector(10, 0), new Vector(-50, 20),
+            131);
+        expect(under.x).toBeCloseTo(-40, 12);
+        expect(under.y).toBeCloseTo(20, 12);
+        // An axis already at 200 keeps it; the pull may slow it.
+        const over = pulledVelocity(new Vector(200, 0), new Vector(10, -5),
+            131);
+        expect(over.x).toBe(200);
+        expect(over.y).toBe(-5);
+        expect(pulledVelocity(new Vector(200, 0), new Vector(-30, 0), 131).x)
+            .toBe(170);
     });
 });
 
