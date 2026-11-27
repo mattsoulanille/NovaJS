@@ -71,8 +71,13 @@ export class AsyncSimulationBridgeClient {
         return await this.guard(() => this.host.snapshot());
     }
 
-    async step(count = 1) {
-        await this.guard(() => this.host.step(count));
+    /**
+     * Resolves to the host's own ms for the batch when it reports one
+     * (see AsyncSimulationBridgeHostApi.step).
+     */
+    async step(count = 1): Promise<number | undefined> {
+        const hostMs = await this.guard(() => this.host.step(count));
+        return typeof hostMs === 'number' ? hostMs : undefined;
     }
 
     async catchUpToRoomClock(): Promise<number> {

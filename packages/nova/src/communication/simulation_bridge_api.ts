@@ -100,7 +100,13 @@ export interface AsyncSimulationBridgeHostApi {
     captureShip(capture: CapturedShip): Promise<void>;
     stellarSetString(record: StellarSetString): Promise<void>;
     missionSetString(record: MissionSetString): Promise<void>;
-    step(count?: number): Promise<void>;
+    /**
+     * Steps `count` ticks. A host that times itself (the browser worker)
+     * resolves to the wall-clock ms the batch took IN the host, which the
+     * frame pump sizes its batches by (a round trip also carries the
+     * caller's own message-queue wait).
+     */
+    step(count?: number): Promise<number | void>;
     catchUpToRoomClock(): Promise<number>;
     snapshot(): Promise<SimulationFrame>;
     addEntity(uuid: string, entity: EncodedEntity): Promise<void>;

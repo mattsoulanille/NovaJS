@@ -158,7 +158,10 @@ class BrowserSimulationBridgeHost implements BrowserSimulationBridgeWorkerApi {
     }
 
     async step(count?: number) {
-        this.requireBridge().step(count);
+        const bridge = this.requireBridge();
+        const start = performance.now();
+        bridge.step(count);
+        return performance.now() - start;
     }
 
     async catchUpToRoomClock() {

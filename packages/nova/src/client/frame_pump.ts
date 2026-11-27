@@ -83,6 +83,33 @@ const HARD_CATCHUP_STEPS = 60;
  */
 const ENTRY_SNAP_BEHIND_TICKS = 2;
 export const ENTRY_SNAP_WINDOW_MS = 2000;
+/**
+ * The most simulation work, in wall-clock ms at the worker's measured
+ * cost per step, that one pump may ask for. The pump waits for its
+ * batch before the next snapshot can land, so a batch IS the gap
+ * between snapshots: ships extrapolate across it, and freeze outright
+ * once it passes STALE_SNAPSHOT_MS. A worker that keeps up (a few ms a
+ * tick) never meets this; one that cannot keep 60 ticks/s (a big
+ * fight) used to be handed the full hard snap (HARD_CATCHUP_STEPS) on
+ * every pump once it trailed the room — 66 ticks at 50 ms is a
+ * 3.3-second batch, which is the "renders one frame every three
+ * seconds" stall. Bounding the batch keeps snapshots flowing at about
+ * this interval: the simulation runs no slower than it did (the
+ * worker's throughput is the limit either way), but in slow motion
+ * instead of in lurches.
+ */
+export const STEP_BATCH_BUDGET_MS = 100;
+
+/**
+ * How many steps fit in STEP_BATCH_BUDGET_MS at `msPerStep`, never
+ * fewer than one. Unbounded while the cost is unknown.
+ */
+export function stepBatchCap(msPerStep: number | undefined): number {
+    if (msPerStep === undefined || !(msPerStep > 0)) {
+        return Infinity;
+    }
+    return Math.max(1, Math.floor(STEP_BATCH_BUDGET_MS / msPerStep));
+}
 
 /**
  * Pure fixed-timestep accumulator step for the frame pump: converts real
@@ -98,6 +125,12 @@ export function advanceSimulationDebt(input: {
     /** Just entered (or docked; see ENTRY_SNAP_BEHIND_TICKS): snap any
      * drift beyond ENTRY_SNAP_BEHIND_TICKS instead of slewing it. */
     eagerSnap?: boolean;
+    /**
+     * The worker's recent wall-clock cost per step (see stepBatchCap):
+     * a frame's steps are bounded to STEP_BATCH_BUDGET_MS of it. Not
+     * applied to debug stepping while paused.
+     */
+    msPerStep?: number;
 }): { steps: number; timeDebt: number } {
     let timeDebt = input.timeDebt;
     if (!input.paused && input.elapsedMs > 0) {
@@ -111,18 +144,29 @@ export function advanceSimulationDebt(input: {
     const speed = input.pacing?.speed ?? 1;
     timeDebt = Math.min(timeDebt,
         SIMULATION_STEP_MS * MAX_CATCHUP_STEPS * speed);
-    let steps = Math.floor(timeDebt / SIMULATION_STEP_MS);
+    const ordinary = Math.floor(timeDebt / SIMULATION_STEP_MS);
+    let steps = ordinary;
     timeDebt -= steps * SIMULATION_STEP_MS;
     if (input.paused) {
-        steps = input.pendingSteps;
-        timeDebt = 0;
-    } else if (input.pacing && input.pacing.behindTicks
+        return { steps: input.pendingSteps, timeDebt: 0 };
+    }
+    if (input.pacing && input.pacing.behindTicks
         > (input.eagerSnap ? ENTRY_SNAP_BEHIND_TICKS : SNAP_BEHIND_TICKS)
             * speed) {
         // Too far behind the room to slew: snap by stepping the backlog,
         // bounded per frame (also scaled by speed to keep real-time cap).
         steps += Math.min(Math.floor(input.pacing.behindTicks),
             HARD_CATCHUP_STEPS * speed);
+    }
+    const cap = stepBatchCap(input.msPerStep);
+    if (steps > cap) {
+        // A slow worker: hand it no more than the budget. Ordinary steps
+        // left over stay owed (under the same debt cap); the snap's share
+        // is re-read from the room's clock next frame.
+        const deferred = Math.max(0, ordinary - cap);
+        timeDebt = Math.min(timeDebt + deferred * SIMULATION_STEP_MS,
+            SIMULATION_STEP_MS * MAX_CATCHUP_STEPS * speed);
+        steps = cap;
     }
     return { steps, timeDebt };
 }
@@ -251,6 +295,12 @@ export class FramePump {
     pacing: SimulationPacing | undefined;
     private timeDebt = 0;
     private lastPumpTime: number | undefined;
+    /**
+     * The worker's recent wall-clock cost per simulation step (a moving
+     * average of step round trips), which bounds each pump's batch
+     * (STEP_BATCH_BUDGET_MS). Reset with each live system.
+     */
+    private msPerStep: number | undefined;
     /**
      * The display's presentation clock (advanceDisplayClock): the
      * simulation time the last display frame showed, the frame timestamp
@@ -555,12 +605,16 @@ export class FramePump {
                 eagerSnap: stateKind() !== 'inSpace'
                     || (this.liveSince !== undefined
                         && now - this.liveSince < ENTRY_SNAP_WINDOW_MS),
+                msPerStep: this.msPerStep,
             });
             this.timeDebt = next.timeDebt;
             const steps = next.steps;
 
             if (steps > 0) {
-                await bridge.step(steps);
+                const stepStart = performance.now();
+                const hostMs = await bridge.step(steps);
+                this.noteStepCost(hostMs ?? performance.now() - stepStart,
+                    steps);
                 const frame = await bridge.snapshot();
                 if (liveSystem(runtime.state.state) !== live) {
                     return;
@@ -614,6 +668,24 @@ export class FramePump {
     }
 
     /**
+     * Folds one batch's cost into the per-step estimate. The cost is the
+     * worker's OWN time for the batch, as it reports it: the round trip
+     * also carries however long the reply queued behind this thread's
+     * work (a slow render), and sizing batches by that would shrink them
+     * for a slowness they cannot help — and, every round trip paying
+     * that queueing once, cut the simulation's rate. (A host that does
+     * not report falls back to the round trip.) Every batch counts, one
+     * step too (a cap of one must see the cost fall when the fight
+     * ends), and the average leans on the newest batch: a fight that
+     * just started must shrink the next batch at once.
+     */
+    private noteStepCost(elapsedMs: number, steps: number): void {
+        const perStep = elapsedMs / steps;
+        this.msPerStep = this.msPerStep === undefined ? perStep
+            : this.msPerStep * 0.5 + perStep * 0.5;
+    }
+
+    /**
      * Takes up a newly published live system, on its first ticker frame
      * and BEFORE that frame's display step: a fresh delta stream and a
      * fresh route (the pacing from the previous system's frames is
@@ -637,6 +709,7 @@ export class FramePump {
         this.landedSnapshot = undefined;
         this.pacing = undefined;
         this.timeDebt = 0;
+        this.msPerStep = undefined;
         this.lastPumpTime = frameTime;
         this.liveSince = frameTime;
         try {

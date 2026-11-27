@@ -4,7 +4,9 @@ import { TimePlugin, TimeResource, TimeScaleResource } from 'nova_ecs/plugins/ti
 import { World } from 'nova_ecs/world';
 import { MAX_EXTRAPOLATION_DELTA_MS } from '../display/movement_extrapolation_plugin.js';
 import { SIMULATION_STEP_MS } from '../nova_plugin/make_system.js';
-import { advanceSimulationDebt, applyDisplaySpeed } from './frame_pump.js';
+import {
+    advanceSimulationDebt, applyDisplaySpeed, STEP_BATCH_BUDGET_MS, stepBatchCap,
+} from './frame_pump.js';
 
 describe('advanceSimulationDebt (#371 R1)', () => {
     it('advances 1 step per frame at 1x and 2 steps per frame at 2x', () => {
@@ -112,6 +114,62 @@ describe('advanceSimulationDebt: the eager snap after an entry', () => {
         // Bounded per frame like the steady-state snap.
         expect(frame(500, 1, true).steps).toBe(1 + 60);
         expect(frame(500, 2, true).steps).toBe(2 + 120);
+    });
+});
+
+describe('advanceSimulationDebt: a slow worker\'s batch is bounded', () => {
+    // A worker that cannot keep 60 ticks/s trails the room; the hard snap
+    // used to hand it HARD_CATCHUP_STEPS on every pump, and the pump
+    // waits for its batch before the next snapshot lands.
+    const trailing = (msPerStep?: number) =>
+        advanceSimulationDebt({
+            timeDebt: 0,
+            elapsedMs: SIMULATION_STEP_MS,
+            paused: false,
+            pendingSteps: 0,
+            pacing: { rate: 1.05, behindTicks: 500, speed: 1 },
+            msPerStep,
+        });
+
+    it('keeps a 50 ms/tick batch inside the budget instead of 61 ticks (3 s)', () => {
+        expect(trailing().steps).toBe(1 + 60);
+        const bounded = trailing(50);
+        expect(bounded.steps).toBe(Math.floor(STEP_BATCH_BUDGET_MS / 50));
+        expect(bounded.steps * 50).toBeLessThanOrEqual(STEP_BATCH_BUDGET_MS);
+    });
+
+    it('still steps once per frame however slow the worker is', () => {
+        expect(trailing(1000).steps).toBe(1);
+        expect(stepBatchCap(1000)).toBe(1);
+    });
+
+    it('leaves a worker that keeps up its full snap', () => {
+        expect(trailing(1).steps).toBe(1 + 60);
+        expect(stepBatchCap(undefined)).toBe(Infinity);
+        expect(stepBatchCap(0)).toBe(Infinity);
+    });
+
+    it('keeps the ordinary steps it defers owed, under the usual debt cap', () => {
+        // 3 ticks of debt plus this frame's at 60 ms a tick: 1 step now,
+        // the other 3 carried (not dropped, and not more than 6 ticks).
+        const next = advanceSimulationDebt({
+            timeDebt: 3 * SIMULATION_STEP_MS,
+            elapsedMs: SIMULATION_STEP_MS,
+            paused: false,
+            pendingSteps: 0,
+            pacing: { rate: 1, behindTicks: 0, speed: 1 },
+            msPerStep: 60,
+        });
+        expect(next.steps).toBe(1);
+        expect(next.timeDebt).toBeCloseTo(3 * SIMULATION_STEP_MS, 6);
+    });
+
+    it('does not bound debug stepping while paused', () => {
+        const next = advanceSimulationDebt({
+            timeDebt: 0, elapsedMs: SIMULATION_STEP_MS, paused: true,
+            pendingSteps: 30, msPerStep: 50,
+        });
+        expect(next.steps).toBe(30);
     });
 });
 
