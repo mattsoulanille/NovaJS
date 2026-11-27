@@ -778,30 +778,33 @@ killed by the Kit Beam Turret in the Leave's own keys step leaves a known
 charge that drains at 0.29 a second per Deionize point; read the turn off
 the Kit Ring Ion's spoke (`tools/e6rates.sh`, `tools/brk.py`). Scenarios
 `w50_space_interactive.json` (inbox `w50.jsonl`).
-Wave 51 used sÿst 1493, spöb 1215, wëap 330, oütf 514-518 and bit 9334,
-and RETIRED wave 39's shïp 598 (Kit Ring Ion Fade), wave 40's 603 (Kit
-Jump Slow Ring) and 604 (Kit Ring Ion D50), wave 41's 629 (Kit Ring Ion
-D0), wave 6's 792 (Kit Lancer Ion), wave 7's 814 (Kit Lancer Ion Slow) and
-wave 4's S100 jam set (oütf 631, shïp 777, düde 608, mïsn 968, bit 9009),
-using them for its own (pilots `w39_e6f`, `w40_u8r`, `w40_e6d`, `w41_e6`,
-`w6_ion*`, `w7_ionthr`, `w4_rk_decoyS100` and `w4_rk_passS100` are
-stale). Next free: sÿst 1494, spöb 1216-1399 (and 518-999), shïp **none**
-(retire an old kit hull), düde 328 / 552, ränk 205, mïsn **none** (retire
-another old kit mission: wave 14's 1082-1084), përs: override a stock one,
-wëap 331, oütf 519 (and 631), gövt 283 and below, flët 324, jünk 205, bits
-9335, rlëD 1113. A **second tractor**: shïp 777 Kit Tractor Beamer 40
-(wëap 330, Impact -40) on Kit Knock Grid's first moon by mïsn 968 (bit
-9334), beside wave 50's Impact -20 one (mïsn 1078). **Turn ladder**: shïp 598 / 604 / 629 /
-792 / 814 Kit Ring Ion T10 / T20 / T60 / T100 / T200 are the Kit Ring Ion
-(596, Turn 30) at other Turns; with wave 50's ion clock (mïsn 963 on Kit
-Knock Grid Port, the Kit Beam Turret kill in the Leave's own keys step) a
-hull's turn is read per charge stage; read a fast or tinted ring with
+Wave 51 used sÿst 1493, spöb 1215, wëap 330, oütf 514-518 and bit 9335, and
+RETIRED wave 39's shïp 598 (Kit Ring Ion Fade), wave 40's 603 (Kit Jump Slow
+Ring) and 604 (Kit Ring Ion D50), wave 41's 629 (Kit Ring Ion D0), wave 6's
+792 (Kit Lancer Ion), wave 7's 814 (Kit Lancer Ion Slow) and wave 4's S50 /
+S100 jam sets (oütf 630 / 631, shïp 776 / 777, düde 607 / 608, mïsn 967 /
+968, bits 9008 / 9009), using them for its own (pilots `w39_e6f`, `w40_u8r`,
+`w40_e6d`, `w41_e6`, `w6_ion*`, `w7_ionthr` and `w4_rk_*S50` / `w4_rk_*S100`
+are stale). Next free: sÿst 1494, spöb 1216-1399 (and 518-999), shïp
+**none** (retire an old kit hull), düde 607 / 328 / 552, ränk 205, mïsn 967
+(then retire another old kit mission: wave 14's 1082-1084), përs: override a
+stock one, wëap 331, oütf 519 (and 630 / 631), gövt 283 and below, flët 324,
+jünk 205, bits 9336 (**stock bits live up here**: 9011-9015, 9111,
+9200-9208, 9215-9216, 9333-9334, 9500-9501, 9666, 9812, 9995, 9998-9999; bit
+9334 offers stock mïsn 861 "Head Back to Merrol" on landing), rlëD 1113. A
+**second tractor**: shïp 777 Kit Tractor Beamer 40 (wëap 330, Impact -40) on
+Kit Knock Grid's first moon by mïsn 968 (bit 9335), beside wave 50's Impact
+-20 one (mïsn 1078). **Turn ladder**: shïp 598 / 604 / 629 / 792 / 814 / 776
+Kit Ring Ion T10 / T20 / T60 / T100 / T200 / T25 are the Kit Ring Ion (596,
+Turn 30) at other Turns; with wave 50's ion clock (mïsn 963 on Kit Knock
+Grid Port, the Kit Beam Turret kill in the Leave's own keys step) a hull's
+turn is read per charge stage; read a fast or tinted ring with
 `tools/hough.py` (a rate the moons and the tint flicker cannot drag), not a
-plain least-squares fit. shïp 603 Kit Probe Ion A900 is wave 44's Kit
-Probe Ion at Accel 900. A **self-granting outfitter**: sÿst 1493 Kit Self
-Grant (port spöb 1215, outfitter only) sells oütf 514 Kit SG Grant
-(OnPurchase `G514`), 515 Kit SG Drop (OnSell `D515`), 516 Kit SG Both,
-517 Kit SG Giver (`G518`) and 518 Kit SG Gift, Max 3 each. Scenarios
+plain least-squares fit. shïp 603 Kit Probe Ion A900 is wave 44's Kit Probe
+Ion at Accel 900. A **self-granting outfitter**: sÿst 1493 Kit Self Grant
+(port spöb 1215, outfitter only) sells oütf 514 Kit SG Grant (OnPurchase
+`G514`), 515 Kit SG Drop (OnSell `D515`), 516 Kit SG Both, 517 Kit SG Giver
+(`G518`) and 518 Kit SG Gift, Max 3 each. Scenarios
 `w51_space_interactive.json` (inbox `w51.jsonl`).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change

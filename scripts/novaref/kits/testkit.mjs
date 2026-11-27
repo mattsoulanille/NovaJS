@@ -801,17 +801,20 @@ function wave50Resources() {
  * Ring (w40_u8r) and 604 Kit Ring Ion D50 (w40_e6d), wave 41's 629 Kit
  * Ring Ion D0 (w41_e6), wave 6's 792 Kit Lancer Ion (w6_ion*) and wave
  * 7's 814 Kit Lancer Ion Slow (w7_ionthr), using them for its own (those
- * pilots are stale), and (added during the wave) wave 4's S100 jam set
- * (oütf 631, shïp 777, düde 608, mïsn 968, bit 9009; pilots
- * w4_rk_decoyS100 / w4_rk_passS100 stale). Used: sÿst 1493, spöb 1215,
- * shïp 598 / 603 / 604 / 629 / 777 / 792 / 814, düde 608, wëap 330, oütf
- * 514-518, mïsn 968, bit 9334. Map row y = -3240 (x -680). The next
+ * pilots are stale), and (added during the wave) wave 4's S100 and S50 jam
+ * sets (oütf 630 / 631, shïp 776 / 777, düde 607 / 608, mïsn 967 / 968,
+ * bits 9008 / 9009; pilots w4_rk_*S50 / w4_rk_*S100 stale). Used: sÿst
+ * 1493, spöb 1215, shïp 598 / 603 / 604 / 629 / 776 / 777 / 792 / 814,
+ * düde 608, wëap 330, oütf 514-518, mïsn 968, bit 9335 (free again: düde
+ * 607, mïsn 967, oütf 630 / 631). Map row y = -3240 (x -680). The next
  * free ids: sÿst 1494+, spöb 1216-1399 (and 518-999), shïp NONE (retire
- * an old kit hull), düde 328 / 552+, përs: override a stock one
- * (kits/w48_pers225.mjs), ränk 205+, mïsn NONE (retire another old kit
- * mission: wave 14's 1082-1084 are one-off rigs), gövt 283 and below,
- * flët 324+, wëap 331+, oütf 519+ (and 631), jünk 205+, bits 9335+, rlëD
- * 1113+.
+ * an old kit hull), përs: override a stock one
+ * (kits/w48_pers225.mjs), ränk 205+, mïsn 967 (then retire another old
+ * kit mission: wave 14's 1082-1084 are one-off rigs), düde 607 / 328 /
+ * 552+, gövt 283 and below, flët 324+, wëap 331+, oütf 519+ (and 630 /
+ * 631), jünk 205+, bits 9336+ (NOT 9333 / 9334 or any stock bit:
+ * 9011-9015, 9111, 9200-9208, 9215-9216, 9333-9334, 9500-9501, 9666,
+ * 9812, 9995, 9998-9999 are stock), rlëD 1113+.
  *
  *  E6T shïp 598 / 604 / 629 / 792 / 814 Kit Ring Ion T10 / T20 / T60 /
  *      T100 / T200: the Kit Ring Ion (596: the white-spoke ring, inertialess,
@@ -821,6 +824,7 @@ function wave50Resources() {
  *      Beam Turret: killed after two hits the charge sits tinted (about 59
  *      down to 33) for about 90 s and then untinted; after six, above the
  *      no-turn line for minutes. So each stage's turn rate per Turn.
+ *  E6T25 (added) shïp 776 Kit Ring Ion T25: the same at Turn 25.
  *  E6A shïp 603 Kit Probe Ion A900: wave 44's Kit Probe Ion (791: inertial,
  *      Accel 300, Speed 300, IonizeMax 100, Deionize 1) at Accel 900 and
  *      Speed 600, so the saturated thrust cut is read on two Accels.
@@ -830,7 +834,8 @@ function wave50Resources() {
  *      Both (both), 517 Kit SG Giver (OnPurchase "G518") and 518 Kit SG
  *      Gift (plain): Max 3 each, Cost 1000, ModType 2 (cargo) +1 each, so
  *      the hold's size counts them too.
- *  TR40 (added) mïsn 968 (bit 9334) puts shïp 777 Kit Tractor Beamer 40
+ *  TR40 (added) mïsn 968 (bit 9335; 9334 is a STOCK bit: mïsn 861 Head
+ *      Back to Merrol is offered on it) puts shïp 777 Kit Tractor Beamer 40
  *      (düde 608: wave 48's beamer, the same 136 clone, with wëap 330's
  *      Impact -40 Count-30 beam) on Kit Knock Grid's first moon, as wave
  *      50's mïsn 1078 does the Impact-20 one: the pull's Impact scaling.
@@ -845,6 +850,9 @@ function wave51Resources() {
     ];
     // --- E6T: shïp 598 / 604 / 629 / 792 / 814 (retired, see above).
     [[598, 10], [604, 20], [629, 60], [792, 100], [814, 200]].forEach(([id, turn]) => out.push(...ringIon(id, `Kit Ring Ion T${turn}`, turn)));
+    // --- E6T25 (added during the wave): wave 4's S50 jam set retired (oütf 630 unused; shïp 776 reused): a Turn that is not a
+    // multiple of 10 (is the uncharged turn itself whole degrees a frame?).
+    out.push(...ringIon(776, "Kit Ring Ion T25", 25));
     // --- E6A: shïp 603 (retired), wave 44's Kit Probe Ion at Accel 900.
     out.push(...ship(603, "Kit Probe Ion A900", 128, { turn: 30, armor: 30000, shield: 30000, mass: 50, freeMass: 500, cargo: 50, maxGuns: 8,
         maxTurrets: 8, ai: 1, strength: 10, flags: 0, flags2: 0x0088, accel: 900, speed: 600, ionization: 100, deionize: 1 }));
@@ -858,14 +866,14 @@ function wave51Resources() {
     out.push(sg(514, "Kit SG Grant", "G514", ""), sg(515, "Kit SG Drop", "", "D515"), sg(516, "Kit SG Both", "G516", "D516"),
         sg(517, "Kit SG Giver", "G518", ""), sg(518, "Kit SG Gift", "", ""));
     // --- TR40 (added during the wave): wave 4's S100 jam set retired (oütf 631 unused; shïp 777, düde 608, mïsn 968 reused), wëap
-    // 330, bit 9334: wave 48's Kit Tractor Beamer 20 (shïp 843, clone of 136) with an Impact -40 beam, on the knock grid's first moon.
+    // 330, bit 9335 (not 9334: stock mïsn 861's AvailBits): wave 48's Kit Tractor Beamer 20 (shïp 843, clone of 136) with an Impact -40 beam, on the knock grid's first moon.
     out.push(weap(330, "Kit Tractor Beam 40", 170, { reload: 120, duration: 30, speed: 0, armorDamage: 1, shieldDamage: 1, guidance: 3,
         beamLength: 3000, beamWidth: 2, impact: -40, ionization: 0, flags: 0 }));
     out.push(...ship(777, "Kit Tractor Beamer 40", 136, { armor: 30000, shield: 0, accel: 0, speed: 0, turn: 60, ai: 3, strength: 1, crew: 1,
         weapons: [330, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
     out.push(dude(608, "Kit Tractor Beamer 40", 3, 362, 777));
-    out.push(...misn(968, "Kit TR tractor beamer 40 on the grid", 9334, { availStel: 1170, shipCount: 1, shipDude: 608, shipGoal: -1,
-        shipBehav: -1, shipStart: -2, onAccept: "!b9334" }));
+    out.push(...misn(968, "Kit TR tractor beamer 40 on the grid", 9335, { availStel: 1170, shipCount: 1, shipDude: 608, shipGoal: -1,
+        shipBehav: -1, shipStart: -2, onAccept: "!b9335" }));
     return out;
 }
 
@@ -7025,7 +7033,7 @@ function jamWave4() {
  *  oütf 630/631 Kit Jammer 50/100: ONE outfit of +50/+100 type-1 jamming
  *       (stacked outfits don't add up, wave 3).
  *  shïp 776/777 Jam Target S50/S100: the J0 target with one of those
- *       (the S100 set RETIRED in wave 51).
+ *       (both sets RETIRED in wave 51).
  *       düde 607/608 (AI 1, govt 363); mïsn 967/968 (bits 9008/9009) put
  *       one on Kit Rock Marker (900 px) in sÿst 2132 Kit Rock Range (16
  *       asteroids), where mïsn 976 (bit 9017) puts the J0 target.
@@ -7039,9 +7047,10 @@ function wave4Rocks() {
         seekerFlags: seeker, jamVuln: [100, 0, 0, 0], proxRadius: 25, blastRadius: 0, flags: 0x0002,
     });
     out.push(jm(378, "JamM Decoy V100", 0x0002), jm(380, "JamM Pass V100", 0x0001));
-    // The S100 set (oütf 631, shïp 777, düde 608, mïsn 968, bit 9009) was RETIRED in wave 51 for the Kit Tractor Beamer 40
-    // (wave51Resources; pilots w4_rk_decoyS100 / w4_rk_passS100 are stale).
-    [[630, 50, 776, 607, 967, 9008]].forEach(([oid, j, sid, did, mid, bit]) => {
+    // The S100 set (oütf 631, shïp 777, düde 608, mïsn 968, bit 9009) and the S50 set (oütf 630, shïp 776, düde 607, mïsn 967, bit
+    // 9008) were RETIRED in wave 51 for the Kit Tractor Beamer 40 and the Kit Ring Ion T25 (wave51Resources; pilots
+    // w4_rk_decoyS100 / w4_rk_passS100 / w4_rk_decoyS50 / w4_rk_plainS100 are stale).
+    [].forEach(([oid, j, sid, did, mid, bit]) => {
         const jammer = gun(oid, `Kit Jammer ${j}`, 0);
         jammer.set = { ...jammer.set, modType: 33, modVal: j, max: 8 };
         out.push(jammer);
