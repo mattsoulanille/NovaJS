@@ -50,7 +50,7 @@ const disableSuspendedStats = new Set<Component<Stat>>(
 // The ion charge is NOT capped at IonizeMax: every hit adds its full
 // Ionization and Deionize drains the whole pile. MEASURED (reference
 // "Ionization's cap and the afterburner (E6 leftovers), wave 40"): a
-// Deionize-50 hull (15 a second) was still fully ionized 150 s after
+// Deionize-50 hull (28 a second, DEIONIZE_FRAME_RATE) was still fully ionized 150 s after
 // leaving the ion gun, where a charge capped at IonizeMax 100 drains in
 // under 7 s. A hull with no ion capacity (IonizeMax <= 0) is still
 // clamped to [0, 0] (see ionization_plugin's ruling).

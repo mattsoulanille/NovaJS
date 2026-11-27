@@ -6,7 +6,7 @@ import { CloakData, decodeCloakModVal, getDefaultCloakData } from "novadatainter
 import { CloakScannerData, decodeCloakScannerModVal, getDefaultCloakScannerData } from "novadatainterface/cloak_scanner_data";
 import { decodeRequireGovt, OutfitData, OutfitPhysics } from "novadatainterface/outfit_data";
 import { getDefaultPictData } from "novadatainterface/pict_data";
-import { FPS, OutfitTurnRateConversionFactor, ShipAccelerationConversionFactor, ShipSpeedConversionFactor, ShipTurnRateConversionFactor } from "./constants.js";
+import { DEIONIZE_FRAME_RATE, FPS, OutfitTurnRateConversionFactor, ShipAccelerationConversionFactor, ShipSpeedConversionFactor, ShipTurnRateConversionFactor } from "./constants.js";
 
 
 // This should not be necessary!
@@ -150,7 +150,9 @@ export async function OutfitParse(outf: OutfResource, notFoundFunction: (m: stri
             if (typeof fVal !== "number") {
                 throw new Error("Wrong type. Expected number");
             }
-            physics[fType] = fVal * FPS / 100;
+            // The shïp field's unit (GUESS: the Bible gives ModType 39
+            // as an increase of the same rate).
+            physics[fType] = fVal * DEIONIZE_FRAME_RATE / 100;
         }
         else if (fType === "turnRate") {
             if (typeof fVal !== "number") {

@@ -22,21 +22,23 @@ import { IonizationComponent, IonizationRechargeSystem } from "./health_plugin.j
  * 39/40 add dissipation and capacity.
  *
  * "Ionized" is a LEVEL test: a ship is ionized while its charge is above
- * ION_IONIZED_FRACTION (0.3) of IonizeMax, and free again the tick it
+ * ION_IONIZED_FRACTION (0.16) of IonizeMax, and free again the tick it
  * decays to that line or below — however it got there. While it holds,
  * the wëap IonizeColor tint is painted (ship_animation_plugin reads
  * IsIonizedComponent) and wëap Flags 0x0020 weapons can't fire. The
- * slowdown (ionSlowdown) is a function of the charge alone: it starts
- * with the first point of charge and is complete at the ionized line.
+ * slowdown (ionSlowdown) is a function of the charge alone, in three
+ * steps: one with the first point of charge, one at the ionized (tint)
+ * line, and the full cut above a second line (ION_NO_TURN_FRACTION).
  *
  * MAINTAINER RULING #153 restored the level test (over #124's full-charge
  * / full-dissipate hysteresis) at HALF of IonizeMax; the line has since
  * been measured lower (reference "Ionization below a full charge (E6
- * leftover), wave 41": a Deionize-1 hull was tinted from its SECOND
- * 20-point hit, about 39 of IonizeMax 100 after the drain between hits,
- * and not after the first). Everything else #124 fixed stays: the
- * IonizeMax-0 guard below, the stat's percent guard (health_plugin), the
- * IonizeColor tint, and the ordering before the decay.
+ * leftover), wave 41", and "Ion charge against the turn, in 5-point steps
+ * (E6), wave 42": tinted from the 5th 5-point hit, not the 4th, with
+ * Deionize 1 draining about 2 points between hits). Everything else #124
+ * fixed stays: the IonizeMax-0 guard below, the stat's percent guard
+ * (health_plugin), the IonizeColor tint, and the ordering before the
+ * decay.
  *
  * The state lives in IsIonizedComponent, which is serializer-registered
  * and so carried in rollback snapshots and wire baselines like
@@ -62,24 +64,47 @@ import { IonizationComponent, IonizationRechargeSystem } from "./health_plugin.j
  * does not turn at all (0 deg/s in every hold, the control 87.8 deg/s),
  * accelerates about a third as fast (0 -> top speed in 3-3.4 s against
  * 1.1 s) and keeps its top speed. This replaces ruling #153's 0.6 on all
- * three (the pre-#124 value, never measured). Wave 41 found the turn
- * already gone at the tint (about 40 of 100 and up), so the full cut
- * holds from the ionized line (ION_IONIZED_FRACTION) up.
+ * three (the pre-#124 value, never measured). The full cut holds above
+ * the second line (ION_NO_TURN_FRACTION), wave 42.
  */
 export const ION_FULL_TURN_FACTOR = 0;
 export const ION_FULL_ACCELERATION_FACTOR = 1 / 3;
 
 /**
  * The share of IonizeMax above which a ship is IONIZED (tinted, its
- * Flags 0x0020 weapons silent, its turn and acceleration fully cut).
- * MEASURED to lie between 20 and about 39 of IonizeMax 100 (reference
- * "Ionization below a full charge (E6 leftover), wave 41": not tinted
- * after one 20-point hit, tinted after the second, which with Deionize
- * 1's 0.3 a second drained over the 3.6 s between hits is about 39);
- * GUESS 0.3, the middle of that bracket (the section's own 0.4 would miss
- * the second hit's 39). Was half (ruling #153).
+ * Flags 0x0020 weapons silent, its turn cut to a third). MEASURED
+ * (reference "Ion charge against the turn, in 5-point steps (E6), wave
+ * 42"): a Deionize-1 hull of IonizeMax 100 hit for 5 every 3.6 s was
+ * tinted from the 5th hit, not the 4th; with Deionize 1 draining 2.0
+ * points between hits (0.01 a 1/56 s frame, DEIONIZE_FRAME_RATE) that is
+ * a line between 14 and 17, and a 20-point hit tints at once (wave 42's
+ * e6b_b). GUESS 0.16, the section's proposal. Was 0.3 (wave 41's
+ * bracket, read with the slower 1/30 s drain), and half before that
+ * (ruling #153).
  */
-export const ION_IONIZED_FRACTION = 0.3;
+export const ION_IONIZED_FRACTION = 0.16;
+
+/**
+ * The share of IonizeMax above which an ionized ship does not turn at
+ * all (the full cut, ION_FULL_*). MEASURED, the same section: the
+ * 5-point hull turned at a third through hits 5-12 and not at all from
+ * hit 13 (with the 2.0 drain, charges 38 and 41), and the 20-point hull
+ * not at all from its second hit (38). GUESS 0.38, the section's
+ * proposal (the two runs meet at about 38).
+ */
+export const ION_NO_TURN_FRACTION = 0.38;
+
+/**
+ * How much of the full cut (ION_FULL_*) each step of the charge applies:
+ * MEASURED on the turn (wave 42: about two thirds of the turn, 60 of 87.8
+ * deg/s, for any untinted charge; about a third, 30 deg/s, once tinted;
+ * none above the second line), two identical runs and wave 41's
+ * Deionize-0 dips (58 deg/s just after a 20-point hit). The acceleration
+ * was not measured below a full charge: GUESS it takes the same share of
+ * its full cut, so 7/9, 5/9 and then the measured third.
+ */
+export const ION_UNTINTED_SEVERITY = 1 / 3;
+export const ION_TINTED_SEVERITY = 2 / 3;
 
 /** Multipliers ionization puts on a ship's movement physics. */
 export interface IonSlowdown {
@@ -92,18 +117,14 @@ export const NO_ION_SLOWDOWN: Readonly<IonSlowdown> =
     { maxVelocity: 1, acceleration: 1, turnRate: 1 };
 
 /**
- * The slowdown of a ship whose ion charge is `ionization`: none at no
- * charge; the measured full cut (no turn, a third of the acceleration)
- * from the ionized line (ION_IONIZED_FRACTION of IonizeMax) up; and below
- * it, GUESS, linear in the charge from nothing at zero to the full cut at
- * the line. MEASURED that a charge well below the line already slows the
- * turn (reference "Ionization below a full charge (E6 leftover), wave
- * 41": a 20-point hit on a Deionize-0 hull of IonizeMax 100, never
- * tinted, cut the turn to about 58 deg/s in the next 10 frames and 68 in
- * the 10 after, the control 87.8, as the charge drained at about 1 a
- * frame); the linear ramp to the line fits those two dips about as well
- * as the section's 1 - 1.5 x charge / IonizeMax and leaves no jump at the
- * tint. The top speed is never cut. A pure function of the synced charge.
+ * The slowdown of a ship whose ion charge is `ionization`, in three
+ * steps (MEASURED, reference "Ion charge against the turn, in 5-point
+ * steps (E6), wave 42"; see ION_*_SEVERITY): none at no charge; a third
+ * of the full cut for any charge up to the ionized line; two thirds of it
+ * from there to ION_NO_TURN_FRACTION; the measured full cut (no turn, a
+ * third of the acceleration) above. Was a linear ramp to the ionized
+ * line (GUESS, wave 41). The top speed is never cut. A pure function of
+ * the synced charge.
  */
 export function ionSlowdown(
     ionization: { current: number, max: number } | undefined,
@@ -111,9 +132,11 @@ export function ionSlowdown(
     if (!ionization || ionization.max <= 0 || !(ionization.current > 0)) {
         return NO_ION_SLOWDOWN;
     }
-    const line = ionization.max * ION_IONIZED_FRACTION;
-    const severity = Math.min(1, ionization.current / line);
-    // Written as a blend so a full charge gives the constants exactly.
+    const { current, max } = ionization;
+    const severity = current > max * ION_NO_TURN_FRACTION ? 1
+        : current > max * ION_IONIZED_FRACTION ? ION_TINTED_SEVERITY
+            : ION_UNTINTED_SEVERITY;
+    // Written as a blend so the full cut gives the constants exactly.
     return {
         maxVelocity: 1,
         acceleration: (1 - severity)

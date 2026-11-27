@@ -12,6 +12,18 @@ export const FPS = 30;
  */
 export const BEAM_COUNT_RATE = 56;
 
+/**
+ * The frame rate shïp Deionize (and oütf ModType 39's extra Deionize) is
+ * counted in: Deionize 100 drains one point of ion charge a frame of
+ * THIS rate. GUESS from the drain (reference "Ion charge against the
+ * turn, in 5-point steps (E6), wave 42"): the 5-point and 20-point runs
+ * agree only if Deionize 1 drains a little over 2 points in the 3.6 s
+ * between hits, which 0.01 a 1/56 s frame (2.0) gives and the 1/30 s
+ * frame NovaJS used (1.08) does not; the same 56 a second as the beam's
+ * Count (BEAM_COUNT_RATE). Was FPS (30).
+ */
+export const DEIONIZE_FRAME_RATE = 56;
+
 // shïp Speed and Accel, measured on the original EV Nova 1.1.1 (#316;
 // docs/reference_experiments.md, "U1"): they do NOT share the wëap Speed
 // encoding (pixels/frame * 100, WEAP_SPEED_FACTOR in weapon_parse.ts).

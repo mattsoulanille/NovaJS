@@ -15,7 +15,7 @@ import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "no
 import { getDefaultStatusBarColors, getDefaultStatusBarDataAreas } from "novadatainterface/status_bar_data";
 import { WeaponData } from "novadatainterface/weapon_data";
 import { NovaParse } from "../src/nova_parse.js";
-import { FPS, ShipAccelerationConversionFactor, ShipSpeedConversionFactor, ShipTurnRateConversionFactor } from "../src/parsers/constants.js";
+import { DEIONIZE_FRAME_RATE, FPS, ShipAccelerationConversionFactor, ShipSpeedConversionFactor, ShipTurnRateConversionFactor } from "../src/parsers/constants.js";
 import { getPNG } from "./resource_parsers/png_compare.js";
 import { resolveFixture } from './fixtures.js';
 
@@ -72,7 +72,7 @@ describe("NovaParse", () => {
         expect(s128.physics.energy).toEqual(21);
         expect(s128.physics.energyRecharge).toEqual(FPS / 22);
         expect(s128.physics.ionization).toEqual(23);
-        expect(s128.physics.deionize).toEqual(24 / 100 * FPS);
+        expect(s128.physics.deionize).toEqual(24 / 100 * DEIONIZE_FRAME_RATE);
         expect(s128.physics.speed).toEqual(12 * ShipSpeedConversionFactor);
         expect(s128.physics.acceleration).toEqual(11 * ShipAccelerationConversionFactor);
         expect(s128.physics.turnRate).toEqual(13 * ShipTurnRateConversionFactor);

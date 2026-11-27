@@ -11,7 +11,7 @@ import { NovaResources } from "../resource_parsers/resource_holder_base.js";
 import { ShipResource } from "../resource_parsers/ship_resource.js";
 import { BaseParse } from "./base_parse.js";
 import { FlagNamespaceMap, resolveResourceFlags } from "../flag_namespace.js";
-import { FPS, ShipAccelerationConversionFactor, ShipSpeedConversionFactor, ShipTurnRateConversionFactor } from "./constants.js";
+import { DEIONIZE_FRAME_RATE, FPS, ShipAccelerationConversionFactor, ShipSpeedConversionFactor, ShipTurnRateConversionFactor } from "./constants.js";
 import { ShanParse } from "./shan_parse.js";
 
 
@@ -80,14 +80,19 @@ export type AmmoOutfitMap = ShipPictMap;
 
 /**
  * shïp Deionize as the hull's drain, in Deionize units (100 = one point of
- * ion charge a 1/30 s frame). A ZERO field is not "never drains": MEASURED
- * (reference "Ionization below a full charge (E6 leftover), wave 41") a
- * Deionize-0 hull of IonizeMax 100 shed each 20-point hit within about 20
- * frames and was never ion-tinted across twenty hits, where a Deionize-1
- * hull kept its charge. GUESS: 0 falls back to 100 (about 1 a frame, the
- * drain time read). Any other value is used as given.
+ * ion charge a 1/56 s frame, DEIONIZE_FRAME_RATE). A ZERO field is not
+ * "never drains": MEASURED (reference "Ionization below a full charge (E6
+ * leftover), wave 41") a Deionize-0 hull of IonizeMax 100 shed each
+ * 20-point hit within about 20-30 recorded frames and was never
+ * ion-tinted across twenty hits, where a Deionize-1 hull kept its charge.
+ * GUESS: 0 falls back to 70, about 39 points a second: with the turn cut
+ * in steps (wave 42: two thirds of the turn for ANY untinted charge) a
+ * 20-point hit then holds the cut about 0.5 s, which reproduces wave 41's
+ * folded dips (58 deg/s in the first 10 recorded frames after a hit, 68
+ * in the next 10, the control 87.8); was 100 at 1/30 s frames (30 a
+ * second, a cut through both windows). Any other value is used as given.
  */
-export const DEIONIZE_ZERO_FALLBACK = 100;
+export const DEIONIZE_ZERO_FALLBACK = 70;
 export function shipDeionize(deionize: number): number {
     return deionize === 0 ? DEIONIZE_ZERO_FALLBACK : deionize;
 }
@@ -413,7 +418,7 @@ export async function ShipParse(ship: ShipResource,
         energyRecharge: ship.energyRecharge === 0 ? 0 : FPS / ship.energyRecharge,
         ionization: ship.ionization,
         // 100 is 1 point of ion energy per 1/30th of a second (evn bible).
-        deionize: shipDeionize(ship.deionize) / 100 * FPS,
+        deionize: shipDeionize(ship.deionize) / 100 * DEIONIZE_FRAME_RATE,
         speed: ship.speed * ShipSpeedConversionFactor,
         acceleration: ship.acceleration * ShipAccelerationConversionFactor,
         turnRate: ship.turnRate * ShipTurnRateConversionFactor,

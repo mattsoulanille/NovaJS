@@ -7,20 +7,21 @@ import { DamagedEvent } from './death_plugin.js';
 import { completeEntity } from '../spawn/index.js';
 import { IonizationComponent } from './health_plugin.js';
 import {
-    ION_FULL_ACCELERATION_FACTOR, ION_IONIZED_FRACTION, ionizedNow,
-    ionSlowdown, IsIonizedComponent, NO_ION_SLOWDOWN,
+    ION_FULL_ACCELERATION_FACTOR, ION_IONIZED_FRACTION, ION_NO_TURN_FRACTION,
+    ionizedNow, ionSlowdown, IsIonizedComponent, NO_ION_SLOWDOWN,
 } from './ionization_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem } from '../make_system.js';
 
 /**
  * Maintainer ruling #153 (ionization_plugin.ts): "ionized" is a LEVEL
- * test with no hysteresis; the line is ION_IONIZED_FRACTION (0.3) of
- * IonizeMax (reference "Ionization below a full charge (E6 leftover),
- * wave 41"). The slowdown is the measured one (reference "Ionization
- * (E6), wave 39"): no turn, a third of the acceleration, the top speed
- * kept, from the ionized line up; below it linear in the charge from
- * nothing (GUESS; wave 41: a sub-line charge already slows the turn). What
+ * test with no hysteresis; the line is ION_IONIZED_FRACTION (0.16) of
+ * IonizeMax (reference "Ion charge against the turn, in 5-point steps
+ * (E6), wave 42"). The slowdown comes in that section's three steps: two
+ * thirds of the turn below the line, a third above it, none above
+ * ION_NO_TURN_FRACTION (0.38), where the measured full cut (reference
+ * "Ionization (E6), wave 39": no turn, a third of the acceleration, the
+ * top speed kept) holds. What
  * #124 fixed alongside stays pinned here: a hull with no ion capacity is
  * never ionized and never shows a NaN percent.
  */
@@ -65,13 +66,16 @@ function steps(world: World, n: number) {
 describe('ionizedNow (the level rule, #153)', () => {
     const stat = (current: number, max = 100) => ({ current, max, min: 0 });
 
-    it('holds above 0.3 of IonizeMax, and not at or below it (E6 wave '
-        + '41: one 20-point hit no tint, two about 39 tinted)', () => {
-        expect(ION_IONIZED_FRACTION).toBe(0.3);
+    it('holds above 0.16 of IonizeMax, and not at or below it (E6 wave '
+        + '42: tinted from the 5th 5-point hit, about 17, not the 4th, '
+        + 'about 14; a 20-point hit tints at once)', () => {
+        expect(ION_IONIZED_FRACTION).toBe(0.16);
         expect(ionizedNow(stat(0))).toBeFalse();
-        expect(ionizedNow(stat(20))).toBeFalse();
-        expect(ionizedNow(stat(30))).toBeFalse();
-        expect(ionizedNow(stat(30.01))).toBeTrue();
+        expect(ionizedNow(stat(14))).toBeFalse();
+        expect(ionizedNow(stat(16))).toBeFalse();
+        expect(ionizedNow(stat(16.01))).toBeTrue();
+        expect(ionizedNow(stat(17))).toBeTrue();
+        expect(ionizedNow(stat(20))).toBeTrue();
         expect(ionizedNow(stat(39))).toBeTrue();
         expect(ionizedNow(stat(100))).toBeTrue();
         expect(ionizedNow(stat(140))).toBeTrue();
@@ -87,14 +91,14 @@ describe('ionizedNow (the level rule, #153)', () => {
 describe('ionization in a live world', () => {
     it('is not ionized at a charge below the ionized line', async () => {
         const { world, hit, ionized } = await ionWorld();
-        hit(0.25 * BASE.ionization);
+        hit(0.12 * BASE.ionization);
         steps(world, 2);
         expect(ionized()).toBeFalse();
     });
 
     it('is ionized once the charge is past the ionized line', async () => {
         const { world, hit, ionized } = await ionWorld();
-        hit(0.4 * BASE.ionization);
+        hit(0.2 * BASE.ionization);
         world.step();
         expect(ionized()).toBeTrue();
     });
@@ -178,25 +182,29 @@ describe('ionization in a live world', () => {
             expect(physics.turnRate).toBeCloseTo(0, 6);
         });
 
-    it('gives the movement back as the charge drains below the line, '
-        + 'and all of it once the charge is gone', async () => {
+    it('gives the movement back in steps as the charge drains, and all '
+        + 'of it once the charge is gone', async () => {
             const { world, ship, hit, charge } = await ionWorld();
             hit(BASE.ionization);
             const physics = () =>
                 ship.components.get(MovementPhysicsComponent)!;
-            while (charge().current > BASE.ionization * 0.15) {
-                world.step();
-            }
-            // Partway down: some turn back, not all of it.
-            expect(physics().turnRate).toBeGreaterThan(0);
-            expect(physics().turnRate).toBeLessThan(BASE.turnRate * 0.6);
+            const turns: number[] = [];
             while (charge().current > 0) {
                 world.step();
+                const turn = physics().turnRate / BASE.turnRate;
+                if (turns.length === 0
+                    || Math.abs(turns[turns.length - 1] - turn) > 1e-9) {
+                    turns.push(turn);
+                }
             }
             steps(world, 2);
             expect(physics().turnRate).toBeCloseTo(BASE.turnRate, 6);
             expect(physics().acceleration)
                 .toBeCloseTo(BASE.acceleration, 6);
+            // None, a third, two thirds, all: no values in between.
+            expect(turns.length).toBe(4);
+            [0, 1 / 3, 2 / 3, 1].forEach((t, i) =>
+                expect(turns[i]).toBeCloseTo(t, 9));
         });
 });
 
@@ -209,8 +217,9 @@ describe('ionSlowdown', () => {
         expect(ionSlowdown(charge(10, 0))).toEqual(NO_ION_SLOWDOWN);
     });
 
-    it('is the measured full cut from the ionized line up', () => {
-        for (const current of [30, 39, 100, 250]) {
+    it('is the measured full cut above the second line (0.38)', () => {
+        expect(ION_NO_TURN_FRACTION).toBe(0.38);
+        for (const current of [38.01, 41, 100, 250]) {
             expect(ionSlowdown(charge(current))).toEqual({
                 maxVelocity: 1,
                 acceleration: ION_FULL_ACCELERATION_FACTOR,
@@ -219,26 +228,36 @@ describe('ionSlowdown', () => {
         }
     });
 
-    it('already slows a charge below the line, linearly from nothing '
-        + '(E6 wave 41: a 20-of-100 hit, never tinted, cut the turn to '
-        + 'about two thirds as it drained; the ramp is a GUESS)', () => {
-        const at = (current: number) => ionSlowdown(charge(current));
-        expect(at(15).turnRate).toBeCloseTo(0.5, 9);
-        expect(at(15).acceleration).toBeCloseTo(2 / 3, 9);
-        expect(at(15).maxVelocity).toBe(1);
-        expect(at(5).turnRate).toBeCloseTo(5 / 6, 9);
-        // The dips read 58 / 68 deg/s against 87.8 over the 10-frame
-        // windows a 1-a-frame drain takes from 20 to 10 and 10 to 0.
-        const mean = (from: number, to: number) => {
-            let sum = 0;
-            for (let c = from; c > to; c--) {
-                sum += at(c - 0.5).turnRate;
+    it('comes in three steps, not a ramp (reference "Ion charge against '
+        + 'the turn, in 5-point steps (E6), wave 42": about 60 deg/s '
+        + 'untinted, 30 tinted, 0 above the second line, control 87.8)',
+        () => {
+            const at = (current: number) => ionSlowdown(charge(current));
+            for (const current of [0.5, 5, 10, 14, 16]) {
+                expect(at(current).turnRate).toBeCloseTo(2 / 3, 9);
+                // GUESS: the same share of the full acceleration cut.
+                expect(at(current).acceleration).toBeCloseTo(7 / 9, 9);
+                expect(at(current).maxVelocity).toBe(1);
             }
-            return 87.8 * sum / (from - to);
-        };
-        expect(mean(20, 10)).toBeGreaterThan(40);
-        expect(mean(20, 10)).toBeLessThan(65);
-        expect(mean(10, 0)).toBeGreaterThan(65);
-        expect(mean(10, 0)).toBeLessThan(85);
-    });
+            for (const current of [16.5, 17, 25, 38]) {
+                expect(at(current).turnRate).toBeCloseTo(1 / 3, 9);
+                expect(at(current).acceleration).toBeCloseTo(5 / 9, 9);
+            }
+            expect(87.8 * at(10).turnRate).toBeCloseTo(60, -1);
+            expect(87.8 * at(30).turnRate).toBeCloseTo(30, -1);
+        });
+
+    it('reproduces wave 42\'s 5-point and 20-point runs with Deionize 1 '
+        + 'draining 2 points between hits', () => {
+            const drain = 2.0;
+            const turnAfterHit = (perHit: number, hits: number) =>
+                ionSlowdown(charge(perHit * hits - drain * (hits - 1)))
+                    .turnRate;
+            expect(turnAfterHit(5, 4)).toBeCloseTo(2 / 3, 9);
+            expect(turnAfterHit(5, 5)).toBeCloseTo(1 / 3, 9);
+            expect(turnAfterHit(5, 12)).toBeCloseTo(1 / 3, 9);
+            expect(turnAfterHit(5, 13)).toBe(0);
+            // The 20-point hull: tinted after its first hit.
+            expect(turnAfterHit(20, 1)).toBeCloseTo(1 / 3, 9);
+        });
 });
