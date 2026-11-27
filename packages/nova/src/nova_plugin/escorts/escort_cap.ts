@@ -138,8 +138,8 @@ export interface EscortCapSources {
  * that is on a roster while the player boards a hulk is invisible to
  * the capture gate. That is the residual window: the rosters are
  * drained the moment the player is back in a world and at rest
- * (browser.ts: lift-off, jump arrival, and the held batch of a
- * multi-jump chain or a gate arrival once carriedBatchSettled), but the
+ * (browser.ts: lift-off, jump arrival, and the held batch of a gate
+ * arrival once carriedBatchSettled), but the
  * re-inserts arrive as input records a few ticks later, and a capture
  * attempted inside those ticks is counted against the world alone. A
  * boarding takes a disabled target, an approach, and two presses, so

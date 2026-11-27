@@ -337,6 +337,45 @@ describe('an escort that warps out first', () => {
     });
 });
 
+describe('a multi-jump (ModType 32)', () => {
+    it('takes every escort to the final system with the player, whatever '
+        + 'it carries itself', async () => {
+            // "Escorts follow as if they had multi-jump too" (Matthew,
+            // 2026-11-27): none of these hulls has a multi-jump outfit.
+            const { world, addEscort, player } = await makeWorld();
+            await addEscort('quick', FAST_SHIP_ID, 200);
+            await addEscort('plain', SHIP_ID, -200);
+            await addEscort('slow', SLOW_SHIP_ID, 300);
+            const { order, escortJumps } = recordCarryOrder(world);
+            const finishes: string[] = [];
+            world.events.get(FinishJumpEvent).subscribe(
+                ({ data }) => finishes.push(data.to));
+            // What beginJump writes for a two-hop multi-jump.
+            player.components.set(JumpComponent, {
+                to: DESTINATION, stage: 'stopping', direction: 0,
+                via: ['test:passed'], arrivalDirection: Math.PI / 2,
+            });
+            world.step();
+            for (const uuid of ['quick', 'plain', 'slow']) {
+                expect(jumpOf(world, uuid)?.to).withContext(uuid)
+                    .toEqual(DESTINATION);
+            }
+
+            stepUntil(world, () => !world.entities.has(PLAYER));
+            // One transition, straight to the final system: no escort is
+            // carried to (or left in) the system passed through.
+            expect(finishes).toEqual([DESTINATION]);
+            expect(escortJumps.map(jump => jump.uuid).sort())
+                .toEqual(['plain', 'quick', 'slow']);
+            expect(escortJumps.every(jump => jump.to === DESTINATION))
+                .toBeTrue();
+            for (const uuid of ['quick', 'plain', 'slow']) {
+                expect(world.entities.has(uuid)).withContext(uuid).toBeFalse();
+            }
+            expect(order.at(-1)).toEqual(`player:${PLAYER}`);
+        });
+});
+
 describe('an escort that is too slow to get away in time', () => {
     it('is swept at the player\'s departure, still ahead of the player\'s '
         + 'own carry', async () => {

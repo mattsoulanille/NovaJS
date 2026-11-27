@@ -224,17 +224,12 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
     // touch the torn-down session.
     scope.check();
     runtime.autopilot?.cancel();
-    // A multi-jump chain (ModType 32) is about to auto-continue out of
-    // the system we are arriving in. Hold the batch rather than inserting
-    // it there: an insertion record that lands after the chain has moved
-    // on would strand its escort. Read off the player's own entity,
-    // before it is re-inserted and the destination world turns the
-    // budget into its continue marker (see multiJumpChainContinues).
     // A GATE arrival is positioned by GateArrivalSystem on the first tick
     // in the destination world, so the entity still holds its ORIGIN
-    // station here. Hold the batch exactly as a chained one is and let
-    // flushCarriedJumpEscorts put it down once the marker clears (see
-    // gateArrivalPending).
+    // station here. Hold the batch and let flushCarriedJumpEscorts put it
+    // down once the marker clears (see gateArrivalPending). A hyperspace
+    // jump, a multi-jump (ModType 32) included, set its arrival at
+    // departure and never holds: a multi-jump is one jump to its last hop.
     const holdBatch = carriedBatchMustHold(entity);
     fleet.resetSlotFloor(); // Fresh world, fresh slot run.
     // "Mission randomizing values are recalculated each time you warp

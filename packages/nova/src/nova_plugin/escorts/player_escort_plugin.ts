@@ -115,7 +115,7 @@ import { ShipComponent, ShipPhysicsComponent } from '../ship/index.js';
  *    down mid-spinup drops their escorts back into formation on the same
  *    tick. Escorts that had already warped out ride the client's carried
  *    roster and are put back beside the player who never left, by the
- *    standing flush that exists for multi-jump chains
+ *    standing flush of the jump roster
  *    (flushCarriedJumpEscorts / carriedBatchSettled, spaceport/
  *    landed_escorts.ts): the never-drop machinery covers the cancel case
  *    with nothing added.
@@ -168,15 +168,13 @@ import { ShipComponent, ShipPhysicsComponent } from '../ship/index.js';
  *    time there is no destination, so there is no heading to turn onto.
  *    Escorts leave with the player at the gate instead of each flying down
  *    to it, which is why gates need no landing orders.
- *  - A "multi-jump" outfit chain (ModType 32) no longer out-runs the carry,
- *    but it does so by HOLDING the batch out of the world for the length of
- *    the chain (browser.ts): escorts are absent from the intermediate
- *    systems the chain passes through and appear at the final destination.
- *    See multiJumpChainContinues / multiJumpChainSettled. The warp-out
- *    sequences therefore only ever run in the system a chain STARTS from:
- *    at every later hop the escorts are in the client's hands and not in
- *    the world, so EscortFollowJumpBeginSystem finds nobody to start and
- *    nothing double-triggers.
+ *  - A "multi-jump" (ModType 32) is ONE jump to the last of its hops
+ *    (jump_plugin.ts resolveJumpHops), so the flock follows it exactly as
+ *    it follows any jump: it copies the leader's `to`, warps out with it,
+ *    and is put down beside the player at the final destination, whether
+ *    or not an escort carries the outfit itself ("Escorts follow as if they
+ *    had multi-jump too", Matthew, 2026-11-27). Nobody ever enters the
+ *    systems passed through.
  *  - Escorts ARE saved, as whole serialized entities, and come back
  *    through this same carried-batch path on the first system entry after
  *    a load (save_game.ts, browser.ts). What a save cannot bring back is

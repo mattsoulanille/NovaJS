@@ -15,7 +15,7 @@ import {
 } from '../nova_plugin/combat/index.js';
 import { FiringGroupComponent, ShipDataComponent, TargetComponent } from '../nova_plugin/ship/index.js';
 import {
-    GateArrivalComponent, JumpComponent, MultiJumpContinueComponent,
+    GateArrivalComponent, JumpComponent,
 } from '../nova_plugin/travel/index.js';
 import {
     FormationComponent, formationSlotPosition, formationSpacing, NpcComponent,
@@ -72,7 +72,7 @@ export interface CarriedEscort {
      * reference to a carrier that came back in the same batch.
      *
      * Rides the entry rather than being a batch parameter deliberately:
-     * restored escorts can be held (a multi-jump chain, a gate arrival) or
+     * restored escorts can be held (a gate arrival, a jump under way) or
      * handed back by a failed transition, and they must still carry the
      * remap whenever they are finally put down.
      */
@@ -81,57 +81,24 @@ export interface CarriedEscort {
 
 /**
  * ----------------------------------------------------------------------
- * Multi-jump chains
+ * Multi-jumps need no hold
  * ----------------------------------------------------------------------
  *
- * A "multi-jump" outfit (ModType 32) auto-continues a routed jump the tick
- * after each arrival (MultiJumpContinueSystem), so a chain crosses several
- * systems from one key press. Escorts are re-inserted through input
- * records, and a record that lands after the chain has already left the
- * intermediate system strands its escort there.
- *
- * The client closes that seam by NOT putting the batch back down until the
- * chain finishes: `multiJumpChainContinues` says a carried batch must be
- * held (asked of the player entity as it leaves a system), and
- * `multiJumpChainSettled` says a held batch may be released (asked of the
- * player entity in the world it arrived in).
- *
- * ORDERING GUARANTEE. The two are read off the player's own entity — the
- * same entity the carry rode with — so no clock, timeout, or round trip is
- * involved and there is nothing to race. At departure the entity's
- * JumpComponent still holds the budget the destination world is about to
- * act on (JumpSequenceSystem's 'arriving' case turns `autoJumpsLeft` into
- * the MultiJumpContinueComponent marker), so "will there be another hop?"
- * is known before the batch would have been inserted. On arrival exactly
- * one of JumpComponent / MultiJumpContinueComponent is present at every
- * step boundary for as long as the chain runs (the arriving step swaps the
- * first for the second; the continuing step swaps back), so their joint
- * absence is an unambiguous "the chain is over" — including when it ended
- * early because the route ran out or the fuel did. Both components
- * serialize, so the display world sees them.
- *
- * The batch is therefore absent from the systems a chain passes through
- * and appears at the final destination with the player. That is the
- * documented cost; it adds no delay, touches no simulation state, and
- * needs no agreement between peers, because a roster is client state.
+ * A "multi-jump" outfit (ModType 32) used to auto-continue a routed jump
+ * the tick after each arrival, and the batch was held out of every system
+ * on the way. A multi-jump is now ONE jump to its last hop
+ * (jump_plugin.ts resolveJumpHops): the batch rides it like any other
+ * jump and is put down at the destination with the player. What is left
+ * here is the gate hold below and the in-flight-jump check of
+ * {@link carriedBatchSettled}.
  */
 
 /**
- * Whether the player entity leaving a system will auto-continue into
- * another jump, so a batch carried with it must be held rather than
- * inserted at this hop.
+ * Whether the player entity is between jumps — no jump sequence under
+ * way — so a held batch may be put back down beside it.
  */
-export function multiJumpChainContinues(player: Entity): boolean {
-    return (player.components.get(JumpComponent)?.autoJumpsLeft ?? 0) > 0;
-}
-
-/**
- * Whether the player entity has come to rest between jumps, so a held
- * batch may be put back down beside it.
- */
-export function multiJumpChainSettled(player: Entity): boolean {
-    return !player.components.has(JumpComponent)
-        && !player.components.has(MultiJumpContinueComponent);
+export function playerJumpSettled(player: Entity): boolean {
+    return !player.components.has(JumpComponent);
 }
 
 /**
@@ -152,9 +119,8 @@ export function multiJumpChainSettled(player: Entity): boolean {
  * placed on it lands in formation around where the player used to be,
  * arbitrarily far from the gate they just came out of.
  *
- * The fix reuses the multi-jump hold: a batch arriving with a gate transit
- * is held exactly as a chained batch is, and released once the marker is
- * gone — which is precisely the moment GateArrivalSystem has finished
+ * The fix is a hold: a batch arriving with a gate transit is held on the
+ * jump roster, and released once the marker is gone — which is precisely the moment GateArrivalSystem has finished
  * positioning the player. The escorts then take formation stations on the
  * gate exit, coasting outward at the player's emergence velocity.
  * GateArrivalComponent is serializer-registered (gate_transit_plugin), so
@@ -166,23 +132,24 @@ export function gateArrivalPending(player: Entity): boolean {
 
 /**
  * Whether a batch arriving with this player entity must be HELD rather
- * than put down beside it: another jump is coming (a multi-jump chain), or
- * the player has not been placed at its arrival gate yet. Asked of the
- * player entity as it enters a system.
+ * than put down beside it: the player has not been placed at its arrival
+ * gate yet. Asked of the player entity as it enters a system. (A
+ * hyperspace arrival, multi-jump included, never holds: its arrival
+ * kinematics were set at departure.)
  */
 export function carriedBatchMustHold(player: Entity): boolean {
-    return multiJumpChainContinues(player) || gateArrivalPending(player);
+    return gateArrivalPending(player);
 }
 
 /**
- * Whether a held batch may now be put down: the exact complement of
- * {@link carriedBatchMustHold}, asked of the player entity in the world it
- * arrived in. Both conditions must have cleared — the chain has settled AND
- * the gate arrival has been positioned — or the batch takes formation on a
- * station the player is about to leave.
+ * Whether a held batch may now be put down, asked of the player entity in
+ * the world it arrived in: the gate arrival has been positioned AND no
+ * jump sequence is under way (the arrival tick's 'arriving' stage
+ * included), or the batch takes formation on a station the player is
+ * about to leave.
  */
 export function carriedBatchSettled(player: Entity): boolean {
-    return multiJumpChainSettled(player) && !gateArrivalPending(player);
+    return playerJumpSettled(player) && !gateArrivalPending(player);
 }
 
 /**

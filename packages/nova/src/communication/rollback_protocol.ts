@@ -1065,6 +1065,21 @@ export const STATE_HASH_INTERVAL = 60;
 //    member, so the derived wire schema fingerprint changes
 //    (22e64bb746b73e86 -> 156d366e51953a65); every other kind and field is
 //    unchanged, and the join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the multi-jump (oütf ModType 32) is ONE jump
+//    (Matthew, 2026-11-27: "1 jump of fuel is used for any number of
+//    multi-jumps. A multi jump looks just like a normal jump. Escorts
+//    follow as if they had multi-jump too."). PlayerJumpControl resolves
+//    the extra hops at the press (jump_plugin.ts resolveJumpHops) and the
+//    ship departs once, for one FUEL_PER_JUMP, straight to the last of
+//    them; the systems passed through are never entered. JumpSequence
+//    loses `autoJumpsLeft` and gains two OPTIONAL fields, `via` (the
+//    systems passed through) and `arrivalDirection` (the heading in from
+//    the last of them); the serializer-registered MultiJumpContinue
+//    component and MultiJumpContinueSystem are gone. No input or message
+//    kind changes, but the component codecs feed the derived wire schema,
+//    so its fingerprint changes (156d366e51953a65 -> 28e54be45bbe19d2) and
+//    the join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

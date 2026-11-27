@@ -344,9 +344,14 @@ export const StarmapPlugin: Plugin = {
             // simulation drops such a head on arrival regardless
             // (JumpRouteReconcileSystem); this keeps the route the player
             // and their peers see correct in the meantime.
-            const committed = playerComponent(world, JumpComponent)?.to;
-            if (committed && route[0] === committed) {
-                route.shift();
+            // A multi-jump (ModType 32) has committed to every hop it
+            // passes through as well as its destination.
+            const jump = playerComponent(world, JumpComponent);
+            const committed = jump?.to
+                ? [...(jump.via ?? []), jump.to] : [];
+            if (committed.length > 0
+                && committed.every((hop, i) => route[i] === hop)) {
+                route.splice(0, committed.length);
             }
             const jumpRoute = playerJumpRoute(world);
             if (jumpRoute) {

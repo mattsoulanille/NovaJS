@@ -28,12 +28,12 @@ import {
 } from '../nova_plugin/npc/index.js';
 import { deriveEntityComponents, Stat, CollisionEvent } from '../nova_plugin/core/index.js';
 import {
-    JumpComponent, MultiJumpContinueComponent, GateArrivalComponent,
+    JumpComponent, GateArrivalComponent,
 } from '../nova_plugin/travel/index.js';
 import {
     CarriedEscort, deployedFightersBySource, escortsAccountedFor,
     carriedBatchMustHold, carriedBatchSettled, gateArrivalPending,
-    multiJumpChainContinues, multiJumpChainSettled, prepareCarriedEscort,
+    playerJumpSettled, prepareCarriedEscort,
     prepareCarriedEscorts, restoreFailedTransitionBatch, takeCarriedEscorts,
     takeEscortsForTransition,
 } from './landed_escorts.js';
@@ -348,42 +348,33 @@ describe('carried escort round trip', () => {
     });
 });
 
-describe('multi-jump chain roster policy', () => {
-    /** A player entity mid-jump with `autoJumpsLeft` budget remaining. */
-    function jumping(autoJumpsLeft?: number) {
+describe('carried batch roster policy', () => {
+    /** A player entity arriving from a jump; `via` makes it a multi-jump. */
+    function jumping(via?: string[]) {
         const player = new Entity();
         player.components.set(JumpComponent, {
             to: 'test:destination',
             stage: 'arriving',
             direction: 0,
-            ...(autoJumpsLeft === undefined ? {} : { autoJumpsLeft }),
+            ...(via === undefined ? {} : { via, arrivalDirection: 1 }),
         });
         return player;
     }
 
-    it('holds a batch while the chain has budget left', () => {
-        expect(multiJumpChainContinues(jumping(2))).toBeTrue();
-        expect(multiJumpChainContinues(jumping(1))).toBeTrue();
-    });
-
-    it('releases a batch on the last hop of a chain', () => {
-        expect(multiJumpChainContinues(jumping(0))).toBeFalse();
-        expect(multiJumpChainContinues(jumping())).toBeFalse();
-        // An ordinary single jump, and a gate transit (no JumpComponent at
-        // all — jumpTo serves both).
-        expect(multiJumpChainContinues(new Entity())).toBeFalse();
-    });
-
-    it('calls the chain settled only when neither jump component is set',
+    it('never holds a batch arriving by hyperspace, multi-jump included',
         () => {
-            expect(multiJumpChainSettled(new Entity())).toBeTrue();
-            // Mid-sequence in the origin system.
-            expect(multiJumpChainSettled(jumping(1))).toBeFalse();
-            // The one step between arriving and the next hop beginning.
-            const continuing = new Entity();
-            continuing.components.set(MultiJumpContinueComponent, { left: 1 });
-            expect(multiJumpChainSettled(continuing)).toBeFalse();
+            // A multi-jump (ModType 32) is ONE jump to its last hop: the
+            // batch rides it and is put down beside the player there.
+            expect(carriedBatchMustHold(jumping())).toBeFalse();
+            expect(carriedBatchMustHold(jumping(['mid a', 'mid b'])))
+                .toBeFalse();
         });
+
+    it('calls the player settled only when no jump is under way', () => {
+        expect(playerJumpSettled(new Entity())).toBeTrue();
+        expect(playerJumpSettled(jumping())).toBeFalse();
+        expect(carriedBatchSettled(jumping(['mid']))).toBeFalse();
+    });
 
     /**
      * Matthew's item 2: escorts must come out of a wormhole/hypergate IN
@@ -396,7 +387,7 @@ describe('multi-jump chain roster policy', () => {
      * GateArrivalSystem teleports the player on its first tick there.
      * Placing a batch before that put the escorts in formation around the
      * player's ORIGIN-system position. The batch is therefore held over a
-     * pending gate arrival exactly as it is over a multi-jump chain.
+     * pending gate arrival.
      */
     describe('gate arrivals hold the batch until the player is placed', () => {
         /** A player entity still carrying its gate arrival marker. */
@@ -435,71 +426,16 @@ describe('multi-jump chain roster policy', () => {
                 expect(carriedBatchSettled(new Entity())).toBeTrue();
             });
 
-        it('holds for a chain and a gate independently', () => {
+        it('holds for a jump under way and a gate independently', () => {
             const both = arrivingAtGate();
-            both.components.set(MultiJumpContinueComponent, { left: 1 });
+            both.components.set(JumpComponent,
+                { to: 'test:next', stage: 'stopping', direction: 0 });
             expect(carriedBatchSettled(both)).toBeFalse();
-            both.components.delete(MultiJumpContinueComponent);
+            both.components.delete(JumpComponent);
             expect(carriedBatchSettled(both)).toBeFalse();
             both.components.delete(GateArrivalComponent);
             expect(carriedBatchSettled(both)).toBeTrue();
         });
-    });
-
-    it('ends a chain that ran out of route or fuel', () => {
-        // MultiJumpContinueSystem consumes its marker whatever the outcome,
-        // so a blocked continuation leaves the player with neither
-        // component — which is exactly the release signal.
-        const blocked = new Entity();
-        blocked.components.set(MultiJumpContinueComponent, { left: 3 });
-        expect(multiJumpChainSettled(blocked)).toBeFalse();
-        blocked.components.delete(MultiJumpContinueComponent);
-        expect(multiJumpChainSettled(blocked)).toBeTrue();
-    });
-
-    /**
-     * The client's take/hold/insert decision, as jumpTo and
-     * flushCarriedJumpEscorts make it (browser.ts), run headlessly over a
-     * whole chain. The point under test is that the batch is never put down
-     * in a system the chain is about to leave, and is put down exactly once
-     * in the one it ends in.
-     */
-    it('lands the batch in the final system of a chain, and only there',
-        () => {
-            let held: CarriedEscort[] = [
-                { player: PLAYER, uuid: 'e1', entity: new Entity() },
-                { player: PLAYER, uuid: 'e2', entity: new Entity() },
-            ];
-            const insertedIn: string[] = [];
-
-            // Three hops of a two-extra-jump chain: budget 2 -> 1 -> 0.
-            for (const [system, budget] of
-                [['mid a', 2], ['mid b', 1], ['final', 0]] as const) {
-                const arriving = jumping(budget);
-                const taken = takeCarriedEscorts(held, PLAYER);
-                held = [];
-                if (multiJumpChainContinues(arriving)) {
-                    held = taken; // Rides on to the next hop.
-                } else if (taken.length > 0) {
-                    insertedIn.push(system);
-                }
-            }
-
-            expect(insertedIn).toEqual(['final']);
-            expect(held.length).toEqual(0);
-        });
-
-    it('releases a held batch when the chain ends early', () => {
-        // The chain claimed more hops but the next one was blocked, so the
-        // player settles where it is. The standing flush is what puts the
-        // batch down: settled player, batch taken, roster emptied.
-        const held: CarriedEscort[] = [
-            { player: PLAYER, uuid: 'e1', entity: new Entity() },
-        ];
-        expect(multiJumpChainSettled(new Entity())).toBeTrue();
-        const taken = takeCarriedEscorts(held, PLAYER);
-        expect(taken.map(({ uuid }) => uuid)).toEqual(['e1']);
-        expect(held.length).toEqual(0);
     });
 });
 

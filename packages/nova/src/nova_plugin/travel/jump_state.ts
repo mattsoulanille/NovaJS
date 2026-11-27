@@ -107,12 +107,23 @@ export const JumpStateType = t.intersection([t.type({
      * with stageStart. ADDITIVE (wave 39, U8). */
     departAt: t.number,
     /**
-     * How many further jumps to auto-continue along the route without the
-     * player re-pressing the jump key ("multi-jump" outfits, ModType 32). Set
-     * when the player first initiates a jump to min(multiJump, route length),
-     * decremented on each auto-continued jump, and carried across systems with
-     * the entity. Absent/0 means the ship stops after this jump. */
-    autoJumpsLeft: t.number,
+     * A "multi-jump" (oütf ModType 32, "number of extra jumps to perform
+     * when the user initiates a hyperspace jump"): the systems this ONE jump
+     * passes through on its way to `to`, in route order. The ship never
+     * enters them — it leaves the origin and arrives in `to` as a single
+     * jump, one fuel charge, one arrival (jump_plugin.ts
+     * resolveJumpHops). Read by the client for what passing through still
+     * costs or earns (the date, the map: client/transit.ts). Absent on an
+     * ordinary single-hop jump. ADDITIVE.
+     */
+    via: t.array(t.string),
+    /**
+     * The heading (radians, map space) the ship ARRIVES on when that is not
+     * `direction`: a multi-jump departs toward its first hop but comes in
+     * from the last system it passed through. Absent: `direction`.
+     * ADDITIVE.
+     */
+    arrivalDirection: t.number,
 })]);
 export type JumpState = t.TypeOf<typeof JumpStateType>;
 export const JumpComponent = new Component<JumpState>('JumpSequence');

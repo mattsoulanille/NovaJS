@@ -19,8 +19,6 @@ describe('load-bearing system orderings are declared', () => {
         ['PlayerJumpControl', 'JumpSequenceSystem',
             'a held jump key must not begin the next hop on the arrival tick, '
             + 'before JumpRouteReconcileSystem has dropped an unflyable head'],
-        ['MultiJumpContinueSystem', 'JumpSequenceSystem',
-            'the multi-jump marker must not begin the next hop on the arrival tick'],
         ['UpdateHurtboxHullSystem', 'CollisionSystem',
             'projectiles must not collide with one-tick-stale hurtboxes'],
         ['UpdateHitboxHullSystem', 'CollisionSystem',

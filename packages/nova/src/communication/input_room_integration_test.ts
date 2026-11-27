@@ -1229,7 +1229,8 @@ describe('Input-driven rooms', () => {
     it('a retimed insertion re-applied by a rollback inserts the ship it was sent '
         + 'as: the sender, the archive and the log agree (the nova:282 desync)', async () => {
         // Matthew's playtest, twice: arriving in Tekel mid multi-jump
-        // (JumpSequence 'arriving', one auto-jump left) while his client
+        // (JumpSequence 'arriving', one auto-jump left; multi-jumps have
+        // since become one jump, so the spec holds the jump key) while his client
         // was still catching up to the room, both of his first records
         // were retimed. The insertion's echo came back at once and he
         // applied the ECHOED record at the room's tick; his world took
@@ -1289,16 +1290,16 @@ describe('Input-driven rooms', () => {
         // A falls behind the room (a busy client on system entry).
         relay.advanceTicks(20);
 
-        // The ship arrives mid multi-jump: the tick after its insertion,
-        // with no key pressed, it begins the jump to the route's head.
+        // The ship arrives with the jump key held (the incident's
+        // auto-continued multi-jump hop, which a multi-jump no longer
+        // makes: it is one jump now): right after its insertion it begins
+        // the jump to the route's head, in the same retimed batch.
         const ship = await makePeerShip('a', peerA.world);
         ship.components.set(JumpRouteComponent, { route: [destination] });
-        ship.components.set(JumpComponent, {
-            stage: 'arriving', to: systemId, direction: 0, autoJumpsLeft: 1,
-        });
         ship.components.get(MovementStateComponent)!.position =
             new Position(0, -(JUMP_DISTANCE * 2));
         await peerA.client.addEntity('ship a', ship);
+        peerA.host.controlEvents([{ action: 'hyperjump', state: 'start' }]);
         // The insertion goes out stamped behind the clock; its echo comes
         // straight back, before A reaches the room's tick.
         peerA.host.step();

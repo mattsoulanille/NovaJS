@@ -291,11 +291,12 @@ describe('a D-U-U-D route plotted on the map, flown', () => {
         ship.components.set(JumpRouteComponent, { route: [...route] });
         await completeEntity(world, ship);
         world.entities.set(SHIP_UUID, ship);
-        // A multi-jump budget so the chain continues on arrival without a
-        // key press (jump_plugin_test), and fuel for the whole trip.
+        // No multi-jump (that would fly the route as ONE jump): the jump
+        // key is held through every arrival instead, and there is fuel for
+        // the whole trip.
         const physics = ship.components.get(ShipPhysicsComponent)!;
         ship.components.set(ShipPhysicsComponent,
-            { ...physics, multiJump: 5 });
+            { ...physics, multiJump: 0 });
         ship.components.get(MovementStateComponent)!.position =
             new Position(0, -(JUMP_DISTANCE * 2));
         world.step();
@@ -331,8 +332,11 @@ describe('a D-U-U-D route plotted on the map, flown', () => {
             await completeEntity(world, ship);
             world.entities.set(SHIP_UUID, ship);
             systemId = hop;
-            // The first tick finishes the arrival, the second starts the
-            // route's next jump off the multi-jump budget.
+            // The held key (browser key repeat) reaches the new system; the
+            // first tick finishes the arrival, the second starts the
+            // route's next jump.
+            applyControlEvents(world, undefined,
+                [{ action: 'hyperjump', state: 'repeat' }]);
             world.step();
             world.step();
         }

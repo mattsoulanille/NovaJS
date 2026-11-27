@@ -6,7 +6,7 @@ import { World } from "nova_ecs/world";
 import { getIntegrationGameData, getSyntheticGameData } from "../../communication/simulation_test_fixture.js";
 import { GameDataAggregator } from "../../server/parsing/game_data_aggregator.js";
 import { completeEntity } from "../spawn/index.js";
-import { FinishJump, FinishJumpEvent, JumpComponent, JumpRouteComponent, MultiJumpContinueComponent, hopIsUnflyableFromHere, reconcileRouteOnArrival, PLAYER_JUMP_ARRIVAL_MARGIN_S, JUMP_DEPART_DELAY_MS, JUMP_DISTANCE, JUMP_SPINUP_DELAY_MS, WARP_OUT_SOUND, WARP_UP_FAST_SOUND, WARP_UP_SOUND } from "./jump_plugin.js";
+import { FinishJump, FinishJumpEvent, JumpComponent, JumpRouteComponent, hopIsUnflyableFromHere, reconcileRouteOnArrival, PLAYER_JUMP_ARRIVAL_MARGIN_S, JUMP_DEPART_DELAY_MS, JUMP_DISTANCE, JUMP_SPINUP_DELAY_MS, WARP_OUT_SOUND, WARP_UP_FAST_SOUND, WARP_UP_SOUND } from "./jump_plugin.js";
 import { makeShip } from "../ship/index.js";
 import { makeSystem, SIMULATION_STEP_MS } from "../make_system.js";
 import { applyControlEvents } from "../player/index.js";
@@ -474,73 +474,6 @@ describe('jump sequence', () => {
             .toEqual([]);
     }, 30_000);
 
-    it('multi-jump budgets extra jumps from a single initiation (ModType 32)', async () => {
-        const { gameData, world, ship, destinationId } =
-            await makeJumpHarness();
-        const destination = await gameData.data.System.get(destinationId);
-        const nextId = [...destination.links].sort()[0];
-        if (!nextId) {
-            throw new Error('Expected the destination to have links');
-        }
-        await gameData.data.System.get(nextId);
-        ship.components.set(JumpRouteComponent,
-            { route: [destinationId, nextId] });
-        // The re-derived ShipPhysicsComponent is frozen; replace it with a
-        // copy carrying multiJump (what an outfit's multiJump folds in).
-        const physics = ship.components.get(ShipPhysicsComponent)!;
-        ship.components.set(ShipPhysicsComponent, { ...physics, multiJump: 5 });
-        const movement = ship.components.get(MovementStateComponent)!;
-        movement.position = new Position(0, -(JUMP_DISTANCE * 2));
-        world.step();
-
-        pressHyperjump(world);
-        // The first jump is initiated; its budget is capped to the one
-        // remaining route hop, not the full multiJump of 5.
-        const jump = ship.components.get(JumpComponent)!;
-        expect(jump).toBeDefined();
-        expect(jump.autoJumpsLeft).toEqual(1);
-    }, 30_000);
-
-    it('auto-continues a multi-jump on arrival without a key press', async () => {
-        const { gameData, world, ship, destinationId } =
-            await makeJumpHarness();
-        const destination = await gameData.data.System.get(destinationId);
-        const nextId = [...destination.links].sort()[0];
-        if (!nextId) {
-            throw new Error('Expected the destination to have links');
-        }
-        await gameData.data.System.get(nextId);
-        ship.components.set(JumpRouteComponent,
-            { route: [destinationId, nextId] });
-        const physics = ship.components.get(ShipPhysicsComponent)!;
-        ship.components.set(ShipPhysicsComponent, { ...physics, multiJump: 5 });
-        const movement = ship.components.get(MovementStateComponent)!;
-        movement.position = new Position(0, -(JUMP_DISTANCE * 2));
-        world.step();
-
-        let finishJump: FinishJump | undefined;
-        world.events.get(FinishJumpEvent).subscribe(({ data }) => {
-            finishJump = data;
-        });
-        pressHyperjump(world);
-        stepUntil(world, () => finishJump !== undefined);
-
-        const destWorld = await makeSystem(destinationId, gameData);
-        const jumpedShip = finishJump!.entity;
-        await completeEntity(destWorld, jumpedShip);
-        destWorld.entities.set(SHIP_UUID, jumpedShip);
-        // No held key this time: the multi-jump budget alone continues the
-        // route. First tick finishes arrival (dropping JumpComponent and
-        // leaving the continuation marker); the second starts the next jump.
-        destWorld.step();
-        destWorld.step();
-        const nextJump = jumpedShip.components.get(JumpComponent);
-        expect(nextJump).toBeDefined();
-        expect(nextJump!.to).toEqual(nextId);
-        expect(jumpedShip.components.get(JumpRouteComponent)!.route)
-            .toEqual([]);
-    }, 30_000);
-
     it('does not refuel on landing (refueling is paid, via the spaceport)', async () => {
         const { world, ship } = await makeJumpHarness();
         world.step();
@@ -949,23 +882,6 @@ describe('a route hop naming the system the ship is already in', () => {
         expect(jump!.to).toEqual(destinationId);
     }, 60_000);
 
-    it('is dropped before a multi-jump chain auto-continues', async () => {
-        const gameData = await getSyntheticGameData();
-        const { originId, destinationId } = await findLinkedSystems(gameData);
-        await gameData.data.System.get(destinationId);
-        // Arrived in `originId` with the multi-jump continuation marker
-        // still set and a route whose head names this very system.
-        const { world, ship } = await shipInSystem(originId,
-            [originId, destinationId], gameData);
-        ship.components.set(MultiJumpContinueComponent, { left: 1 });
-        world.step();
-
-        const jump = ship.components.get(JumpComponent);
-        expect(jump).toBeDefined();
-        expect(jump!.to).not.toEqual(originId);
-        expect(jump!.to).toEqual(destinationId);
-    }, 60_000);
-
     it('a jump cancelled AFTER arrival does not give the hop back',
         async () => {
             // JumpDisableCancelSystem hands the destination back to the
@@ -1288,4 +1204,184 @@ describe('jump phases (U8, waves 38-39)', () => {
             expect(ship.components.get(FuelComponent)!.current)
                 .toEqual(FUEL_PER_JUMP * 2);
         }, 30_000);
+});
+
+/**
+ * A "multi-jump" outfit (oütf ModType 32, "number of extra jumps to perform
+ * when the user initiates a hyperspace jump"), as Matthew describes the
+ * original (2026-11-27): "1 jump of fuel is used for any number of
+ * multi-jumps. A multi jump looks just like a normal jump." One departure,
+ * one fuel charge, one FinishJumpEvent (one system transition, so one
+ * arrival, and nobody in the systems passed through ever sees the ship).
+ */
+describe('a multi-jump (ModType 32) is one jump', () => {
+    // The synthetic map is a line: Ossory Shoal - Thessaly Reach - Kestrel
+    // Drift - Vael Hollow.
+    const OSSORY = 'nova:130';
+    const THESSALY = 'nova:128';
+    const KESTREL = 'nova:129';
+    const VAEL = 'nova:131';
+
+    async function multiJumper(systemId: string, route: string[],
+        multiJump: number) {
+        const gameData = await getSyntheticGameData();
+        const ids = await gameData.ids;
+        const world = await makeSystem(systemId, gameData, undefined,
+            { npcs: false });
+        let shipData;
+        for (const shipId of [...ids.Ship].sort()) {
+            const candidate = await gameData.data.Ship.get(shipId);
+            if (!candidate.physics.inertialess
+                && !candidate.physics.canJumpWithoutSlowing) {
+                shipData = candidate;
+                break;
+            }
+        }
+        const ship = makeShip(shipData!);
+        ship.components.set(PlayerShipSelector, undefined);
+        ship.components.set(JumpRouteComponent, { route: [...route] });
+        await completeEntity(world, ship);
+        // What an outfit's multiJump folds into the derived physics.
+        ship.components.set(ShipPhysicsComponent, {
+            ...ship.components.get(ShipPhysicsComponent)!, multiJump,
+        });
+        world.entities.set(SHIP_UUID, ship);
+        ship.components.get(MovementStateComponent)!.position =
+            new Position(0, -(JUMP_DISTANCE * 2));
+        world.step();
+        return { gameData, world, ship };
+    }
+
+    async function heading(gameData: GameDataAggregator, from: string,
+        to: string) {
+        const a = await gameData.data.System.get(from);
+        const b = await gameData.data.System.get(to);
+        return new Vector(b.position[0] - a.position[0],
+            b.position[1] - a.position[1]).angle.angle;
+    }
+
+    it('flies its extra hops as ONE jump: one fuel charge, one departure, '
+        + 'one arrival in the last system', async () => {
+            const { gameData, world, ship } =
+                await multiJumper(THESSALY, [KESTREL, VAEL], 5);
+            const fuel = ship.components.get(FuelComponent)!;
+            fuel.recharge = 0;
+            const initialFuel = FUEL_PER_JUMP * 3;
+            fuel.current = initialFuel;
+            const finishes: FinishJump[] = [];
+            world.events.get(FinishJumpEvent).subscribe(
+                ({ data }) => finishes.push(data));
+
+            pressHyperjump(world);
+            const jump = ship.components.get(JumpComponent)!;
+            expect(jump.to).toEqual(VAEL);
+            expect(jump.via).toEqual([KESTREL]);
+            expect(ship.components.get(JumpRouteComponent)!.route)
+                .toEqual([]);
+            // It turns onto its first hop, as a jump there would...
+            expect(jump.direction).toBeCloseTo(
+                await heading(gameData, THESSALY, KESTREL), 6);
+            // ...and comes in from the last system it passed through.
+            const arrivalHeading = await heading(gameData, KESTREL, VAEL);
+            expect(jump.arrivalDirection).toBeCloseTo(arrivalHeading, 6);
+
+            stepUntil(world, () => finishes.length > 0);
+            world.step();
+            expect(finishes.map(finish => finish.to)).toEqual([VAEL]);
+            const jumped = finishes[0]!.entity;
+            // One jump's fuel, however many systems.
+            expect(jumped.components.get(FuelComponent)!.current)
+                .toEqual(initialFuel - FUEL_PER_JUMP);
+            const movement = jumped.components.get(MovementStateComponent)!;
+            expect(movement.velocity.angle.angle)
+                .toBeCloseTo(arrivalHeading, 6);
+            expect(movement.rotation.angle).toBeCloseTo(arrivalHeading, 6);
+            // On the side of Vael Hollow facing Kestrel Drift.
+            expect(movement.position.angle.angle)
+                .toBeCloseTo(new Angle(arrivalHeading + Math.PI).angle, 4);
+
+            // One arrival, in the last system, and nothing more: no
+            // further jump begins without a key.
+            const destWorld = await makeSystem(VAEL, gameData, undefined,
+                { npcs: false });
+            await completeEntity(destWorld, jumped);
+            destWorld.entities.set(SHIP_UUID, jumped);
+            jumped.components.get(FuelComponent)!.recharge = 0;
+            destWorld.step();
+            destWorld.step();
+            expect(jumped.components.has(JumpComponent)).toBeFalse();
+            expect(jumped.components.get(FuelComponent)!.current)
+                .toEqual(initialFuel - FUEL_PER_JUMP);
+        }, 60_000);
+
+    it('needs only one jump of fuel to start', async () => {
+        const { world, ship } =
+            await multiJumper(OSSORY, [THESSALY, KESTREL, VAEL], 5);
+        const fuel = ship.components.get(FuelComponent)!;
+        fuel.recharge = 0;
+        fuel.current = FUEL_PER_JUMP;
+        pressHyperjump(world);
+        expect(ship.components.get(JumpComponent)?.to).toEqual(VAEL);
+    }, 60_000);
+
+    it('caps the hops at the outfit\'s extra jumps and at the route',
+        async () => {
+            const cases: [number, string, string[] | undefined, string[]][] = [
+                [0, THESSALY, undefined, [KESTREL, VAEL]],
+                [1, KESTREL, [THESSALY], [VAEL]],
+                [2, VAEL, [THESSALY, KESTREL], []],
+                [10, VAEL, [THESSALY, KESTREL], []],
+            ];
+            for (const [multiJump, to, via, rest] of cases) {
+                const { world, ship } = await multiJumper(OSSORY,
+                    [THESSALY, KESTREL, VAEL], multiJump);
+                pressHyperjump(world);
+                const jump = ship.components.get(JumpComponent)!;
+                expect(jump.to).withContext(`multiJump ${multiJump}`)
+                    .toEqual(to);
+                expect(jump.via).withContext(`multiJump ${multiJump}`)
+                    .toEqual(via);
+                expect(ship.components.get(JumpRouteComponent)!.route)
+                    .withContext(`multiJump ${multiJump}`).toEqual(rest);
+            }
+        }, 120_000);
+
+    it('stops at a hop it cannot fly from the one before', async () => {
+        // Ossory Shoal is not a link of Kestrel Drift.
+        const { world, ship } =
+            await multiJumper(THESSALY, [KESTREL, OSSORY, THESSALY], 5);
+        pressHyperjump(world);
+        const jump = ship.components.get(JumpComponent)!;
+        expect(jump.to).toEqual(KESTREL);
+        expect(jump.via).toBeUndefined();
+        expect(ship.components.get(JumpRouteComponent)!.route)
+            .toEqual([OSSORY, THESSALY]);
+    }, 60_000);
+
+    it('lets a held key chain on from the arrival, as after any jump',
+        async () => {
+            const { gameData, world, ship } =
+                await multiJumper(OSSORY, [THESSALY, KESTREL, VAEL], 1);
+            let finish: FinishJump | undefined;
+            world.events.get(FinishJumpEvent).subscribe(
+                ({ data }) => { finish = data; });
+            pressHyperjump(world);
+            stepUntil(world, () => finish !== undefined);
+            expect(finish!.to).toEqual(KESTREL);
+
+            const destWorld = await makeSystem(KESTREL, gameData, undefined,
+                { npcs: false });
+            const jumped = finish!.entity;
+            await completeEntity(destWorld, jumped);
+            destWorld.entities.set(SHIP_UUID, jumped);
+            applyControlEvents(destWorld, undefined,
+                [{ action: 'hyperjump', state: 'repeat' }]);
+            destWorld.step();
+            destWorld.step();
+            const next = jumped.components.get(JumpComponent);
+            expect(next?.to).toEqual(VAEL);
+            expect(next?.via).toBeUndefined();
+            expect(jumped.components.get(JumpRouteComponent)!.route)
+                .toEqual([]);
+        }, 60_000);
 });

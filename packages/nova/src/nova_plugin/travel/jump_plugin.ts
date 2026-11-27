@@ -162,8 +162,8 @@ export const JUMP_ARRIVAL_MARGIN_S = 3;
  * GUESS that it scales with top speed rather than being a fixed 1,350:
  * one hull measured). A held jump key
  * that reaches the simulation only after the ship has coasted inside the
- * zone still chains: see ARRIVAL_JUMP_GRACE_MS. Multi-jump continues on
- * the tick after the arrival. */
+ * zone still chains: see ARRIVAL_JUMP_GRACE_MS. A multi-jump arrives the
+ * same way, once, in its final system (resolveJumpHops). */
 export const PLAYER_JUMP_ARRIVAL_MARGIN_S = 1;
 
 /**
@@ -279,7 +279,7 @@ export type TransitKind = 'jump' | 'gate';
  *
  *  - 'jump' (hyperspace): beginJump already shifted the destination off
  *    the route at jump START, so on arrival route[0] is normally the NEXT
- *    hop of a multi-jump chain (or the route is empty) and the remaining
+ *    hop after the jump just flown (or the route is empty) and the remaining
  *    hops are exactly the player's onward plan. The one repair is a head
  *    naming THIS system: the starmap, opened during the jump sequence and
  *    closed before the ship departs, re-derives the route from the ORIGIN
@@ -340,17 +340,6 @@ export const JumpRouteProvider = Provide({
 // import cycle; re-exported here for everyone else.
 export { JumpComponent, JumpStateType } from './jump_state.js';
 export type { JumpState } from './jump_state.js';
-
-/**
- * Marker left on a ship that just arrived from a jump and still has
- * "multi-jump" budget (ModType 32), telling MultiJumpContinueSystem to start
- * the route's next jump this tick without a fresh key press. `left` is the
- * remaining auto-jump budget, passed on to the next JumpComponent. Transient
- * sim state: cloned in snapshots (see snapshot_policies) so a rollback across
- * an arrival tick still auto-continues.
- */
-export const MultiJumpContinueComponent =
-    new Component<{ left: number }>('MultiJumpContinue');
 
 export interface FinishJump {
     entity: Entity,
@@ -459,34 +448,78 @@ export const JumpFromSystem = new System({
 });
 
 /**
- * Attaches a JumpComponent for a jump to `destination`, resolving the travel
- * heading from the origin and destination systems' map positions. Shifts the
- * destination off the route. Returns false (and does nothing) if the system
- * data is not yet cached. `autoJumpsLeft` is the remaining multi-jump budget
- * to carry into this jump.
+ * THE MULTI-JUMP (oütf ModType 32, "number of extra jumps to perform when
+ * the user initiates a hyperspace jump"): the route hops ONE jump initiation
+ * takes the ship through, the last of which is where it arrives. Up to
+ * `extraJumps` hops past the first, each a hyperlink of the one before it;
+ * the walk stops early at the route's end, at a hop that cannot be flown
+ * from the previous one (hopIsUnflyableFromHere: the same system, a stacked
+ * twin, anything that is not a link) or at one whose record is not staged.
+ * Empty when even the first hop cannot be flown.
  *
- * Both getCached reads are provably warm (the staging contract for in-sim
- * getCached): `systemId` is this world's own system, and `destination` is
- * always route[0] — the next hop. A route is a Dijkstra path over
- * system.links (starmap.computeShortestPaths), so every consecutive pair is
- * adjacent; route[0] is therefore a *link* of this world's system, and
- * makeSystem stages every linked system's data at genesis (make_system.ts).
- * This holds at every hop of a multi-jump chain: each per-system world is
- * built through makeSystem on every peer (browser worker, server archive,
- * node worker), so the link set is warm before the world steps.
+ * ONE JUMP, NOT A CHAIN (Matthew, 2026-11-27: "1 jump of fuel is used for
+ * any number of multi-jumps. A multi jump looks just like a normal jump.
+ * Escorts follow as if they had multi-jump too."). The ship leaves the
+ * origin and arrives in the LAST hop as a single system transition: one
+ * departure, one fuel charge, one FinishJumpEvent, one arrival. The systems
+ * in between are never entered — no world is built for them, nobody in
+ * them sees the ship, nothing spawns or triggers there — and the escorts,
+ * which follow the leader's `to`, arrive beside the player at the end.
+ *
+ * DETERMINISTIC: it reads only System records, and makeSystem stages EVERY
+ * sÿst on every peer before a world steps (the legal-record spread, ruling
+ * #380), so each getCached here answers the same on the browser worker,
+ * the server archive and the node worker.
+ *
+ * GUESS (unmeasured on the original): an unexplored system on the way does
+ * not stop the walk; only a hop that cannot be flown does.
  */
-function beginJump(entity: Entity, systemId: string, destination: string,
+export function resolveJumpHops(systemId: string, route: readonly string[],
+    extraJumps: number, gameData: SimulationGameDataInterface): string[] {
+    const hops: string[] = [];
+    let from = systemId;
+    for (const hop of route) {
+        if (hops.length > Math.max(0, extraJumps)
+            || hopIsUnflyableFromHere(hop, from, gameData)
+            || !gameData.data.System.getCached(hop)) {
+            break;
+        }
+        hops.push(hop);
+        from = hop;
+    }
+    return hops;
+}
+
+/**
+ * Attaches a JumpComponent for a jump through `hops` (resolveJumpHops: the
+ * first is the next system on the route, the last is where the ship
+ * arrives; more than one for a multi-jump), resolving the departure heading
+ * (origin -> first hop) and the arrival heading (the last system passed
+ * through -> the destination) from the systems' map positions. Shifts the
+ * hops off the route. Returns false (and does nothing) when there is no
+ * hop or a system's data is not cached.
+ *
+ * Every getCached read is provably warm (the staging contract for in-sim
+ * getCached): makeSystem stages this world's own system, its links and
+ * every sÿst of the scenario at genesis (make_system.ts), on every peer
+ * (browser worker, server archive, node worker), before the world steps.
+ */
+function beginJump(entity: Entity, systemId: string, hops: readonly string[],
     jumpRoute: JumpRoute, shipPhysics: ShipPhysics,
-    gameData: SimulationGameDataInterface, autoJumpsLeft: number): boolean {
-    const origin = gameData.data.System.getCached(systemId);
-    const dest = gameData.data.System.getCached(destination);
-    if (!origin || !dest) {
+    gameData: SimulationGameDataInterface): boolean {
+    const destination = hops[hops.length - 1];
+    if (destination === undefined) {
         return false;
     }
-    const direction = new Vector(
-        dest.position[0] - origin.position[0],
-        dest.position[1] - origin.position[1]);
-    jumpRoute.route.shift();
+    const origin = gameData.data.System.getCached(systemId);
+    const first = gameData.data.System.getCached(hops[0]!);
+    const dest = gameData.data.System.getCached(destination);
+    const lastPassed = hops.length > 1
+        ? gameData.data.System.getCached(hops[hops.length - 2]!) : origin;
+    if (!origin || !first || !dest || !lastPassed) {
+        return false;
+    }
+    jumpRoute.route.splice(0, hops.length);
     // A ship that jumps again leaves its arrival grace behind (a jump a
     // disable cancels does not get it back).
     entity.components.delete(HyperspaceArrivalComponent);
@@ -494,10 +527,23 @@ function beginJump(entity: Entity, systemId: string, destination: string,
         to: destination,
         // Ships with "fast jumping" skip coming to a stop.
         stage: shipPhysics.canJumpWithoutSlowing ? 'aligning' : 'stopping',
-        direction: direction.length === 0 ? 0 : direction.angle.angle,
-        autoJumpsLeft,
+        // GUESS: a multi-jump turns onto its FIRST hop (the heading an
+        // ordinary jump there takes) and arrives from the last system it
+        // passed through (as an ordinary jump from there would).
+        direction: mapHeading(origin.position, first.position),
+        ...(hops.length > 1 ? {
+            via: hops.slice(0, -1),
+            arrivalDirection: mapHeading(lastPassed.position, dest.position),
+        } : {}),
     });
     return true;
+}
+
+/** The map-space heading (radians) from one system position to another;
+ * 0 for two systems at the same spot. */
+function mapHeading(from: readonly number[], to: readonly number[]): number {
+    const vector = new Vector(to[0]! - from[0]!, to[1]! - from[1]!);
+    return vector.length === 0 ? 0 : vector.angle.angle;
 }
 
 /**
@@ -643,62 +689,20 @@ const PlayerJumpControl = new System({
             return;
         }
         // "multi-jump" (ModType 32): a single jump initiation performs up to
-        // multiJump EXTRA jumps along the route automatically. Budget the
-        // auto-continues to what the remaining route can actually reach (after
-        // this jump's own destination is shifted off).
-        const autoJumpsLeft = Math.max(0,
-            Math.min(shipPhysics.multiJump, jumpRoute.route.length - 1));
-        beginJump(entity, systemId, destination, jumpRoute, shipPhysics,
-            gameData, autoJumpsLeft);
+        // multiJump EXTRA jumps along the route, as ONE jump to the last of
+        // them (resolveJumpHops), for one jump's fuel: the gate above asks
+        // for FUEL_PER_JUMP whatever the hop count. A held key then chains
+        // on from the arrival exactly as after any other jump.
+        beginJump(entity, systemId,
+            resolveJumpHops(systemId, jumpRoute.route,
+                shipPhysics.multiJump, gameData),
+            jumpRoute, shipPhysics, gameData);
     },
     // #237 pin (shared: ControlledBy, JumpRouteComponent): JumpPlugin
     // registers this before its route provider. After TimeSystem: it reads
     // the clock for the arrival grace (determinism rule 4).
     after: [TimeSystem],
     before: [JumpRouteProvider],
-});
-
-/**
- * Auto-continues a multi-jump (ModType 32) route the tick after a ship arrives
- * from hyperspace: if it left a MultiJumpContinueComponent marker and still
- * has a routed destination and enough fuel, it starts the next jump without a
- * fresh key press (the ship arrives outside the standard no-jump zone, so
- * no radius check is needed; a hull whose dist mod enlarges its zone
- * arrives inside it and still continues: GUESS, unmeasured). Runs before
- * PlayerJumpControl so a released key never
- * cancels an in-flight multi-jump chain.
- */
-const MultiJumpContinueSystem = new System({
-    name: 'MultiJumpContinueSystem',
-    args: [MultiJumpContinueComponent, GetEntity, SystemIdResource,
-        JumpRouteComponent, ShipPhysicsComponent, FuelComponent,
-        SimulationGameDataResource, Optional(DisabledComponent)] as const,
-    step(cont, entity, systemId, jumpRoute, shipPhysics, fuel, gameData,
-        disabled) {
-        // Consume the marker regardless of outcome, so a blocked continuation
-        // (no route / no fuel / disabled) simply ends the chain.
-        entity.components.delete(MultiJumpContinueComponent);
-        if (entity.components.has(JumpComponent)) {
-            return;
-        }
-        // A ship that arrived disabled cannot spin up its hyperdrive, the
-        // same reason PlayerJumpControl refuses. Checked here rather than
-        // left to the disabled-cancels-jump rule so the chain ends without
-        // ever consuming the route hop it could not fly.
-        if (disabled) {
-            return;
-        }
-        const destination = jumpRoute.route[0];
-        if (!destination || cont.left <= 0) {
-            return;
-        }
-        if (fuel.current < FUEL_PER_JUMP) {
-            return;
-        }
-        beginJump(entity, systemId, destination, jumpRoute, shipPhysics,
-            gameData, cont.left - 1);
-    },
-    before: [PlayerJumpControl],
 });
 
 /**
@@ -748,8 +752,8 @@ export const JumpRouteReconcileSystem = new System({
         // resumes the moment the sequence ends, which for an arriving ship
         // is the first tick in the new system: JumpSequenceSystem drops the
         // component there, and nothing can start another jump before then
-        // (PlayerJumpControl refuses while one is in progress, and the
-        // multi-jump marker is only read on the following tick).
+        // (PlayerJumpControl refuses while one is in progress, and runs
+        // before the arrival tick drops the component).
         if (jump) {
             return;
         }
@@ -758,10 +762,9 @@ export const JumpRouteReconcileSystem = new System({
             jumpRoute.route.shift();
         }
     },
-    // Before both consumers, so neither can begin a jump to a hop this
-    // would have dropped — including the auto-continue that runs on the
-    // tick after an arrival without any key press.
-    before: [MultiJumpContinueSystem, PlayerJumpControl],
+    // Before the consumer, so it cannot begin a jump to a hop this would
+    // have dropped.
+    before: [PlayerJumpControl],
 });
 
 /**
@@ -792,6 +795,11 @@ export const JumpRouteReconcileSystem = new System({
  * twin, or a stale hop from wherever the route was planned, and none of
  * those can be jumped to from here (beginJump would refuse the unstaged
  * ones on the archive anyway — silently, and forever).
+ *
+ * (Since ruling #380 makeSystem stages EVERY sÿst on every peer, so the
+ * cold-archive hazard above no longer exists and resolveJumpHops may read
+ * a hop's record to walk a multi-jump; this rule stays link-only because
+ * that is what "can be flown from here" means.)
  *
  * If this system's own record is somehow not staged the hop is kept: the
  * answer is then the same "no data" every peer sees.
@@ -1058,21 +1066,31 @@ export const JumpSequenceSystem = new System({
                     // still sizes the departure gate (PlayerJumpControl).
                     // Measured for a positive mod only; a negative one
                     // arrives here too (GUESS).
+                    //
+                    // A multi-jump comes in on its own arrival heading,
+                    // from the last system it passed through.
+                    const arrivalHeading = jump.arrivalDirection === undefined
+                        ? target : new Angle(jump.arrivalDirection);
                     const basePhysics = getShipMovementPhysics(shipPhysics);
                     const arrivalDistance = JUMP_DISTANCE
                         + basePhysics.maxVelocity * PLAYER_JUMP_ARRIVAL_MARGIN_S;
-                    const unit = target.getUnitVector();
+                    const unit = arrivalHeading.getUnitVector();
                     teleport(movement,
                         new Position(-unit.x * arrivalDistance,
                             -unit.y * arrivalDistance),
                         unit.scale(basePhysics.maxVelocity));
-                    movement.rotation = target;
+                    movement.rotation = arrivalHeading;
+                    // This tick's turn order was the departure heading;
+                    // the ship must not swing back toward it on the way in.
+                    movement.turnTo = arrivalHeading;
                     movement.targetSpeed = basePhysics.maxVelocity;
                     jump.stage = 'arriving';
                     jump.stageStart = undefined;
                     jump.departAt = undefined;
                     // A jump costs FUEL_PER_JUMP (EVN Bible: fuel
-                    // "100 = 1 jump"). It is deducted at departure — the
+                    // "100 = 1 jump"), a multi-jump too however many
+                    // systems it passes through (Matthew, 2026-11-27). It
+                    // is deducted at departure — the
                     // moment the ship actually leaves the system, which
                     // is the arrival frame on the original (reference
                     // "Jump phases and fuel (U8), wave 38", finding 2: a
@@ -1103,17 +1121,6 @@ export const JumpSequenceSystem = new System({
                 // coasted into the no-jump zone.
                 entity.components.set(HyperspaceArrivalComponent,
                     { at: time.time });
-                // "multi-jump" (ModType 32): if the ship still has auto-jump
-                // budget, leave a marker so MultiJumpContinueSystem starts the
-                // route's next jump this tick without the player re-pressing
-                // the key. The marker carries the remaining budget across to
-                // the fresh JumpComponent.
-                if ((jump.autoJumpsLeft ?? 0) > 0) {
-                    entity.components.set(MultiJumpContinueComponent,
-                        { left: jump.autoJumpsLeft! });
-                } else {
-                    entity.components.delete(MultiJumpContinueComponent);
-                }
                 break;
             }
         }
@@ -1124,22 +1131,20 @@ export const JumpSequenceSystem = new System({
     // is not itself ordered after TimeSystem), so without the explicit edge a
     // restore could toposort JumpSequenceSystem before TimeSystem.
     //
-    // After both jump STARTERS (#113): JumpRouteReconcileSystem's
+    // After the jump STARTER (#113): JumpRouteReconcileSystem's
     // correctness argument ("nothing can start another jump before the
     // tick after arrival") holds only because this system — which drops
-    // JumpComponent on the arrival tick — runs after PlayerJumpControl
-    // and MultiJumpContinueSystem on that tick. Were either sorted after
-    // this one, a held jump key (or the multi-jump marker) would begin
+    // JumpComponent on the arrival tick — runs after PlayerJumpControl on
+    // that tick. Were it sorted after this one, a held jump key would begin
     // the route's next hop on the ARRIVAL tick, before the reconcile
     // system has dropped an unflyable head — and beginJump's getCached
     // for a non-link hop is warm on the browser (preload bundle) and cold
     // on the archive: the review-r13 fork the reconcile system exists to
     // prevent. That ordering used to hold only by addSystem insertion
     // order; this edge makes it a constraint. (Declared here rather than
-    // as `before` on the starters because they are defined above this
-    // const and cannot reference it.)
-    after: [TimeSystem, ControlShipSystem, PlayerJumpControl,
-        MultiJumpContinueSystem],
+    // as `before` on the starter because it is defined above this const
+    // and cannot reference it.)
+    after: [TimeSystem, ControlShipSystem, PlayerJumpControl],
     before: [MovementSystem],
 });
 
@@ -1152,11 +1157,6 @@ export const JumpPlugin: Plugin = {
             route: t.array(t.string),
         }));
         serializer?.addComponent(JumpComponent, JumpStateType);
-        // The multi-jump continuation marker crosses systems with the entity
-        // (it is set in the origin world at departure and read in the
-        // destination world), so it must serialize.
-        serializer?.addComponent(MultiJumpContinueComponent,
-            t.type({ left: t.number }));
         // Synced so the display's readiness readouts see the arrival grace.
         serializer?.addComponent(HyperspaceArrivalComponent,
             t.type({ at: t.number }));
@@ -1165,7 +1165,6 @@ export const JumpPlugin: Plugin = {
         }
         world.addSystem(JumpFromSystem);
         world.addSystem(JumpRouteReconcileSystem);
-        world.addSystem(MultiJumpContinueSystem);
         world.addSystem(PlayerJumpControl);
         world.addSystem(JumpSequenceSystem);
         world.addSystem(JumpRouteProvider);

@@ -33,7 +33,7 @@ import {
 } from '../ship/index.js';
 import {
     GateArrivalComponent, JumpComponent, JumpRouteComponent,
-    MultiJumpContinueComponent, PlanetTargetComponent, StellarBribesComponent,
+    PlanetTargetComponent, StellarBribesComponent,
     StellarHaggleComponent, SystemVisitComponent,
 } from '../travel/index.js';
 import { sweepableEscorts, sweepJumpingEscort } from '../escorts/index.js';
@@ -242,7 +242,6 @@ export const FLIGHT_STATE_COMPONENTS: readonly Component<any>[] = [
     PlanetTargetComponent,
     JumpRouteComponent,
     JumpComponent,
-    MultiJumpContinueComponent,
     GateArrivalComponent,
 ];
 
@@ -453,7 +452,6 @@ export const MissionSystemMoveSystem = new System({
             }
         }
         entity.components.delete(JumpComponent);
-        entity.components.delete(MultiJumpContinueComponent);
         entity.components.delete(TargetComponent);
         entity.components.delete(PlanetTargetComponent);
         entities.delete(uuid);

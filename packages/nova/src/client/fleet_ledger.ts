@@ -125,13 +125,10 @@ export class FleetLedger {
      * advance before calling it. That is the ordering guarantee that
      * keeps the carry ahead of the origin teardown's entity purge.
      *
-     * Also where a batch WAITS OUT a multi-jump chain. The arrival hands
-     * the batch back to this array instead of inserting it whenever the
-     * arriving player is going to auto-continue (multiJumpChainContinues),
-     * so each further hop simply picks it up again; flushCarriedJumpEscorts
-     * puts it down once the chain settles. That is what stops the chain
-     * out-running the insertion records and stranding escorts in an
-     * intermediate system.
+     * Also where a batch WAITS OUT a gate arrival (carriedBatchMustHold)
+     * or a failed insertion; flushCarriedJumpEscorts puts it down once the
+     * player is settled (carriedBatchSettled). A multi-jump needs no hold:
+     * it is one jump to its last hop.
      */
     readonly jumping: CarriedEscort[] = [];
     /**
@@ -645,8 +642,8 @@ export interface RefundBridge {
  *                                world (a same-system lift-off), under
  *                                the uuid it still has — and still the
  *                                player's, by its ownership marker;
- *   a carrier on a roster        not back yet (held for a multi-jump
- *                                chain, landed late, itself lost): the
+ *   a carrier on a roster        not back yet (held for a gate
+ *                                arrival, landed late, itself lost): the
  *                                row WAITS for the insertion that
  *                                brings it back;
  *   anything else                the carrier is gone for good —
@@ -717,14 +714,12 @@ export async function flushLandedEscorts(ctx: FleetContext,
 }
 
 /**
- * Puts down a batch that has been riding along with a multi-jump chain,
- * once the chain has settled (the player is in flight with no jump in
- * progress and no auto-continue pending — multiJumpChainSettled).
+ * Puts down a batch held on the jump roster (a gate arrival, a failed
+ * insertion) once the player has settled: in flight, placed at its gate,
+ * with no jump in progress (carriedBatchSettled).
  *
  * Runs every frame the player is in flight and not docked, so it is also
- * the recovery path for a chain that ended early (route exhausted, fuel
- * out) and for the ordinary case of a batch that somehow outlived its
- * arrival. While the player is between simulations there is no display
+ * the recovery path for a batch that somehow outlived its arrival. While the player is between simulations there is no display
  * entity to ask, so the batch is simply kept: dropping it is the one
  * thing that must never happen.
  */
@@ -750,7 +745,7 @@ export async function flushCarriedJumpEscorts(ctx: FleetContext,
         playerUuid, leader, mine);
     ctx.fleet.jumping.push(...inserted.failed);
     // A lost fighter whose carrier rode this batch (held through a
-    // multi-jump chain, or retried after a failed insertion) is owed its
+    // gate arrival, or retried after a failed insertion) is owed its
     // round now that the carrier is back (issue #258).
     await refundLostFighters(ctx, bridge, displayWorld, playerUuid,
         inserted.reinserted);

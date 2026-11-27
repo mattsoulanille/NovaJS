@@ -515,8 +515,9 @@ export class FramePump {
                 && runtime.state.state.kind === 'inSpace') {
                 await flushLandedEscorts(fleetContext, bridge, displayWorld);
             }
-            // A batch riding out a multi-jump chain is put back down once
-            // the chain settles. Same in-flight, not-docked guard: the
+            // A batch held on the jump roster (a gate arrival, a failed
+            // insertion) is put back down once the player settles. Same
+            // in-flight, not-docked guard: the
             // dock/launch blocks above have already run this frame, so a
             // player who is on their way into a spaceport or a gate map
             // keeps holding until they are back in space.

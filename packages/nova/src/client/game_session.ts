@@ -522,8 +522,8 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
     // What the client is currently holding for its escorts (see
     // spaceport/landed_escorts.ts). `landed` is the roster held while
     // docked or swept at a gate; `jumping` is the batch waiting for the
-    // destination system's world to be built — or riding out a multi-
-    // jump chain; `lost` the escorts that left the world without dying,
+    // destination system's world to be built — or held over a gate
+    // arrival; `lost` the escorts that left the world without dying,
     // to be respawned at the next system entry (ruling #148).
     window.novaEscortRosters = () => fleet.summary();
     // The same-system convergence invariant, live (FleetLedger.audit).

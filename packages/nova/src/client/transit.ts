@@ -25,9 +25,12 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import type { SimulationGameDataInterface } from './gamedata/simulation_game_data.js';
-import { daysPerJump } from '../nova_plugin/player/index.js';
 import {
-    GateArrivalComponent, planGateTransitRecovery, planHyperspaceJumpRecovery,
+    daysPerJump, DISCOVERY_ENTERED, markManyDiscovered,
+} from '../nova_plugin/player/index.js';
+import {
+    GateArrivalComponent, JumpComponent, planGateTransitRecovery,
+    planHyperspaceJumpRecovery,
 } from '../nova_plugin/travel/index.js';
 import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship/index.js';
 import { advanceEntityDate } from '../spaceport/mission_session.js';
@@ -60,8 +63,17 @@ export function followHyperspaceJump(runtime: ClientRuntime,
     // advance included: an exit-to-title during the (possibly long)
     // advance waits for this to bail rather than letting the jumpTo below
     // start into a torn-down session.
+    // A MULTI-JUMP (ModType 32) passed through these systems without
+    // entering them (jump_plugin.ts resolveJumpHops). GUESSES, unmeasured
+    // on the original: each still counts as explored on the map (the
+    // pilot flew through it), and each hop costs its days as a separate
+    // jump would. Nothing else happens there: no world is built, so no
+    // traffic, no mission ships, no hails, no arrival.
+    const passedThrough = data.entity.components.get(JumpComponent)?.via ?? [];
+    markManyDiscovered(passedThrough, DISCOVERY_ENTERED);
     void runtime.transitions.run(async () => {
-        await advanceDateForJump(runtime, data.entity);
+        await advanceDateForJump(runtime, data.entity,
+            passedThrough.length + 1);
         // A rejection here used to be unobserved: the ship (already
         // deleted sim-side) was simply gone. Recover it into the system it
         // left, the way a failed gate transit recovers to its gate.
@@ -93,10 +105,11 @@ export function followHyperspaceJump(runtime: ClientRuntime,
  * mod" outfits); advance the player's calendar while the entity is
  * between simulations. The date rides to peers with the re-added entity.
  * The derived ShipPhysicsComponent already sums the outfit mods; fall
- * back to the raw ship data if it isn't populated yet.
+ * back to the raw ship data if it isn't populated yet. `hops` jumps'
+ * worth of days pass: more than one for a multi-jump.
  */
-async function advanceDateForJump(runtime: ClientRuntime, entity: Entity):
-    Promise<void> {
+async function advanceDateForJump(runtime: ClientRuntime, entity: Entity,
+    hops = 1): Promise<void> {
     const { gameData } = runtime;
     try {
         const derived = entity.components.get(ShipPhysicsComponent);
@@ -110,7 +123,7 @@ async function advanceDateForJump(runtime: ClientRuntime, entity: Entity):
             mass = physics?.mass ?? 100;
             speedMod = physics?.hyperspaceSpeedMod ?? 0;
         }
-        await advanceEntityDate(entity, daysPerJump(mass, speedMod),
+        await advanceEntityDate(entity, daysPerJump(mass, speedMod) * hops,
             MissionUniverse.shared(gameData), gameData);
     } catch (e) {
         // THE DATE COST IS FORFEIT, DELIBERATELY, and the jump still
