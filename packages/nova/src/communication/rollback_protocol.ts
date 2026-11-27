@@ -921,7 +921,12 @@ export const STATE_HASH_INTERVAL = 60;
 //    4-10 s (was a 15 s clock); ionized above 0.3 of IonizeMax with the
 //    turn cut ramping in from the first point of charge, and Deionize 0
 //    read as 100; the afterburner factor floored at 1.5; gravity's pull
-//    23 G + 3.2 G|G| px/s². The derived wire schema fingerprint changes (7c258fc1263a74e7 ->
+//    23 G + 3.2 G|G| px/s²; a beam's Count in 1/56 s; an observe-goal
+//    mission ship not held; shïp Flags2 0x0004 ships skipped by
+//    targeting; planet-type weapons and ships hitting only each other (a
+//    new 'planetType' collision tag); a paid planet bribe lasting until
+//    the next landing or system exit; an auto-abort's DatePostInc applied
+//    at its lift-off abort. The derived wire schema fingerprint changes (7c258fc1263a74e7 ->
 //    4ed054bb232c84e8), and the join gate keeps older and newer builds
 //    apart.
 
