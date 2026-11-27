@@ -25808,7 +25808,7 @@ high (seven, six and three shots, each beam on its count every time).
 **Evidence:** `~/.local/share/novaref/evidence/20261127-w52/e10t_a/`,
 `e10n_a/`, `e10nt_a/` (`recording.mp4`, the F12 shots), `tools/beamcount.py`.
 
-### The multi-jump outfit (the hub's item 3, oütf ModType 32), wave 52: ModVal is the number of HOPS a press takes (ModVal 2 went two systems, ModVal 3 three), not extra hops; the ship arrives on the side OPPOSITE ITS DEPARTURE heading (west of the destination after leaving Alpha eastward), not facing the last system passed through; a held `j` chains whole multi-jumps (three of two hops each, a day each); a route cannot be plotted past an unexplored system, so the systems passed through are always explored already; a mission ship in a system passed through is not observed (2026-11-27)
+### The multi-jump outfit (the hub's item 3, oütf ModType 32), wave 52: ModVal is the number of HOPS a press takes (ModVal 2 went two systems, ModVal 3 three), not extra hops; the ship arrives on the side OPPOSITE ITS DEPARTURE heading (west of the destination after leaving Alpha eastward), not facing the last system passed through; a held `j` chains whole multi-jumps (three of two hops each, a day each); an UNEXPLORED system the map draws does not stop it and stays UNEXPLORED after being passed through; a mission ship in a system passed through is not observed (2026-11-27)
 
 **Questions** (the hub's item 3, against main's d37a0c04 + e8d9fe6e; one
 jump of fuel, one arrival, the date once and escorts following are
@@ -25833,7 +25833,8 @@ by the map: Find "Kit MJ Alpha" (centred at window (355, 264)), then
 shift-clicks on each hop (wave 44's way), Done; then `j`; after the
 arrival Down 1.5 s and `l l`, Leave (the pilot written), the map. Pilots
 `w52_mjx` (all seven explored, ModVal 2), `w52_mj3` (ModVal 3), `w52_mju`
-(only Alpha explored), `w52_mjo` (mïsn 1084: observe one anchored Kit
+(only Alpha explored), `w52_mjd` (Alpha and Charlie explored, Bravo not: the
+map draws Bravo as a dim ring, wave 2's D-U-D case), `w52_mjo` (mïsn 1084: observe one anchored Kit
 Prey Bare in Bravo, ShipGoal 4, OnShipDone b9346, offered at Alpha East).
 The arrival side from the radar (ports 31.5 px per radar px) and the
 first frames after the flash; the pilot read by `tools/mjpilot.mjs`.
@@ -25844,6 +25845,7 @@ first frames after the flash; the pilot read by `tools/mjpilot.mjs`.
 | mj3_a | ModVal 3, A-B-C-D-E-F-G, one tap | **Delta** (3 hops; E-F-G kept) | Delta's **west** side: stopped 410 px east of Delta West (-1350, 0), the radar's ports symmetric N / S | "Arriving in the Kit MJ Delta system on June 24th." | June **24** (one day); landing failed ("too far") |
 | mjh_a | ModVal 2, A-...-G, `j` held 25 s | **Charlie, Echo, Golf**: three multi-jumps of two hops, each at once on the arrival (flashes 70.1 and 79.9 s; the Echo line at about 74.5 s) | | "Jumping into ... Charlie ... June 24th", "Arriving in the Kit MJ Echo system on June 25th.", "Arriving in the Kit MJ Golf system on June 26th." | June **26** (a day each) |
 | mju_a | ModVal 2, only Alpha explored: shift-clicks at Bravo's and Charlie's places | the map shows only Alpha; the Bravo click selects **"<Unknown>"** (nav "Hyperspace / Unexplored System"), the Charlie click does nothing: a route of ONE hop; `j`: **Bravo** | landed Bravo West (-950) | | June 25 (jump + landing), fuel **2,900**; explored Alpha 2, **Bravo 2, Charlie .. Golf 0** |
+| **mjd_a** | ModVal 2, Alpha and Charlie explored, Bravo NOT: shift-clicks on Bravo (the dim ring) and Charlie | the route A -> (dim) -> Charlie drawn green; one tap: **Charlie** (passing the unexplored Bravo) | landed Charlie West (-950) | | June 25, fuel 2,900; explored **Alpha 2, Bravo 0, Charlie 2**: the map after still shows Bravo as an unnamed dim ring |
 | mjoc_a | ModVal 2, mïsn 1084 accepted, route A-B only | Bravo | landed Bravo West | | **b9346 set** (the observe goal met), 1084 active |
 | mjo_a | the same, route A-B-C | Charlie (passing Bravo) | landed Charlie West | | **b9346 NOT set**, 1084 still active; fuel 2,900 |
 
@@ -25863,14 +25865,15 @@ first frames after the flash; the pilot read by `tools/mjpilot.mjs`.
 3. **A held `j` chains whole multi-jumps**: each arrival started the next
    multi-jump at once (as a held `j` chains plain jumps, wave 44), two
    hops each, one day each; the "budget" is per press, not per route.
-4. **The route cannot run through an unexplored system**: the map draws
-   only explored systems (and grey unexplored neighbours of the current
-   system); a shift-click picks an unexplored neighbour ("<Unknown>") but
-   nothing beyond it, so a multi-jump can only END in an unexplored
-   system. The systems passed through are therefore always explored
-   already, and the passed-through mark question does not arise (after
-   the jump to Bravo it was explored 2, Charlie and beyond still 0).
-   "Blocked" systems were not tried.
+4. **An unexplored system on the route does not stop the multi-jump,
+   and it is NOT marked explored by passing**: with Bravo unexplored
+   between the explored Alpha and Charlie (the map draws it as a dim
+   ring, wave 2's D-U-D), the route Alpha -> Bravo -> Charlie plotted and
+   one press took the ship through Bravo to Charlie; afterwards Bravo was
+   still 0 in the pilot and still an unnamed dim ring on the map. A route
+   can only reach systems the map draws (`mju_a`: with only Alpha
+   explored, Bravo was pickable as "<Unknown>" but Charlie, two jumps out,
+   was not), as for plain routes. "Blocked" systems were not tried.
 5. **A mission ship in a system passed through is not observed**:
    OnShipDone b9346 was set by a plain jump into Bravo and not by a
    multi-jump through it (Matthew's ruling; NovaJS already does this).
@@ -25888,17 +25891,18 @@ extraJumps)`, i.e. ModVal hops. The arrival heading is
 `mapHeading(lastPassed, dest)` (`jump_plugin.ts:536`): **mismatch**: use
 the departure heading (`direction`, `:533`, origin -> first hop) for the
 arrival too. A held `j` chains as after any jump (d37a0c04): **matches**.
-The client marks the passed systems explored (`N/client/transit.ts:74`):
-harmless (they are always explored on the original, finding 4), so no
-change needed; the route picker should refuse a hop past an unexplored
-system (GUESS that NovaJS's map allows it: `N/spaceport/route.ts`, not
-read here). Mission goals in passed systems: **matches** (never entered).
+The client marks the passed systems explored (`markManyDiscovered(passedThrough,
+DISCOVERY_ENTERED)`, `N/client/transit.ts:74`, a GUESS there):
+**mismatch**: drop it (passing leaves a system unexplored, finding 4).
+The router already routes through drawn unexplored systems only
+(`N/spaceport/route.ts:21-34`, wave 2's M4) and `resolveJumpHops` does not
+stop at an unexplored hop: **matches**. Mission goals in passed systems: **matches** (never entered).
 Confidence: high for 1 and 3 (three runs), high for 2 on this geometry
 (two arrivals, both west, both heading east), medium for its general form.
 
 **Evidence:** `~/.local/share/novaref/evidence/20261127-w52/mjx_a/`,
 `mj3_a/` (the `-retry1` attempt), `mjh_a/`, `mju_a/`, `mjoc_a/` (`-retry1`),
-`mjo_a/` (`recording.mp4`, the map shots, `pilot-after/`), `mjx_a/fr/`,
+`mjo_a/`, `mjd_a/` (`recording.mp4`, the map shots, `pilot-after/`), `mjx_a/fr/`,
 `mj3_a/fr/arr.png`, `mjh_a/fr/status.png`, `tools/mjpilot.mjs`,
 `tools/feed.sh` (re-sent mj3_a's steps to its retry).
 
