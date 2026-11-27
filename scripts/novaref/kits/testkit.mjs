@@ -322,6 +322,7 @@ export default {
         ...wave48Resources(),
         ...wave49Resources(),
         ...wave50Resources(),
+        ...wave51Resources(),
     ].map(wave15Patches).map(wave46Patches).map(withoutRunningLights),
 };
 
@@ -789,6 +790,65 @@ function wave50Resources() {
         out.push(...misn(mid, `Kit TR tractor beamer ${d} px out`, bit, { availStel: port, shipCount: 1, shipDude: 548, shipGoal: -1,
             shipBehav: -1, shipStart: -2, onAccept: `!b${bit}` }));
     });
+    return out;
+}
+
+/**
+ * Wave-51 experiments (docs/reference_experiments.md, "... wave 51"):
+ * Matthew's question whether the ion turn cut is the same for every hull,
+ * a self-granting outfit, the tractor's per-frame pull. RETIRED: wave 39's
+ * shïp 598 Kit Ring Ion Fade (pilot w39_e6f), wave 40's 603 Kit Jump Slow
+ * Ring (w40_u8r) and 604 Kit Ring Ion D50 (w40_e6d), wave 41's 629 Kit
+ * Ring Ion D0 (w41_e6), wave 6's 792 Kit Lancer Ion (w6_ion*) and wave
+ * 7's 814 Kit Lancer Ion Slow (w7_ionthr), using them for its own (those
+ * pilots are stale). Used: sÿst 1493, spöb 1215, shïp 598 / 603 / 604 /
+ * 629 / 792 / 814, oütf 514-518. Map row y = -3240 (x -680). The next
+ * free ids: sÿst 1494+, spöb 1216-1399 (and 518-999), shïp NONE (retire
+ * an old kit hull), düde 328 / 552+, përs: override a stock one
+ * (kits/w48_pers225.mjs), ränk 205+, mïsn NONE (retire another old kit
+ * mission: wave 14's 1082-1084 are one-off rigs), gövt 283 and below,
+ * flët 324+, wëap 330+, oütf 519+, jünk 205+, bits 9334+, rlëD 1113+.
+ *
+ *  E6T shïp 598 / 604 / 629 / 792 / 814 Kit Ring Ion T10 / T20 / T60 /
+ *      T100 / T200: the Kit Ring Ion (596: the white-spoke ring, inertialess,
+ *      Accel 2000, Speed 800, IonizeMax 100, Deionize 1) with Turn 10 / 20 /
+ *      60 / 100 / 200 (596 is Turn 30). On Kit Knock Grid Port with wave
+ *      50's mïsn 963 Kit Ion Shot Target (Ionization 30 a hit) and the Kit
+ *      Beam Turret: killed after two hits the charge sits tinted (about 59
+ *      down to 33) for about 90 s and then untinted; after six, above the
+ *      no-turn line for minutes. So each stage's turn rate per Turn.
+ *  E6A shïp 603 Kit Probe Ion A900: wave 44's Kit Probe Ion (791: inertial,
+ *      Accel 300, Speed 300, IonizeMax 100, Deionize 1) at Accel 900 and
+ *      Speed 600, so the saturated thrust cut is read on two Accels.
+ *  SG  sÿst 1493 Kit Self Grant, port spöb 1215 (land and outfitter only,
+ *      TechLevel 0, SpecialTech 9510) selling oütf 514 Kit SG Grant
+ *      (OnPurchase "G514"), 515 Kit SG Drop (OnSell "D515"), 516 Kit SG
+ *      Both (both), 517 Kit SG Giver (OnPurchase "G518") and 518 Kit SG
+ *      Gift (plain): Max 3 each, Cost 1000, ModType 2 (cargo) +1 each, so
+ *      the hold's size counts them too.
+ */
+function wave51Resources() {
+    const out = [];
+    const ringIon = (id, name, turn) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", accel: 2000,
+            speed: 800, turn, armor: 30000, shield: 30000, shieldRecharge: 1000, mass: 50, freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16,
+            ai: 3, strength: 100, crew: 10, flags: 0, flags2: 0x00C8, ionization: 100, deionize: 1 } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": 1955, "@2:i16": 1956, "@4:i16": 1, "@6:i16": 24, "@8:i16": 24 } },
+    ];
+    // --- E6T: shïp 598 / 604 / 629 / 792 / 814 (retired, see above).
+    [[598, 10], [604, 20], [629, 60], [792, 100], [814, 200]].forEach(([id, turn]) => out.push(...ringIon(id, `Kit Ring Ion T${turn}`, turn)));
+    // --- E6A: shïp 603 (retired), wave 44's Kit Probe Ion at Accel 900.
+    out.push(...ship(603, "Kit Probe Ion A900", 128, { turn: 30, armor: 30000, shield: 30000, mass: 50, freeMass: 500, cargo: 50, maxGuns: 8,
+        maxTurrets: 8, ai: 1, strength: 10, flags: 0, flags2: 0x0088, accel: 900, speed: 600, ionization: 100, deionize: 1 }));
+    // --- SG: sÿst 1493, spöb 1215, oütf 514-518.
+    out.push(system(1493, "Kit Self Grant", -680, -3240, 363, [1215]),
+        spob(1215, "Kit Self Grant Port", 0, 0, 138, { flags: 0x05, techLevel: 0, specialTech: [9510, -1, -1] }));
+    const sg = (id, name, onPurchase, onSell) => ({ type: "oütf", id, name, clone: "oütf:130", set: {
+        displayWeight: 2000 + id, mass: 0, techLevel: 9510, modType: 2, modVal: 1, max: 3, flags: 0, cost: 1000, modType2: -1, modVal2: 0,
+        modType3: -1, modVal3: 0, modType4: -1, modVal4: 0, contribute: 0, require: 0, availability: "", onPurchase, onSell,
+        shortName: name, lcName: name.toLowerCase(), lcPlural: name.toLowerCase() + "s", itemClass: 0, scanMask: 0, buyRandom: 100 } });
+    out.push(sg(514, "Kit SG Grant", "G514", ""), sg(515, "Kit SG Drop", "", "D515"), sg(516, "Kit SG Both", "G516", "D516"),
+        sg(517, "Kit SG Giver", "G518", ""), sg(518, "Kit SG Gift", "", ""));
     return out;
 }
 
@@ -1478,9 +1538,7 @@ function wave41Resources() {
         armor: 30000, shield: 0, accel: 0, speed: 0, turn: 0, ai: 3, strength: 1, crew: 1, ...armed(305),
     }));
     out.push(dude(523, "Ion Tick Target", 3, 362, 628));
-    out.push(...shareRled(629, "Kit Ring Ion D0", RLED.ring, 24, { accel: 2000, speed: 800, turn: 30, armor: 30000, shield: 30000,
-        shieldRecharge: 1000, mass: 50, freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, crew: 10, flags: 0,
-        flags2: 0x00C8, ionization: 100, deionize: 0 }));
+    // shïp 629 Kit Ring Ion D0 (Deionize 0) was RETIRED in wave 51 for the Kit Ring Ion T60 (wave51Resources; pilot w41_e6 is stale).
     out.push(system(1428, "Kit Ion Tick Range", nextX(), Y, 363, [1987]), port(1987, "Kit Ion Tick Port"));
     out.push(...misn(1031, "Kit E6 ion tick target", 9266, { availStel: 1987, shipCount: 1, shipDude: 523, shipGoal: -1, shipBehav: -1,
         shipStart: -1, onAccept: "!b9266" }));
@@ -1741,11 +1799,8 @@ function wave40Resources() {
     }
     out.push(system(1419, "Kit E11 Yard", nextX(), Y, 363, [1980]),
         port(1980, "Kit E11 Yard Port", { flags: 0x09, techLevel: 0, specialTech: [9403, -1, -1] }));
-    // --- U8: shïp 603 (wave 38's sÿst 1387). E6: shïp 604 (Kit Port, mïsn 1005).
-    const ring = (id, name, set) => shareRled(id, name, RLED.ring, 24, { mass: 50, freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3,
-        strength: 100, crew: 10, flags: 0, armor: 30000, shield: 30000, shieldRecharge: 1000, ...set });
-    out.push(...ring(603, "Kit Jump Slow Ring", { accel: 100, speed: 200, turn: 10, flags2: 0x0088, fuel: 300 }));
-    out.push(...ring(604, "Kit Ring Ion D50", { accel: 2000, speed: 800, turn: 30, flags2: 0x00C8, ionization: 100, deionize: 50 }));
+    // --- U8: shïp 603 Kit Jump Slow Ring (wave 38's sÿst 1387) and E6: shïp 604 Kit Ring Ion D50 (Kit Port, mïsn 1005) were
+    // RETIRED in wave 51 for the Kit Probe Ion A900 and the Kit Ring Ion T20 (wave51Resources; pilots w40_u8r / w40_e6d are stale).
     // --- R18: sÿst 1418, spöb 1979 (gövt 290, düde 509: wave 38).
     out.push(system(1418, "Kit Tribute Station", nextX(), Y, 290, [1979]),
         spob(1979, "Kit Tribute Station Six", 0, 0, 311, { flags: 0x53, govt: 290, tribute: 1500, defenseDude: 509, defenseCount: 6 }));
@@ -1863,13 +1918,8 @@ function wave39Resources() {
         freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, crew: 10, flags: 0, flags2: 0x00C8, ionization: 100,
         deionize: 1 } },
     { type: "shän", id: 596, name: "Kit Ring Ion", clone: "shän:128", set: { "@0:i16": 1955, "@2:i16": 1956, "@4:i16": 1, "@6:i16": 24, "@8:i16": 24 } });
-    // Added during the wave (the Deionize-1 hull, saturated, never turned at all): shïp 598 Kit Ring Ion Fade, the same with
-    // Deionize 20, so the charge drains while a turn is held away from the ion target.
-    out.push({ type: "shïp", id: 598, name: "Kit Ring Ion Fade", clone: "shïp:128", set: { ...shipBase, shortName: "Kit Ring Ion Fade",
-        longName: "Kit Ring Ion Fade", commName: "Kit Ring Ion Fade", subtitle: "", accel: 2000, speed: 800, turn: 30, armor: 30000, shield: 30000,
-        shieldRecharge: 1000, mass: 50, freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, crew: 10, flags: 0,
-        flags2: 0x00C8, ionization: 100, deionize: 20 } },
-    { type: "shän", id: 598, name: "Kit Ring Ion Fade", clone: "shän:128", set: { "@0:i16": 1955, "@2:i16": 1956, "@4:i16": 1, "@6:i16": 24, "@8:i16": 24 } });
+    // Added during the wave: shïp 598 Kit Ring Ion Fade (the same with Deionize 20) was RETIRED in wave 51 for the Kit Ring Ion T10
+    // (wave51Resources; pilot w39_e6f is stale).
     // --- R4: gövt 287, düde 513, sÿst 1403, spöb 1958.
     out.push(govt(287, "Kit Zero Penalty", { killPenalty: 0, disabPenalty: 0, boardPenalty: 0, shootPenalty: 0, smugPenalty: 0, crimeTol: 30000 }));
     out.push(dude(513, "Kit Zero Victim", 1, 287, 580));
@@ -6044,10 +6094,7 @@ function wave7Resources() {
             spob(sid + 1, `${name} Marker`, 900, 0, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
         // mïsn 1017 / 1018 (bits 9058 / 9059, the J0 targets) were retired in wave 38 for the R13 offers (wave38Resources).
     });
-    out.push(...ship(814, "Kit Lancer Ion Slow", 135, {
-        accel: 2000, speed: 800, turn: 60, armor: 30000, shield: 30000, shieldRecharge: 0, armorRecharge: 0, mass: 50, freeMass: 1000,
-        cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, flags: 0, flags2: 0x00C8, ionization: 100, deionize: 1,
-    }));
+    // shïp 814 Kit Lancer Ion Slow was RETIRED in wave 51 for the Kit Ring Ion T200 (wave51Resources; pilot w7_ionthr is stale).
     out.push(weap(249, "Kit Ion Gun 10", 131, { reload: 45, duration: 60, armorDamage: 1, shieldDamage: 1, guidance: 4, ionization: 10 }));
     out.push({ type: "shïp", id: 815, name: "Ion Target Green", clone: "shïp:128", set: { ...shipBase, shortName: "Ion Target Green", longName: "Ion Target Green", commName: "Ion Target Green", subtitle: "",
         armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 1, crew: 1, flags: 0, flags2: 0,
@@ -6191,10 +6238,7 @@ function wave6Resources() {
         seekerFlags: 0x0020, jamVuln: [0, 0, 0, 0], proxRadius: 25, blastRadius: 0, flags: 0x0002,
     }));
     out.push(gun(446, "JamM Launcher Ion", 241));
-    out.push(...ship(792, "Kit Lancer Ion", 135, {
-        accel: 2000, speed: 800, turn: 60, armor: 30000, shield: 30000, shieldRecharge: 0, armorRecharge: 0, mass: 50, freeMass: 1000,
-        cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, flags: 0, flags2: 0x00C8, ionization: 100, deionize: 1,
-    }));
+    // shïp 792 Kit Lancer Ion was RETIRED in wave 51 for the Kit Ring Ion T100 (wave51Resources; pilots w6_ion* are stale).
     out.push(weap(242, "Kit Ion Turret", 130, { reload: 15, duration: 90, armorDamage: 1, shieldDamage: 1, guidance: 4, speed: 2500, ionization: 50 }));
     out.push(...ship(793, "Ion Target", 136, {
         armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, ai: 3, strength: 1, crew: 1,
