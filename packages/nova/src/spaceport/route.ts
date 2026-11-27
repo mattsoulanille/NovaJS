@@ -298,7 +298,67 @@ export function effectiveRoute(adj: Adjacency, current: string,
 }
 
 /**
+ * The hyperspace jump that brought the player into the system it is in:
+ * the system it left and every hop it took, in order, the last being where
+ * it arrived. One hop for an ordinary jump; a multi-jump (oütf ModType 32)
+ * also lists the systems it passed through without entering (JumpComponent
+ * `via`).
+ */
+export interface JumpArrival {
+    from: string;
+    hops: readonly string[];
+}
+
+/**
+ * `pinned` without the pins a jump has reached: each leading pin the
+ * jump's hops reach in order (matched by PLACE), and any pin that is the
+ * same place as the last one reached (or as the jump's origin), which
+ * {@link expandRoute} skips anyway. Stops at the first pin the hops do not
+ * reach, so a route that comes back through a system the jump passed keeps
+ * its later visit (Sol, Tichel, Sol, Kania flown two hops at once leaves
+ * Sol, Kania).
+ *
+ * Exact for pins the flown route was expanded from: a segment's shortest
+ * path reaches its pin only at its end, so the earliest match of each pin
+ * after the previous pin's is where the jump reached it.
+ *
+ * A multi-jump never ARRIVES at the systems it passes through, so the
+ * "drop the pins the player is standing in" rule alone left them at the
+ * head of the list, and the map routed the player straight back to them.
+ */
+export function dropPassedPins(pinned: readonly string[],
+    arrival: JumpArrival, samePlace: SamePlace = sameId): string[] {
+    const rest = [...pinned];
+    let anchor = arrival.from;
+    let next = 0;
+    while (rest.length > 0) {
+        const pin = rest[0]!;
+        if (samePlace(pin, anchor)) {
+            rest.shift();
+            continue;
+        }
+        let at = -1;
+        for (let i = next; i < arrival.hops.length; i++) {
+            if (samePlace(arrival.hops[i]!, pin)) {
+                at = i;
+                break;
+            }
+        }
+        if (at === -1) {
+            break;
+        }
+        rest.shift();
+        anchor = arrival.hops[at]!;
+        next = at + 1;
+    }
+    return rest;
+}
+
+/**
  * Brings persisted route state up to date when the map opens in `current`:
+ *  - pins the jump that brought the player here reached fall off the front
+ *    of the waypoint list ({@link dropPassedPins}; `arrival`, given once,
+ *    the first time the map reconciles after that jump);
  *  - pins the player has arrived at fall off the front of the waypoint list;
  *  - a single-jump destination that is no longer adjacent (completed, or the
  *    player went elsewhere) is cleared;
@@ -310,8 +370,10 @@ export function effectiveRoute(adj: Adjacency, current: string,
  */
 export function reconcileRouteState(state: RouteState, current: string,
     adj: Adjacency, simRoute: readonly string[],
-    samePlace: SamePlace = sameId): RouteState {
-    const pinned = [...state.pinned];
+    samePlace: SamePlace = sameId, arrival?: JumpArrival): RouteState {
+    const pinned = arrival
+        ? dropPassedPins(state.pinned, arrival, samePlace)
+        : [...state.pinned];
     // "Arrived at" by PLACE, not by id: a pin made under different control
     // bits can name another copy of the system the player is now in.
     while (pinned.length > 0 && samePlace(pinned[0]!, current)) {

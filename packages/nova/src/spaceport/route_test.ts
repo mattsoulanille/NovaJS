@@ -4,6 +4,7 @@ import {
     buildAdjacency,
     canPin,
     cycleSingle,
+    dropPassedPins,
     effectiveRoute,
     expandRoute,
     formatMapDate,
@@ -209,6 +210,47 @@ describe('reconcileRouteState', () => {
                 { pinned: ['f'] }, 'a', adj, ['b', 'c', 'd']);
             expect(state.pinned).toEqual(['f']);
         });
+    it('drops the pins a multi-jump passed through', () => {
+        // a -> b -> c -> d pinned hop by hop, flown a -> c via b in one
+        // jump: b was never arrived at, but it is behind the player.
+        const state = reconcileRouteState({ pinned: ['b', 'c', 'd'] }, 'c',
+            adj, ['d'], undefined, { from: 'a', hops: ['b', 'c'] });
+        expect(state.pinned).toEqual(['d']);
+        expect(expandRoute(adj, 'c', state.pinned)).toEqual(['d']);
+    });
+});
+
+describe('dropPassedPins', () => {
+    const arrival = { from: 'a', hops: ['b', 'c'] };
+
+    it('drops every pin the hops reach, in order', () => {
+        expect(dropPassedPins(['b', 'c', 'd'], arrival)).toEqual(['d']);
+        expect(dropPassedPins(['c', 'd'], arrival)).toEqual(['d']);
+    });
+    it('keeps a later visit to a passed system', () => {
+        // a -> b -> c -> b -> e: the jump to c leaves b -> e.
+        expect(dropPassedPins(['b', 'c', 'b', 'e'], arrival))
+            .toEqual(['b', 'e']);
+    });
+    it('stops at the first pin the hops do not reach', () => {
+        expect(dropPassedPins(['d', 'b'], arrival)).toEqual(['d', 'b']);
+        expect(dropPassedPins(['b', 'e', 'c'], arrival)).toEqual(['e', 'c']);
+    });
+    it('keeps a pin the hops only passed on the way to an earlier one',
+        () => {
+            // Pinned c then b: the route is a -> b -> c -> b, and the jump
+            // to c (via b) has reached c but not the pinned return to b.
+            expect(dropPassedPins(['c', 'b'], arrival)).toEqual(['b']);
+        });
+    it('drops pins the route skipped as the same place as the anchor', () => {
+        expect(dropPassedPins(['a', 'b', 'b', 'd'], arrival)).toEqual(['d']);
+    });
+    it('matches by place', () => {
+        const samePlace = (x: string, y: string) =>
+            x.replace('2', '') === y.replace('2', '');
+        expect(dropPassedPins(['b2', 'c', 'd'], arrival, samePlace))
+            .toEqual(['d']);
+    });
 });
 
 /**

@@ -20,7 +20,7 @@ import {
 } from '../nova_plugin/ship/index.js';
 import { applyOwnedMapOutfits } from '../spaceport/map_outfit.js';
 import {
-    JumpComponent, JumpRouteComponent, StellarBribesComponent,
+    FinishJumpEvent, JumpComponent, JumpRouteComponent, StellarBribesComponent,
 } from '../nova_plugin/travel/index.js';
 import { MissionMapMark, missionMapMarks } from '../nova_plugin/missions/index.js';
 import {
@@ -46,6 +46,7 @@ import { BEEP_MAP_CLOSE, BEEP_MAP_OPEN, playUiSound } from './ui_sound.js';
 
 export const StarmapResource = new Resource<Starmap>("Starmap");
 const StarmapControlsSubscription = new Resource<Subscription>('StarmapControlsSubscription');
+const StarmapJumpSubscription = new Resource<Subscription>('StarmapJumpSubscription');
 /** Marks the plugin's openStarmap as torn down (see remove). */
 const StarmapDisposer = new Resource<() => void>('StarmapDisposer');
 export const SetJumpRouteEvent = new EcsEvent<{ route: string[] }>('SetJumpRouteEvent');
@@ -216,6 +217,32 @@ export const StarmapPlugin: Plugin = {
         // — you see what is inhabited, not what the ports sell; landing is
         // what raises it to 2 (browser.ts, discovery.ts).
         discovery.mark(systemId, DISCOVERY_ENTERED);
+
+        // The jump that brought the player here (recorded at its departure
+        // below) drops the route pins it reached at the map's next
+        // reconcile. Not if this world is somewhere else: a jump that
+        // failed recovers into the system it left, and nothing was passed.
+        const arrival = persistentRouteStore.arrival;
+        if (arrival && arrival.hops[arrival.hops.length - 1] !== systemId) {
+            persistentRouteStore.arrival = undefined;
+        }
+        // The player's ship leaving this system: remember every hop the
+        // jump takes. A multi-jump (oütf ModType 32) passes through its
+        // `via` systems without arriving in them, so the map's "drop the
+        // pins the player is standing in" rule never removes them, and the
+        // full map (or a minimap pick) would plot the route back through
+        // them and commit it: the next `j` flew BACK (wave 52's MJ fix).
+        world.resources.set(StarmapJumpSubscription,
+            world.events.get(FinishJumpEvent).subscribe(({ data }) => {
+                if (!data.entity.components.has(PlayerShipSelector)) {
+                    return;
+                }
+                const jump = data.entity.components.get(JumpComponent);
+                persistentRouteStore.arrival = {
+                    from: systemId,
+                    hops: [...(jump?.via ?? []), data.to],
+                };
+            }));
 
         // NCB system visibility uses the player's real control bits.
         const getPlayerBits = (): ReadonlySet<number> =>
@@ -476,6 +503,8 @@ export const StarmapPlugin: Plugin = {
     },
     remove(world) {
         world.resources.get(StarmapControlsSubscription)?.unsubscribe();
+        world.resources.get(StarmapJumpSubscription)?.unsubscribe();
+        world.resources.delete(StarmapJumpSubscription);
         world.removeSystem(DrawMiniMap);
         const miniMapState = world.resources.get(MiniMapResource);
         if (miniMapState) {

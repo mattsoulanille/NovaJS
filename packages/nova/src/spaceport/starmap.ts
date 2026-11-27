@@ -29,7 +29,9 @@ import { FindDialog } from "./find_dialog.js";
 import { Menu } from "./menu.js";
 import { MenuControls } from "./menu_controls.js";
 import { MissionUniverse } from "./mission_universe.js";
-import { formatMapDate, reconcileRouteState, RouteState } from "./route.js";
+import {
+    formatMapDate, JumpArrival, reconcileRouteState, RouteState,
+} from "./route.js";
 import {
     MISSION_MARK_ACTIVE_CICN, MISSION_MARK_VIEWED_CICN, MissionMarkTextures,
 } from "./starmap_marks.js";
@@ -57,6 +59,15 @@ import { loadEachOrSkip } from "./skip_failed_loads.js";
  */
 export interface RouteStateStore {
     state: RouteState;
+    /**
+     * The hyperspace jump that brought the player into this system, not yet
+     * applied to `state`: the next reconcile (the full map's open or the
+     * `h` minimap's build) drops the pins it reached and clears this. Set
+     * by the plugin when the player's ship departs (FinishJumpEvent), and
+     * cleared by the next display world if that is not the jump's
+     * destination (a jump that failed and recovered to its origin).
+     */
+    arrival?: JumpArrival;
 }
 
 /**
@@ -459,12 +470,27 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             size,
             miniMap: true,
         });
-        this.routeStore.state = reconcileRouteState(this.routeStore.state,
-            this.systemId, graph.adjacency, route, graph.samePlace);
-        graph.setRouteState(this.routeStore.state);
+        this.reconcileRoute(graph, route);
         graph.zoomBy(zoom);
         graph.center();
         return graph;
+    }
+
+    /**
+     * Brings the persisted pins/single up to date with where the player is
+     * now (dropping the pins the jump here reached, once), adopting the
+     * sim's `route` if the client state was lost, and shows the result on
+     * `graph`.
+     */
+    private reconcileRoute(graph: SystemGraph, route: readonly string[]) {
+        const arrival = this.routeStore.arrival;
+        this.routeStore.arrival = undefined;
+        this.routeStore.state = reconcileRouteState(this.routeStore.state,
+            this.systemId, graph.adjacency, route, graph.samePlace,
+            arrival && graph.samePlace(
+                arrival.hops[arrival.hops.length - 1] ?? arrival.from,
+                this.systemId) ? arrival : undefined);
+        graph.setRouteState(this.routeStore.state);
     }
 
     /** (Re)filters the map against the given control bits. */
@@ -609,12 +635,7 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         if (!this.systemGraph) {
             throw new Error('Expected system graph to be built')
         }
-        // Bring the persisted pins/single up to date with where the player
-        // is now, adopting the sim's route if the client state was lost.
-        this.routeStore.state = reconcileRouteState(this.routeStore.state,
-            this.systemId, this.systemGraph.adjacency, route,
-            this.systemGraph.samePlace);
-        this.systemGraph.setRouteState(this.routeStore.state);
+        this.reconcileRoute(this.systemGraph, route);
         this.systemGraph.center();
         this.refreshClearButton();
         this.showProperties(this.systemId);
