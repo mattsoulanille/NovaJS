@@ -28,7 +28,9 @@ import { IonizationComponent, IonizationRechargeSystem } from "./health_plugin.j
  * IsIonizedComponent) and wëap Flags 0x0020 weapons can't fire. The
  * slowdown (ionSlowdown) is a function of the charge alone, in three
  * steps: one with the first point of charge, one at the ionized (tint)
- * line, and the full cut above a second line (ION_NO_TURN_FRACTION).
+ * line, and the full cut above a second line (ION_NO_TURN_FRACTION);
+ * the acceleration instead slides with the charge between the two lines
+ * (wave 47).
  *
  * MAINTAINER RULING #153 restored the level test (over #124's full-charge
  * / full-dissipate hysteresis) at HALF of IonizeMax; the line has since
@@ -112,18 +114,48 @@ export const ION_UNTINTED_SEVERITY = 1 / 3;
 export const ION_TINTED_SEVERITY = 2 / 3;
 
 /**
- * The acceleration's multiplier on the two lower steps (untinted, then
- * tinted). MEASURED, reference "Thrust on the lower ion plateaus (E6
- * leftover), wave 45": with an Impact-0 ion weapon (no push), two Up
- * pulses per plateau read about 0.93 of the control's thrust untinted and
- * 0.71 tinted; above the no-turn line it is ION_FULL_ACCELERATION_FACTOR
- * (wave 44). The exact values are GUESSES within two pulses each, and
- * whether the factor steps or slides with the charge inside a plateau was
- * not read (kept as steps, like the turn's). Was 7/9 and 5/9 (GUESS: the
- * turn's shares of the old 1/3 full cut).
+ * The acceleration's multiplier below the no-turn line. MEASURED,
+ * reference "Thrust under a rising ion charge, pulse by pulse (E6
+ * leftover), wave 47": with an Impact-0 ion weapon (no push) the thrust
+ * does not step but SLIDES with the charge: from about 15 s of hits on,
+ * each Up pulse thrust less than the one before (0.84, 0.80, 0.77, 0.72,
+ * 0.71, 0.64 of the control over 15-33 s, about -0.011 a second, no
+ * plateau), while the first 13 s read 0.96 twice (the untinted level;
+ * the 0.83 at 7.6 s a GUESSED short dip just after a hit, unmodelled).
+ * Wave 45's 0.93 / 0.71 "plateaus" were two points on the slide.
+ *
+ * So: ION_UNTINTED_ACCELERATION_FACTOR (0.96) for any charge up to the
+ * ionized (tint) line, then a straight line in the charge from
+ * ION_TINT_LINE_ACCELERATION_FACTOR (0.85) at the tint line down to
+ * ION_NO_TURN_LINE_ACCELERATION_FACTOR (0.6) at the no-turn line, then
+ * ION_FULL_ACCELERATION_FACTOR (0.4, wave 44) above it: the section's
+ * proposal. The charge itself was not read; the mapping from the
+ * section's seconds to charge is a GUESS from the Kit ion tick's rate
+ * (wave 42 / 45: 5 points a hit every 3.6 s, Deionize 1 draining 2.0 a
+ * hit, so about +3 a hit, about +0.83 a second): the tint line (16 of
+ * IonizeMax 100) arrives with the 5th hit near 15 s, where the slide
+ * starts at 0.84, and 33 s is about 31, which the line puts at about
+ * 0.68 against the 0.64 read. Was steps of 0.93 / 0.71 (wave 45), 7/9 /
+ * 5/9 before that (GUESS). The turn keeps its steps (wave 42).
  */
-export const ION_UNTINTED_ACCELERATION_FACTOR = 0.93;
-export const ION_TINTED_ACCELERATION_FACTOR = 0.71;
+export const ION_UNTINTED_ACCELERATION_FACTOR = 0.96;
+export const ION_TINT_LINE_ACCELERATION_FACTOR = 0.85;
+export const ION_NO_TURN_LINE_ACCELERATION_FACTOR = 0.6;
+
+/**
+ * The tinted acceleration multiplier for a charge `fraction` of
+ * IonizeMax between the tint line and the no-turn line: linear from
+ * ION_TINT_LINE_ACCELERATION_FACTOR to
+ * ION_NO_TURN_LINE_ACCELERATION_FACTOR. Pure.
+ */
+function tintedAccelerationFactor(fraction: number): number {
+    const along = (fraction - ION_IONIZED_FRACTION)
+        / (ION_NO_TURN_FRACTION - ION_IONIZED_FRACTION);
+    const clamped = Math.min(1, Math.max(0, along));
+    return ION_TINT_LINE_ACCELERATION_FACTOR + clamped
+        * (ION_NO_TURN_LINE_ACCELERATION_FACTOR
+            - ION_TINT_LINE_ACCELERATION_FACTOR);
+}
 
 /** Multipliers ionization puts on a ship's movement physics. */
 export interface IonSlowdown {
@@ -136,15 +168,15 @@ export const NO_ION_SLOWDOWN: Readonly<IonSlowdown> =
     { maxVelocity: 1, acceleration: 1, turnRate: 1 };
 
 /**
- * The slowdown of a ship whose ion charge is `ionization`, in three
- * steps (MEASURED, reference "Ion charge against the turn, in 5-point
- * steps (E6), wave 42"; see ION_*_SEVERITY): none at no charge; a third
- * of the full cut for any charge up to the ionized line; two thirds of it
- * from there to ION_NO_TURN_FRACTION; the measured full cut (no turn, 0.4
- * of the acceleration, wave 44) above. The acceleration's lower steps are
- * ION_UNTINTED/TINTED_ACCELERATION_FACTOR (0.93 / 0.71, wave 45). Was a
- * linear ramp to the ionized line (GUESS, wave 41). The top speed is
- * never cut. A pure function of the synced charge.
+ * The slowdown of a ship whose ion charge is `ionization`. The turn comes
+ * in three steps (MEASURED, reference "Ion charge against the turn, in
+ * 5-point steps (E6), wave 42"; see ION_*_SEVERITY): none at no charge; a
+ * third of the full cut for any charge up to the ionized line; two thirds
+ * of it from there to ION_NO_TURN_FRACTION; the measured full cut (no
+ * turn, 0.4 of the acceleration, wave 44) above. The acceleration is 0.96
+ * untinted and SLIDES above the tint line, 0.85 down to 0.6 at the
+ * no-turn line (wave 47; see ION_UNTINTED_ACCELERATION_FACTOR). The top
+ * speed is never cut. A pure function of the synced charge.
  */
 export function ionSlowdown(
     ionization: { current: number, max: number } | undefined,
@@ -164,7 +196,7 @@ export function ionSlowdown(
     const severity = tinted ? ION_TINTED_SEVERITY : ION_UNTINTED_SEVERITY;
     return {
         maxVelocity: 1,
-        acceleration: tinted ? ION_TINTED_ACCELERATION_FACTOR
+        acceleration: tinted ? tintedAccelerationFactor(current / max)
             : ION_UNTINTED_ACCELERATION_FACTOR,
         // A blend of the turn's full cut, so its steps are exact thirds.
         turnRate: (1 - severity) + severity * ION_FULL_TURN_FACTOR,
