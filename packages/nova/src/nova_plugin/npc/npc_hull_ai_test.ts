@@ -421,18 +421,22 @@ describe('hull AI flags (reference W1 / C1 wave 15)', () => {
                 false, true)).toBeFalse();
         });
 
-        it('steps at a rating between 1,200 and 1,599, with no spells '
+        it('steps at a rating between 1,326 and 1,333, with no spells '
             + '(reference "The Flags 0x0020 burn with longer runs (A13 '
-            + 'leftover), wave 44")', () => {
-                expect(ADVANCED_RATING_BURN_MIN).toBeGreaterThan(1200);
-                expect(ADVANCED_RATING_BURN_MIN).toBeLessThanOrEqual(1599);
-                // Never in 4 minutes (800) / 2 minutes (1,200).
-                for (const rating of [0, 800, 1200]) {
+            + 'leftover), wave 44"; "... rating edge (A13 leftover), wave '
+            + '46")', () => {
+                expect(ADVANCED_RATING_BURN_MIN).toBeGreaterThan(1325);
+                expect(ADVANCED_RATING_BURN_MIN).toBeLessThanOrEqual(1333);
+                // Never in 4 minutes (800), 2 minutes (1,200), wave 45's
+                // 1,300, wave 46's 165 s (1,325).
+                for (const rating of [0, 800, 1200, 1300, 1325]) {
                     expect(advancedRatingBurns(rating))
                         .withContext(`${rating}`).toBeFalse();
                 }
-                // Every 10 s window of 2-4 minutes.
-                for (const rating of [1599, 1600, 3200, 12_800, 1_000_000]) {
+                // Burned: every 10 s window of 2-4 minutes (wave 44), 1,400
+                // (wave 45), 1,333 / 1,334 / 1,350 (wave 46).
+                for (const rating of [1333, 1334, 1350, 1400, 1599, 1600,
+                    3200, 12_800, 1_000_000]) {
                     expect(advancedRatingBurns(rating))
                         .withContext(`${rating}`).toBeTrue();
                 }
