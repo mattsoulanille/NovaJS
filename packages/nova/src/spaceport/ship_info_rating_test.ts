@@ -81,4 +81,16 @@ describe('ship info rating edges (E11, wave 41)', () => {
             expect(accelRating(a)).toBe(word);
         });
     }
+
+    // The odd values (reference "Ship-info Accel at the odd values (E11
+    // leftover), wave 42").
+    const odd: [number, string][] = [
+        [129, 'Terrible'], [249, 'Poor'], [381, 'Good'], [551, 'Very Good'],
+        [731, 'Excellent'],
+    ];
+    for (const [a, word] of odd) {
+        it(`reads the odd Accel ${a} as ${word} (wave 42)`, () => {
+            expect(accelRating(a)).toBe(word);
+        });
+    }
 });

@@ -121,10 +121,12 @@ const WEAPONS_FONT: Partial<PIXI.ITextStyle> = {
  * wave 40's 50 / 5 grid):
  *  - Turn: Poor from 11, Average 21, Good 31, Very Good 41, Excellent 51,
  *    each edge exact ("more than 10 / 20 / 30 / 40 / 50").
- *  - Accel: 128 / 248 / 380 / 550 / 730 read the lower word and 130 /
- *    250 / 382 / 552 / 732 the upper (the odd values between were not
- *    built). GUESS: each edge at the odd value, "more than 128 / 248 /
- *    380 / 550 / 730".
+ *  - Accel: Poor from 130, Average 250, Good 381, Very Good 551,
+ *    Excellent 731, each edge exact (wave 41 read 128 / 248 / 380 / 550 /
+ *    730 as the lower word and 130 / 250 / 382 / 552 / 732 as the upper;
+ *    reference "Ship-info Accel at the odd values (E11 leftover), wave
+ *    42" read 129 Terrible, 249 Poor, 381 Good, 551 Very Good, 731
+ *    Excellent: "more than 129 / 249 / 380 / 550 / 730").
  *  - The hull's Speed plays no part (Accel 250 and 380 read Average at
  *    Speed 100, 300 and 1,000).
  */
@@ -134,8 +136,8 @@ export function accelRating(raw: number): string {
     if (raw >= 731) return 'Excellent';
     if (raw >= 551) return 'Very Good';
     if (raw >= 381) return 'Good';
-    if (raw >= 249) return 'Average';
-    if (raw >= 129) return 'Poor';
+    if (raw >= 250) return 'Average';
+    if (raw >= 130) return 'Poor';
     return 'Terrible';
 }
 
