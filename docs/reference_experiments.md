@@ -25607,26 +25607,30 @@ the total are the readings; the fast hulls' windows sit on the line
    20 (1 - q) in [6, 7) gives q in (0.65, 0.70]) the hold sits in (0.684,
    0.70]: 0.7, the thrust's hold too (wave 51's 0.28-0.32).
 
-**NovaJS (main 99e600ed):** the base turn rate is Turn x
-`ShipTurnRateConversionFactor`, continuous (`P/parsers/ship_parse.ts:432`),
-and the ion factor multiplies it by thirds (`N/nova_plugin/ship/
-ionization_plugin.ts:155-195`, applied at `N/nova_plugin/travel/
-afterburner_plugin.ts:168`): **mismatch** for every hull whose Turn is
-not a multiple of 10 (Turn 35, the 18 stock Star Liner / Terrapin /
-Argosy / IDA Frigate / Valkyrie / Rebel Destroyer class hulls, 102 against
-87.5 deg/s; Turn 55: 160 against 146; Turn 45: 131 against 117) and
-**mismatch** the other way for Turn 7-9 (the Aurora Carriers nova:297-300:
-20-26 against 29 deg/s); Turn 10-19 hulls (Turn 11, 14) turn 32-41 in
-NovaJS against 29. **Proposed:** the base turn rate max(1, floor(Turn /
-10)) degrees per 1/30 s frame (i.e. that x 10 x the conversion factor in
-place of Turn x the factor) for Turn > 0, and under charge floor(Turn / 10
-x (1 - min(q, 0.7))) degrees a frame with no floor (wave 51's staircase,
-its hold now measured at 0.7). The ship parser should keep the raw Turn
-(the ion law cuts the RAW Turn, wave 51's Turn 25 finding) and derive the
-uncharged rate from it. GUESS for Turn 1-6 and for a charged Turn < 10.
-Confidence: high (seven hulls, every one on its whole-degree line within
-2 %, the continuous rates 8-46 % away; the saturated Turn 95 on 2 a frame
-in every window).
+**NovaJS (main 07be7182, with wave 51's ion fix 125c551a):** the base
+turn rate is still Turn x `ShipTurnRateConversionFactor`, continuous
+(`P/parsers/ship_parse.ts:432`); the ion cut is now wave 51's staircase,
+floor(d x (1 - min(q, ION_CHARGE_HOLD))) / d with d = the uncharged rate
+in degrees a frame (`turnFactor`, `N/nova_plugin/ship/
+ionization_plugin.ts:162-171`, `ION_CHARGE_HOLD` 0.7 at `:80`, applied at
+`N/nova_plugin/travel/afterburner_plugin.ts:149` / `:168`): **matches**
+the hold (finding 4: 0.7 with floor, the GUESS in `:70-79` is now
+measured); **mismatch** in the base turn for every hull whose Turn is not
+a multiple of 10 (Turn 35, the 18 stock Star Liner / Terrapin / Argosy /
+IDA Frigate / Valkyrie / Rebel Destroyer class hulls: 102 against 87.5
+deg/s; Turn 55: 160 against 146; Turn 45: 131 against 117) and the other
+way for Turn 7-9 (the Aurora Carriers nova:297-300: 20-26 against 29
+deg/s); Turn 11 / 14 turn 32 / 41 against 29. Because `turnFactor` takes
+d from the continuous base rate, a charged Turn-25 hull keeps floor(2.5 x
+(1 - q)), as measured (wave 51) — the fix must keep that raw d for the
+cut while the UNCHARGED rate becomes whole degrees. **Proposed:** the
+uncharged turn max(1, floor(Turn / 10)) degrees per 1/30 s frame (that x
+10 x the conversion factor) for Turn > 0, the ion cut unchanged
+(floor(Turn / 10 x (1 - min(q, 0.7))) on the RAW Turn / 10, no minimum of
+1), i.e. `turnFactor` returns kept / that uncharged whole-degree rate.
+GUESS for Turn 1-6 and for a charged Turn < 10. Confidence: high (seven
+hulls, every one on its whole-degree line within 2 %, the continuous rates
+8-46 % away; the saturated Turn 95 on 2 a frame in every window).
 
 **Evidence:** `~/.local/share/novaref/evidence/20261127-w52/c_t7/` ..
 `c_t95/`, `c_t25/`, `k6_t95/` (`recording.mp4`), `*.hd1.txt` (headings
