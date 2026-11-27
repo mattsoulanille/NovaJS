@@ -6,7 +6,34 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { MovementState, MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { PlanetComponent } from './nova_plugin/travel/index.js';
 import { ShipComponent } from './nova_plugin/ship/index.js';
-import { pickNearest } from './tap_targeting.js';
+import { installCtrlClickGuard, pickNearest } from './tap_targeting.js';
+
+/**
+ * A ctrl-click fires the secondary and still clicks (reference "Map keys,
+ * minimap routes and ctrl-clicks (K4, M2, M3), wave 41"): on macOS it must
+ * not open the browser's context menu over the game.
+ */
+describe('a ctrl-click on the game view (M3, wave 41)', () => {
+    it('keeps the browser\'s context menu off a ctrl-click only', () => {
+        const listeners: ((event: { ctrlKey: boolean,
+            preventDefault(): void }) => void)[] = [];
+        const view = {
+            addEventListener: (type: string, listener: never) => {
+                expect(type).toBe('contextmenu');
+                listeners.push(listener);
+            },
+        } as unknown as HTMLElement;
+        installCtrlClickGuard(view);
+        expect(listeners.length).toBe(1);
+        const fire = (ctrlKey: boolean) => {
+            let prevented = false;
+            listeners[0]!({ ctrlKey, preventDefault: () => prevented = true });
+            return prevented;
+        };
+        expect(fire(true)).toBeTrue();
+        expect(fire(false)).toBeFalse();
+    });
+});
 
 function makeMovement(x: number, y: number): MovementState {
     return {

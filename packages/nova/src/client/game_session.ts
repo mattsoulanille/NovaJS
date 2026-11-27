@@ -57,7 +57,7 @@ import type { CarriedEscort } from '../spaceport/landed_escorts.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { clearShipDoneTextShown } from '../spaceport/ship_done_shown.js';
-import { installTapTargeting } from '../tap_targeting.js';
+import { installCtrlClickGuard, installTapTargeting } from '../tap_targeting.js';
 import { installTouchControls, wantsTouchControls } from '../touch_controls.js';
 import {
     beginTeardown, dockedShip, enterFailed, enterGame, liveSystem, tornDown,
@@ -619,6 +619,8 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
     // duplicate listeners.
     if (!tapTargetingInstalled) {
         tapTargetingInstalled = true;
+        // A ctrl-click fires the secondary and still clicks (M3).
+        installCtrlClickGuard(app.view as unknown as HTMLElement);
         installTapTargeting(app.view as unknown as HTMLElement, {
             getWorld: () => liveSystem(state.state)?.world,
             getMyPeerId: () => communicator.uuid ?? undefined,

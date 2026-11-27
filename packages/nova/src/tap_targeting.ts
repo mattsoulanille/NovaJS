@@ -33,6 +33,25 @@ export interface TapHandlers {
     isBlocked?(clientX: number, clientY: number): boolean;
 }
 
+/**
+ * Keeps a ctrl-click on the game view a click. Ctrl is the secondary-fire
+ * key, and in the original a click with it held fires the secondary AND
+ * acts as a plain click: on the `h` minimap it picks the system as well
+ * (reference "Map keys, minimap routes and ctrl-clicks (K4, M2, M3), wave
+ * 41"). The key press already fires (it is a held control like any other);
+ * but on macOS a ctrl-click is also the system's secondary click, and the
+ * browser would open its context menu over the game, which takes the
+ * pointer (and the ctrl release) away from it. A plain right-click keeps
+ * the browser's menu.
+ */
+export function installCtrlClickGuard(view: HTMLElement): void {
+    view.addEventListener('contextmenu', event => {
+        if (event.ctrlKey) {
+            event.preventDefault();
+        }
+    });
+}
+
 /** How close (world units ≈ px) a tap must be to count as a hit. */
 export const SHIP_PICK_RADIUS = 45;
 export const PLANET_PICK_RADIUS = 70;
