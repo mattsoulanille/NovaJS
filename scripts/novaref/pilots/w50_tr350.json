@@ -1,0 +1,33 @@
+{
+  "name": "novaref-w50-tr350",
+  "edits": {
+    "ship": 700,
+    "stellar": 1185,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1491": 2
+    },
+    "missionBits": {
+      "9332": true
+    },
+    "nickname": "Probe",
+    "shipName": "w50-tr350",
+    "weapons": {
+      "128": 0
+    },
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}

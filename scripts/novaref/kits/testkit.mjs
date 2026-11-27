@@ -321,6 +321,7 @@ export default {
         ...wave47Resources(),
         ...wave48Resources(),
         ...wave49Resources(),
+        ...wave50Resources(),
     ].map(wave15Patches).map(wave46Patches).map(withoutRunningLights),
 };
 
@@ -693,6 +694,101 @@ function wave49Resources() {
     out.push(dude(610, "Kit Knock Wide Runner", 3, 362, 775));
     out.push(...misn(970, "Kit KB wide runner", 9328, { availStel: 1170, shipCount: 1, shipDude: 610, shipGoal: -1, shipBehav: -1,
         shipStart: -2, onAccept: "!b9328" }));
+    return out;
+}
+
+/**
+ * Wave-50 experiments (docs/reference_experiments.md, "... wave 50"): a
+ * bolt's share of its firer's velocity and its sprite's facing, a direct
+ * reading of the ion charge, a turret's lead in a blind sector, a tractor
+ * beam's rate against the target's Mass and distance. RETIRED: wave 4's
+ * T2 / T3 jam target sets (shïp 773 / 774, düde 604 / 606, mïsn 963 /
+ * 966, bits 9004 / 9007; jamWave4) and wave 14's mïsn 1078 (bit 9147, S
+ * rebel food drop copy), 1080 (bit 9150, R kit dude with cargo) and 1081
+ * (bit 9152, S rebel food drop tolerant), using them for its own. Used:
+ * sÿst 1491-1492, spöb 1185-1214, shïp 773-774, düde 604 / 606, wëap
+ * 327-329, oütf 512-513, mïsn 963 / 966 / 1078 / 1080 / 1081, bits
+ * 9329-9333. Map row y = -3240 (x -760 / -720). The next free ids: sÿst
+ * 1493+, spöb 1215-1399 (and 518-999), shïp NONE (retire an old kit
+ * hull), düde 328 / 552+, përs: override a stock one
+ * (kits/w48_pers225.mjs), ränk 205+, mïsn NONE (retire another old kit
+ * mission: wave 14's 1082-1084 are one-off rigs), gövt 283 and below, flët
+ * 324+, wëap 330+, oütf 514+, jünk 205+, bits 9334+, rlëD 1113+.
+ *
+ *  FX  shïp 773 Kit Fast Blind Ring: the ring sprite (white spoke: the
+ *      heading) on an INERTIAL hull (flags2 0x0088 as the Kit Probes),
+ *      Speed 500 (about 219 px/s), Accel 2000, Turn 30 (about 88 deg/s),
+ *      shïp Flags 0x4000 (turrets blind to the rear). wëap 327 Kit Slow
+ *      Fixed 90 (oütf 512): an UNGUIDED gun of the Medium Blaster's long
+ *      streak sprite (spïn 3001), Speed 300 (about 90 px/s), Count 450,
+ *      Reload 30, Impact 0. Coasting at 219 px/s, a shot at 90 px/s tells
+ *      the share of the firer's velocity apart (0, partial, 1) and its
+ *      streak tells aim from travel (68 deg apart for a shot across the
+ *      motion at a full share).
+ *  TX  wëap 328 Kit Turret 300 (oütf 513): a full turret (Guidance 4) of
+ *      the same sprite, Speed 1000 (about 300 px/s), Count 90, Reload 10;
+ *      on the rear-blind hull above, coasting past mïsn 966's still target
+ *      (bit 9330: düde 604, wave 41's anchored unarmed cyan disc shïp 658
+ *      Kit Prey Bare as AI 3 of the always-hostile gövt 362, ShipStart -2:
+ *      the first moon), its lead swings well aft of the target's bearing.
+ *  E6  wëap 329 Kit Ion Shot 30 (Ionization 30, Impact 0, Reload 60);
+ *      shïp 774 Kit Ion Shot Target (immobile, Turn 60, armor 100, mass
+ *      50: one Kit Beam Turret shot kills it, with no explosion push);
+ *      düde 606; mïsn 963 (bit 9329) puts it ON the port (ShipStart -1).
+ *      The Kit Ring Ion (shïp 596: IonizeMax 100, Deionize 1) with the Kit
+ *      Beam Turret kills it after one or two hits and then reads the
+ *      charge's decay through the turn's steps.
+ *  TR  (added) mïsn 1078 (bit 9331) puts wave 48's Kit Tractor Beamer 20
+ *      (düde 548: Impact -20 beam, Count 30, Reload 120) on the knock
+ *      grid's first moon; Kit Mass Hull 300 (845) or Kit Probe A (700)
+ *      coasts under it. sÿst 1491 / 1492 Kit Tractor Range 350 / 425
+ *      (ports spöb 1185 / 1200, the marker 350 / 425 px west, the knock
+ *      grid's moons less (-400, 0)): mïsn 1080 / 1081 (bits 9332 / 9333)
+ *      put the same beamer on the marker.
+ */
+function wave50Resources() {
+    const out = [];
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    // --- FX / TX: shïp 773 (wave 4's, retired), wëap 327-328, oütf 512-513, düde 604 (wave 4's, retired), mïsn 966 (wave 4's,
+    // retired), bit 9330.
+    out.push(...shareRled(773, "Kit Fast Blind Ring", 1955, 24, { accel: 2000, speed: 500, turn: 30, armor: 30000, shield: 30000,
+        shieldRecharge: 1000, mass: 50, freeMass: 1000, cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 100, crew: 10, flags: 0x4000,
+        flags2: 0x0088 }));
+    const slow = { armorDamage: 1, shieldDamage: 1, impact: 0, ionization: 0, flags: 0 };
+    out.push(weap(327, "Kit Slow Fixed 90", 131, { ...slow, reload: 30, duration: 450, speed: 300, guidance: -1 }), gun(512, "Kit Slow Fixed 90", 327));
+    out.push(weap(328, "Kit Turret 300", 131, { ...slow, reload: 10, duration: 90, speed: 1000, guidance: 4 }), gun(513, "Kit Turret 300", 328));
+    out.push(dude(604, "Kit T Still Cyan", 3, 362, 658));
+    out.push(...misn(966, "Kit T still cyan on the moon", 9330, { availStel: 1170, shipCount: 1, shipDude: 604, shipGoal: -1, shipBehav: -1,
+        shipStart: -2, onAccept: "!b9330" }));
+    // --- E6: wëap 329, shïp 774 (wave 4's, retired), düde 606 (wave 4's, retired), mïsn 963 (wave 4's, retired), bit 9329.
+    out.push(weap(329, "Kit Ion Shot 30", 131, { reload: 60, duration: 60, armorDamage: 1, shieldDamage: 1, guidance: 4, ionization: 30,
+        impact: 0, flags: 0 }));
+    out.push(...ship(774, "Kit Ion Shot Target", 136, { armor: 100, shield: 0, shieldRecharge: 0, armorRecharge: 0, accel: 0, speed: 0,
+        turn: 60, mass: 50, ai: 3, strength: 1, crew: 1, weapons: [329, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
+    out.push(dude(606, "Kit Ion Shot Target", 3, 362, 774));
+    out.push(...misn(963, "Kit E6 ion shot target on the port", 9329, { availStel: 1170, shipCount: 1, shipDude: 606, shipGoal: -1,
+        shipBehav: -1, shipStart: -1, onAccept: "!b9329" }));
+    // --- TR (added during the wave): mïsn 1078 (wave 14's, retired), bit 9331: wave 48's Kit Tractor Beamer 20 (düde 548) on the
+    // knock grid's first moon, so a coasting hull's velocity is read in 2-D under its shots.
+    out.push(...misn(1078, "Kit TR tractor beamer on the grid", 9331, { availStel: 1170, shipCount: 1, shipDude: 548, shipGoal: -1,
+        shipBehav: -1, shipStart: -2, onAccept: "!b9331" }));
+    // --- TR2 (added during the wave: the still Probe A was pulled at 500 px and held at 250): sÿst 1491 / 1492 Kit Tractor Range
+    // 350 / 425, a port at the centre, the marker (nav default 2) 350 / 425 px west, and the knock grid's moons but its (-400, 0)
+    // one; mïsn 1080 / 1081 (wave 14's, retired), bits 9332 / 9333, put the beamer (düde 548) on the marker.
+    const grid = [];
+    for (const y of [-300, 0, 300]) for (const x of [-400, -200, 0, 200, 400]) if ((x || y) && !(x === -400 && y === 0)) grid.push([x, y]);
+    [[1491, 1185, 350, 1080, 9332], [1492, 1200, 425, 1081, 9333]].forEach(([sid, port, d, mid, bit], k) => {
+        out.push(system(sid, `Kit Tractor Range ${d}`, -760 + 40 * k, -3240, 363, [port, port + 1, ...grid.map((_, j) => port + 2 + j)]),
+            spob(port, `Kit Tractor Range ${d} Port`, 0, 0, 138, { flags: 0x43 }),
+            spob(port + 1, `Kit Tractor Range ${d} Marker`, -d, 0, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] }),
+            ...grid.map(([x, y], j) => spob(port + 2 + j, `Kit Tractor Range ${d} ${x},${y}`, x, y, 132, { flags: 0, techLevel: 0,
+                specialTech: [-1, -1, -1] })));
+        out.push(...misn(mid, `Kit TR tractor beamer ${d} px out`, bit, { availStel: port, shipCount: 1, shipDude: 548, shipGoal: -1,
+            shipBehav: -1, shipStart: -2, onAccept: `!b${bit}` }));
+    });
     return out;
 }
 
@@ -4840,8 +4936,9 @@ function wave14Resources() {
     // wave 49 (wave49Resources: KB the knock runner).
 
     // --- S: contraband.
-    out.push(...misn(1078, "Kit S rebel food drop copy", 9147, { availStel: 2069, travelStel: 2068, returnStel: 2069, cargoType: 0, cargoQty: 10, pickupMode: 0, dropoffMode: 0,
-        scanMask: 0, flags: 0x1060, compGovt: 354, compReward: 10, onAccept: "!b9147", onFailure: "b9148", onSuccess: "b9149" }));
+    // mïsn 1078 (bit 9147, S rebel food drop copy: a kit copy of stock mïsn 441, availStel 2069, travelStel 2068, food x10,
+    // Flags 0x1060, CompGovt 354; OnFailure b9148, OnSuccess b9149) was retired in wave 50 (wave50Resources: TR the tractor
+    // beamer on the knock grid).
     const customs = (gid, name, did, sid, sname, set) => {
         out.push(govt(gid, name, { scanMask: 0x0001, scanFine: 500, smugPenalty: 50, classes: [gid, -1, -1, -1], ...set }));
         out.push(dude(did, `${name} Cutter`, 4, gid, 855));
@@ -4869,8 +4966,7 @@ function wave14Resources() {
     // is 1078 offered at Kit Scan Tolerant Port (gövt 332, CrimeTol 30000:
     // the pilot stays legal, so it can be scanned again with the mission
     // aboard), to Kit Scan Free Port (OnFailure b9153, OnSuccess b9154).
-    out.push(...misn(1081, "Kit S rebel food drop tolerant", 9152, { availStel: 2053, travelStel: 2055, returnStel: 2053, cargoType: 0, cargoQty: 10, pickupMode: 0, dropoffMode: 0,
-        scanMask: 0, flags: 0x1060, compGovt: 332, compReward: 10, onAccept: "!b9152", onFailure: "b9153", onSuccess: "b9154" }));
+    // mïsn 1081 (bit 9152) was retired in wave 50 (wave50Resources: TR the tractor distance rigs).
     out.push({ type: "jünk", id: 203, name: "Kit Contraband", clone: "jünk:128", set: { soldAt: [2069, ...none8.slice(1)], boughtAt: none8, basePrice: 100, flags: 0, scanMask: 0x0001, lcName: "kit contraband", abbrev: "Contraband", buyOn: "", sellOn: "" } });
 
     // --- P: police, distress calls, nosy-ignore, a victim the police care about.
@@ -4914,7 +5010,9 @@ function wave14Resources() {
     // --- R: the Raczak rescue with the kit düde and the mission cargo.
     const raczak = { shipCount: 1, shipSyst: -1, shipDude: 330, shipGoal: 5, shipBehav: -1, shipNameID: 25002, compGovt: 144, compReward: 10,
         cargoType: 27, cargoQty: 1, pickupMode: 2, dropoffMode: 1, scanMask: 520, flags: 0x1214, flags2: 0x0001, returnStel: 2100, availShipType: 127 };
-    out.push(...misn(1080, "Kit R kit dude with cargo", 9150, { ...raczak, shipStart: -1, onAccept: "!b9150", onSuccess: "b9151" }));
+    // mïsn 1080 (bit 9150, R kit dude with cargo: the raczak fields with ShipStart -1, OnSuccess b9151) was retired in wave 50
+    // (wave50Resources: TR the tractor distance rigs).
+    void raczak;
     return out;
 }
 
@@ -6826,7 +6924,8 @@ function a14Resources() {
  *  shïp 773/774/775 Jam Target T2/T3/T4: the J0 target (immobile, armor
  *       100) carrying one of those jammers. düde 604/606/610 (AI 1, govt
  *       363); mïsn 963/966/970 (bits 9004/9007/9011) put one at Kit Market.
- *       (The T4 set, shïp 775 / düde 610 / mïsn 970, was retired in wave 49.)
+ *       (The T4 set, shïp 775 / düde 610 / mïsn 970, was retired in wave 49;
+ *       the T2 / T3 sets in wave 50.)
  *  InhJam on the other AI types: düde 603 (AI 2) and 605 (AI 4) are the J0
  *  target hull of gövt 364 (InhJam1 100); mïsn 962/965 (bits 9003/9006) put
  *  one at Kit Market. Wave 3 did AI 1 and AI 3 (mïsn 986).
@@ -6844,15 +6943,9 @@ function jamWave4() {
         const jammer = gun(627 + i, `Kit Jammer T${k}`, 0);
         jammer.set = { ...jammer.set, modType: 32 + k, modVal: 100, max: 8 };
         out.push(jammer);
-        // The T4 target (shïp 775, düde 610, mïsn 970, bit 9011) was retired in wave 49 (wave49Resources: KB the wide runner).
-        if (k === 4) return;
-        out.push(...ship(773 + i, `Jam Target T${k}`, 136, {
-            armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, ai: 1, strength: 1, crew: 1,
-            outfits: [627 + i, -1, -1, -1], outfitCounts: [1, 0, 0, 0],
-        }));
-        const [dudeId, misnId, bit] = [[604, 963, 9004], [606, 966, 9007]][i];
-        out.push(dude(dudeId, `Jam Target T${k}`, 1, 363, 773 + i));
-        out.push(...misn(misnId, `Kit J T${k} target`, bit, { shipCount: 1, shipDude: dudeId, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+        // The T4 target (shïp 775, düde 610, mïsn 970, bit 9011) was retired in wave 49 (wave49Resources: KB the wide runner);
+        // the T2 / T3 targets (shïp 773 / 774 Jam Target T2 / T3: the J0 target with one jammer; düde 604 / 606; mïsn 963 / 966,
+        // bits 9004 / 9007) in wave 50 (wave50Resources: FX the fast ring, E6 the ion shot target).
     });
     [[603, 2, 962, 9003], [605, 4, 965, 9006]].forEach(([dudeId, ai, misnId, bit]) => {
         out.push(dude(dudeId, `Jam Target InhJam AI ${ai}`, ai, 364, 732));

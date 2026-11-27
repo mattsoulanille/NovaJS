@@ -755,6 +755,29 @@ escort fight's end is not muddied by new arrivals. `w49_capture_cargo.json`
 is wave 48's with the 40 t job (mïsn 1075). A job must fit the player's
 OWN hold: the HUD's Free also counts a hired AI 1 / 2 escort's. Scenarios
 `w49_space_interactive.json` (inbox `w49.jsonl`).
+Wave 50 used sÿst 1491-1492, spöb 1185-1214, shïp 773 / 774, düde 604 /
+606, wëap 327-329, oütf 512-513, mïsn 963 / 966 / 1078 / 1080 / 1081 and
+bits 9329-9333, and RETIRED wave 4's T2 / T3 jam target sets (shïp 773 /
+774, düde 604 / 606, mïsn 963 / 966, bits 9004 / 9007) and wave 14's mïsn
+1078 / 1080 / 1081 (bits 9147 / 9150 / 9152), using them for its own. Next
+free: sÿst 1493, spöb 1215-1399 (and 518-999), shïp **none** (retire an
+old kit hull), düde 328 / 552, ränk 205, mïsn **none** (retire another
+old kit mission: wave 14's 1082-1084), përs: override a stock one, wëap
+330, oütf 514, gövt 283 and below, flët 324, jünk 205, bits 9334, rlëD
+1113. A **tractor range**: wave 48's Kit Tractor Beamer 20 on Kit Knock
+Grid's first moon (mïsn 1078, 500 px) or 350 / 425 px out (sÿst 1491 /
+1492, mïsn 1080 / 1081). A **fast inertial
+shooter**: shïp 773 Kit Fast Blind Ring (the ring's spoke on an inertial
+hull, Speed 500, rear-blind turrets) coasts at about 219 px/s after a 1 s
+Up from the grid's port; a shot's screen velocity is then its nominal
+speed along its aim (bolts carry all of the firer's velocity), so a
+turret's aim reads straight off its bolts (`tools/boltaxis.mjs`,
+`tools/bolttracks.py`, `tools/tlead.py` in the wave-50 evidence). An
+**ion charge clock**: mïsn 963's Kit Ion Shot Target (Ionization 30)
+killed by the Kit Beam Turret in the Leave's own keys step leaves a known
+charge that drains at 0.29 a second per Deionize point; read the turn off
+the Kit Ring Ion's spoke (`tools/e6rates.sh`, `tools/brk.py`). Scenarios
+`w50_space_interactive.json` (inbox `w50.jsonl`).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they
