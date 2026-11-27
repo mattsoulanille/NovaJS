@@ -20,6 +20,8 @@
 //   (run from packages/nova with the game server running, default
 //    http://localhost:8000; the dir needs desync.json, baselines.json,
 //    log.json, and at least one client_<peer>.json)
+//   ANALYZE_FULL=1 prints component values untruncated (by default each
+//   truth/client value is clipped to 200 characters).
 //
 // Game data comes from the RUNNING SERVER over HTTP — the same parse
 // the live worlds consumed — never from a local re-parse, which can
@@ -175,7 +177,8 @@ function componentMap(wireEntity) {
         .map(([name, data]) => [name, canonicalJson(data)]));
 }
 
-const clip = value => value.length > 200 ? value.slice(0, 200) + '…' : value;
+const clip = value => !process.env.ANALYZE_FULL && value.length > 200
+    ? value.slice(0, 200) + '…' : value;
 
 /** Deep-diffs two wire snapshots; returns human-readable lines. */
 function diffSnapshots(truth, client) {
