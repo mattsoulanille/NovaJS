@@ -9,7 +9,6 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { MovementState, MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
-import { Vector } from 'nova_ecs/datatypes/vector';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
 import { requireNovaData } from '../test_support/nova_data_gate.js';
@@ -32,7 +31,7 @@ import { SimulationTimeResource } from './simulation_time.js';
 import { StatusBar } from './status_bar.js';
 import {
     blipPixels, centerArrowPixels, centerArrowShown, CENTER_ARROW_HEAD,
-    CENTER_ARROW_ONSET, CENTER_ARROW_TAIL, CENTER_ARROW_TIP, DrawRadar, linePixels, RadarPane, radarBlinkOn,
+    CENTER_ARROW_RADIUS, CENTER_ARROW_TAIL, CENTER_ARROW_TIP, DrawRadar, linePixels, RadarPane, radarBlinkOn,
     radarCenterPixel, radarRefreshIndex, RADAR_REFRESH_MS, shipBlipSize,
     planetRadarShape, stellarRadarShape, stellarRadarSize,
     STELLAR_RING_MIN_SIZE, STELLAR_RING_PIXELS,
@@ -169,33 +168,34 @@ describe('centerArrowPixels (the original\'s thin grey line arrow)', () => {
     });
 });
 
-describe('centerArrowShown (reference K8, wave 43)', () => {
-    const range = { x: 3000, y: 3000 };
-
-    it('waits until the system centre reaches the radar\'s edge', () => {
-        // The original's onset: the centre's ring about 84 of 88 radar px
-        // out, on the axis it left by.
-        expect(centerArrowShown({ x: 0, y: 0 }, range)).toBeFalse();
-        expect(centerArrowShown({ x: 0, y: -2000 }, range)).toBeFalse();
-        expect(centerArrowShown({ x: 0, y: -3000 * CENTER_ARROW_ONSET },
-            range)).toBeFalse();
-        expect(centerArrowShown({ x: 0, y: -3000 * CENTER_ARROW_ONSET - 1 },
-            range)).toBeTrue();
-        expect(centerArrowShown({ x: 2900, y: 0 }, range)).toBeTrue();
-    });
-
-    it('goes by each axis on its own, not the distance', () => {
-        // 2,500 px out on both axes is 3,536 px away, still on the radar.
-        expect(centerArrowShown({ x: 2500, y: -2500 }, range)).toBeFalse();
-        expect(centerArrowShown({ x: 100, y: 2900 }, range)).toBeTrue();
-    });
-
-    it('scales with the radar\'s own span', () => {
-        expect(centerArrowShown({ x: 4000, y: 0 }, { x: 6000, y: 6000 }))
-            .toBeFalse();
-        expect(centerArrowShown({ x: 4000, y: 0 }, { x: 2000, y: 2000 }))
-            .toBeTrue();
-    });
+describe('centerArrowShown (reference K8, waves 43-44)', () => {
+    it('gates on the distance to the centre: a circle of 2,404-2,650 px '
+        + '(reference "The centre arrow\'s onset (K8 leftover), wave 44")',
+        () => {
+            expect(CENTER_ARROW_RADIUS).toBeGreaterThan(2404);
+            expect(CENTER_ARROW_RADIUS).toBeLessThan(2650);
+            expect(centerArrowShown({ x: 0, y: 0 })).toBeFalse();
+            // The axis starts: shown at 2,650 / 2,750 / 2,850, not at
+            // 2,400 / 2,200 / 2,000 / 1,700.
+            for (const x of [2650, 2750, 2850]) {
+                expect(centerArrowShown({ x: -x, y: 0 })).withContext(`${x}`)
+                    .toBeTrue();
+            }
+            for (const x of [2400, 2200, 2000, 1700]) {
+                expect(centerArrowShown({ x: -x, y: 0 })).withContext(`${x}`)
+                    .toBeFalse();
+            }
+            // The diagonal: (2000, 2000) is 2,828 px out and shows,
+            // though neither axis passes 2,400; (1700, 1700) is 2,404 px
+            // out and does not.
+            expect(centerArrowShown({ x: -2300, y: -2300 })).toBeTrue();
+            expect(centerArrowShown({ x: -2000, y: -2000 })).toBeTrue();
+            expect(centerArrowShown({ x: -1700, y: -1700 })).toBeFalse();
+            expect(centerArrowShown({ x: 0, y: -CENTER_ARROW_RADIUS }))
+                .toBeFalse();
+            expect(centerArrowShown({ x: 0, y: CENTER_ARROW_RADIUS + 1 }))
+                .toBeTrue();
+        });
 });
 
 describe('radar blip sizes (density scanner, oütf ModType 13)', () => {
@@ -432,7 +432,7 @@ describe('DrawRadar cadence', () => {
         world.resources.set(SimulationGameDataResource, gameData);
         const drawRadar = jasmine.createSpy('drawRadar');
         world.resources.set(StatusBarResource, {
-            radar: { drawRadar, range: new Vector(3000, 3000) },
+            radar: { drawRadar },
         } as unknown as StatusBar);
         world.addSystem(DrawRadar);
         const player = new Entity('player');
@@ -501,12 +501,13 @@ describe('DrawRadar cadence', () => {
             .toEqual({ x: -4000, y: 0 });
     });
 
-    it('draws no arrow while the centre is on the radar, stellars or not',
-        () => {
+    it('draws no arrow while the centre is within CENTER_ARROW_RADIUS, '
+        + 'stellars or not', () => {
             const { drawRadar, stepAt, world } = radarWorld();
+            // 2,404 px out: wave 44's (1700, 1700) start, no arrow.
             world.entities.get('player')!.components.set(
                 MovementStateComponent,
-                { position: new Position(1500, -2500) } as MovementState);
+                { position: new Position(1700, -1700) } as MovementState);
             stepAt(0);
             expect(drawRadar.calls.mostRecent().args[4]).toBeNull();
         });
@@ -612,7 +613,7 @@ describe('DrawRadar IFF ship colours match the brackets (K9)', () => {
         world.resources.set(SystemIdResource, OWN_370_SYSTEM);
         const drawRadar = jasmine.createSpy('drawRadar');
         world.resources.set(StatusBarResource, {
-            radar: { drawRadar, range: new Vector(3000, 3000) },
+            radar: { drawRadar },
         } as unknown as StatusBar);
         world.addSystem(DrawRadar);
         const player = new Entity('player');

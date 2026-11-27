@@ -176,31 +176,33 @@ export function centerArrowPixels(dx: number, dy: number,
 }
 
 /**
- * How far out on the radar's axis the SYSTEM CENTRE must be, as a fraction
- * of the radar's half-span, before the centre arrow shows. Reference "The
- * radar's centre arrow (K8), wave 43": flying due south from a port at the
- * centre, the arrow first appeared with the centre's ring about 84 of the
- * radar's 88 px out (about 2,750 px of a 2,880 px half-span), i.e. once
- * the centre is at (or just past) the radar's edge. One onset, read in
- * whole radar pixels, so the exact fraction is a GUESS within a pixel or
- * two; the gate itself is two rigs' worth of certain.
+ * How far from the SYSTEM CENTRE, px, the player must be before the
+ * centre arrow shows: a CIRCLE, not the radar's per-axis span. Reference
+ * "The centre arrow's onset (K8 leftover), wave 44": static starts showed
+ * the arrow at (2650, 0) and at (2000, 2000) (2,828 px out, 2,000 on each
+ * axis) and not at (2400, 0) nor (1700, 1700) (2,404 px out), so the gate
+ * is the distance and the onset lies between 2,404 and 2,650 px, well
+ * inside the radar's edge. GUESS 2,500 inside that bracket. Was an
+ * either-axis gate at 84 / 88 of the radar's half-span (2,864 px; wave
+ * 43's one flight).
  */
-export const CENTER_ARROW_ONSET = 84 / 88;
+export const CENTER_ARROW_RADIUS = 2500;
 
 /**
  * Whether the radar draws its system-centre arrow (blink aside): whenever
- * the system centre (0, 0) is off the radar on either axis, WHATEVER
- * stellars are on it (wave 43, K8: on a port 4,000 px from an empty centre
- * the arrow showed from the first frame, the port's dot under the
- * player's; flying out of a crowded system it appeared while markers and a
- * planet were still on the radar). `toCenter` is the toroidal-nearest
- * offset from the player to the centre; `range` the radar's half-span per
- * axis (RadarPane.range).
+ * the system centre (0, 0) is more than CENTER_ARROW_RADIUS away,
+ * WHATEVER stellars are on the radar (wave 43, K8: on a port 4,000 px from
+ * an empty centre the arrow showed from the first frame, the port's dot
+ * under the player's; flying out of a crowded system it appeared while
+ * markers and a planet were still on the radar). `toCenter` is the
+ * toroidal-nearest offset from the player to the centre. The radius is in
+ * world px, not a share of the radar's span (GUESS: only the stock
+ * status bar was measured). Squared, so no square root.
  */
-export function centerArrowShown(toCenter: { x: number, y: number },
-    range: { x: number, y: number }): boolean {
-    return Math.abs(toCenter.x) > range.x * CENTER_ARROW_ONSET
-        || Math.abs(toCenter.y) > range.y * CENTER_ARROW_ONSET;
+export function centerArrowShown(toCenter: { x: number, y: number }):
+    boolean {
+    return toCenter.x * toCenter.x + toCenter.y * toCenter.y
+        > CENTER_ARROW_RADIUS * CENTER_ARROW_RADIUS;
 }
 
 /**
@@ -387,15 +389,6 @@ export class RadarPane {
     private get interference(): number {
         return Math.max(0, Math.min(100,
             this.systemInterference - this.interferenceReduction));
-    }
-
-    /**
-     * Half the radar's world span on each axis: a stellar within this of the
-     * player shows as a blip. Used to decide when to draw the system-center
-     * arrow (when the centre itself is off the radar: centerArrowShown).
-     */
-    get range(): Vector {
-        return this.radarScale.scale(0.5);
     }
 
     /**
@@ -731,11 +724,11 @@ export const DrawRadar = new System({
                     planetColors.set(uuid, color);
                 }
             }
-            // System-center arrow: once the system centre (0, 0) is off the
-            // radar, the original blinks a thin grey line arrow out from
-            // the player's dot toward it — one refresh on, one off
+            // System-center arrow: once the system centre (0, 0) is more
+            // than CENTER_ARROW_RADIUS away, the original blinks a thin grey
+            // line arrow out from the player's dot toward it — one refresh on, one off
             // (centerArrowPixels) — whatever stellars are still on the
-            // radar (centerArrowShown; reference K8, wave 43). Blinks on
+            // radar (centerArrowShown; reference K8, waves 43-44). Blinks on
             // the radar's own refresh clock (radarBlinkOn).
             const toCenter = {
                 x: wrapNearestDelta(0 - position.x),
@@ -743,7 +736,7 @@ export const DrawRadar = new System({
             };
             const blinkOn = radarBlinkOn(refresh);
             const centerArrow = (blinkOn
-                && centerArrowShown(toCenter, statusBar.radar.range))
+                && centerArrowShown(toCenter))
                 ? toCenter : null;
             // Density scanner (oütf ModType 13): ship blips sized by hull
             // mass. Derived from the player's delta-synced outfits, like
