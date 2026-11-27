@@ -335,7 +335,9 @@ export default {
  * bits 9293+, rlëD 1113+.
  *
  *  CU  (the hub: capture "Use As My Ship") sÿst 1473 Kit Prize Range, port
- *      spöb 1102; mïsn 1054 (bit 9292) puts shïp 889 Kit Prize Hull (the
+ *      spöb 1102; mïsn 1054 (bit 9292; a ShipBehav-1 / ShipGoal-3 protector,
+ *      so that disabling it fails the mission and leaves an ordinary
+ *      hulk) puts shïp 889 Kit Prize Hull (the
  *      magenta pointer, armor 300 / shield 0, Speed 60, crew 1, fuel 400,
  *      Cargo 30; default weapon wëap 361 Kit Tickler x1 and outfit oütf 502
  *      Kit Prize Gadget x2; OnCapture b9288, OnRetire b9289; düde 540: AI 4
@@ -403,7 +405,10 @@ function wave45Resources() {
     const prize = dude(540, "Kit Prize", 4, 363, 889);
     prize.set = { ...prize.set, flags: 0x0041 };
     out.push(prize, system(1473, "Kit Prize Range", nextX(), Y, 363, [1102]), port(1102, "Kit Prize Port"));
-    out.push(...misn(1054, "Kit CU prize on the port", 9292, { availStel: 1102, shipCount: 1, shipDude: 540, shipGoal: -1, shipBehav: -1,
+    // Built first with ShipGoal / ShipBehav -1: a live mission's ship answers every board "You can't board this ship." (wave 3;
+    // cu_a), so it is wave 11's protector (ShipBehav 1, ShipGoal 3): it follows the player, and disabling it FAILS the mission,
+    // which leaves an ordinary hulk that boards and captures (wave 11's "Reviving a disabled ally").
+    out.push(...misn(1054, "Kit CU prize on the port", 9292, { availStel: 1102, shipCount: 1, shipDude: 540, shipGoal: 3, shipBehav: 1,
         shipStart: -1, onAccept: "!b9292" }));
     // --- EC / T: shïp 891-893, düde 541-542, sÿst 1474-1475, spöb 1103-1104, wëap 313-314, oütf 504-505.
     out.push(...shareRled(891, "Kit Tough Red", RLED.red, 24, { accel: 300, speed: 300, turn: 60, armor: 3000, shield: 3000, shieldRecharge: 0,
