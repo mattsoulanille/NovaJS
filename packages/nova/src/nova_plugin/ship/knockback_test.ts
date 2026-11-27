@@ -18,7 +18,8 @@ import {
     DamagedEvent, DisabledComponent, DISABLED_COAST_TIME_CONSTANT_S,
     DISABLED_REST_SPEED, KNOCKBACK_PER_IMPACT, knockedVelocity, makeShip,
     ShipDataComponent,
-    ShipPhysicsComponent, SourceComponent, tractoredVelocity,
+    ShipPhysicsComponent, SourceComponent, TRACTOR_BRAKE_PER_IMPACT,
+    tractoredVelocity,
 } from './index.js';
 
 describe('knockedVelocity', () => {
@@ -416,27 +417,43 @@ describe('a tractor beam (reference KB, wave 48)', () => {
             expect(movement.position.y).toBe(start.y);
         }, 60_000);
 
-    it('brakes a hull flying TOWARD the beamer, then holds it still '
-        + '(ktm_a), never reversing it', async () => {
+    /** One Count-30 tractor shot, its units shared over 32 ticks as
+     * BeamDamageSystem shares them. */
+    function tractorShot(world: World, impact: number) {
+        for (let i = 0; i < 32; i++) {
+            tractor(world, impact, 30 / 32);
+        }
+    }
+
+    it('brakes about 19 px/s a Count-30 Impact -20 shot on 50 t '
+        + '(GUESS fit, TRACTOR_BRAKE_PER_IMPACT 1.6)', () => {
+            expect(TRACTOR_BRAKE_PER_IMPACT).toBe(1.6);
+            expect(30 * 20 * TRACTOR_BRAKE_PER_IMPACT / 50)
+                .toBeCloseTo(19.2, 9);
+        });
+
+    it('brakes a hull flying TOWARD the beamer by about 19 px/s, stops it '
+        + 'with the next shot and holds it still (ktm_a: 30 -> 10.9 -> 0), '
+        + 'never reversing it', async () => {
             const { world, movement } = await hull();
             movement.velocity = new Vector(-30, 0);
-            // Impact -20 on 50 t: 12 px/s a unit by the law.
-            tractor(world, -20);
-            expect(movement.velocity.x).toBeCloseTo(-18, 9);
+            tractorShot(world, -20);
+            // ktm_a read 10.9 after the first shot.
+            expect(movement.velocity.x).toBeCloseTo(-10.8, 6);
             expect(movement.velocity.y).toBeCloseTo(0, 9);
-            tractor(world, -20);
-            expect(movement.velocity.x).toBeCloseTo(-6, 9);
-            tractor(world, -20);
+            expect(Math.abs(movement.velocity.x - -10.9)).toBeLessThan(0.5);
+            tractorShot(world, -20);
             expect(movement.velocity.length).toBe(0);
             // Not pulled on toward the beamer: it stays put.
             const at = movement.position;
-            for (let i = 0; i < 3; i++) {
-                tractor(world, -20);
-            }
-            for (let s = 0; s < 120; s++) {
-                world.step();
+            for (let i = 0; i < 2; i++) {
+                tractorShot(world, -20);
+                for (let s = 0; s < 420; s++) {
+                    world.step();
+                }
             }
             expect(movement.position.x).toBe(at.x);
+            expect(movement.position.y).toBe(at.y);
             expect(movement.velocity.length).toBe(0);
         }, 60_000);
 
@@ -445,15 +462,16 @@ describe('a tractor beam (reference KB, wave 48)', () => {
         beamer.components.get(MovementStateComponent)!.velocity =
             new Vector(0, 20);
         movement.velocity = new Vector(30, 20);
-        tractor(world, -20);
-        expect(movement.velocity.x).toBeCloseTo(18, 9);
+        tractorShot(world, -20);
+        expect(movement.velocity.x).toBeCloseTo(10.8, 6);
         expect(movement.velocity.y).toBeCloseTo(20, 9);
-        for (let i = 0; i < 4; i++) {
-            tractor(world, -20);
-        }
+        tractorShot(world, -20);
         // Latched to the beamer's motion, no overshoot.
-        expect(movement.velocity.x).toBeCloseTo(0, 9);
-        expect(movement.velocity.y).toBeCloseTo(20, 9);
+        expect(movement.velocity.x).toBe(0);
+        expect(movement.velocity.y).toBe(20);
+        tractorShot(world, -20);
+        expect(movement.velocity.x).toBe(0);
+        expect(movement.velocity.y).toBe(20);
     }, 60_000);
 
     it('leaves an inertialess hull alone (the Bible; ktg_a)', async () => {

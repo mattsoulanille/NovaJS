@@ -385,6 +385,22 @@ export function knockedVelocity(velocity: Vector, impulse: Vector,
 export const BEAM_KNOCKBACK_TOP_SPEED_FRACTION = 0.72;
 
 /**
+ * A TRACTOR's (negative Impact's) brake, in the push law's form: one hit
+ * of wëap Impact -I on a hull of Mass M moves its velocity toward the
+ * firer's by TRACTOR_BRAKE_PER_IMPACT x I / M px/s (a beam: once per
+ * Count unit), never past it (tractoredVelocity).
+ *
+ * GUESS, fitted to one run (reference "A tractor beam (the KB leftover),
+ * wave 48", ktm_a): the Count-30 Impact -20 beam took about 19 px/s off
+ * Kit Probe A (50 t) coasting at 30 px/s (30 -> 20.7 -> 10.9 over one
+ * shot) and stopped it dead with the next. 1.6 gives 30 x 20 x 1.6 / 50 =
+ * 19.2 px/s a shot: 30 -> 10.8, then 0. How the rate scales with Impact
+ * and Mass is unmeasured (assumed like the push, which is 30 here, i.e.
+ * 360 px/s a shot: far too strong).
+ */
+export const TRACTOR_BRAKE_PER_IMPACT = 1.6;
+
+/**
  * A velocity after a TRACTOR hit (a negative Impact): moved toward the
  * firer's velocity `toward` by `amount` px/s, never past it. Pure.
  */
@@ -422,7 +438,8 @@ export const KnockbackSystem = new System({
             targetMass = shipPhysics.mass || 1;
         }
         const strength = Math.abs(damage.knockback) * scale / targetMass
-            * KNOCKBACK_PER_IMPACT;
+            * (damage.knockback < 0
+                ? TRACTOR_BRAKE_PER_IMPACT : KNOCKBACK_PER_IMPACT);
 
         if (damage.knockback < 0) {
             // A tractor (negative Impact) does NOT pull: it brakes the
@@ -432,9 +449,9 @@ export const KnockbackSystem = new System({
             // at 30 px/s it was slowed and then stopped dead, and stayed
             // put). Inertialess hulls are exempt (the Bible: "inertialess
             // ships are not affected"; the glide hull at rest did not
-            // move either). The rate: GUESS, the push law's magnitude
-            // (the reading was about 20 px/s a Count-30 shot of Impact
-            // -20 on 50 t, low confidence; the law gives 360).
+            // move either). The rate: TRACTOR_BRAKE_PER_IMPACT (GUESS,
+            // fitted to about 19 px/s a Count-30 shot of Impact -20 on
+            // 50 t).
             if (movementPhysics.movementType === MovementType.INERTIALESS) {
                 return;
             }
