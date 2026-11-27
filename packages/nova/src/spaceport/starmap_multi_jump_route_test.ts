@@ -109,6 +109,26 @@ describe('the star map after a multi-jump', () => {
         expect(await openAndClose(starmap, [KANIA])).toEqual([KANIA]);
     });
 
+    it('takes a minimap pick of a passed system as the next jump until '
+        + 'the full map\'s Done (M2, wave 41)', async () => {
+        const store = afterMultiJump([SOL, TICHEL, KANIA]);
+        const starmap = await mapIn(TICHEL, store);
+        const graph = (await starmap.miniMapGraph({ x: 100, y: 100 }, 1,
+            [KANIA]))!;
+        // Sol is a neighbour of Tichel but not on the remaining route: the
+        // pick overrides it (and does not resurrect Sol -> Tichel -> Kania).
+        graph.clickSystem(SOL);
+        expect(graph.getEffectiveRoute()).toEqual([SOL]);
+        // starmap_plugin's minimap `picked` handler.
+        store.state = graph.getRouteState();
+        expect(store.state).toEqual(
+            { pinned: [KANIA], single: SOL, singleFirst: true });
+        // The full map's Done drops the pick: forward again.
+        expect(await openAndClose(starmap, [SOL])).toEqual([KANIA]);
+        expect(store.state.pinned).toEqual([KANIA]);
+        expect(store.state.single).toBeUndefined();
+    });
+
     it('keeps a later visit to a system the jump passed', async () => {
         // Alpha -> Sol -> Tichel -> Sol -> Alpha: the jump to Tichel via
         // Sol leaves Sol -> Alpha, not just Alpha.

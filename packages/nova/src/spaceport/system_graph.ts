@@ -16,7 +16,8 @@ import { MissionMapMark } from "../nova_plugin/missions/index.js";
 import { enhancementEnabled } from "../enhancements.js";
 import {
     Adjacency, adjacentSystems, buildAdjacency, canPin, cycleSingle,
-    effectiveRoute, expandRoute, Passable, RouteState, SamePlace,
+    effectiveRoute, expandRoute, Passable, pickOnMiniMap, RouteState,
+    SamePlace, settleMiniMapPick,
 } from "./route.js";
 import {
     drawCurrentSystemCentre, drawGatePickOverlay, drawLinks,
@@ -203,6 +204,9 @@ export class SystemGraph {
     // single-jump destination, and the system whose properties are shown.
     private pinned: string[] = [];
     private single?: string;
+    /** RouteState.singleFirst: the single jump is a minimap pick that
+     * overrides the multi-jump route's first hop. */
+    private singleFirst = false;
     private infoSelected?: string;
     private routes: Map<string, string[]>;
     /** Every system's "place" (name + map coordinates), for {@link
@@ -473,14 +477,29 @@ export class SystemGraph {
     setRouteState(state: RouteState) {
         this.pinned = [...state.pinned];
         this.single = state.single;
+        this.singleFirst = state.singleFirst === true;
         this.drawRoute();
     }
 
     getRouteState(): RouteState {
-        return { pinned: [...this.pinned], single: this.single };
+        return {
+            pinned: [...this.pinned], single: this.single,
+            ...(this.singleFirst ? { singleFirst: true } : {}),
+        };
     }
 
-    /** The route hyperspace jumps follow (multi-jump takes precedence). */
+    /**
+     * The full map's Done (route.ts settleMiniMapPick): a minimap pick
+     * that overrode the multi-jump route is dropped, so the route's first
+     * hop is the next jump again.
+     */
+    settleMiniMapPick() {
+        this.setRouteState(settleMiniMapPick(this.adj, this.currentSystem,
+            this.getRouteState(), this.samePlace, this.passable));
+    }
+
+    /** The route hyperspace jumps follow: multi-jump takes precedence, but
+     * for a minimap pick (route.ts effectiveRoute). */
     getEffectiveRoute(): string[] {
         return effectiveRoute(this.adj, this.currentSystem,
             this.getRouteState(), this.samePlace, this.passable);
@@ -525,6 +544,7 @@ export class SystemGraph {
     clearRoute() {
         this.pinned = [];
         this.single = undefined;
+        this.singleFirst = false;
         this.routeChanged.next();
         this.drawRoute();
     }
@@ -537,6 +557,7 @@ export class SystemGraph {
         }
         const neighbours = adjacentSystems(this.adj, this.currentSystem);
         this.single = cycleSingle(neighbours, this.single, direction);
+        this.singleFirst = false;
         if (this.single !== undefined) {
             this.selectForInfo(this.single);
         }
@@ -669,12 +690,15 @@ export class SystemGraph {
         if (this.miniMap) {
             // The minimap only ever picks the single next jump (see
             // SystemGraphOptions.miniMap), whatever modifier is held.
+            // Over a multi-jump route the pick is the next jump, until the
+            // full map's Done (route.ts pickOnMiniMap, wave 41).
             if (system !== this.single
                 && adjacentSystems(this.adj, this.currentSystem)
                     .includes(system)) {
-                this.single = system;
+                this.setRouteState(pickOnMiniMap(this.adj,
+                    this.currentSystem, this.getRouteState(), system,
+                    this.samePlace, this.passable));
                 this.routeChanged.next();
-                this.drawRoute();
             }
             return;
         }
@@ -718,6 +742,7 @@ export class SystemGraph {
             // A plain click on an adjacent system sets (or toggles off) the
             // single-jump route. Clicking anything else only inspects it.
             this.single = this.single === system ? undefined : system;
+            this.singleFirst = false;
             this.routeChanged.next();
         }
         this.selectForInfo(system);
@@ -807,6 +832,10 @@ export class SystemGraph {
             this.samePlace, this.passable);
         drawRouteOverlay(this.routeGraphics, {
             miniMap: this.miniMap,
+            // The minimap pales the route's first hop while a pick of its
+            // own is the next jump (wave 41).
+            paleFirstHop: this.miniMap && this.singleFirst
+                && this.single !== undefined,
             current: this.systems.get(this.currentSystem),
             single: this.single === undefined
                 ? undefined : this.systems.get(this.single),

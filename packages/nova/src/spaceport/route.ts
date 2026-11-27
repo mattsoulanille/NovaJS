@@ -16,7 +16,10 @@ import { GameDate } from 'novadatainterface/player_start_data';
 //   * The single-jump route: one adjacent system chosen with a plain click
 //     (or cycled with Tab). Rendered as a WEAKER green line.
 //
-// The multi-jump route always takes precedence for actual hyperspace jumps.
+// The multi-jump route takes precedence for actual hyperspace jumps, with
+// one exception: a single jump picked on the `h` minimap over the route is
+// the next jump until the full map's Done (RouteState.singleFirst,
+// measured in wave 41).
 //
 // DRAWN SYSTEMS ONLY (Matthew, 2026-11-23: "I should be allowed to plan a
 // route through the undiscovered system. D-U-D is allowed. Surprisingly,
@@ -83,6 +86,17 @@ export interface RouteState {
     pinned: string[];
     /** The chosen single-jump (adjacent) destination, if any. */
     single?: string;
+    /**
+     * `single` was picked on the `h` minimap over a multi-jump route, and
+     * so is the NEXT jump in place of the route's first hop, until the
+     * full map's Done (see {@link settleMiniMapPick}). MEASURED (reference
+     * "Map keys, minimap routes and ctrl-clicks (K4, M2, M3), wave 41"):
+     * with Hub -> East -> Void -> Far plotted, a minimap pick of SW turned
+     * the nav readout from "Unexplored System" (East) to "Map SW" while the
+     * map kept drawing the route; after the full map's Done the nav read
+     * East again and the minimap drew no SW line.
+     */
+    singleFirst?: boolean;
 }
 
 export function emptyRouteState(): RouteState {
@@ -278,23 +292,67 @@ export function cycleSingle(adjacent: readonly string[],
 }
 
 /**
- * The route hyperspace jumps actually follow. The multi-jump route always
- * takes precedence; the single-jump route is only used when no pinned
- * waypoint produces a route.
+ * The route hyperspace jumps actually follow. The multi-jump route takes
+ * precedence; the single-jump route is only used when no pinned waypoint
+ * produces a route, or when it was picked on the minimap over the route
+ * ({@link RouteState.singleFirst}).
  */
 export function effectiveRoute(adj: Adjacency, current: string,
     state: RouteState, samePlace: SamePlace = sameId,
     passable: Passable = everywhere): string[] {
+    const single = state.single !== undefined
+        && !samePlace(state.single, current)
+        && adjacentSystems(adj, current).includes(state.single)
+        ? state.single : undefined;
+    if (single !== undefined && state.singleFirst) {
+        return [single];
+    }
     const multi = expandRoute(adj, current, state.pinned, samePlace,
         passable);
     if (multi.length > 0) {
         return multi;
     }
-    if (state.single !== undefined && !samePlace(state.single, current)
-        && adjacentSystems(adj, current).includes(state.single)) {
-        return [state.single];
+    return single !== undefined ? [single] : [];
+}
+
+/**
+ * A pick on the `h` minimap: `system` (a neighbour of `current`) becomes
+ * the single jump. Over a multi-jump route whose first hop is elsewhere,
+ * it is also the next jump ({@link RouteState.singleFirst}); the route
+ * itself is kept. Picking the route's own first hop changes nothing about
+ * where the ship goes.
+ */
+export function pickOnMiniMap(adj: Adjacency, current: string,
+    state: RouteState, system: string, samePlace: SamePlace = sameId,
+    passable: Passable = everywhere): RouteState {
+    const multi = expandRoute(adj, current, state.pinned, samePlace,
+        passable);
+    const overrides = multi.length > 0 && !samePlace(multi[0]!, system);
+    return {
+        pinned: [...state.pinned],
+        single: system,
+        ...(overrides ? { singleFirst: true } : {}),
+    };
+}
+
+/**
+ * The full map's Done after a minimap pick (wave 41, see
+ * {@link RouteState.singleFirst}): a pick that was overriding a multi-jump
+ * route is dropped, so the route's first hop is the next jump again. A
+ * pick with no route left to override is kept, as a plain single jump.
+ */
+export function settleMiniMapPick(adj: Adjacency, current: string,
+    state: RouteState, samePlace: SamePlace = sameId,
+    passable: Passable = everywhere): RouteState {
+    if (!state.singleFirst) {
+        return state;
     }
-    return [];
+    const multi = expandRoute(adj, current, state.pinned, samePlace,
+        passable);
+    return {
+        pinned: [...state.pinned],
+        single: multi.length > 0 ? undefined : state.single,
+    };
 }
 
 /**
@@ -391,7 +449,10 @@ export function reconcileRouteState(state: RouteState, current: string,
             pinned.push(...simRoute);
         }
     }
-    return { pinned, single };
+    // A minimap pick keeps its precedence while it is still a neighbour.
+    const singleFirst = state.singleFirst === true && single !== undefined
+        && single === state.single;
+    return { pinned, single, ...(singleFirst ? { singleFirst } : {}) };
 }
 
 // The galactic-calendar date readout, e.g. "Nov. 18th, 1177 NC" (see

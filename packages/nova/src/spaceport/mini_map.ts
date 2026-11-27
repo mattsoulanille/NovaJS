@@ -14,7 +14,11 @@
 //    both captures: ~1.77 px per map unit; see MINI_MAP_ZOOM).
 //  * The route is a thin green line; the current system is marked by its
 //    cyan centre alone (no dashed ring, no selection brackets, no pinned
-//    waypoint boxes).
+//    waypoint boxes). A multi-jump route is drawn strong green, clipped at
+//    the box; a pick made here over it is the next jump (until the full
+//    map's Done) and is drawn beside it, the route's first hop going pale
+//    (route.ts RouteState.singleFirst; reference "Map keys, minimap routes
+//    and ctrl-clicks (K4, M2, M3), wave 41"). No borders, ever.
 //
 // WHEN IT SHOWS (reference_experiments M1-M3, measured frame by frame on
 // the original): it is a PEEK, not a toggle. Every `h` press shows it for

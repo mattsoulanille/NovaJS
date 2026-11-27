@@ -688,6 +688,9 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
 
     override done() {
         if (this.systemGraph) {
+            // A minimap pick overriding the multi-jump route lasts until
+            // here (route.ts settleMiniMapPick).
+            this.systemGraph.settleMiniMapPick();
             this.routeStore.state = this.systemGraph.getRouteState();
             this.input = this.systemGraph.getEffectiveRoute();
         }

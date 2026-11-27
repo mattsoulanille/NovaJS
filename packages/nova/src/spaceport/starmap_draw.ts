@@ -80,6 +80,15 @@ const ROUTE_SINGLE_WIDTH = 1;
 /** The minimap's route (mini_map.png): a thin (1-2px) green line laid
  * along the grey lane, for both kinds of route. */
 const MINI_ROUTE_WIDTH = 2;
+/**
+ * The multi-jump route's first hop on the minimap while a minimap pick is
+ * the next jump instead (RouteOverlay.paleFirstHop): a pale grey line on
+ * the lane. MEASURED (reference "Map keys, minimap routes and ctrl-clicks
+ * (K4, M2, M3), wave 41", frame 1725 of `map_a`): the Hub -> East hop read
+ * 182,182,182 beside the 63,63,63 lane where it had been green, the hops
+ * past East still 13,255,8.
+ */
+const MINI_ROUTE_PALE_COLOR = 0xb6b6b6;
 const SELECT_COLOR = 0x00ff00;
 /**
  * The filled centre of the CURRENT system's dot: #00adef, sampled on both
@@ -370,6 +379,10 @@ export interface RouteOverlay {
      * route lines, no pinned-waypoint boxes, and no dashed ring round the
      * current system. */
     miniMap?: boolean;
+    /** The multi-jump route's first hop is not the next jump (a minimap
+     * pick is: route.ts RouteState.singleFirst): with `miniMap`, that hop
+     * is drawn pale, the rest of the route as usual. */
+    paleFirstHop?: boolean;
 }
 
 /**
@@ -405,15 +418,19 @@ export function drawRouteOverlay(g: PIXI.Graphics, route: RouteOverlay) {
             ROUTE_SINGLE_COLOR, mini ? MINI_ROUTE_WIDTH : ROUTE_SINGLE_WIDTH);
     }
 
-    // Multi-jump route: the stronger green line, over the single one.
+    // Multi-jump route: the stronger green line, over the single one. On
+    // the minimap its first hop goes pale while a pick there is the next
+    // jump.
     let prev = route.current;
-    for (const system of route.multi) {
+    route.multi.forEach((system, i) => {
         if (prev) {
-            drawLink(g, prev, system, ROUTE_MULTI_COLOR,
+            const pale = mini && i === 0 && (route.paleFirstHop ?? false);
+            drawLink(g, prev, system,
+                pale ? MINI_ROUTE_PALE_COLOR : ROUTE_MULTI_COLOR,
                 mini ? MINI_ROUTE_WIDTH : ROUTE_MULTI_WIDTH);
         }
         prev = system;
-    }
+    });
 
     // Pinned waypoints: a small green box marks each explicitly
     // selected system (they always stay in the route). Not on the
