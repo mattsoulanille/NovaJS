@@ -4,6 +4,7 @@ import { ShipResource } from "../../src/resource_parsers/ship_resource.js";
 import { NovaResources } from "../../src/resource_parsers/resource_holder_base.js";
 import { FPS } from "../../src/parsers/constants.js";
 import { NovaDataType } from "novadatainterface/nova_data_interface";
+import { installedOutfitMass } from "novadatainterface/outfit_data";
 import {
     getDefaultShipAIFlags, ShipAICloakFlags, ShipData,
 } from "novadatainterface/ship_data";
@@ -479,5 +480,115 @@ describe("ShipParse AI hull flags (data only)", () => {
             expect(ships.find(s => s.id === "nova:128")!.podCount).toBe(0);
             expect(countWhere(s => s.podCount > 0)).toBe(83);
         });
+    });
+});
+
+/**
+ * shïp FreeMass is "in addition to the space taken up by the ship's stock
+ * weapons" (EVN Bible ~:2367): a ship bought new has exactly FreeMass
+ * free. physics.freeMass is the EMPTY hull, from which the sim and the
+ * outfitter take every outfit aboard at installedOutfitMass, so the parser
+ * must add each stock item back at that same tonnage.
+ */
+describe("ShipParse free mass", () => {
+    // A hand-made oütf, as both id spaces hold it.
+    function outf(id: number, mass: number, flags = 0) {
+        return { globalID: `nova:${id}`, id, mass, flags, functions: [] };
+    }
+    const scaled = outf(300, 3, 0x0400); // the Pariah's Defense Phaser
+    const launcher = outf(301, 40);
+    const rounds = outf(302, 1);
+    const supply = {
+        globalID: "nova:130", guidance: "unguided", ammoType: 2,
+        idSpace: { wëap: {} as Record<number, unknown> },
+    };
+    supply.idSpace.wëap[130] = supply;
+
+    async function freeOnPurchase(mass: number, freeSpace: number) {
+        const globalOutfits = {
+            "nova:300": scaled, "nova:301": launcher, "nova:302": rounds,
+        };
+        const ship = await ShipParse(fakeShip({
+            mass, freeSpace,
+            outfits: [{ id: 300, count: 2 }],
+            weapons: [{ id: 130, count: 3, ammo: 75 }],
+            idSpace: {
+                dësc: {}, bööm: {}, shän: {}, PICT: {}, gövt: {}, shïp: {},
+                oütf: { 300: scaled, 301: launcher, 302: rounds },
+                wëap: { 130: supply },
+            },
+        } as unknown as Partial<ShipResource>), () => { },
+            Promise.resolve({ "nova:128": "nova:5000" }),
+            Promise.resolve({ "nova:130": "nova:301" }),
+            Promise.resolve({ "nova:130": "nova:302" }),
+            Promise.resolve({ oütf: globalOutfits } as unknown as NovaResources));
+        expect(ship.outfits).toEqual(
+            { "nova:300": 2, "nova:301": 3, "nova:302": 75 });
+        let free = ship.physics.freeMass;
+        for (const [id, count] of Object.entries(ship.outfits)) {
+            const o = globalOutfits[id as keyof typeof globalOutfits];
+            free -= installedOutfitMass({
+                physics: { freeMass: o.mass },
+                massScalesWithShipMass: (o.flags & 0x0400) > 0,
+            }, mass) * count;
+        }
+        return { empty: ship.physics.freeMass, free };
+    }
+
+    it("adds a 0x0400 stock item back at its HULL-SCALED mass", async () => {
+        // The Singularity plug-in's Pariah: Mass 6000, FreeMass 180, two
+        // Mass-3 Defense Phasers that weigh floor(6000 x 3 / 100) = 180 t
+        // each aboard it. Adding back the written 3 t left it 354 t short:
+        // -174 t free in a new ship.
+        const { empty, free } = await freeOnPurchase(6000, 180);
+        expect(empty).toBe(180 + 2 * 180 + 3 * 40 + 75 * 1);
+        expect(free).toBe(180);
+    });
+
+    it("keeps a 0x0400 item's own Mass below hull Mass 100", async () => {
+        // max(Mass, floor(hull x Mass / 100)): 3 t on a 50 t hull.
+        const { empty, free } = await freeOnPurchase(50, 20);
+        expect(empty).toBe(20 + 2 * 3 + 3 * 40 + 75 * 1);
+        expect(free).toBe(20);
+    });
+
+    it("counts the stock AmmoLoad rounds into the hull too (GUESS)",
+        async () => {
+            // Unmeasured: whether the original's FreeMass leaves room for
+            // the stock rounds. NovaJS reads the Bible's "stock weapons" as
+            // the loaded weapons, so a ship bought new shows FreeMass and
+            // selling its 75 one-ton rounds frees 75 t.
+            const { empty } = await freeOnPurchase(98, 24);
+            expect(empty - (2 * 3 + 3 * 40)).toBe(24 + 75);
+        });
+
+    describe("over the stock data", () => {
+        it("gives every stock hull exactly its FreeMass free when new",
+            async () => {
+                const np = await stockNovaParse();
+                if (!np) {
+                    pending(STOCK_DATA_MISSING);
+                    return;
+                }
+                const off: string[] = [];
+                for (const id of (await np.ids).Ship) {
+                    const ship = await np.data[NovaDataType.Ship].get(id);
+                    let free = ship.physics.freeMass;
+                    for (const [outfitId, count] of
+                        Object.entries(ship.outfits)) {
+                        const outfit =
+                            await np.data[NovaDataType.Outfit].get(outfitId);
+                        free -= installedOutfitMass(outfit,
+                            ship.physics.mass) * count;
+                    }
+                    if (free !== ship.freeSpace) {
+                        off.push(`${id} ${free} != ${ship.freeSpace}`);
+                    }
+                }
+                // Before the fix nova:366 (Pegasus; Second-Hand -
+                // upgraded, Mass 2000, three stock Carbon Fiber at 20 t
+                // each) came out at -57 t instead of 0.
+                expect(off).toEqual([]);
+            });
     });
 });

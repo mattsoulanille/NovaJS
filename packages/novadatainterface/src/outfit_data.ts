@@ -384,6 +384,46 @@ export interface OutfitData extends BaseData {
     nonlethalBomb: number | null,
 }
 
+/**
+ * The tonnage ONE unit of `outfit` takes up aboard a hull of `shipMass`
+ * tons: its oütf Mass as written, unless flag 0x0400 says the mass is
+ * proportional to the ship's — "ship class Mass field is multiplied by
+ * this item's Mass field and then divided by 100. Only works for
+ * positive-mass items" (EVN Bible ~:1977).
+ *
+ * THE RULE, measured on the original (docs/reference_experiments.md,
+ * "Outfits that scale with the ship's mass", wave 10): an item's
+ * installed mass is max(oütf Mass, floor(hull Mass x oütf Mass / 100)).
+ * Five kit hulls with a Mass-10 0x0400 item read "Item Mass" 10, 10, 10,
+ * 15 and 30 at hull Mass 37, 50, 100, 155 and 300: proportional above
+ * Mass 100, TRUNCATED (155 -> 15, not 16), and never below the item's own
+ * Mass (37 and 50 -> 10, not 4 and 5). The older Carbon Fiber capture
+ * agrees: ui_screenshots/original_macos_screenshots/outfitter/
+ * earth_outfitter_carbon_fiber_cant_hold_any_more.png is a mass-25 hull
+ * ("Item Price: 6,250 cr" = 250 x 25) reading "Item Mass: 1 ton" for an
+ * item whose written Mass is 1 -- the item's own Mass, not the 0.25 of
+ * the Bible's formula. (It used to be read as rounding UP, which the
+ * wave-10 hulls refute: ceil gives 4, 5 and 16.)
+ *
+ * This is THE ONE mass rule: the sim's physics derivation (nova
+ * outfit_plugin.ts applyOutfitPhysics), the outfitter's free-mass
+ * arithmetic and its "Item Mass:" line all read it, so what the shop
+ * quotes is what the ship flies with. So does the ship parser
+ * (novaparse ship_parse.ts), which adds each stock item back into the
+ * hull's empty capacity at this same tonnage: a stock ship then starts
+ * with exactly its shïp FreeMass free (EVN Bible ~:2367), however heavy
+ * its 0x0400 stock items are on that hull.
+ */
+export function installedOutfitMass(
+    outfit: Pick<OutfitData, "physics" | "massScalesWithShipMass">,
+    shipMass: number): number {
+    const mass = outfit.physics.freeMass;
+    if (outfit.massScalesWithShipMass && mass > 0) {
+        return Math.max(mass, Math.floor(shipMass * mass / 100));
+    }
+    return mass;
+}
+
 export function getDefaultOutfitData(): OutfitData {
     return {
         ...getDefaultBaseData(),

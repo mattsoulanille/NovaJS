@@ -1,5 +1,6 @@
 import { Animation, getDefaultAnimation } from "novadatainterface/animation";
 import { BaseData } from "novadatainterface/base_data";
+import { installedOutfitMass } from "novadatainterface/outfit_data";
 import { getDefaultPictData } from "novadatainterface/pict_data";
 import { ShipData, ShipPhysics } from "novadatainterface/ship_data";
 import { BayGuidanceSet } from "novadatainterface/weapon_data";
@@ -313,9 +314,25 @@ export async function ShipParse(ship: ShipResource,
         }
     }
 
-    // The ship's free mass is mass on top of the mass of preinstalled outfits,
-    // so to find it's actual free mass, we add in the masses of all the outfits.
-    // (this is done while outfits are parsed).
+    // shïp FreeMass is the space left AFTER the stock items: "in addition
+    // to the space taken up by the ship's stock weapons" (EVN Bible
+    // ~:2367). physics.freeMass is the EMPTY hull's capacity, from which
+    // the sim and the outfitter subtract every outfit aboard, so each
+    // stock item (DefaultItems, weapons and their AmmoLoad rounds) is
+    // added back here at the SAME tonnage they take off: the shared
+    // installedOutfitMass, which for an oütf 0x0400 item is the
+    // hull-scaled mass, not its written Mass. Adding the written Mass left
+    // a 0x0400 stock item short by the difference: the Singularity
+    // plug-in's Pariah (Mass 6000, FreeMass 180, two Defense Phasers of
+    // Mass 3 that weigh 180 t each on it) came out of the shipyard 354 t
+    // over, at -174 t free.
+    //
+    // GUESS (unmeasured): the stock AmmoLoad rounds count as part of the
+    // "stock weapons" too, so a new ship shows FreeMass with them aboard
+    // and selling them frees their mass. The other reading (FreeMass
+    // leaves no room for them) would put eleven stock NPC hulls below zero
+    // when captured, the Rebel Starbridge nova:341 (FreeMass 24, forty
+    // 1 t Gravimetric Missiles) at -16 among them.
     var freeMass = ship.freeSpace;
     for (let outfitID in outfits) {
         // Implicit built-in-weapon outfits have no oütf resource behind
@@ -325,7 +342,10 @@ export async function ShipParse(ship: ShipResource,
         if (!outfit) {
             continue;
         }
-        freeMass += outfit.mass * outfits[outfitID];
+        freeMass += installedOutfitMass({
+            physics: { freeMass: outfit.mass },
+            massScalesWithShipMass: (outfit.flags & 0x400) > 0,
+        }, ship.mass) * outfits[outfitID];
     }
 
     // The government whose ïntf status bar this class shows for the player.
