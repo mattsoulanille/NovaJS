@@ -1,0 +1,39 @@
+{
+  "name": "novaref-w44-gc0",
+  "edits": {
+    "ship": 651,
+    "stellar": 1081,
+    "credits": 100000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1461": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w44-gc0",
+    "weapons": {
+      "128": 0,
+      "360": 1,
+      "365": 1
+    },
+    "outfits": {
+      "128": 0,
+      "600": 1,
+      "607": 1
+    },
+    "rating": 0,
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}

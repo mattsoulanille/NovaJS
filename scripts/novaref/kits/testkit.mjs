@@ -315,8 +315,162 @@ export default {
         ...wave41Resources(),
         ...wave42Resources(),
         ...wave43Resources(),
+        ...wave44Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-44 experiments (docs/reference_experiments.md, "... wave 44"): the
+ * wave-43 leftovers. RETIRED: wave 12's mïsn 1051 (bit 9099, Kit D shooter
+ * beam) and 1053 (bit 9103, Kit D duellist bare); their ships and düdes
+ * stay. Used: sÿst 1457-1466, spöb 1035-1091, shïp 738-739 / 761 / 766-768 /
+ * 791, düde 539, wëap 312, oütf 497-499, mïsn 1051 / 1053, bits 9286-9287.
+ * Map row y = -2940 (x -800 .. -440). The next free ids: sÿst 1467+, spöb
+ * 1092-1399 (and 518-999), shïp 888-894 (and 416-419; then look for other
+ * stock gaps below 895), düde 540+, përs: override a stock one
+ * (kits/w43_pers225.mjs), ränk 205+, mïsn NONE (retire another old kit
+ * mission), gövt 283 and below, flët 324+, wëap 313+, oütf 500+, jünk 205+,
+ * bits 9288+, rlëD 1113+.
+ *
+ *  U4  sÿst 1457 Kit Accel Pad: a decoration start (spöb 1035) at the
+ *      centre and 14 moon decorations (spöb 1036-1049) on a 200 x 300 px
+ *      grid around it (x -400 .. 400, y -300 .. 300): the ship's position
+ *      from rest in any direction (its heading at Enter Ship is not
+ *      chosen). shïp 738 Kit Probe F (Speed 1000, Accel 150) and 739 Kit
+ *      Probe G (Speed 600, Accel 600): the boost thrust law (hull Accel or
+ *      top speed) and a fourth Accel for the coast-down on the wave-43
+ *      ruler (sÿst 1450 -> 1451).
+ *  U7  sÿst 1458 Kit Gravity 5 Moons: the well (spöb 1050, Gravity 5, the
+ *      dark 40 px planet art 143) at the centre, moon starts 1051-1054 at
+ *      (600 / 1000 / 1500 / 2000, 0), each with two reference moons at
+ *      (x, 200) and (x - 300, 200) (spöb 1055-1062): the far falloff read
+ *      off moons. sÿst 1459 Kit Gravity 10 Moons: the well (spöb 1063,
+ *      Gravity 10), starts 1064-1067 at (150 / 300 / 1000 / 2000, 0),
+ *      reference moons 1068-1074.
+ *  K8  sÿst 1460 Kit Arrow Grid: nothing at the centre; decoration starts
+ *      spöb 1075-1080 at (2650, 0), (2750, 0), (2850, 0), (0, 2750), (2300,
+ *      2300), (2000, 2000): does the centre arrow show when the centre is
+ *      2,650 / 2,750 / 2,850 px out on an axis, and on a diagonal whose
+ *      axis distances are inside the onset (a box) but whose radius is not
+ *      (a circle)?
+ *  R18 sÿst 1461 Kit Guard Control (port spöb 1081, owner 363): traffic
+ *      avgShips 1 of düde 539 (AI 3, the always-hostile gövt 362, shïp 593
+ *      Kit Tribute Guard S1000): a plain kill of the defender's own hull for
+ *      the combat rating, at 12,800 and at 0.
+ *  LN  sÿst 1462 Kit Long Names 2, port spöb 1082 (outfitter + shipyard,
+ *      SpecialTech 9409): oütf 497 ShortName "Kit Three\nLine\nCaption",
+ *      498 "Kit Gap\n\nLine"; shïp 761 ShortName "Kit Two\nLine Hull", 766
+ *      "Kit Three\nLine\nHull Name", 767 "Kit Very Long Single Line Hull
+ *      Short Name" (all \n are the two characters, the Bible's form).
+ *  E8  shïp 768 Kit Bay Disc Lazy (the green disc at Speed 1000, Accel
+ *      100), wëap 312 Kit Lazy Disc Bay (Speed 400, the stock Viper Bay's,
+ *      carrying 768) + oütf 499: does a fighter's low Accel slow its brake
+ *      after a kick (wave 42's Speed / Accel 1000 disc stopped within about
+ *      8 frames)?
+ *  E6  sÿst 1463 Kit Ion Pad: port spöb 1083 at the centre and 8 moon
+ *      decorations (spöb 1084-1091) around it; mïsn 1051 (bit 9286) puts
+ *      wave 41's Ion Tick Target (Ionization 20, düde 523) and mïsn 1053
+ *      (bit 9287) wave 42's Ion Tick5 Target (Ionization 5, düde 534) ON the
+ *      port. shïp 791 Kit Probe Ion: Kit Probe A (Speed 300, Accel 300,
+ *      inertial) with IonizeMax 100, Deionize 1: its acceleration from rest
+ *      at each ion plateau.
+ *  R16 sÿst 1464 / 1465 / 1466 Kit R16 Accept Bit / Abort Bit / Success Bit:
+ *      no stellars, Visibility b9281 / b9282 / b9283 (mïsn 1044's OnAccept /
+ *      OnAbort / OnSuccess bits): the map shows which bits are set in
+ *      flight, with no landing (pilots must have them explored).
+ */
+function wave44Resources() {
+    const out = [];
+    const Y = -2940;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const port = (id, name, set = {}) => spob(id, name, 0, 0, 138, { flags: 0x43, ...set });
+    const decoration = (id, name, x = 0, y = 0) => spob(id, name, x, y, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] });
+    const withTraffic = (sys, dudes, avgShips) => {
+        sys.set = { ...sys.set, avgShips, dudes: [...dudes, ...none8].slice(0, 8), dudeProbs: [...dudes.map(() => Math.floor(100 / dudes.length)), ...zero8].slice(0, 8) };
+        return sys;
+    };
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const probe = { turn: 30, armor: 30000, shield: 30000, mass: 50, freeMass: 500, cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 1, strength: 10,
+        flags: 0, flags2: 0x0088 };
+    // --- U4: sÿst 1457, spöb 1035-1049, shïp 738-739.
+    const grid = [];
+    for (const y of [-300, 0, 300]) for (const x of [-400, -200, 0, 200, 400]) if (x || y) grid.push([x, y]);
+    out.push(system(1457, "Kit Accel Pad", nextX(), Y, 363, [1035, ...grid.map((_, k) => 1036 + k)]),
+        decoration(1035, "Kit Accel Pad Start"), ...grid.map(([x, y], k) => decoration(1036 + k, `Kit Accel Pad ${x},${y}`, x, y)));
+    out.push(...ship(738, "Kit Probe F", 128, { ...probe, accel: 150, speed: 1000 }));
+    out.push(...ship(739, "Kit Probe G", 128, { ...probe, accel: 600, speed: 600 }));
+    // --- U7: sÿst 1458-1459, spöb 1050-1074.
+    const wellSystem = (sid, name, wellId, gravity, starts, firstStart) => {
+        const refs = starts.flatMap((x) => [[x, 200], [x - 300, 200]]);
+        const ids = [wellId, ...starts.map((_, k) => firstStart + k), ...refs.map((_, k) => firstStart + starts.length + k)];
+        out.push(system(sid, name, nextX(), Y, 363, ids),
+            spob(wellId, `${name} Well`, 0, 0, 143, { flags: 0x01, gravity }),
+            ...starts.map((x, k) => decoration(firstStart + k, `${name} Start ${x}`, x, 0)),
+            ...refs.map(([x, y], k) => decoration(firstStart + starts.length + k, `${name} Ref ${x},${y}`, x, y)));
+    };
+    wellSystem(1458, "Kit Gravity 5 Moons", 1050, 5, [600, 1000, 1500, 2000], 1051);
+    // Gravity 10: starts 1064-1067; references 1068-1075 would be eight, so the 150 start's pair is cut to (150, 200) alone.
+    {
+        const starts = [150, 300, 1000, 2000];
+        const refs = [[150, 200], [300, 200], [0, 200], [1000, 200], [700, 200], [2000, 200], [1700, 200]];
+        out.push(system(1459, "Kit Gravity 10 Moons", nextX(), Y, 363, [1063, 1064, 1065, 1066, 1067, ...refs.map((_, k) => 1068 + k)]),
+            spob(1063, "Kit Gravity 10 Moons Well", 0, 0, 143, { flags: 0x01, gravity: 10 }),
+            ...starts.map((x, k) => decoration(1064 + k, `Kit Gravity 10 Moons Start ${x}`, x, 0)),
+            ...refs.map(([x, y], k) => decoration(1068 + k, `Kit Gravity 10 Moons Ref ${x},${y}`, x, y)));
+    }
+    // --- K8: sÿst 1460, spöb 1075-1080.
+    const arrow = [[2650, 0], [2750, 0], [2850, 0], [0, 2750], [2300, 2300], [2000, 2000]];
+    out.push(system(1460, "Kit Arrow Grid", nextX(), Y, 363, arrow.map((_, k) => 1075 + k)),
+        ...arrow.map(([x, y], k) => decoration(1075 + k, `Kit Arrow ${x},${y}`, x, y)));
+    // --- R18: sÿst 1461, spöb 1081, düde 539.
+    out.push(dude(539, "Kit Guard Control", 3, 362, 593));
+    out.push(withTraffic(system(1461, "Kit Guard Control", nextX(), Y, 363, [1081]), [539], 1), port(1081, "Kit Guard Control Port"));
+    // --- LN: sÿst 1462, spöb 1082, oütf 497-498, shïp 761 / 766 / 767.
+    const LN2 = 9409;
+    const lnGun = (id, name, shortName) => { const g = gun(id, name, 365); g.set = { ...g.set, techLevel: LN2, shortName }; return g; };
+    out.push(lnGun(497, "Kit Three Line Caption", "Kit Three\\nLine\\nCaption"), lnGun(498, "Kit Gap Line", "Kit Gap\\n\\nLine"));
+    const lnHull = (id, name, shortName) => ship(id, name, 135, { accel: 2000, speed: 800, turn: 60, armor: 300, shield: 300, mass: 50,
+        freeMass: 100, cargo: 20, maxGuns: 4, maxTurrets: 4, ai: 3, strength: 10, flags: 0, flags2: 0x00C8, techLevel: LN2, shortName,
+        hireRandom: 100 });
+    // Added during the wave (the hub's question: a BLANK ShortName in the shipyard and in the bar's hire list): shïp 888 Kit Blank
+    // Short Hull (ShortName ""); every LN hull is for hire (HireRandom 100) and the port has a bar.
+    out.push(...lnHull(761, "Kit Two Line Hull", "Kit Two\\nLine Hull"), ...lnHull(766, "Kit Three Line Hull Name", "Kit Three\\nLine\\nHull Name"),
+        ...lnHull(767, "Kit Very Long Single Line Hull", "Kit Very Long Single Line Hull Short Name"), ...lnHull(888, "Kit Blank Short Hull", ""));
+    out.push(system(1462, "Kit Long Names 2", nextX(), Y, 363, [1082]),
+        port(1082, "Kit Long Names 2 Port", { flags: 0x4D, techLevel: 0, specialTech: [LN2, -1, -1] }));
+    // --- E8: shïp 768, wëap 312, oütf 499 (the green disc's rlëD 1972, wave 15).
+    out.push(...shareRled(768, "Kit Bay Disc Lazy", 1972, 24, { accel: 100, speed: 1000, turn: 60, mass: 20, freeMass: 10, cargo: 0, crew: 1,
+        flags: 0, flags2: 0, ai: 3, armor: 300, shield: 0, shieldRecharge: 0, armorRecharge: 0, strength: 10 }));
+    out.push(weap(312, "Kit Lazy Disc Bay", 149, { reload: 30, guidance: 99, ammoType: 768, speed: 400 }), gun(499, "Kit Lazy Disc Bay", 312));
+    // --- E6: sÿst 1463, spöb 1083-1091, mïsn 1051 / 1053 (wave 12's, retired), shïp 791.
+    const pad = [[-300, -250], [0, -250], [300, -250], [-300, 0], [300, 0], [-300, 250], [0, 250], [300, 250]];
+    out.push(system(1463, "Kit Ion Pad", nextX(), Y, 363, [1083, ...pad.map((_, k) => 1084 + k)]), port(1083, "Kit Ion Pad Port"),
+        ...pad.map(([x, y], k) => decoration(1084 + k, `Kit Ion Pad ${x},${y}`, x, y)));
+    out.push(...misn(1051, "Kit E6 ion 20 on the pad", 9286, { availStel: 1083, shipCount: 1, shipDude: 523, shipGoal: -1, shipBehav: -1,
+        shipStart: -1, onAccept: "!b9286" }));
+    out.push(...misn(1053, "Kit E6 ion 5 on the pad", 9287, { availStel: 1083, shipCount: 1, shipDude: 534, shipGoal: -1, shipBehav: -1,
+        shipStart: -1, onAccept: "!b9287" }));
+    out.push(...ship(791, "Kit Probe Ion", 128, { ...probe, accel: 300, speed: 300, ionization: 100, deionize: 1 }));
+    // --- R16: sÿst 1464-1466 (no stellars), shown on the map only while mïsn 1044's bit is set.
+    for (const [sid, name, bit] of [[1464, "Kit R16 Accept Bit", 9281], [1465, "Kit R16 Abort Bit", 9282], [1466, "Kit R16 Success Bit", 9283]]) {
+        const s = system(sid, name, nextX(), Y, 363, []);
+        s.set = { ...s.set, visibility: `b${bit}` };
+        out.push(s);
+    }
+    // --- R8 (added during the wave): sÿst 1467 Kit R8 Lapse (gövt 304, wave 29's Kit Bribe Stay set-up): the refusing port
+    // spöb 1092 (gövt 304, MinStatus 0: a pilot at -50 is refused) at (-200, 0), an OPEN port spöb 1093 at (200, 0) and the
+    // start decoration spöb 1094 at the centre: 200 px from each 72 px port, inside its 249 px clearance square and outside its
+    // 1.7 W landing window, so `l` answers "too far" while a clearance stands, and a fresh clearance (open) or "Landing request
+    // denied." (bribed) once it has lapsed: an ordinary and a paid clearance timed in one session.
+    out.push(system(1467, "Kit R8 Lapse", nextX(), Y, 304, [1092, 1093, 1094]),
+        spob(1092, "Kit R8 Lapse Bribe", -200, 0, 138, { flags: 0x43, govt: 304, minStatus: 0 }),
+        spob(1093, "Kit R8 Lapse Open", 200, 0, 138, { flags: 0x43 }), decoration(1094, "Kit R8 Lapse Start"));
+    return out;
+}
 
 /**
  * Wave-43 experiments (docs/reference_experiments.md, "... wave 43"): the
@@ -4225,7 +4379,7 @@ function wave14Resources() {
  *      Disabler (one 1200-damage turret bolt, reload 30000 frames: one
  *      shot) at the player, through the victim on the near mark. Victims
  *      (Mission BBS jobs, armor 1500, shield 0, so the hit leaves 300:
- *      disabled, alive): the wave-12 goal-1 duellist mïsn 1053 (9103), or
+ *      disabled, alive): the wave-12 goal-1 duellist mïsn 1053 (9103, RETIRED in wave 44), or
  *      mïsn 1067 (9126) shïp 873 Kit Ally Anchored (the magenta pointer,
  *      gövt 360 via düde 359, unarmed) as a ShipBehav 1 / ShipGoal 3 escort
  *      (OnFailure b9127, OnSuccess b9128).
@@ -4432,7 +4586,7 @@ function wave13Resources() {
  *      penalties). A shooter mission is the spaceport offer (ShipBehav 0,
  *      no goal, the far mark, ShipStart -3): mïsn 1049 (bit 9097) shïp 837
  *      Kit FF Shooter (10-damage bolt), 1050 (9098) shïp 858 Kit Duel
- *      Shooter Blast (wëap 281: 100 damage, 150 px blast), 1051 (9099) shïp
+ *      Shooter Blast (wëap 281: 100 damage, 150 px blast), 1051 (9099, RETIRED in wave 44) shïp
  *      857 Kit Duel Shooter Beam (wëap 280: a turreted beam, ONE frame of
  *      5000 damage; a beam stops on its own govt's ships, wave 10). The
  *      duellist is a Mission BBS job, mïsn 1052 (9100): shïp 856 Kit Duel
@@ -4441,7 +4595,7 @@ function wave13Resources() {
  *      0, ReturnStel Kit FF Port, OnSuccess b9101, OnFailure b9102,
  *      DispWeight 30000 (a stock BBS job listed above it got the Accept in
  *      the first blast run; the kit's BBS jobs now come first). düde
- *      338-341; mïsn 1053 (bit 9103) is the job with shïp 865 (shield 0,
+ *      338-341; mïsn 1053 (bit 9103, RETIRED in wave 44) was the job with shïp 865 (shield 0,
  *      düde 350), which the beam kills in one frame. The player disables
  *      the duellist with wëap 282 Kit Duel Gun (turret,
  *      100 damage) + oütf 459.
@@ -4496,7 +4650,7 @@ function wave12Resources() {
     const duelShooter = { availStel: 2047, shipCount: 1, shipGoal: -1, shipBehav: 0, shipStart: -3 };
     // mïsn 1049 (bit 9097, the bolt shooter) and 1050 (bit 9098, the blast shooter) were retired in wave 43
     // (wave43Resources: A13 stray fire); düde 339 / 340 stay.
-    out.push(...misn(1051, "Kit D shooter beam", 9099, { ...duelShooter, shipDude: 341, onAccept: "!b9099" }));
+    // mïsn 1051 (bit 9099, the beam shooter) was retired in wave 44 (wave44Resources: E6 ion 20 on the pad); düde 341 stays.
     out.push(...misn(1052, "Kit D duellist", 9100, { availStel: 2047, availLoc: 0, shipCount: 1, shipDude: 338, shipGoal: 1, shipBehav: 0, shipStart: -2,
         returnStel: 2047, onAccept: "!b9100", onSuccess: "b9101", onFailure: "b9102", dispWeight: 30000 }));
     // The one-frame beam kills a HEALTHY duellist outright only if no
@@ -4504,8 +4658,7 @@ function wave12Resources() {
     // armor 1500), düde 350, mïsn 1053 (bit 9103), the same BBS job.
     out.push(...shareRled(865, "Kit Duel Victim Bare", 1959, 24, { ...anchored, ai: 4, armor: 1500, shield: 0, ...armed(267) }));
     out.push(dude(350, "Kit Duel Victim Bare", 4, 355, 865));
-    out.push(...misn(1053, "Kit D duellist bare", 9103, { availStel: 2047, availLoc: 0, shipCount: 1, shipDude: 350, shipGoal: 1, shipBehav: 0, shipStart: -2,
-        returnStel: 2047, onAccept: "!b9103", onSuccess: "b9101", onFailure: "b9102", dispWeight: 30000 }));
+    // mïsn 1053 (bit 9103, the duellist bare) was retired in wave 44 (wave44Resources: E6 ion 5 on the pad); düde 350 stays.
 
     // --- H: hunters and prey, both neutral to the player.
     out.push(govt(356, "Kit Hunter", { classes: [356, -1, -1, -1], enemies: [357, -1, -1, -1] }));

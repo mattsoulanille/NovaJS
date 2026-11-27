@@ -1,0 +1,31 @@
+{
+  "name": "novaref-w44-r8",
+  "edits": {
+    "ship": 703,
+    "stellar": 1094,
+    "credits": 2000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1467": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w44-r8",
+    "legal": {
+      "1467": -50
+    },
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}
