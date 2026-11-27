@@ -170,7 +170,16 @@ export function acceptOffer(machinery: MissionMachineryContext,
             payment = applyPayVal(machinery, mission,
                 decodePayVal(mission.payVal));
         }
-        state.dateAdvance += Math.max(0, mission.datePostInc);
+        // DatePostInc ("after successful completion or auto-aborting",
+        // the Bible) comes with the abort: here when the abort is now,
+        // at the lift-off with the queued OnAbort otherwise
+        // (runQueuedAutoAbortOnAborts). MEASURED (reference "DatePostInc
+        // on an immediate auto-abort (R16), wave 41"): a DatePostInc-7
+        // docked accept moved the date a week further, but the pilot
+        // written at the Leave right after the accept had not moved yet.
+        if (!queueShips) {
+            state.dateAdvance += Math.max(0, mission.datePostInc);
+        }
         // An auto-abort mission never becomes active, so its <SN> pick
         // lives only as long as this popup — and as long as the ships
         // below, which wear the same name.

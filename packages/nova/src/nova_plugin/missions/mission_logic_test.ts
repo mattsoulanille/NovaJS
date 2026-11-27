@@ -1651,6 +1651,22 @@ describe('accept / landing / completion flow', () => {
             }
         });
 
+        it('adds its DatePostInc at the lift-off abort, not at the docked '
+            + 'accept (reference "DatePostInc on an immediate auto-abort '
+            + '(R16), wave 41")', () => {
+                const mission = squad();
+                mission.datePostInc = 7;
+                const { state, machinery } = docked(mission);
+                acceptOffer(machinery,
+                    makeMissionOffer(mission, machinery.offerContext())!);
+                expect(state.dateAdvance).toBe(0);
+                expect(runQueuedAutoAbortOnAborts(machinery)).toBe(1);
+                expect(state.dateAdvance).toBe(7);
+                // Once only.
+                expect(runQueuedAutoAbortOnAborts(machinery)).toBe(0);
+                expect(state.dateAdvance).toBe(7);
+            });
+
         it('leaves a batch an older build queued (OnAbort already run) '
             + 'alone', () => {
             const mission = squad();

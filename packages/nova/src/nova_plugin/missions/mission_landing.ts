@@ -152,9 +152,10 @@ export function runPendingAutoAborts(machinery: MissionMachineryContext,
  * however the set string recurses; the batch itself stays for
  * buildMissionShipSpawns to spawn. A batch queued by the set strings run
  * here (an Sxxx starting another such mission) aborts at this same
- * lift-off. Nothing else of the abort is deferred: OnAccept, the 0x0002
- * Pay, the date and the notice all happened at accept. Returns how many
- * ran.
+ * lift-off. Its DatePostInc comes here too (reference "DatePostInc on an
+ * immediate auto-abort (R16), wave 41"). Nothing else of the abort is
+ * deferred: OnAccept, the 0x0002 Pay, the accept's own day and the notice
+ * all happened at accept. Returns how many ran.
  */
 export function runQueuedAutoAbortOnAborts(machinery: MissionMachineryContext,
     outfits?: Map<string, number>): number {
@@ -180,6 +181,9 @@ export function runQueuedAutoAbortOnAborts(machinery: MissionMachineryContext,
         }
         runMissionSetString(machinery, mission.onAbort,
             setStringPrefix(mission), outfits);
+        // ...and its DatePostInc, held back at the accept (reference
+        // "DatePostInc on an immediate auto-abort (R16), wave 41").
+        machinery.state.dateAdvance += Math.max(0, mission.datePostInc);
         ran++;
     }
     return ran;
