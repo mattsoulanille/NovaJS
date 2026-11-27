@@ -958,16 +958,17 @@ export const EscortCommandBehaviorSystem = new System({
                     && !inRearQuadrant(movement, otherMovement.position)) {
                     continue;
                 }
-                // Turret blind spots. A candidate this turret would be
-                // refused permission to shoot at (fire_weapon_plugin
-                // would return undefined) must not be CHOSEN here
-                // either, or the escort latches `firing` on a target it
-                // cannot engage and ignores one it could. Live for full
-                // turrets (stock shïp and wëap blind spots exist); for
-                // a quadrant turret it bites only when a blind spot
-                // covers that turret's own sector (a ship blind astern
-                // silences its rear-quadrant turrets), and it keeps the
-                // two halves reading the same rule.
+                // Turret blind spots. A candidate this turret may not
+                // AIM at (fire_weapon_plugin refuses a full turret's
+                // shot, and sends a quadrant turret's straight along its
+                // axis instead) must not be CHOSEN here either, or the
+                // escort latches `firing` on a target it cannot engage
+                // and ignores one it could. Live for full turrets (stock
+                // shïp and wëap blind spots exist); for a quadrant
+                // turret it bites only when a blind spot covers that
+                // turret's own sector (a ship blind astern keeps its
+                // rear-quadrant turrets from picking a victim astern),
+                // and it keeps the two halves reading the same rule.
                 if (blindSpotBlocksFiring({
                     guidance: weaponData.guidance,
                     weaponBlindSpots: weaponData.turretBlindSpots,

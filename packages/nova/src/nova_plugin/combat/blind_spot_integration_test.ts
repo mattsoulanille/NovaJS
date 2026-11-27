@@ -45,6 +45,11 @@ const BEARINGS = {
     ahead: new Position(1000, 800),
     abeam: new Position(1200, 1000),
     astern: new Position(1000, 1200),
+    // Off the axes, so an AIMED shot and a straight one point
+    // different ways: ~27° off the nose and ~27° off the tail, inside
+    // the front and the rear quadrant respectively.
+    offBow: new Position(1100, 800),
+    offQuarter: new Position(1100, 1200),
 } as const;
 type Bearing = keyof typeof BEARINGS;
 
@@ -214,6 +219,117 @@ describe('turret blind spots', () => {
             });
     });
 
+    // Matthew's playtest report (2026-11-26): "Railguns should still fire
+    // (straight forward) if the target is not within their firing arc."
+    // The stock Fixed Railguns are guidance 7 and ride on rear-blind
+    // hulls (the Aurora Cruisers, the Thunderforge); a target
+    // astern of such a hull used to SILENCE them, because the ship's
+    // blind spot refused the shot outright. A quadrant turret "fires
+    // straight ahead if no target" (Bible wëap Guidance 7), and a target
+    // it may not aim at — outside its arc, or in a blind sector — is no
+    // target as far as aiming goes.
+    describe('quadrant turrets with nothing they may aim at', () => {
+        /**
+         * The shot `weaponId` fires this tick (inaccuracy off), its
+         * heading relative to the shooter's (which faces rotation 0),
+         * or undefined when nothing fires. `guidance` swaps the
+         * weapon's guidance on THIS world's entry only, for the
+         * rear-quadrant mirror the scenario has no weapon for.
+         */
+        async function shotHeading(bearing: Bearing, weaponId: string,
+            shipId = SKIFF, guidance?: 'rearQuadrant'):
+            Promise<number | undefined> {
+            const { world } = await setUp(bearing, shipId);
+            await loadWeaponsGameData(world, [weaponId]);
+            const weapon = world.resources.get(WeaponEntries)!
+                .getCached(weaponId)!;
+            if (guidance) {
+                weapon.data = { ...weapon.data, guidance } as typeof weapon.data;
+            }
+            const shot = weapon.fireFromEntity('shooter', false);
+            if (!shot) {
+                return undefined;
+            }
+            return shot.components.get(MovementStateComponent)!.rotation
+                .angle;
+        }
+
+        const STRAIGHT_AHEAD = 0;
+
+        it('fires a rear-blind hull\'s front-quadrant gun straight ahead '
+            + 'at a target astern', async () => {
+                const heading = await shotHeading('astern', BOW_CHASER,
+                    REAR_BLIND_HULL);
+                expect(heading).toBeDefined();
+                expect(heading!).toBeCloseTo(STRAIGHT_AHEAD, 9);
+            });
+
+        it('fires it straight ahead at a target abeam, blind or not',
+            async () => {
+                for (const ship of [SKIFF, REAR_BLIND_HULL]) {
+                    const heading = await shotHeading('abeam', BOW_CHASER,
+                        ship);
+                    expect(heading).withContext(ship).toBeDefined();
+                    expect(heading!).withContext(ship)
+                        .toBeCloseTo(STRAIGHT_AHEAD, 9);
+                }
+            });
+
+        it('fires it straight ahead at a target astern of an unblind hull',
+            async () => {
+                const heading = await shotHeading('astern', BOW_CHASER);
+                expect(heading!).toBeCloseTo(STRAIGHT_AHEAD, 9);
+            });
+
+        it('still aims it at a target inside its arc', async () => {
+            for (const ship of [SKIFF, REAR_BLIND_HULL]) {
+                const heading = await shotHeading('offBow', BOW_CHASER,
+                    ship);
+                expect(heading).withContext(ship).toBeDefined();
+                // Aimed ~27° off the nose, toward the target.
+                expect(Math.abs(heading!)).withContext(ship)
+                    .toBeGreaterThan(0.3);
+                expect(Math.abs(heading!)).withContext(ship)
+                    .toBeLessThan(Math.PI / 4);
+            }
+        });
+
+        // The mirror for guidance 8 (straight out of the tail). On the
+        // rear-blind hull the turret's OWN sector is blind, so a target
+        // astern may not be aimed at either: the shot goes straight back.
+        // No stock or plug-in ship mounts a rear-quadrant turret on a
+        // rear-blind hull; this pins the one rule, not a data case.
+        it('fires a rear-quadrant turret straight astern when it may not '
+            + 'aim', async () => {
+                for (const [bearing, ship] of [
+                    ['ahead', SKIFF],
+                    ['abeam', REAR_BLIND_HULL],
+                    ['offQuarter', REAR_BLIND_HULL],
+                ] as Array<[Bearing, string]>) {
+                    const heading = await shotHeading(bearing, BOW_CHASER,
+                        ship, 'rearQuadrant');
+                    expect(heading).withContext(`${bearing} ${ship}`)
+                        .toBeDefined();
+                    expect(Math.abs(heading!))
+                        .withContext(`${bearing} ${ship}`)
+                        .toBeCloseTo(Math.PI, 9);
+                }
+                // The control: aimed at a target off its tail when it may.
+                const aimed = await shotHeading('offQuarter', BOW_CHASER,
+                    SKIFF, 'rearQuadrant');
+                expect(Math.abs(aimed!)).toBeLessThan(Math.PI - 0.3);
+                expect(Math.abs(aimed!)).toBeGreaterThan(3 * Math.PI / 4);
+            });
+
+        // Full turrets keep holding fire at a blind target (the specs
+        // above); this is the rule's other half, side by side.
+        it('leaves a full turret silent at the same blind bearing',
+            async () => {
+                expect(await shotHeading('astern', SENTRY_TURRET,
+                    REAR_BLIND_HULL)).toBeUndefined();
+            });
+    });
+
     describe('the reload clock', () => {
         // A refused turret must not eat its own cooldown: WeaponsSystem
         // only stamps `lastFired` when fireFromEntity hands back a shot,
@@ -290,6 +406,28 @@ describe('turret blind spots', () => {
                     .toEqual(blindSpots as never);
             }
         });
+
+        // The playtest report's railguns: front-quadrant turrets with no
+        // blind spots of their own. Stock, they ride on rear-blind hulls
+        // (the Aurora Cruisers, the Thunderforge), like the Fed
+        // Destroyer below.
+        it('reads the Fixed Railguns as unflagged front-quadrant turrets',
+            async () => {
+                const gameData = await getIntegrationGameData();
+                const expected: Array<[string, string]> = [
+                    ['nova:156', 'Fixed Railgun (100mm)'],
+                    ['nova:157', 'Fixed Railgun (150mm)'],
+                    ['nova:158', 'Fixed Railgun (200mm)'],
+                ];
+                for (const [id, name] of expected) {
+                    const weapon = await gameData.data.Weapon.get(id);
+                    expect(weapon.name).withContext(id).toEqual(name);
+                    expect((weapon as { guidance?: string }).guidance)
+                        .withContext(id).toEqual('frontQuadrant');
+                    expect(weapon.turretBlindSpots).withContext(id)
+                        .toEqual({ front: false, sides: false, rear: false });
+                }
+            });
 
         it('reads the shïp flags off the Fed Destroyer and the Shuttle',
             async () => {

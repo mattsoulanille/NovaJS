@@ -5,7 +5,8 @@ import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import {
     blindSpotBlocksFiring, blindSpotBlocksQuadrant, combineBlindSpots,
-    getQuadrant, isBlindQuadrant, isTurretedGuidance, Quadrant,
+    getQuadrant, isBlindQuadrant, isQuadrantGuidance, isTurretedGuidance,
+    Quadrant,
 } from './blind_spots.js';
 
 const ORIGIN = new Position(0, 0);
@@ -98,6 +99,24 @@ describe('isTurretedGuidance', () => {
     it('excludes point defense', () => {
         expect(isTurretedGuidance('pointDefense')).toBeFalse();
         expect(isTurretedGuidance('pointDefenseBeam')).toBeFalse();
+    });
+});
+
+// The guidance types that fire straight along their axis, rather than
+// holding fire, when there is nothing they may aim at.
+describe('isQuadrantGuidance', () => {
+    it('is exactly guidance 7 and 8', () => {
+        for (const guidance of ['frontQuadrant', 'rearQuadrant'] as
+            GuidanceType[]) {
+            expect(isQuadrantGuidance(guidance)).withContext(guidance)
+                .toBeTrue();
+        }
+        for (const guidance of ['turret', 'beamTurret', 'unguided', 'beam',
+            'guided', 'rocket', 'freefallBomb', 'bay', 'pointDefense',
+            'pointDefenseBeam'] as GuidanceType[]) {
+            expect(isQuadrantGuidance(guidance)).withContext(guidance)
+                .toBeFalse();
+        }
     });
 });
 

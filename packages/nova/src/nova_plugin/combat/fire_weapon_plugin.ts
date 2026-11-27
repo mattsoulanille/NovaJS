@@ -33,7 +33,9 @@ import {
     OwnerComponent, OwnerComponentType, SourceComponent, VulnerableToPD,
 } from '../ship/index.js';
 import { AnimationComponent } from '../core/index.js';
-import { blindSpotBlocksQuadrant, getQuadrant } from './blind_spots.js';
+import {
+    blindSpotBlocksQuadrant, getQuadrant, isQuadrantGuidance,
+} from './blind_spots.js';
 import { CloakActiveComponent, CloakScannerComponent, isTargetable } from '../ship/index.js';
 import { ExplodingComponent, ExplodingFinishedSystem } from '../ship/index.js';
 import { DisabledComponent } from '../ship/index.js';
@@ -550,28 +552,48 @@ export abstract class WeaponEntry {
             // Deliberately gated on WHERE THE TARGET IS and nothing
             // else — see blind_spots.ts. The check sits BEFORE the
             // aiming below rather than after it because the aimed angle
-            // is not what the original game tests: a rear-blind turret
-            // leading a target off its bow fires happily even when the
-            // lead angle swings behind the beam, and a rear-blind
-            // turret with a target astern stays silent even though it
-            // could point forward. Returning here rather than clearing
-            // `firing` also means the weapon burns no ammo and its
-            // reload clock does not restart (WeaponsSystem only stamps
-            // those when a shot comes back), so the turret is ready the
-            // instant the target crosses back into a live sector.
-            if (blindSpotBlocksQuadrant({
+            // is not what the rule tests: a rear-blind turret leading a
+            // target off its bow fires happily even when the lead angle
+            // swings behind the beam.
+            //
+            // What a blind target COSTS depends on the guidance, and the
+            // rule is one sentence: a target in a blind sector is no
+            // target at all, as far as aiming goes.
+            //  - A full turret (guidance 3/4) does not fire without a
+            //    target (the targetless return above), so it holds fire.
+            //    Returning here rather than clearing `firing` means the
+            //    weapon burns no ammo and its reload clock does not
+            //    restart (WeaponsSystem only stamps those when a shot
+            //    comes back), so the turret is ready the instant the
+            //    target crosses back into a live sector.
+            //  - A quadrant turret (guidance 7/8) "fires straight ahead
+            //    if no target" (EVN Bible wëap Guidance 7, ~:3100), so it
+            //    fires straight along its axis — out of the nose for 7,
+            //    out of the tail for 8 — exactly as it does at a target
+            //    merely outside its ±45° arc. Matthew's playtest report
+            //    (2026-11-26): "Railguns should still fire (straight
+            //    forward) if the target is not within their firing
+            //    arc." The stock Fixed Railguns (nova:156-158) are
+            //    guidance 7 and ride on rear-blind hulls (the Aurora
+            //    Cruisers nova:154/247-255, the Thunderforge nova:380, and
+            //    any rear-blind hull a pilot fits them to, such as the
+            //    Fed Destroyer nova:141), where a target astern used to
+            //    silence them outright. A blind spot stops a turret AIMING into
+            //    a sector; it never stopped a gun firing forward.
+            const blind = blindSpotBlocksQuadrant({
                 guidance: this.data.guidance,
                 weaponBlindSpots: this.data.turretBlindSpots,
                 shipBlindSpots: shipData?.turretBlindSpots,
                 targetQuadrant: quadrant,
-            })) {
+            });
+            if (blind && !isQuadrantGuidance(this.data.guidance)) {
                 return undefined;
             }
 
             if ((this.data.guidance === quadrant
                 || this.data.guidance === 'turret'
                 || this.data.guidance === 'beamTurret')
-                && targetMovement) {
+                && targetMovement && !blind) {
                 angle = this.guidance(exitPoint, movement, targetMovement);
             }
 

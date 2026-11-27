@@ -225,8 +225,10 @@ export const NpcFireControlSystem = new System({
             }
             // Turret blind spots are NOT filtered here, on purpose. This
             // system holds a trigger; it does not decide what leaves the
-            // barrel. A turret whose target is in a blind sector is
-            // refused by fireFromEntity (blind_spots.ts), which returns
+            // barrel. A full turret whose target is in a blind sector is
+            // refused by fireFromEntity (blind_spots.ts; a quadrant
+            // turret there fires straight along its axis instead, the
+            // same as the player's), which returns
             // without spawning a shot, without consuming ammo and
             // without restarting the reload clock — so latching `firing`
             // costs nothing and the turret opens up the instant the

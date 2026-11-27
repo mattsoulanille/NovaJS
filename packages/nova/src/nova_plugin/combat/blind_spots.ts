@@ -50,12 +50,15 @@ export function getQuadrant(source: Position, angle: Angle,
  * them), which visibly still shoot forward in the original game.
  *
  * The front/rear-quadrant turrets are included because they ARE
- * turrets ("Front-quadrant turret", "Rear-quadrant turret", ~:3100).
- * In practice the quadrant restriction dominates: across the stock
- * data and every installed plug-in there is no quadrant weapon whose
- * own quadrant is blind, and no ship with a front blind spot at all,
- * so including them changes no stock behaviour — it just keeps one
- * rule instead of two.
+ * turrets ("Front-quadrant turret", "Rear-quadrant turret", ~:3100):
+ * a blind spot stops them AIMING into that sector. It does not stop
+ * them firing: a quadrant turret with nothing it may aim at fires
+ * straight along its axis (see isQuadrantGuidance), so for them the
+ * predicate below only decides aimed shot versus straight shot.
+ * Across the stock data and every installed plug-in there is no
+ * quadrant weapon whose own quadrant is blind, and no ship with a
+ * front blind spot at all, so in practice a blind sector is always one
+ * the quadrant turret could not have aimed into anyway.
  *
  * Point defense is NOT included: those turrets pick their own victim
  * out of the world every frame rather than tracking the ship's target,
@@ -64,6 +67,21 @@ export function getQuadrant(source: Position, angle: Angle,
 export function isTurretedGuidance(guidance: GuidanceType): boolean {
     return guidance === 'turret' || guidance === 'beamTurret'
         || guidance === 'frontQuadrant' || guidance === 'rearQuadrant';
+}
+
+/**
+ * The quadrant turrets (wëap Guidance 7 and 8). Unlike a full turret,
+ * which holds fire without a target, these fire straight along their
+ * axis when there is nothing they may aim at: "fires straight ahead if
+ * no target" (EVN Bible wëap Guidance 7, ~:3100), and the rear-quadrant
+ * turret's mirror of it (straight out of the tail). "Nothing they may
+ * aim at" covers no target, a target outside the ±45° arc, and a target
+ * in a blind sector alike (Matthew, 2026-11-26: railguns "should still
+ * fire (straight forward) if the target is not within their firing
+ * arc").
+ */
+export function isQuadrantGuidance(guidance: GuidanceType): boolean {
+    return guidance === 'frontQuadrant' || guidance === 'rearQuadrant';
 }
 
 const NO_BLIND_SPOTS: TurretBlindSpots =
@@ -103,16 +121,21 @@ export function isBlindQuadrant(blindSpots: TurretBlindSpots,
 }
 
 /**
- * Whether a turret's blind spots stop it firing at this target.
+ * Whether a turret's blind spots stop it AIMING at this target.
  *
  * THE ODD PART, and the whole reason this is a separate predicate: the
- * original game gates on where the TARGET is, not on where the turret
- * is pointing. A turret whose target sits in a live sector fires at
+ * rule gates on where the TARGET is, not on where the turret is
+ * pointing. A turret whose target sits in a live sector fires at
  * whatever angle guidance asks for — including a lead angle that falls
  * inside a blind sector, and including a beam that sweeps through one.
- * A turret whose target sits in a blind sector does not fire at all,
- * even though it could point somewhere legal. So this is one test, on
- * one bearing, taken before the shot is aimed.
+ * So this is one test, on one bearing, taken before the shot is aimed.
+ * (A GUESS: docs/reference_experiments.md has no blind-spot run.)
+ *
+ * What `true` costs the shooter depends on its guidance
+ * (fireFromEntity): a full turret (3/4) holds fire, even though it
+ * could point somewhere legal; a quadrant turret (7/8) treats the
+ * target as no target and fires straight along its axis
+ * (isQuadrantGuidance).
  *
  * `targetPosition` undefined means there is nothing to test a bearing
  * against, so nothing is blocked: a targetless full turret has already
