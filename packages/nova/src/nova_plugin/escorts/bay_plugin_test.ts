@@ -850,7 +850,11 @@ describe('the bay launch kick (E8 wave 41)', () => {
             // About 100 px at 0.3 s and 400 at 1.3 s on the original.
             expect(at03).toBeGreaterThan(80);
             expect(at13).toBeGreaterThan(330);
-            expect((at13 - at03) / 30).toBeGreaterThan(9);
+            // The original read a steady 10. NovaJS bleeds the kick off
+            // like any overspeed, at OVERSPEED_DECAY_FACTOR x 54 px/s²
+            // (0.7 since the U4 wave-43 ruler; 0.5 before), about 9 px a
+            // frame on average over this second.
+            expect((at13 - at03) / 30).toBeGreaterThan(8.5);
         });
 
     it('brakes a Speed-200 kick about 18 px out (reference "Bay launch '
