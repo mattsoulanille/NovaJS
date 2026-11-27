@@ -28,19 +28,22 @@ import { getShipMovementPhysics, ShipPhysicsComponent } from '../ship/index.js';
 export const AFTERBURNER_FACTOR = 1.8;
 
 /**
- * The afterburner's own thrust, px/s²: an engaged burner accelerates the
- * ship at this rate (or the hull's own acceleration, if that is more),
- * NOT at the hull's acceleration times AFTERBURNER_FACTOR.
+ * The afterburner's thrust, as a multiple of the hull's own acceleration:
+ * an engaged burner accelerates the ship at base acceleration x this (NOT
+ * at AFTERBURNER_FACTOR, which is only the top speed's boost).
  *
- * MEASURED (reference "The afterburner with a ruler (U4), wave 43"): the
- * boost comes up in about 0.4-0.5 s on Kit Probe A (131 -> 237 px/s,
- * about 250 px/s², five times its own 54 px/s²) and about 1.5 s on Kit
- * Probe E (437 -> 790, about 230-250 px/s²). GUESS: one thrust for every
- * hull (both hulls have Accel 300, so "accel x 5" fits too; a third
- * hull's ramp would tell). Ionization cuts it like the hull's own
- * acceleration (not measured).
+ * MEASURED on a pad of moons and on wave 43's ruler (reference "The
+ * afterburner's thrust and the coast-down (U4 leftovers), wave 44"): the
+ * boost follows the hull's Accel, not its Speed (the two Accel-150 hulls
+ * at Speed 600 and 1,000 both boost at 125-148 px/s², the two Accel-300
+ * hulls at Speed 300 and 1,000 at 265-300, the Accel-600 one at about
+ * 600): 4.9-5.8 x the hull's own acceleration over five hulls. GUESS 5.4
+ * inside that scatter (whether the original's multiple is 5 or 6 is still
+ * open). Ionization cuts it like the hull's own acceleration (not
+ * measured). Was a flat 250 px/s² (wave 43, read off two Accel-300
+ * hulls).
  */
-export const AFTERBURNER_THRUST = 250;
+export const AFTERBURNER_THRUST_FACTOR = 5.4;
 
 /**
  * What strict play multiplies the player's top speed by. Measured on the
@@ -65,14 +68,16 @@ export const STRICT_PLAY_SPEED_FACTOR = 2 / 3;
  * decay is scaled by the ship's own acceleration, the one number in the
  * data that says how quickly these engines change this hull's speed.
  *
- * MEASURED with a ruler (reference "The afterburner with a ruler (U4),
- * wave 43"): with Up held after the burner's release the ship comes back
- * to its top speed at about 0.6-0.8 of the hull's own acceleration (Kit
- * Probe A 44, D 30-35, E 37 px/s² against 54 for Accel 300; B about 19
- * against 27 for Accel 150). GUESS 0.7. Was 0.5 (waves 39-40's "about
- * half", read off the biased star field), and 1 before that.
+ * MEASURED (reference "The afterburner's thrust and the coast-down (U4
+ * leftovers), wave 44"): with Up held after the burner's release the ship
+ * comes back to its top speed at a CONSTANT 0.71-0.87 of the hull's own
+ * acceleration over six hulls (Kit Probe B's whole 10.5 s coast a
+ * straight line at 20 px/s² against its 28; with both keys released the
+ * same). 0.8, the section's figure. Was 0.7 (wave 43's ruler), 0.5 (waves
+ * 39-40's "about half", read off the biased star field), and 1 before
+ * that.
  */
-export const OVERSPEED_DECAY_FACTOR = 0.7;
+export const OVERSPEED_DECAY_FACTOR = 0.8;
 
 /**
  * The speed cap to enforce this tick for a ship whose real cap is
@@ -156,11 +161,10 @@ export const EffectiveMovementPhysicsSystem = new System({
             base.maxVelocity * strict * ion.maxVelocity * boost,
             movementState.velocity.length,
             base.acceleration * OVERSPEED_DECAY_FACTOR, time.delta_s);
-        // The burner's own thrust, not the hull's times the factor
-        // (reference U4 wave 43: about 0.5 s to the boosted speed).
-        movementPhysics.acceleration = ion.acceleration * (afterburning
-            ? Math.max(base.acceleration, AFTERBURNER_THRUST)
-            : base.acceleration);
+        // The burner thrusts at a multiple of the hull's own
+        // acceleration (reference U4 wave 44: it follows Accel, not Speed).
+        movementPhysics.acceleration = ion.acceleration * base.acceleration
+            * (afterburning ? AFTERBURNER_THRUST_FACTOR : 1);
         movementPhysics.turnRate = base.turnRate * ion.turnRate;
         movementPhysics.movementType = base.movementType;
 
