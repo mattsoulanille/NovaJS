@@ -28,6 +28,9 @@ import { GameDataAggregator } from "./src/server/parsing/game_data_aggregator.js
 import { NovaParseWorkerApi } from "./src/server/parsing/nova_parse_worker.js";
 import { setupRoutes } from "./src/server/setup_routes.js";
 import { registerVersionRoute } from "./src/server/version_route.js";
+import {
+    perfStatsSinkFromEnv, registerPerfStatsRoute,
+} from "./src/server/perf_stats_route.js";
 import { BUILD_VERSION } from "./src/common/generated_build_version.js";
 
 const Settings = t.partial({
@@ -77,6 +80,14 @@ console.log(`wire send policy: ${clientConfig.wireSendPolicy} `
 // the websocket admission check in SocketChannelServer, which is given the
 // same stamp.
 registerVersionRoute(app, BUILD_VERSION);
+
+// Every player's performance stats (docs/perf_stats.md): POST /perf_stats,
+// validated and rate-limited, to perf_stats/<date>.jsonl locally or as
+// structured stdout lines on Cloud Run. Before setupRoutes' catch-all too.
+const perfStats = perfStatsSinkFromEnv(process.env,
+    path.join(__dirname, "../perf_stats"));
+registerPerfStatsRoute(app, { sink: perfStats.sink });
+console.log(`perf stats: ${perfStats.description}`);
 
 // The title screen streams the original's theme, `Nova Music.mp3`, straight
 // from the game data. It's a plain ~9 MB mp3 (not a `snd` resource), so it

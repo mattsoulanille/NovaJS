@@ -90,6 +90,8 @@ traces/
 # Claude Code local settings
 .claude/settings.local.json
 desyncs/
+# Performance telemetry samples (packages/nova/src/server/perf_stats_route.ts)
+perf_stats/
 
 # Written by packages/nova/scripts/generate_build_version.mjs at the start
 # of every build. It carries the build stamp the version handshake
