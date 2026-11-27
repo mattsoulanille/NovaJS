@@ -10708,6 +10708,16 @@ spaceport. Specs: `N/spaceport/landing_offers_test.ts` on the synthetic
 Coldharbour jobs (mïsn 143-146). The map's visibility (fix 4) is NOT
 changed: it waits on a ruling.
 
+**Ruled 2026-11-27 (Matthew, #324: "Show the live state", no setting).**
+Finding 4 stays a deliberate departure: the map shows the live galaxy
+right after an accept. The BBS's `m` map now also passes the landing's
+working bits and records itself (`MissionBoard.openMap`), so its graph, its
+marks, its Legal Status and its red dots all read the one working copy
+even for a board that opened a transaction of its own. Spec:
+`N/spaceport/docked_player_data_test.ts` (a stacked Ossory Shoal copy that
+the charter's b107 reveals, the stock copy it hides, and the charter's mark
+on the revealed copy). Listed in `docs/novajs_enhancements.md`.
+
 Confidence: high for 1-3 (two controls, three runs, every step shot),
 high for 4 (wave 10's three runs plus this one, now with the jump), medium
 for 5 (one record change), high for 6.

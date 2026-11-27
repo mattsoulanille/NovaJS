@@ -1,7 +1,7 @@
 import 'jasmine';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { getDefaultGovtData } from 'novadatainterface/govt_data';
-import { getDefaultSystemData } from 'novadatainterface/system_data';
+import { getDefaultSystemData, SystemData } from 'novadatainterface/system_data';
 import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
 import * as PIXI from 'pixi.js';
@@ -92,9 +92,10 @@ describe('docked readers of the player\'s data, mid-visit', () => {
      * and a display world holding that handle — where the starmap plugin
      * and the status bar find the docked player.
      */
-    async function landedAtColdharbour() {
+    async function landedAtColdharbour(
+        data?: SimulationGameDataInterface) {
         resetOfferRolls();
-        const gameData = await getSyntheticGameData();
+        const gameData = data ?? await getSyntheticGameData();
         const universe = MissionUniverse.shared(gameData);
         await universe.load();
         const shipData = await gameData.data.Ship.get(SYNTHETIC.ships.skiff);
@@ -283,10 +284,14 @@ describe('docked readers of the player\'s data, mid-visit', () => {
             acceptListing(board, CHARTER);
             await (board as unknown as BoardInternals).openMap();
             expect(mapOpens.length).toBe(1);
+            // The BBS hands the map its working bits and records (#324,
+            // "Show the live state"): the very objects the accept moved.
+            expect(mapOpens[0].playerBits).toBe(landed.transaction.state.bits);
+            expect(mapOpens[0].legalRecords)
+                .toBe(landed.transaction.state.records);
 
-            // The BBS passes no bits of its own: the map asks the plugin's
-            // lookup, as wired in StarmapPlugin. A galaxy with one system
-            // hidden behind b107 stands in for a plug-in's story system.
+            // A galaxy with one system hidden behind b107 stands in for a
+            // plug-in's story system.
             const HOME = 'nova:128';
             const STORY = 'nova:900';
             const galaxy = new MockGameData();
@@ -318,6 +323,124 @@ describe('docked readers of the player\'s data, mid-visit', () => {
             expect(graph?.hasSystem(STORY)).toBeTrue();
             starmap.dismiss();
             await shown;
+            await leave(board, closed);
+        });
+
+    /**
+     * The synthetic data with Ossory Shoal STACKED the way a plug-in
+     * stacks a story system (stock example: nova:308 "!b995" / nova:765
+     * "b995"): the scenario's own copy now `!b107`, and a second copy at
+     * the same place, listing the same stellars (Halden Refuge, the
+     * charter run's destination), `b107`. The charter's OnAccept sets
+     * b107, so an accept HIDES one copy and REVEALS the other, and the
+     * charter's orange mark must follow it to the revealed copy.
+     */
+    const OSSORY = SYNTHETIC.systems.ossory;
+    const OSSORY_AFTER = 'nova:140';
+    async function stackedOssory(): Promise<SimulationGameDataInterface> {
+        const base = await getSyntheticGameData();
+        const ossory = await base.data.System.get(OSSORY);
+        const overrides = new Map<string, SystemData>([
+            [OSSORY, { ...ossory, visibility: `!b${BITS.charterSigned}` }],
+            [OSSORY_AFTER, {
+                ...ossory, id: OSSORY_AFTER,
+                visibility: `b${BITS.charterSigned}`,
+            }],
+        ]);
+        const bound = (target: object, prop: string | symbol) => {
+            const value = Reflect.get(target, prop, target);
+            return typeof value === 'function' ? value.bind(target) : value;
+        };
+        const system = new Proxy(base.data.System, {
+            get(target, prop) {
+                if (prop === 'get') {
+                    return async (id: string) =>
+                        overrides.get(id) ?? target.get(id);
+                }
+                if (prop === 'getCached') {
+                    return (id: string) =>
+                        overrides.get(id) ?? target.getCached(id);
+                }
+                return bound(target, prop);
+            },
+        });
+        const data = new Proxy(base.data, {
+            get: (target, prop) =>
+                prop === 'System' ? system : bound(target, prop),
+        });
+        const ids = base.ids.then(ids =>
+            ({ ...ids, System: [...ids.System, OSSORY_AFTER] }));
+        return new Proxy(base, {
+            get(target, prop) {
+                if (prop === 'data') {
+                    return data;
+                }
+                if (prop === 'ids') {
+                    return ids;
+                }
+                return bound(target, prop);
+            },
+        });
+    }
+
+    it('shows the LIVE galaxy on the map opened from the BBS after an '
+        + 'accept: the system the bit reveals is drawn, the one it hides '
+        + 'is gone, and the new mission\'s mark lands on the revealed copy '
+        + '(#324, "Show the live state")', async () => {
+            const gameData = await stackedOssory();
+            const landed = await landedAtColdharbour(gameData);
+            const here = landed.universe.systemIdOfPlanet(COLDHARBOUR,
+                new Set());
+            expect(here).toBeDefined();
+            expect(here).not.toBe(OSSORY);
+            const { board, closed, mapOpens } = await openBoard(landed);
+            const internals = board as unknown as BoardInternals;
+
+            // The map the way StarmapPlugin builds it, except that its own
+            // lookup here reads the HELD HULL, the stale copy, so only
+            // what the BBS hands over can make it live.
+            const hullBits = () =>
+                landed.hull.components.get(ControlBitsComponent)!;
+            const starmap = new Starmap(displayAssets(), gameData, here!,
+                new Subject<ControlEvent>(), hullBits);
+            await starmap.buildPromise;
+            const graphAfterOpen = async (options: OpenStarmapOptions) => {
+                starmap.openOptions = options;
+                const shown = starmap.show([]);
+                await new Promise(resolve => setTimeout(resolve, 0));
+                const graph = (starmap as unknown as {
+                    systemGraph?: { hasSystem(id: string): boolean },
+                }).systemGraph!;
+                starmap.dismiss();
+                await shown;
+                return graph;
+            };
+
+            // Before the accept: the scenario's own copy.
+            await internals.openMap();
+            const before = await graphAfterOpen(mapOpens[0]);
+            expect(before.hasSystem(OSSORY)).toBeTrue();
+            expect(before.hasSystem(OSSORY_AFTER)).toBeFalse();
+
+            // Accept the charter (OnAccept b107) and open the map again
+            // without leaving the BBS.
+            acceptListing(board, CHARTER);
+            expect(listed(board)).not.toContain(CHARTER);
+            expect(hullBits().has(BITS.charterSigned))
+                .withContext('the hull is still the stale copy').toBeFalse();
+            await internals.openMap();
+            expect(mapOpens.length).toBe(2);
+            const after = await graphAfterOpen(mapOpens[1]);
+            expect(after.hasSystem(OSSORY_AFTER))
+                .withContext('revealed by the accept').toBeTrue();
+            expect(after.hasSystem(OSSORY))
+                .withContext('hidden by the accept').toBeFalse();
+            // The orange mark resolved with the same bits, onto the copy
+            // the map draws (placeMarkIcon skips a system not on the map).
+            const charterMark = mapOpens[1].missionMarks
+                ?.find(mark => mark.missionId === CHARTER);
+            expect(charterMark?.systemId).toBe(OSSORY_AFTER);
+            expect(after.hasSystem(charterMark!.systemId)).toBeTrue();
             await leave(board, closed);
         });
 

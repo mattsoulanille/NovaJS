@@ -270,6 +270,20 @@ export class MissionBoard extends Menu<Entity> {
         }
         // The docked entity is out of the display world, so the active
         // missions' orange marks ride along with the green viewed ones.
+        //
+        // LIVE (#324, Matthew's ruling 2026-11-27, "Show the live state"):
+        // the map is filtered with the SAME working bits the marks were
+        // resolved with — this session's, which an accept in this visit
+        // has already moved — and its Legal Status and red dots read the
+        // same working records. The held hull is only written when the
+        // BBS closes, so it would still show the galaxy of before the
+        // accept, and a mark resolved to a stacked copy the old bits
+        // hide would be dropped. (The original keeps the map stale until
+        // the next landing or jump, reference "#324 mission BBS after an
+        // accept, wave 21"; NovaJS deliberately does not.) The plugin's
+        // own docked lookup reads the same working copy when the landing
+        // is attached to the docked handle; passing it here also covers
+        // a board that opened a transaction of its own.
         const session = this.session;
         const active = session
             ? missionMapMarks(session.state.missions.values(),
@@ -280,8 +294,10 @@ export class MissionBoard extends Menu<Entity> {
         await this.openStarmap({
             viewedMarks: this.viewedMarks(),
             missionMarks: active,
-            date: this.session
-                ? dateFromDayNumber(this.session.currentDay) : undefined,
+            date: session
+                ? dateFromDayNumber(session.currentDay) : undefined,
+            playerBits: session?.state.bits,
+            legalRecords: session?.state.records,
         });
     }
 
