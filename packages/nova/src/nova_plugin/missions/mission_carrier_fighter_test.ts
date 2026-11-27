@@ -325,9 +325,9 @@ describe('a mission carrier\'s bay fighters', () => {
      * PlayerEscort-marked fighters, precisely the mark these no longer
      * carry — treats it like every other orphaned wing: a fighter keeps
      * the fight it was in (reference CD wave 45: a dead carrier's Viper
-     * fought on), and once that is over it becomes an ordinary NPC
-     * warship (escort command and formation dropped) whose departure is
-     * already due. At no point does the player claim it.
+     * fought on), and once that is over it departs as an ordinary NPC
+     * (escort command and formation dropped; reference CD wave 46: the
+     * idle ones jumped out). At no point does the player claim it.
      */
     it('retires them like any orphaned NPC wing when the carrier goes',
         async () => {
@@ -348,13 +348,13 @@ describe('a mission carrier\'s bay fighters', () => {
                     .withContext(`${uuid} claimed by the player on the way out`)
                     .toBeFalse();
             }
-            // The fight ends: each becomes an ordinary NPC.
+            // The fight ends: each departs as an ordinary NPC.
             world.entities.delete(ENEMY);
             await stepWorld(world, 3);
             for (const [uuid, fighter] of fighters(world)) {
-                expect(fighter.components.get(NpcComponent)?.departAt)
-                    .withContext(`${uuid} an NPC, departure due`)
-                    .toBe(0);
+                expect(fighter.components.get(NpcComponent)?.mode)
+                    .withContext(`${uuid} an NPC, departing`)
+                    .toBe('depart');
                 expect(fighter.components.has(EscortCommandComponent))
                     .withContext(`${uuid} still under escort command`)
                     .toBeFalse();

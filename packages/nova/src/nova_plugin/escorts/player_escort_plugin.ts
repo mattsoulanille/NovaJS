@@ -284,8 +284,8 @@ const carriedFields = carriedEscortFields;
  * follow from that one sentence: such fighters are never marked, so they
  * are never swept through a jump or a gate, never on the payroll, never in
  * fleet cargo or escort hail management; and when the mission carrier
- * despawns they orphan like any NPC carrier's wing (finish their fight,
- * then become ordinary NPCs that leave once they have none) under
+ * despawns they orphan like any NPC carrier's wing (finish any fight,
+ * leave by the ordinary NPC jump-out) under
  * OrphanedBayFighterSystem (bay_plugin.ts), which exempts only
  * PlayerEscort-marked fighters — precisely the mark they no longer carry.
  *

@@ -583,15 +583,21 @@ const CollectableEscortAI = new System({
 });
 
 /**
- * An NPC carrier's fighters outlive it: they finish their fight, then
- * carry on as ordinary NPCs.
+ * An NPC carrier's fighters outlive it: one in a fight finishes it, the
+ * rest (and it, once done) leave by the ordinary NPC jump-out.
  *
  * MEASURED (reference "A carrier's fighters when it dies (the hub's
  * question), wave 45"): twelve seconds after a stock Fed Carrier blew up,
  * two of its fighters were still targetable and a Fed Viper went on
  * attacking the player for 45 s more, its shield recharging. Nothing
- * like "every fighter gone in the same second". Was: an orphan turned at
- * once into a plain NPC in 'depart' mode, breaking off and jumping out.
+ * like "every fighter gone in the same second". And reference "What
+ * becomes of a dead carrier's fighters (CD leftover), wave 46": the ones
+ * NOT fighting flew straight out, paused and jumped out 12-31 s after the
+ * death (an ordinary departure; none vanished, none landed), even the
+ * always-hostile carrier's fighters right beside the hostile player.
+ * Was (4f3975ce): an idle orphan became an AI 3 warship with its
+ * departure due, which hunted any hostile in reach first; before that,
+ * every orphan departed at once, the Viper included.
  *
  * WHY SOMETHING MUST HAPPEN AT ALL: a bay fighter is steered entirely by
  * escort machinery that its carrier drives (NpcWingCommandSystem mirrors
@@ -606,27 +612,30 @@ const CollectableEscortAI = new System({
  *    nothing is touched, and EscortCommandBehaviorSystem flies the attack
  *    as before (it needs no leader for that). The fight ends when the
  *    victim is destroyed or leaves the system (the order reverts to
- *    'formation'), and the next tick lands in the case below.
+ *    'formation'), and the next tick lands in the case below (GUESS: the
+ *    Viper was not watched past its fight; it departs like the idle ones).
  *  - Any other orphan (between victims, in formation, flying home to
- *    dock) becomes an ordinary NPC warship of its carrier's government
- *    (it flies its carrier's flag already: BayWeaponEntry.fire): escort
- *    command, formation and the return-to-bay flow dropped, NpcComponent
- *    AI 3 (GUESS: the warship brain; the hull's own InherentAI is not
- *    read) with `departAt` already due (0). So it hunts any hostile in
- *    reach like any warship and leaves by the ordinary jump-out only
- *    when it has no fight left (GUESS: what removed the dead carrier's
- *    other fighters within 12-20 s was not read; a blast, a jump-out and
- *    a landing all fit).
+ *    dock) DEPARTS AT ONCE: escort command, formation, the return-to-bay
+ *    flow and its target dropped, it becomes an NPC of its carrier's
+ *    government (it flies its carrier's flag already:
+ *    BayWeaponEntry.fire) in mode 'depart', NpcSteeringSystem's ordinary
+ *    jump-out: straight out past the no-jump zone, then the jump. A
+ *    departing NPC decides nothing (NpcDecisionSystem returns on
+ *    'depart', and only it engages), so it neither hunts a hostile in
+ *    reach nor turns on one that shoots it. AI 3 (GUESS: the warship
+ *    brain; nothing reads it while departing). No delay is added (GUESS:
+ *    cd_b's first fighter lingered about 8 s by the player before its
+ *    run out; the 12-31 s are the run out, the pause and the jump), and
+ *    cd_b's one craft parked 1,250 px out is not modelled.
  *  - A DISABLED orphan cannot jump and stays, like any disabled ship.
  *  - No refund: with the carrier dead there is no hangar to dock in.
  *
- * DETERMINISM: no PRNG draw and no clock read here. `departAt` is set
- * explicitly, so NpcDecisionSystem skips its `rollDepartureTime` draw
- * (a draw whose count depended on how many carriers happened to die
- * would shift every later draw), and with the departure due the warship
- * branch leaves before its patrol-waypoint draw. Whatever the fighter
- * then does in a fight (a gövt 0x0010 retreat draw) is the ordinary NPC
- * brain's, the same on every peer.
+ * DETERMINISM: no PRNG draw and no clock read here. 'depart' is set
+ * explicitly, so NpcDecisionSystem returns at its `mode === 'depart'`
+ * guard before its `rollDepartureTime` draw (a draw whose count depended
+ * on how many carriers happened to die would shift every later draw);
+ * `departAt` 0 is set as well, so nothing that clears the mode later
+ * draws one either.
  *
  * PLAYER-LAUNCHED FIGHTERS ARE EXEMPT: PlayerEscortComponent is stamped
  * whenever the escort chain tops out at a player ship and is NEVER
@@ -666,7 +675,13 @@ export const OrphanedBayFighterSystem = new System({
         // would keep steering it at a carrier that is gone.
         entity.components.delete(ReturnComponent);
         entity.components.delete(CollectableEscortComponent);
-        entity.components.set(NpcComponent, { aiType: 3, departAt: 0 });
+        // Off by the ordinary jump-out, ignoring hostiles (CD wave 46).
+        const target = entity.components.get(TargetComponent);
+        if (target) {
+            target.target = undefined;
+        }
+        entity.components.set(NpcComponent,
+            { aiType: 3, mode: 'depart', departAt: 0 });
     },
     before: [NpcSteeringSystem],
     // #237 pin (shared: *): BayPlugin's registration order.

@@ -455,6 +455,48 @@ describe('NPC carriers launching fighters', () => {
             expect(fighter.components.has(EscortCommandComponent)).toBeFalse();
             expect(fighter.components.has(FormationComponent)).toBeFalse();
         });
+
+    /**
+     * Reference "What becomes of a dead carrier's fighters (CD leftover),
+     * wave 46": the always-hostile carrier's fighters that were NOT
+     * fighting flew out and jumped out 12-31 s after its death, one with
+     * the hostile player right beside it. An idle orphan departs at once
+     * and does not turn on a hostile in reach (main hunted it first).
+     */
+    it('an idle orphan departs at once and ignores a hostile beside it',
+        async () => {
+            const { world, carrier, addEnemy } = await makeWorld();
+            const enemy = await addEnemy('enemy');
+            thinkNow(carrier);
+            await stepWorld(world, 4);
+            const [fighterUuid, fighter] = fighters(world)[0];
+            // Idle: back in formation, no fight on, the hostile alongside.
+            fighter.components.set(EscortCommandComponent,
+                { command: 'formation' });
+            fighter.components.get(TargetComponent)!.target = undefined;
+            const at = fighter.components.get(MovementStateComponent)!
+                .position;
+            enemy.components.get(MovementStateComponent)!.position =
+                new Position(at.x + 60, at.y);
+
+            world.entities.delete(CARRIER);
+            await stepWorld(world, 1);
+            expect(fighter.components.get(NpcComponent)).toEqual(
+                jasmine.objectContaining(
+                    { aiType: 3, departAt: 0, mode: 'depart' }));
+
+            // Five seconds on: still on its way out, never engaging.
+            for (let i = 0; i < 300; i++) {
+                await stepWorld(world, 1);
+                if (!world.entities.has(fighterUuid)) {
+                    break; // Jumped out.
+                }
+                expect(fighter.components.get(NpcComponent)!.mode)
+                    .toBe('depart');
+                expect(fighter.components.get(TargetComponent)?.target)
+                    .toBeUndefined();
+            }
+        });
 });
 
 describe('player-launched fighters (regression)', () => {
