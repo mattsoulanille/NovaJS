@@ -279,10 +279,17 @@ function deriveShipVulnerability(shipData: ShipData | undefined) {
         // 'return_escorts' tag a carrier needs is re-added every step by
         // bay_plugin's ReturnVulnerabilitySystem, which exists precisely
         // because this set is rebuilt whenever the ship is.
+        //
+        // A planet-type hull (shïp Flags 0x0400, ship_parse's
+        // 'planetType') is hit by planet-type fire alone, not by 'normal'
+        // or point defense (reference "Planet-type weapons against ships
+        // (E4), wave 41"); it still scoops debris.
         vulnerableTo: new Set<unknown>(
-            shipData?.vulnerableTo.includes('pointDefense')
-                ? ['normal', 'debris', 'pointDefense']
-                : ['normal', 'debris']),
+            shipData?.vulnerableTo.includes('planetType')
+                ? ['planetType', 'debris']
+                : shipData?.vulnerableTo.includes('pointDefense')
+                    ? ['normal', 'debris', 'pointDefense']
+                    : ['normal', 'debris']),
     };
 }
 

@@ -115,6 +115,12 @@ class ProjectileWeaponEntry extends WeaponEntry {
         if (data.guidance === 'pointDefense') {
             hitTypes = new Set(['pointDefense']);
         }
+        // wëap Flags2 0x0400: a planet-type shot hits planet-type ships
+        // only (and they nothing else); its blast carries the same tag
+        // (reference "Planet-type weapons against ships (E4), wave 41").
+        if (data.planetType) {
+            hitTypes = new Set(['planetType']);
+        }
 
         // Projectiles are built fresh for every shot. Pooling entity
         // objects would leak state between timelines: the pool is not

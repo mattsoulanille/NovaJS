@@ -99,6 +99,11 @@ class BeamWeaponEntry extends WeaponEntry {
         if (data.guidance === 'pointDefenseBeam') {
             this.hitTypes = new Set(['pointDefense']);
         }
+        // wëap Flags2 0x0400 (E4 wave 41; beams GUESSED like the turret
+        // measured): planet-type ships only.
+        if (data.planetType) {
+            this.hitTypes = new Set(['planetType']);
+        }
     }
 
     protected override guidance(exitPoint: Position, _movement: MovementState,

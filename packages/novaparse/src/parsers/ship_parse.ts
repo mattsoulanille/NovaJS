@@ -458,8 +458,16 @@ export async function ShipParse(ship: ShipResource,
         // Viper, Fed Viper, Lightning, Thunderhead, Firebird, Shuttle.
         // The capital ships (Fed Carrier, Fed Destroyer, IDA Frigate,
         // Leviathan) do not, and so cannot be touched by point defense.
-        vulnerableTo: (ship.flags2N & 0x0008)
-            ? ["normal", "pointDefense"] : ["normal"],
+        //
+        // shïp Flags 0x0400, "can only be hit by planet-type weapons"
+        // (EVN Bible), replaces all of that with "planetType": MEASURED
+        // (reference "Planet-type weapons against ships (E4), wave 41") a
+        // plain turret did nothing to such a hull and a planet-type one
+        // shields-downed it, while planet-type fire did nothing to a
+        // plain hull.
+        vulnerableTo: (ship.flagsN & 0x0400) ? ["planetType"]
+            : (ship.flags2N & 0x0008)
+                ? ["normal", "pointDefense"] : ["normal"],
         // Flag sets as JSON-safe hex strings, namespaced per plug-in (so
         // they may run past 64 bits).
         contribute: "0x" + resolveResourceFlags(flagMap, ship, ship.contribute).toString(16),

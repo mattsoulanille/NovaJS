@@ -76,6 +76,15 @@ describe("ShipParse", () => {
         expect((await parse({ flags2N: 0x0008 })).untargetable).toBe(false);
     });
 
+    it("reads Flags 0x0400 as hit by planet-type weapons alone (E4 wave 41)",
+        async () => {
+            expect((await parse({ flagsN: 0x0400 })).vulnerableTo)
+                .toEqual(["planetType"]);
+            expect((await parse({ flagsN: 0x0400, flags2N: 0x0008 }))
+                .vulnerableTo).toEqual(["planetType"]);
+            expect((await parse({})).vulnerableTo).toEqual(["normal"]);
+        });
+
     describe("Holds (EVN Bible ~:2346)", () => {
         it("keeps a positive hold as written and allows mass expansions",
             async () => {

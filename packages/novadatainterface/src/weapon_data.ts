@@ -3,7 +3,14 @@ import { getDefaultTurretBlindSpots, TurretBlindSpots } from "./blind_spots.js";
 import { getDefaultShipData } from "./ship_data.js";
 import { getDefaultSpaceObjectData, SpaceObjectData } from "./space_object_data.js";
 
-export type DamageType = "normal" | "pointDefense" | "planetBuster";
+/**
+ * A collision tag a hitter carries / a target is vulnerable to.
+ * "planetType": wëap Flags2 0x0400 fire and shïp Flags 0x0400 hulls, which
+ * only hit each other (reference "Planet-type weapons against ships (E4),
+ * wave 41").
+ */
+export type DamageType = "normal" | "pointDefense" | "planetBuster"
+    | "planetType";
 
 
 export type ProjectileGuidanceType =
