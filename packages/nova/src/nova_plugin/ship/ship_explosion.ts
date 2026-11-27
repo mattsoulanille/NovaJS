@@ -200,9 +200,14 @@ export const FINAL_FIREBALL_MAX_RADIUS = 200;
  * Knockback ("impact strength", per the Bible's Mass entry) per ton.
  * KnockbackSystem divides by the VICTIM's mass, which is the other half
  * of the Bible's rule (wëap Impact is "inversely proportional to the
- * ship's mass"), so this constant only fixes the scale: a Leviathan's
- * 500 shoves a 98-ton Starbridge at ~25 px/s, a firm push rather than a
- * launch. TUNABLE.
+ * ship's mass"), so this constant only fixes the scale. KnockbackSystem
+ * applies the weapon law to it (KNOCKBACK_PER_IMPACT x impact / mass,
+ * death_plugin.ts; measured 30 for wëap Impact, reference "Knockback (the
+ * hub's KNOCKBACK), wave 46"), so a 10,000-ton wreck's 500 shoves a
+ * 98-ton Starbridge at ~153 px/s (capped at its top speed; ~25 px/s at
+ * the old x 5). GUESS: the explosion's push was never measured; this
+ * per-ton value was set against the x 5 law and kept as it was when the
+ * law went to x 30. TUNABLE.
  */
 export const SHIP_EXPLOSION_KNOCKBACK_PER_TON = 0.05;
 

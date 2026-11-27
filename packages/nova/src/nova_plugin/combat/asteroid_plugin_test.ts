@@ -24,7 +24,7 @@ import { TumbleAnimationComponent } from '../core/index.js';
 import { CargoComponent } from '../ship/index.js';
 import { BlastDamageComponent } from '../ship/index.js';
 import { CollisionEvent } from '../core/index.js';
-import { DamagedEvent } from '../ship/index.js';
+import { DamagedEvent, KNOCKBACK_PER_IMPACT } from '../ship/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { IdFactory, IdFactoryResource } from '../core/index.js';
 import { OutfitsStateComponent } from '../ship/index.js';
@@ -347,7 +347,7 @@ describe('AsteroidDamageSystem', () => {
     it('caps a huge knockback impulse, preserving its direction', async () => {
         const world = await makeBreakupWorld(5);
         const direction = new Angle(1);
-        // impact 1e6 on a mass-300 röid: 1e6 * 5 / 300 ~ 16667 px/s.
+        // impact 1e6 on a mass-300 röid: 1e6 * 30 / 300 = 100,000 px/s.
         knock(world, 1e6, direction);
 
         const velocity = rockVelocity(world);
@@ -373,9 +373,12 @@ describe('AsteroidDamageSystem', () => {
     it('leaves ordinary knockback alone', async () => {
         const world = await makeBreakupWorld(5);
         // A Hellhound Missile's impact (100) against the Big Test Rock
-        // (mass 300) is 100 * 5 / 300 px/s, nowhere near the cap.
+        // (mass 300) is 100 x 30 / 300 = 10 px/s (KNOCKBACK_PER_IMPACT,
+        // wave 46), nowhere near the cap.
         knock(world, 100);
-        expect(rockVelocity(world).length).toBeCloseTo(100 * 5 / 300, 9);
+        expect(KNOCKBACK_PER_IMPACT).toEqual(30);
+        expect(rockVelocity(world).length)
+            .toBeCloseTo(100 * KNOCKBACK_PER_IMPACT / 300, 9);
     });
 
     it('shoves the rock radially away from a blast', async () => {
@@ -387,7 +390,7 @@ describe('AsteroidDamageSystem', () => {
         boom(world, 100, new Position(10, -80), new Angle(Math.PI / 2));
 
         const velocity = rockVelocity(world);
-        const speed = 100 * 5 / 300; // impact 100 on a mass-300 röid.
+        const speed = 100 * KNOCKBACK_PER_IMPACT / 300; // impact 100 on a mass-300 röid.
         expect(velocity.x).toBeCloseTo(0, 9);
         expect(velocity.y).toBeCloseTo(speed, 9);
     });
@@ -425,7 +428,7 @@ describe('AsteroidDamageSystem', () => {
         knock(world, 100, new Angle(Math.PI / 2));
 
         const velocity = rockVelocity(world);
-        const speed = 100 * 5 / 300;
+        const speed = 100 * KNOCKBACK_PER_IMPACT / 300;
         expect(velocity.x).toBeCloseTo(speed, 9);
         expect(velocity.y).toBeCloseTo(0, 9);
     });

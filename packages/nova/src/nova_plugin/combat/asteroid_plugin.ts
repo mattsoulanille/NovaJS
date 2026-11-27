@@ -27,7 +27,9 @@ import { CargoComponent, cargoUsed } from '../ship/index.js';
 import { loadWithRetries } from '../core/index.js';
 import { CollisionEvent, CollisionHitterComponent, CollisionVulnerabilityComponent } from '../core/index.js';
 import { CompositeHull, HitboxHullComponent, HurtboxHullComponent, UpdateHitboxHullSystem, UpdateHurtboxHullSystem } from '../core/index.js';
-import { DamagedEvent, knockbackDirection } from '../ship/index.js';
+import {
+    DamagedEvent, KNOCKBACK_PER_IMPACT, knockbackDirection,
+} from '../ship/index.js';
 import { registerEntityDeriver } from '../core/index.js';
 import {
     AsteroidComponent, AsteroidType, DebrisComponent, DebrisType,
@@ -90,7 +92,8 @@ const ASTEROID_MAX_SPEED = 50;
  * the worst case, because BeamDamageSystem re-emits DamagedEvent every
  * step the beam dwells on its target: a Thunderhead Lance (wëap
  * nova:166, impact 50) held on a Dust Small (röid nova:136, mass 100)
- * adds 50 * 30 * 5 / 100 = 75 px/s for every second of contact, with
+ * adds 50 * 30 * 30 / 100 = 450 px/s for every second of contact
+ * (KNOCKBACK_PER_IMPACT, ship/death_plugin.ts; 75 at the old x 5), with
  * nothing to bound it. Fragments inherit their parent's velocity, so a
  * runaway rock also breaks into runaway fragments.
  *
@@ -571,10 +574,12 @@ export const AsteroidDamageSystem = new System({
                 // Capped: nothing else bounds an asteroid's speed (no
                 // MovementPhysicsComponent, no drag), so without this
                 // the impulses accumulate without limit. See
-                // MAX_ASTEROID_SPEED.
+                // MAX_ASTEROID_SPEED. The ships' law (KNOCKBACK_PER_IMPACT
+                // x Impact / Mass, measured on hulls, wave 46) on the
+                // röid's Mass: GUESS, no rock was measured.
                 movement.velocity = capAsteroidSpeed(movement.velocity.add(
-                    direction.scale(
-                        damage.knockback * scale * 5 / data.mass)));
+                    direction.scale(damage.knockback * scale
+                        * KNOCKBACK_PER_IMPACT / data.mass)));
             }
         }
 

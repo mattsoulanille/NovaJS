@@ -306,6 +306,28 @@ export function knockbackDirection(targetPosition: Position,
 }
 
 /**
+ * The knockback law's factor: one hit of wëap Impact `I` on a hull of
+ * Mass `M` tons adds KNOCKBACK_PER_IMPACT x I / M px/s along the shot (a
+ * blast: away from its centre; knockbackDirection), before the top-speed
+ * cap (knockedVelocity). A beam lands it once per Count unit
+ * (BeamDamageSystem's `scale`).
+ *
+ * MEASURED (reference "Knockback (the hub's KNOCKBACK), wave 46", finding
+ * 1): 30. Fifteen clean bolt hits over three Impact / Mass pairs (20 / 50:
+ * +11.2 to +12.6 px/s a hit, law 12; 100 / 50: +58.3, +59.8, law 60;
+ * 100 / 300: +9.7 to +10.9, law 10), from rest and on top of a drift
+ * alike; a Count-30 Impact-20 beam gave +59 px/s a shot on the 300-ton
+ * hull twice (30 x 2, finding 3). Was 5, six times too small.
+ *
+ * Every knockback shares it: weapon hits and beams (KnockbackSystem), a
+ * ship's final explosion (SHIP_EXPLOSION_KNOCKBACK_PER_TON, ship_explosion
+ * .ts: its impact goes through KnockbackSystem; GUESS, the explosion's
+ * push was not measured) and the push on an asteroid
+ * (AsteroidDamageSystem; GUESS, the same law on a röid's Mass).
+ */
+export const KNOCKBACK_PER_IMPACT = 30;
+
+/**
  * A ship's velocity after a knockback `impulse`: the sum, limited so a
  * hit can never take the ship past its own top speed (`topSpeed`), nor
  * past the speed it already had when that was higher (an afterburner's
@@ -315,23 +337,22 @@ export function knockbackDirection(targetPosition: Position,
  * WHY. Nothing else bounded a knocked ship. MovementSystem's clamp is
  * the DECAYED cap (decayedSpeedCap, afterburner_plugin.ts), which rises
  * to meet any overspeed and bleeds it at 0.7 x the hull's acceleration,
- * and an inertialess hull is only pulled back toward its heading at 2 x
- * its acceleration (inertialessControls) — while a thrusting one's
- * targetSpeed climbed with that risen cap and held the speed for good.
- * Light hulls take far more than that bleed under sustained fire: impact
- * x 5 / mass a hit, and a beam lands its impact once per Count unit (a
- * Thunderhead Lance shot is 10 of them, 250 px/s on a mass-10
- * Hyperioid). Under a Kestrel's guns a Hyperioid (top speed 90 px/s)
- * reached 1,000 px/s in the first second and 9,300 px/s in ten, a Vell-os
- * Dart 12,500 and even an inertial Shuttle 6,100.
+ * and an inertialess hull sheds speed over its throttle's at only
+ * INERTIALESS_SHED_PER_ACCELERATION x its acceleration
+ * (inertialessControls) — while a thrusting one's targetSpeed climbed
+ * with that risen cap and held the speed for good. Light hulls take far
+ * more than that bleed under sustained fire: impact x
+ * KNOCKBACK_PER_IMPACT / mass a hit, and a beam lands its impact once per
+ * Count unit (a Thunderhead Lance shot is 10 of them, 1,500 px/s on a
+ * mass-10 Hyperioid). Under a Kestrel's guns (at the old x 5) a Hyperioid
+ * (top speed 90 px/s) reached 1,000 px/s in the first second and 9,300
+ * px/s in ten, a Vell-os Dart 12,500 and even an inertial Shuttle 6,100.
  *
- * GUESS (not measured for knockback): the cap is the hull's top speed,
- * as the original measurably caps the other outside push, spöb gravity
- * (reference "A Gravity-5 ramp from far out, and the swing's cap ...,
- * wave 42": the swing IS capped at the hull's top speed). The only
- * knockback reading — a still 50-ton hull drifting off at about 12 px/s
- * a hit of a 20-impact bolt (reference "Acceleration under ionization
- * (E6 leftover), wave 44", finding 2) — stays far below any cap.
+ * MEASURED (reference "Knockback (the hub's KNOCKBACK), wave 46", finding
+ * 2): the cap is the hull's top speed. One Impact-100 bolt on a 20-ton
+ * disc (top speed 131 px/s) gave 134 px/s, not the 150 the law gives,
+ * and the speed held there through the next hit; pushes under the cap
+ * add in full. (It was a GUESS from spöb gravity's measured cap.)
  *
  * Deterministic: one add, one compare, and a correctly-rounded sqrt in
  * shortenToLength; no state.
@@ -370,7 +391,8 @@ export const KnockbackSystem = new System({
         // ion / strict / afterburner / jump-burn ceiling, or the speed
         // already held while an overspeed bleeds off).
         movementState.velocity = knockedVelocity(movementState.velocity,
-            direction.scale(damage.knockback * scale / targetMass * 5),
+            direction.scale(damage.knockback * scale / targetMass
+                * KNOCKBACK_PER_IMPACT),
             movementPhysics.maxVelocity);
     },
     // #237 pin (shared: *): the DamagedEvent handlers run damage first,

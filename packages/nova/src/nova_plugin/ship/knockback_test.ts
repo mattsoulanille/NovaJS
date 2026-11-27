@@ -5,7 +5,8 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import {
-    MovementPhysicsComponent, MovementStateComponent, MovementType,
+    INERTIALESS_SHED_PER_ACCELERATION, MovementPhysicsComponent,
+    MovementStateComponent, MovementType,
 } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
@@ -14,7 +15,8 @@ import { makeSystem } from '../make_system.js';
 import { completeEntity } from '../spawn/index.js';
 import {
     DamagedEvent, DisabledComponent, DISABLED_COAST_TIME_CONSTANT_S,
-    DISABLED_REST_SPEED, knockedVelocity, makeShip, ShipDataComponent,
+    DISABLED_REST_SPEED, KNOCKBACK_PER_IMPACT, knockedVelocity, makeShip,
+    ShipDataComponent,
     ShipPhysicsComponent,
 } from './index.js';
 
@@ -47,6 +49,191 @@ describe('knockedVelocity', () => {
             new Vector(-50, 0), 90);
         expect(slower.x).toBe(150);
     });
+});
+
+/**
+ * The measured law, hull by hull (reference "Knockback (the hub's
+ * KNOCKBACK), wave 46"): an immobile shooter's bolts on a still hull of
+ * known Mass and top speed.
+ */
+describe('knockback law (reference KB, wave 46)', () => {
+    const TARGET = 'target';
+    const SHOOTER = 'shooter';
+
+    function bolt(impact: number): WeaponDamage {
+        return {
+            shield: 0, armor: 0, ionization: 0,
+            ionizationColor: DEFAULT_IONIZE_COLOR, passThroughShield: 0,
+            knockback: impact, disableOnly: false,
+        };
+    }
+
+    /** A still hull at the origin, a shooter 250 px off along -y firing
+     * along +y. */
+    async function stillHull(mass: number, speed: number,
+        inertialess = false, acceleration = 45) {
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            'worker', { npcs: false });
+        const shipData = (await gameData.data.Ship.get(
+            SYNTHETIC.ships.skiff))!;
+        const ship = makeShip(shipData);
+        await completeEntity(world, ship);
+        ship.components.set(ShipDataComponent, {
+            ...ship.components.get(ShipDataComponent)!,
+            physics: {
+                ...shipData.physics, mass, speed, acceleration, inertialess,
+            },
+        });
+        ship.components.delete(ShipPhysicsComponent);
+        world.entities.set(TARGET, ship);
+        const shooter = new Entity(SHOOTER);
+        shooter.components.set(MovementStateComponent, {
+            position: new Position(0, -250), velocity: new Vector(0, 0),
+            rotation: new Angle(Math.PI), turning: 0, turnBack: false,
+            accelerating: 0,
+        });
+        world.entities.set(SHOOTER, shooter);
+        const movement = ship.components.get(MovementStateComponent)!;
+        movement.position = new Position(0, 0);
+        movement.velocity = new Vector(0, 0);
+        // Nose across the line of fire, as the pad's player sat.
+        movement.rotation = new Angle(Math.PI / 2);
+        movement.accelerating = 0;
+        world.step();
+        expect(movement.velocity.length).toBe(0);
+        expect(ship.components.get(MovementPhysicsComponent)!.maxVelocity)
+            .toBe(speed);
+        return { world, ship, movement };
+    }
+
+    function hit(world: World, impact: number, scale?: number) {
+        world.emit(DamagedEvent, {
+            damage: bolt(impact), damager: SHOOTER,
+            ...(scale === undefined ? {} : { scale }),
+        }, [TARGET]);
+        world.step();
+    }
+
+    it('is 30 x Impact / Mass px/s a bolt hit', () => {
+        expect(KNOCKBACK_PER_IMPACT).toEqual(30);
+    });
+
+    // [mass, top speed, impact, the measured steps]
+    const RUNS: [number, number, number, number[]][] = [
+        // kb20_b: Probe A, +11.8, +11.2, +12.3, +12.3, +12.6.
+        [50, 131, 20, [12, 24, 36, 48, 60]],
+        // kb100_a: Probe A, 0 -> 58.3 -> 116.7.
+        [50, 131, 100, [60, 120]],
+        // kb100h_a: Mass Hull 300, six steps of about +10 to 69.6.
+        [300, 175, 100, [10, 20, 30, 40, 50, 60]],
+    ];
+    for (const [mass, speed, impact, steps] of RUNS) {
+        it(`adds ${30 * impact / mass} px/s a hit of Impact ${impact} on `
+            + `a ${mass} t hull, in full under its top speed`, async () => {
+                const { world, movement } = await stillHull(mass, speed);
+                for (const expected of steps) {
+                    hit(world, impact);
+                    expect(movement.velocity.length).toBeCloseTo(expected, 6);
+                    // Along the shot (+y).
+                    expect(movement.velocity.x).toBeCloseTo(0, 6);
+                    // Coasts between hits: an inertial hull keeps it.
+                    for (let i = 0; i < 30; i++) {
+                        world.step();
+                    }
+                    expect(movement.velocity.length).toBeCloseTo(expected, 6);
+                }
+            }, 60_000);
+    }
+
+    it('caps the push at the top speed (kb100d_a: 134 px/s, not 150, on '
+        + 'the 20 t disc, held through the next hit)', async () => {
+            const { world, movement } = await stillHull(20, 131);
+            hit(world, 100);
+            expect(movement.velocity.length).toBeCloseTo(131, 6);
+            hit(world, 100);
+            expect(movement.velocity.length).toBeCloseTo(131, 6);
+        }, 60_000);
+
+    it('pushes a beam per Count unit (kbbeamh_a: +59 px/s a Count-30 '
+        + 'Impact-20 shot on the 300 t hull)', async () => {
+            const { world, movement } = await stillHull(300, 175);
+            // BeamDamageSystem shares the Count units over the shot's
+            // ticks as `scale`: 30 units over 32 ticks here.
+            for (let i = 0; i < 32; i++) {
+                hit(world, 20, 30 / 32);
+            }
+            expect(movement.velocity.length).toBeCloseTo(60, 6);
+        }, 60_000);
+
+    /** Steps until `movement` is at rest (at most `max`), and how far it
+     * went. */
+    function untilRest(world: World, movement: { velocity: Vector,
+        position: Position }, max = 120) {
+        const start = movement.position;
+        let steps = 0;
+        let travelled = 0;
+        let last = start;
+        while (movement.velocity.length > 0 && steps < max) {
+            world.step();
+            steps++;
+            travelled += Vector.fromVectorLike(
+                movement.position.subtract(last)).length;
+            last = movement.position;
+        }
+        return { seconds: steps / 60, travelled };
+    }
+
+    it('lets an inertialess hull at rest shed a push in 0.3 s over about '
+        + '9 px (kb20l_a, the Hyperioid, Impact 20)', async () => {
+            const { world, movement } = await stillHull(10, 87.5, true, 45);
+            hit(world, 20);
+            const { seconds, travelled } = untilRest(world, movement);
+            expect(seconds).toBeGreaterThan(0.25);
+            expect(seconds).toBeLessThanOrEqual(0.35);
+            expect(travelled).toBeGreaterThan(7);
+            expect(travelled).toBeLessThan(11);
+        }, 60_000);
+
+    it('lets it shed a capped Impact-100 push in under 0.5 s over about 20 '
+        + 'px (kb100l_a: 21-22 px)', async () => {
+            const { world, movement } = await stillHull(10, 87.5, true, 45);
+            hit(world, 100);
+            const { seconds, travelled } = untilRest(world, movement);
+            expect(seconds).toBeGreaterThan(0.35);
+            expect(seconds).toBeLessThanOrEqual(0.5);
+            expect(travelled).toBeGreaterThan(17);
+            expect(travelled).toBeLessThan(23);
+        }, 60_000);
+
+    it('keeps nothing of 14 hits on an inertialess hull at rest',
+        async () => {
+            const { world, movement } = await stillHull(10, 87.5, true, 45);
+            const start = movement.position;
+            let farthest = 0;
+            for (let i = 0; i < 14; i++) {
+                hit(world, 20);
+                // A shot every 7-8 s; at rest again well before the next.
+                for (let s = 0; s < 60; s++) {
+                    world.step();
+                    farthest = Math.max(farthest, Vector.fromVectorLike(
+                        movement.position.subtract(start)).length);
+                }
+                expect(movement.velocity.length).toBe(0);
+                expect(movement.targetSpeed).toBe(0);
+            }
+            // Each hit's ~9 px adds up along the line of fire, but no
+            // speed carries from one hit to the next.
+            expect(farthest).toBeLessThan(14 * 11);
+        }, 60_000);
+
+    it('sheds at INERTIALESS_SHED_PER_ACCELERATION x the acceleration '
+        + '(180-200 px/s² on the Hyperioid, from its two readings)', () => {
+            expect(45 * INERTIALESS_SHED_PER_ACCELERATION)
+                .toBeGreaterThanOrEqual(170);
+            expect(45 * INERTIALESS_SHED_PER_ACCELERATION)
+                .toBeLessThanOrEqual(210);
+        });
 });
 
 /**
