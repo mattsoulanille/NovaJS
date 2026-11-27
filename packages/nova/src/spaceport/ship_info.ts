@@ -115,32 +115,37 @@ const WEAPONS_FONT: Partial<PIXI.ITextStyle> = {
 
 /*
  * The qualitative Accel and Turn ratings of the ship info dialog, in the
- * original's raw shïp units. MEASURED (reference "Ship-info rating words
- * (E11), wave 40", twenty hulls at Accel 50 k / Turn 5 k): six words, the
- * lowest "Terrible". Accel read Terrible at <= 100, Poor 150-200, Average
- * 250-350, Good 400-550, Very Good 600-700, Excellent >= 750; Turn
- * Terrible <= 10, Poor 15-20, Average 25-30, Good 35-40, Very Good 45-50,
- * Excellent >= 55. Each edge is GUESSED at the lowest measured value of
- * its band (a band starts somewhere in the 50- or 5-wide gap below it).
+ * original's raw shïp units: six words, the lowest "Terrible". MEASURED
+ * (reference "Ship-info rating edges (E11 leftover), wave 41", forty kit
+ * hulls on a 10- / 2-wide Accel grid and a 1-wide Turn grid, on top of
+ * wave 40's 50 / 5 grid):
+ *  - Turn: Poor from 11, Average 21, Good 31, Very Good 41, Excellent 51,
+ *    each edge exact ("more than 10 / 20 / 30 / 40 / 50").
+ *  - Accel: 128 / 248 / 380 / 550 / 730 read the lower word and 130 /
+ *    250 / 382 / 552 / 732 the upper (the odd values between were not
+ *    built). GUESS: each edge at the odd value, "more than 128 / 248 /
+ *    380 / 550 / 730".
+ *  - The hull's Speed plays no part (Accel 250 and 380 read Average at
+ *    Speed 100, 300 and 1,000).
  */
 
 /** The ship info dialog's Accel word, from the raw shïp Accel. */
 export function accelRating(raw: number): string {
-    if (raw >= 750) return 'Excellent';
-    if (raw >= 600) return 'Very Good';
-    if (raw >= 400) return 'Good';
-    if (raw >= 250) return 'Average';
-    if (raw >= 150) return 'Poor';
+    if (raw >= 731) return 'Excellent';
+    if (raw >= 551) return 'Very Good';
+    if (raw >= 381) return 'Good';
+    if (raw >= 249) return 'Average';
+    if (raw >= 129) return 'Poor';
     return 'Terrible';
 }
 
 /** The ship info dialog's Turn word, from the raw shïp Maneuver. */
 export function turnRating(raw: number): string {
-    if (raw >= 55) return 'Excellent';
-    if (raw >= 45) return 'Very Good';
-    if (raw >= 35) return 'Good';
-    if (raw >= 25) return 'Average';
-    if (raw >= 15) return 'Poor';
+    if (raw >= 51) return 'Excellent';
+    if (raw >= 41) return 'Very Good';
+    if (raw >= 31) return 'Good';
+    if (raw >= 21) return 'Average';
+    if (raw >= 11) return 'Poor';
     return 'Terrible';
 }
 

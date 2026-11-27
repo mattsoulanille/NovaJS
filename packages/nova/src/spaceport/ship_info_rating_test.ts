@@ -44,3 +44,41 @@ describe('ship info rating words (E11, wave 40)', () => {
         expect(turnRating(0)).toBe('Terrible');
     });
 });
+
+/**
+ * The finer edges (reference "Ship-info rating edges (E11 leftover), wave
+ * 41"): Turn on a 1-wide grid, Accel on 10- and 2-wide grids around each
+ * edge. Every value the original was read at is checked; the odd Accel
+ * values (129 / 249 / 381 / 551 / 731) were not built, and NovaJS puts the
+ * edge there (GUESS).
+ */
+describe('ship info rating edges (E11, wave 41)', () => {
+    const turnWords = ['Poor', 'Average', 'Good', 'Very Good', 'Excellent'];
+    turnWords.forEach((word, i) => {
+        const edge = 10 * (i + 1);
+        it(`reads Turn ${edge} as the band below and ${edge + 1}-${edge + 4} as ${word}`,
+            () => {
+                expect(turnRating(edge)).toBe(i === 0 ? 'Terrible' : turnWords[i - 1]);
+                for (let t = edge + 1; t <= edge + 4; t++) {
+                    expect(turnRating(t)).toBe(word);
+                }
+            });
+    });
+
+    // [Accel, word] pairs read in the original (passes 1 and 2).
+    const accel: [number, string][] = [
+        ...[110, 120, 122, 124, 126, 128].map(a => [a, 'Terrible'] as [number, string]),
+        ...[130, 140, 210, 220, 230, 240, 242, 244, 246, 248]
+            .map(a => [a, 'Poor'] as [number, string]),
+        ...[250, 360, 370, 380].map(a => [a, 'Average'] as [number, string]),
+        ...[382, 384, 386, 388, 390, 550].map(a => [a, 'Good'] as [number, string]),
+        ...[552, 554, 556, 558, 560, 570, 580, 590, 710, 720, 730]
+            .map(a => [a, 'Very Good'] as [number, string]),
+        ...[732, 734, 736, 738, 740].map(a => [a, 'Excellent'] as [number, string]),
+    ];
+    for (const [a, word] of accel) {
+        it(`reads Accel ${a} as ${word}`, () => {
+            expect(accelRating(a)).toBe(word);
+        });
+    }
+});
