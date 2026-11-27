@@ -154,11 +154,13 @@ export const JUMP_BASE_SPEED = 1500;
  * PLAYER_JUMP_ARRIVAL_MARGIN_S. */
 export const JUMP_ARRIVAL_MARGIN_S = 3;
 /** A ship that JUMPS IN (the player) arrives this many seconds of flight
- * at its regular top speed outside its no-jump radius, coasting inward at
- * that speed: the original's ship arrives about 1,350 px out at Speed 800
- * (about 350 px/s), i.e. 1,000 + one second (reference "Jump phases and
- * fuel (U8), wave 38", finding 3; GUESS that it scales with top speed
- * rather than being a fixed 1,350: one hull measured). A held jump key
+ * at its regular top speed outside the STANDARD no-jump radius
+ * (JUMP_DISTANCE: a hyperspace dist mod does not move the arrival, wave
+ * 45's JC), coasting inward at that speed: the original's ship arrives
+ * about 1,350 px out at Speed 800 (about 350 px/s), i.e. 1,000 + one
+ * second (reference "Jump phases and fuel (U8), wave 38", finding 3;
+ * GUESS that it scales with top speed rather than being a fixed 1,350:
+ * one hull measured). A held jump key
  * that reaches the simulation only after the ship has coasted inside the
  * zone still chains: see ARRIVAL_JUMP_GRACE_MS. Multi-jump continues on
  * the tick after the arrival. */
@@ -589,11 +591,15 @@ export function beginFollowJump(entity: Entity, leader: string,
  * Polled every tick rather than edge-triggered so that *holding* the
  * jump key departs at the first instant a jump becomes possible —
  * flying out of the no-jump zone with the key held, or chain-jumping:
- * ships arrive outside the no-jump radius, so a held key starts the
- * route's next jump immediately, and for ARRIVAL_JUMP_GRACE_MS after
+ * ships arrive outside the standard no-jump radius, so a held key starts
+ * the route's next jump immediately, and for ARRIVAL_JUMP_GRACE_MS after
  * the arrival the zone does not refuse it even once the ship has coasted
  * inside (the held key reaches a new system only after its first frame
- * has been seen: client/control_routing.ts).
+ * has been seen: client/control_routing.ts). A hull whose hyperspace dist
+ * mod enlarges its zone arrives INSIDE it (wave 45's JC); outside the
+ * grace a held key then waits, silently, until the ship coasts out of the
+ * zone on the far side, as the original does. Inside the grace it still
+ * chains at once (the original does not: the grace is a maintainer call).
  */
 const PlayerJumpControl = new System({
     name: 'PlayerJumpControl',
@@ -656,8 +662,10 @@ const PlayerJumpControl = new System({
  * Auto-continues a multi-jump (ModType 32) route the tick after a ship arrives
  * from hyperspace: if it left a MultiJumpContinueComponent marker and still
  * has a routed destination and enough fuel, it starts the next jump without a
- * fresh key press (the ship arrives outside the no-jump zone, so no radius
- * check is needed). Runs before PlayerJumpControl so a released key never
+ * fresh key press (the ship arrives outside the standard no-jump zone, so
+ * no radius check is needed; a hull whose dist mod enlarges its zone
+ * arrives inside it and still continues: GUESS, unmeasured). Runs before
+ * PlayerJumpControl so a released key never
  * cancels an in-flight multi-jump chain.
  */
 const MultiJumpContinueSystem = new System({
@@ -1035,12 +1043,23 @@ export const JumpSequenceSystem = new System({
                     // system will see: the ship jumps in on the side of
                     // the system facing where it came from, coasting
                     // inward at its regular top speed, far enough
-                    // outside the no-jump zone (PLAYER_JUMP_ARRIVAL_MARGIN_S)
-                    // that another jump can start before it drifts in.
+                    // outside the STANDARD no-jump zone
+                    // (PLAYER_JUMP_ARRIVAL_MARGIN_S) that another jump
+                    // can start before it drifts in.
+                    //
+                    // The standard zone, not the ship's own: a hyperspace
+                    // dist mod (oütf ModType 23) does NOT move the
+                    // arrival (reference "Jump chaining edge cases and an
+                    // arrival inside the no-jump zone ..., wave 45",
+                    // finding 4: with +1000, a 2,000 px zone, the ship
+                    // still came in about 1,350 px out, INSIDE its zone,
+                    // and a held `j` waited until it had crossed the
+                    // system and left the zone on the far side). The mod
+                    // still sizes the departure gate (PlayerJumpControl).
+                    // Measured for a positive mod only; a negative one
+                    // arrives here too (GUESS).
                     const basePhysics = getShipMovementPhysics(shipPhysics);
-                    const jumpRadius = jumpRadiusFor(JUMP_DISTANCE,
-                        shipPhysics.jumpDistanceMod);
-                    const arrivalDistance = jumpRadius
+                    const arrivalDistance = JUMP_DISTANCE
                         + basePhysics.maxVelocity * PLAYER_JUMP_ARRIVAL_MARGIN_S;
                     const unit = target.getUnitVector();
                     teleport(movement,

@@ -18,7 +18,7 @@ import { PlayerSoundEvent } from "../core/index.js";
 import { Entity } from "nova_ecs/entity";
 import { DisabledComponent } from "../ship/index.js";
 import { Angle } from "nova_ecs/datatypes/angle";
-import { jumpStageDelays, JUMP_BRAKE_MS, JUMP_BURN_ANGLE, JUMP_CLOCK_MS, JUMP_MIN_BURN_MS, NPC_DEPARTURE_DEPART_DELAY_MS, NPC_DEPARTURE_SPINUP_DELAY_MS } from "./jump_plugin.js";
+import { ARRIVAL_JUMP_GRACE_MS, jumpStageDelays, JUMP_BRAKE_MS, JUMP_BURN_ANGLE, JUMP_CLOCK_MS, JUMP_MIN_BURN_MS, NPC_DEPARTURE_DEPART_DELAY_MS, NPC_DEPARTURE_SPINUP_DELAY_MS } from "./jump_plugin.js";
 import { ShipPhysics } from "novadatainterface/ship_data";
 import { PlanetTargetComponent } from "./planet_plugin.js";
 import { ControlledByComponent } from "../player/index.js";
@@ -1158,6 +1158,65 @@ describe('jump phases (U8, waves 38-39)', () => {
             expect(arrived.position.length).toBeCloseTo(
                 JUMP_DISTANCE + speed, -1);
             expect(arrived.velocity.length).toBeCloseTo(speed, 3);
+        }, 30_000);
+
+    it('a hyperspace dist mod does not move the arrival: a +1000 hull '
+        + 'arrives inside its 2,000 px zone, and a held key past the grace '
+        + 'waits until the ship has coasted out on the far side (reference '
+        + '"Jump chaining edge cases and an arrival inside the no-jump '
+        + 'zone ...", wave 45, finding 4)', async () => {
+            const { gameData, world, ship, destinationId } =
+                await makeJumpHarness({ jumpDistanceMod: 1000 });
+            const zone = JUMP_DISTANCE + 1000;
+            const movement = ship.components.get(MovementStateComponent)!;
+            // Outside the enlarged zone, so the departure is allowed.
+            movement.position = new Position(0, -(zone + 500));
+            movement.velocity = new Vector(0, 0);
+            world.step();
+            const speed = ship.components.get(ShipPhysicsComponent)!.speed;
+            let finishJump: FinishJump | undefined;
+            world.events.get(FinishJumpEvent).subscribe(({ data }) => {
+                finishJump = data;
+            });
+            pressHyperjump(world);
+            applyControlEvents(world, undefined,
+                [{ action: 'hyperjump', state: false }]);
+            stepUntil(world, () => finishJump !== undefined);
+            const jumpedShip = finishJump!.entity;
+            const arrived = jumpedShip.components.get(MovementStateComponent)!;
+            // The STANDARD arrival (1,000 + one second), not 2,000 + one.
+            expect(arrived.position.length).toBeCloseTo(
+                JUMP_DISTANCE + speed, -1);
+            expect(arrived.position.length).toBeLessThan(zone);
+
+            // Into the destination with a next hop routed.
+            const destWorld = await makeSystem(destinationId, gameData,
+                undefined, { npcs: false });
+            await completeEntity(destWorld, jumpedShip);
+            destWorld.entities.set(SHIP_UUID, jumpedShip);
+            const destination = await gameData.data.System.get(destinationId);
+            jumpedShip.components.set(JumpRouteComponent,
+                { route: [[...destination.links].sort()[0]!] });
+            destWorld.step();
+            expect(jumpedShip.components.has(JumpComponent)).toBeFalse();
+            // Past the arrival grace, still inside the zone (it coasts
+            // through the centre toward the far side).
+            for (let i = 0; i < ticksFor(ARRIVAL_JUMP_GRACE_MS) + 2; i++) {
+                destWorld.step();
+            }
+            expect(arrived.position.length).toBeLessThan(zone);
+            applyControlEvents(destWorld, undefined,
+                [{ action: 'hyperjump', state: 'start' }]);
+            destWorld.step();
+            expect(jumpedShip.components.has(JumpComponent)).toBeFalse();
+            // The held key waits while the ship is inside the zone and
+            // starts the jump the tick it is out.
+            stepUntil(destWorld,
+                () => jumpedShip.components.has(JumpComponent));
+            const tick = speed * SIMULATION_STEP_MS / 1000;
+            expect(arrived.position.length)
+                .toBeGreaterThan(zone - 2 * tick);
+            expect(arrived.position.length).toBeLessThan(zone + 2 * tick);
         }, 30_000);
 
     it('an NPC departure keeps the 1 s + 2 s it had; a follower takes the '
