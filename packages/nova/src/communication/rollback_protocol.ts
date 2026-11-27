@@ -1080,6 +1080,22 @@ export const STATE_HASH_INTERVAL = 60;
 //    kind changes, but the component codecs feed the derived wire schema,
 //    so its fingerprint changes (156d366e51953a65 -> 28e54be45bbe19d2) and
 //    the join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): nested bays (Matthew's ruling, 2026-11-27: a
+//    fighter launched from a fighter's bay returns to ITS carrier, or to
+//    the player's ship once that carrier is docked or destroyed, and is
+//    never credited to the player's own bay). One new serializer-
+//    registered component, Hangar (escorts/bay_plugin.ts DockedFighter
+//    array: `{fighter, bayWeaponId, bays, magazine}`), on a carrier that
+//    has docked a fighter which mounts a bay of its own; no stock hull
+//    ever gets one. Sim-rule changes alongside: ReturnAI steers at, and
+//    CollectableEscortAI docks with, fighterHome (the carrier, else the
+//    player's ship) instead of the owner, and a launch from a bay holding
+//    a record restores that fighter's magazine and re-points its
+//    still-deployed wing. No input or message kind changes. The derived
+//    wire schema fingerprint changes (28e54be45bbe19d2 ->
+//    8057c916e5bb0080), and the join gate keeps older and newer builds
+//    apart.
 
 export const PROTOCOL_VERSION = 8;
 
