@@ -652,7 +652,7 @@ function wave49Resources() {
         shipStart: -2, onAccept: "!b9319" }));
     // --- CU: mïsn 1075 (wave 13's, retired), bits 9320-9324.
     out.push(...misn(1075, "Kit CU big cargo job", 9320, { availStel: 1102, availLoc: 0, dispWeight: 30000, travelStel: 2100, cargoType: 2,
-        cargoQty: 90, pickupMode: 0, dropoffMode: 0, onAccept: "!b9320 b9321", onFailure: "b9322", onAbort: "b9323", onSuccess: "b9324" }));
+        cargoQty: 40, pickupMode: 0, dropoffMode: 0, onAccept: "!b9320 b9321", onFailure: "b9322", onAbort: "b9323", onSuccess: "b9324" }));
     // --- KS: shïp 772 (wave 4's, retired), düde 550, mïsn 1076 / 1077 (wave 13's, retired), bits 9325-9326.
     out.push(...shareRled(772, "Kit Hulk Pointer 100", RLED.pointer, 24, { armor: 300, shield: 0, accel: 0, speed: 0, turn: 0, mass: 100,
         freeMass: 100, cargo: 50, ai: 1, strength: 1, crew: 1, flags: 0, flags2: 0, cost: 50000, deathDelay: 10 }));
@@ -676,6 +676,19 @@ function wave49Resources() {
     out.push(dude(551, "Kit Knock Runner", 3, 362, 771));
     out.push(...misn(1079, "Kit KB knock runner", 9327, { availStel: 1170, shipCount: 1, shipDude: 551, shipGoal: -1, shipBehav: -1,
         shipStart: -2, onAccept: "!b9327" }));
+    // --- KB2 (added during the wave: the Turn-30 runner flew straight AT the player, so its bolt's travel, its own line to the
+    // player and its heading all coincided): shïp 775 Kit Knock Wide Runner (Speed / Accel 500, Turn 10: wide loops of about
+    // 500 px at about 220 px/s, so it fires while passing ACROSS the line), wëap 326 Kit Knock Slow 50 (wëap 325 at Impact 50: 5
+    // px/s a hit on Kit Mass Hull 300, so the hull stays on the grid longer), düde 610, mïsn 970 (wave 4's T4 jam target set,
+    // retired), bit 9328.
+    out.push(weap(326, "Kit Knock Slow 50", 131, { reload: 90, duration: 450, speed: 300, armorDamage: 1, shieldDamage: 1, guidance: 4,
+        impact: 50, ionization: 0, flags: 0 }));
+    out.push(...shareRled(775, "Kit Knock Wide Runner", RLED.red, 24, { armor: 30000, shield: 0, shieldRecharge: 0, accel: 500, speed: 500,
+        turn: 10, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 1, crew: 1, flags: 0, flags2: 0, weapons: [326, -1, -1, -1],
+        weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
+    out.push(dude(610, "Kit Knock Wide Runner", 3, 362, 775));
+    out.push(...misn(970, "Kit KB wide runner", 9328, { availStel: 1170, shipCount: 1, shipDude: 610, shipGoal: -1, shipBehav: -1,
+        shipStart: -2, onAccept: "!b9328" }));
     return out;
 }
 
@@ -6809,6 +6822,7 @@ function a14Resources() {
  *  shïp 773/774/775 Jam Target T2/T3/T4: the J0 target (immobile, armor
  *       100) carrying one of those jammers. düde 604/606/610 (AI 1, govt
  *       363); mïsn 963/966/970 (bits 9004/9007/9011) put one at Kit Market.
+ *       (The T4 set, shïp 775 / düde 610 / mïsn 970, was retired in wave 49.)
  *  InhJam on the other AI types: düde 603 (AI 2) and 605 (AI 4) are the J0
  *  target hull of gövt 364 (InhJam1 100); mïsn 962/965 (bits 9003/9006) put
  *  one at Kit Market. Wave 3 did AI 1 and AI 3 (mïsn 986).
@@ -6826,11 +6840,13 @@ function jamWave4() {
         const jammer = gun(627 + i, `Kit Jammer T${k}`, 0);
         jammer.set = { ...jammer.set, modType: 32 + k, modVal: 100, max: 8 };
         out.push(jammer);
+        // The T4 target (shïp 775, düde 610, mïsn 970, bit 9011) was retired in wave 49 (wave49Resources: KB the wide runner).
+        if (k === 4) return;
         out.push(...ship(773 + i, `Jam Target T${k}`, 136, {
             armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, ai: 1, strength: 1, crew: 1,
             outfits: [627 + i, -1, -1, -1], outfitCounts: [1, 0, 0, 0],
         }));
-        const [dudeId, misnId, bit] = [[604, 963, 9004], [606, 966, 9007], [610, 970, 9011]][i];
+        const [dudeId, misnId, bit] = [[604, 963, 9004], [606, 966, 9007]][i];
         out.push(dude(dudeId, `Jam Target T${k}`, 1, 363, 773 + i));
         out.push(...misn(misnId, `Kit J T${k} target`, bit, { shipCount: 1, shipDude: dudeId, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
     });

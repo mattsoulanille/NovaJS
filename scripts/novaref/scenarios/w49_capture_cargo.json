@@ -1,6 +1,6 @@
 {
  "name": "w49_capture_cargo",
- "_comment": "Wave 49 CU leftover (mission cargo across Use As My Ship): as w46_capture_use, but after accepting the prize mission (mïsn 1054) it takes the Mission BBS job mïsn 1075 (90 t of Medical Supplies to Kit Port; BBS at window 182,430, first row 213,238, Accept 476,384) then a hand-driven break (inbox w49.jsonl) for the Leave (a BBS dialog may need its own Return); then the disable, the board and Capture Ship; then hand-driven steps (inbox w49.jsonl): m, the rename alert, the landing and the Leave. Pilot pulled at the end.",
+ "_comment": "Wave 49 CU leftover (mission cargo across Use As My Ship): as w46_capture_use, but after accepting the prize mission (mïsn 1054) it takes the Mission BBS job mïsn 1075 (40 t of Medical Supplies to Kit Port; BBS at window 182,430, first row 213,238, Accept 476,384) then a hand-driven break (inbox w49.jsonl) for the Leave (a BBS dialog may need its own Return); then the disable, the board and Capture Ship; then hand-driven steps (inbox w49.jsonl): m, the rename alert, the landing and the Leave. Pilot pulled at the end.",
  "pilot": {
   "as": "novaref-scenario"
  },
