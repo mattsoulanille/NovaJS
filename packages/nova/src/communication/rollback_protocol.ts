@@ -1120,6 +1120,18 @@ export const STATE_HASH_INTERVAL = 60;
 //    The derived wire schema fingerprint changes (624186b4119d5d2b ->
 //    34e9ddc679dcfa8f), and the join gate keeps older and newer builds
 //    apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): a tractor's pull or brake is the SHOT's
+//    (reference "A tractor shot that starts outside the pull range and
+//    crosses inside it (the hub's extra, KB), wave 52"). One new
+//    serializer-registered component, TractorShot (ship/death_plugin.ts:
+//    'pull' | 'brake'), latched on the shot entity by its first unit that
+//    moves a hull and obeyed by every later unit. Sim-rule change
+//    alongside (no further schema): TRACTOR_PULL_RANGE 450 -> 495 (a still
+//    hull is held at 490 px, wave 52). No input or message kind changes.
+//    The derived wire schema fingerprint changes (34e9ddc679dcfa8f ->
+//    9de999c5881f0046), and the join gate keeps older and newer builds
+//    apart.
 
 export const PROTOCOL_VERSION = 8;
 

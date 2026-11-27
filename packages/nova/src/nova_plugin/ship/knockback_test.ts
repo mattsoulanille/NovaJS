@@ -20,7 +20,7 @@ import {
     ShipDataComponent,
     pulledVelocity, ShipPhysicsComponent, SourceComponent,
     TRACTOR_BRAKE_PER_IMPACT, TRACTOR_PULL_PER_IMPACT, TRACTOR_PULL_RANGE,
-    tractoredVelocity,
+    tractoredVelocity, TractorShotComponent,
 } from './index.js';
 
 describe('knockedVelocity', () => {
@@ -499,10 +499,11 @@ describe('a tractor beam (reference KB, wave 48)', () => {
 
 /**
  * Reference "A tractor beam's rate with Mass and distance (the KB
- * leftover), wave 50": beyond about 450 px the tractor PULLS a hull
- * lighter than the beamer toward it, each velocity axis held at the
- * hull's top speed; within that it brakes (wave 48, above); heavier and
- * inertialess hulls never move. Wave 48's Kit Tractor Beamer 20: the
+ * leftover), wave 50": beyond TRACTOR_PULL_RANGE (495 px since wave 52)
+ * a tractor shot PULLS a hull lighter than the beamer toward it, each
+ * velocity axis held at the hull's top speed; a shot that starts within
+ * it brakes (wave 48, above), and either holds for the whole shot (wave
+ * 52); heavier and inertialess hulls never move. Wave 48's Kit Tractor Beamer 20: the
  * stock Terrapin's 175 t, immobile, a Count-30 Impact -20 beam.
  */
 describe('a tractor beam\'s pull (reference KB, wave 50)', () => {
@@ -580,8 +581,10 @@ describe('a tractor beam\'s pull (reference KB, wave 50)', () => {
     }
 
     /** One Count-30 shot (Impact -20 unless given), its units shared
-     * over 32 ticks as BeamDamageSystem shares them. */
+     * over 32 ticks as BeamDamageSystem shares them. A new shot: the
+     * rig's one beam entity forgets the last shot's pull / brake. */
     function shot(world: World, impact = -20) {
+        world.entities.get(BEAM)!.components.delete(TractorShotComponent);
         for (let i = 0; i < 32; i++) {
             unit(world, impact);
         }
@@ -591,9 +594,12 @@ describe('a tractor beam\'s pull (reference KB, wave 50)', () => {
     const DIAGONAL_500 = new Position(-400, -300);
 
     it('pulls at the push law\'s own 30 x |Impact| / Mass a unit beyond '
-        + '450 px (wave 51: about 11.5 px/s a unit on 50 t at Impact 20)',
+        + '495 px (wave 51: about 11.5 px/s a unit on 50 t at Impact 20; '
+        + 'wave 52: the edge in (490, 500])',
         () => {
-            expect(TRACTOR_PULL_RANGE).toBe(450);
+            expect(TRACTOR_PULL_RANGE).toBeGreaterThan(490);
+            expect(TRACTOR_PULL_RANGE).toBeLessThanOrEqual(500);
+            expect(TRACTOR_PULL_RANGE).toBe(495);
             expect(TRACTOR_PULL_PER_IMPACT).toBe(30);
             // 12 px/s a unit; 360 a Count-30 shot (read 345 uncapped).
             expect(TRACTOR_PULL_PER_IMPACT * 20 / 50).toBe(12);
@@ -701,9 +707,10 @@ describe('a tractor beam\'s pull (reference KB, wave 50)', () => {
         expect(movement.velocity.length).toBe(0);
     }, 60_000);
 
-    it('holds a still hull at 425 and 350 px (tr425_a, tr350_a)',
+    it('holds a still hull at 490, 475, 450, 425 and 350 px (wave 52 '
+        + 'tr490_a / tr475_a / tr450_a, wave 50 tr425_a / tr350_a)',
         async () => {
-            for (const distance of [425, 350]) {
+            for (const distance of [490, 475, 450, 425, 350]) {
                 const { world, movement } = await rig({
                     mass: 50, speed: 131,
                     beamerAt: new Position(-distance, 0),
@@ -718,30 +725,94 @@ describe('a tractor beam\'s pull (reference KB, wave 50)', () => {
     it('pulls just beyond the range edge and not just inside it',
         async () => {
             const outside = await rig({
-                mass: 50, speed: 131, beamerAt: new Position(-460, 0),
+                mass: 50, speed: 131, beamerAt: new Position(-505, 0),
             });
             shot(outside.world);
-            // Pulled in across the edge during the shot, the last units
-            // brake it toward the beamer's (zero) velocity: less than a
-            // whole shot's pull, still well under way.
-            expect(outside.movement.velocity.x).toBeLessThan(-50);
+            // Pulled in across the edge during the shot, and pulled on to
+            // its end (the mode is the shot's): x at its 131 cap, less
+            // the overspeed bleed.
+            expect(outside.movement.velocity.x).toBeLessThan(-120);
             expect(outside.movement.velocity.y).toBeCloseTo(0, 9);
             const inside = await rig({
-                mass: 50, speed: 131, beamerAt: new Position(-440, 0),
+                mass: 50, speed: 131, beamerAt: new Position(-485, 0),
             });
             shot(inside.world);
             expect(inside.movement.velocity.length).toBe(0);
         }, 60_000);
 
+    /**
+     * Reference "A tractor shot that starts outside the pull range and
+     * crosses inside it (the hub's extra, KB), wave 52": wave 51's trb_c
+     * hull passed 425 and 400 px during the shot and kept speeding toward
+     * the beamer to its end, never braked: pull or brake is the SHOT's.
+     */
+    it('keeps pulling for the whole shot once it starts pulling, however '
+        + 'far inside the range the hull comes; the next shot starts afresh',
+        async () => {
+            // 500 px out on the axis, a 262 px/s cap: one shot pulls it
+            // about 90 px in, to about 410 px.
+            const { world, movement } = await rig({
+                mass: 50, speed: 262, beamerAt: new Position(-500, 0),
+            });
+            const speeds: number[] = [];
+            for (let i = 0; i < 32; i++) {
+                unit(world);
+                speeds.push(-movement.velocity.x);
+            }
+            expect(world.entities.get(BEAM)!.components
+                .get(TractorShotComponent)).toBe('pull');
+            // Well inside the range by the shot's end.
+            expect(movement.position.x + 500)
+                .toBeLessThan(TRACTOR_PULL_RANGE - 50);
+            // Every unit added the same pull until the axis met its cap,
+            // and none braked, the last ones inside the range too.
+            for (let i = 1; i < 32; i++) {
+                if (speeds[i - 1] + 11.25 <= 262) {
+                    expect(speeds[i] - speeds[i - 1]).withContext(`${i}`)
+                        .toBeCloseTo(11.25, 6);
+                } else {
+                    expect(speeds[i]).withContext(`${i}`)
+                        .toBeCloseTo(262, 6);
+                }
+            }
+            // A new shot that starts with the hull inside the range brakes
+            // it toward the beamer's (zero) velocity.
+            const before = movement.velocity.length;
+            shot(world);
+            expect(world.entities.get(BEAM)!.components
+                .get(TractorShotComponent)).toBe('brake');
+            expect(movement.velocity.length).toBeLessThan(before);
+        }, 60_000);
+
+    it('GUESS: keeps braking for the whole shot once it starts braking, '
+        + 'though the hull coasts out of the range', async () => {
+            // 480 px out and leaving at 60 px/s: past 495 within the shot.
+            const { world, movement } = await rig({
+                mass: 50, speed: 131, beamerAt: new Position(-480, 0),
+                velocity: new Vector(60, 0),
+            });
+            let last = movement.velocity.x;
+            for (let i = 0; i < 32; i++) {
+                unit(world);
+                expect(movement.velocity.x).withContext(`${i}`)
+                    .toBeLessThanOrEqual(last);
+                expect(movement.velocity.x).withContext(`${i}`)
+                    .toBeGreaterThanOrEqual(0);
+                last = movement.velocity.x;
+            }
+            // Out past the range by the shot's end, never pulled.
+            expect(movement.position.x + 480)
+                .toBeGreaterThan(TRACTOR_PULL_RANGE);
+            expect(world.entities.get(BEAM)!.components
+                .get(TractorShotComponent)).toBe('brake');
+        }, 60_000);
+
     // Wave 51's Kit Probe B: 50 t, a 262 px/s axis cap (Speed 600 on the
-    // reference clock), still on the -143 deg diagonal from the beamer.
-    // Read 500 px out, where the original pulled it for the whole 1 s
-    // shot (about 170 px of travel, so ending well inside
-    // TRACTOR_PULL_RANGE); NovaJS judges pull or brake per unit, so here
-    // the rig starts 700 px out for the whole shot to stay a pull (see
-    // TRACTOR_PULL_PER_IMPACT, the open per-shot question).
-    const DIAGONAL_700 = new Position(-560, -420);
-    const PROBE_B = { mass: 50, speed: 262, beamerAt: DIAGONAL_700 };
+    // reference clock), still on the -143 deg diagonal from the beamer,
+    // 500 px out, where the original pulled it for the whole 1 s shot
+    // (about 170 px of travel, so ending well inside TRACTOR_PULL_RANGE):
+    // the shot's pull goes on inside the range (TractorShotComponent).
+    const PROBE_B = { mass: 50, speed: 262, beamerAt: DIAGONAL_500 };
 
     it('builds the pull steadily, one push-law unit a beam unit, to 340 '
         + 'px/s a Count-30 Impact -20 shot on 50 t (trb_c / trb_a: 33-35 '

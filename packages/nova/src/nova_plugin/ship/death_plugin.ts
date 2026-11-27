@@ -1,5 +1,6 @@
+import * as t from 'io-ts';
 import { WeaponDamage } from 'novadatainterface/weapon_data';
-import { Components, Emit, RunQuery, UUID } from 'nova_ecs/arg_types';
+import { Components, Emit, Entities, RunQuery, UUID } from 'nova_ecs/arg_types';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
@@ -418,24 +419,38 @@ export function tractoredVelocity(velocity: Vector, toward: Vector,
 }
 
 /**
- * The distance from its firer beyond which a tractor hit PULLS the target
- * toward the firer instead of braking it (tractoredVelocity).
+ * The distance from its firer beyond which a tractor SHOT pulls the target
+ * toward the firer instead of braking it (tractoredVelocity), judged once
+ * per shot (TractorShotComponent).
  *
- * GUESS 450 px, between the readings (reference "A tractor beam's rate
- * with Mass and distance (the KB leftover), wave 50", finding 2): a still
- * Kit Probe A 500 px out (diagonal) was pulled at once; at 425, 350 and
- * 250 px (on the axis) it never moved. A range, not a law in the
- * distance, on one far geometry.
- *
- * OPEN (wave 51): NovaJS decides pull or brake per beam UNIT, by where
- * the target is when that unit lands. Wave 51's trb_c pulled Kit Probe B
- * steadily for the whole ~1 s shot from 500 px, about 170 px of travel,
- * so it went on pulling well inside this range; the decision may be the
- * shot's (where the target is when the beam first reaches it), not the
- * unit's. Unchanged here (latching it per shot needs synced per-beam
- * state); NovaJS's shorter beam (Count / 56 s) crosses less of the range.
+ * MEASURED bracket, GUESS value 495 px (reference "The tractor's pull edge
+ * on a still hull (the KB leftover), wave 52"): a still Kit Probe A 450,
+ * 475 and 490 px from the beamer (on its axis) was held through three
+ * whole shots each, as at 425, 350 and 250 (wave 50); waves 50-51 pulled
+ * it from 500 px (on the diagonal) at once. So the edge is in (490, 500]
+ * (a circle, GUESS; a 500 px axis rig would close it). Was 450 (wave 50's
+ * GUESS between 425 and 500).
  */
-export const TRACTOR_PULL_RANGE = 450;
+export const TRACTOR_PULL_RANGE = 495;
+
+/** What a tractor SHOT does to every hull it moves: pull or brake. */
+export type TractorMode = 'pull' | 'brake';
+
+/**
+ * A tractor shot's mode, latched on the shot (the beam or projectile
+ * entity) by its first unit that moves a hull: 'pull' when that hull is
+ * beyond TRACTOR_PULL_RANGE of the firer then, else 'brake'; every later
+ * unit of the shot does the same, wherever the hull has got to. MEASURED
+ * (reference "A tractor shot that starts outside the pull range and
+ * crosses inside it (the hub's extra, KB), wave 52"): a shot that started
+ * pulling from 500 px went on speeding the hull toward the beamer past
+ * 425 and 400 px to its end, never braking (wave 51's trb_c / trb40_d).
+ * GUESS: a shot that starts braking brakes to its end even if the hull
+ * leaves the range. Synced per-shot state (the beam lives across ticks
+ * and a restore), serializer-registered.
+ */
+export const TractorShotComponent = new Component<TractorMode>('TractorShot');
+const TractorModeType = t.union([t.literal('pull'), t.literal('brake')]);
 
 /**
  * The tractor's pull beyond TRACTOR_PULL_RANGE, in the push law's form:
@@ -495,9 +510,9 @@ export const KnockbackSystem = new System({
     name: 'KnockbackSystem',
     events: [DamagedEvent],
     args: [DamagedEvent, MovementStateComponent, MovementPhysicsComponent,
-        Optional(ShipPhysicsComponent), RunQuery] as const,
+        Optional(ShipPhysicsComponent), RunQuery, Entities] as const,
     step({ damage, damager, scale = 1, beam }, movementState, movementPhysics,
-        shipPhysics, runQuery) {
+        shipPhysics, runQuery, entities) {
         if (!damage.knockback) {
             return;
         }
@@ -543,24 +558,39 @@ export const KnockbackSystem = new System({
             const scaled = Math.abs(damage.knockback) * scale / targetMass;
             const toFirer = Vector.fromVectorLike(
                 firerMovement.position.subtract(movementState.position));
-            if (toFirer.lengthSquared
-                > TRACTOR_PULL_RANGE * TRACTOR_PULL_RANGE) {
-                // Beyond TRACTOR_PULL_RANGE it PULLS toward the firer,
-                // each axis held at the top speed (reference "A tractor
-                // beam's rate with Mass and distance (the KB leftover)",
-                // wave 50: a still 50 t Probe 500 px out went to 181-185
-                // px/s toward the beamer in one shot).
+            // Pull or brake is the SHOT's, latched by its first unit that
+            // moves a hull (TractorShotComponent, wave 52's KB): a shot
+            // that starts pulling pulls to its end however close the hull
+            // comes. A shot entity already gone (never: the damage is
+            // emitted by the live shot) would judge each unit alone.
+            const shot = entities.get(damager);
+            let mode = shot?.components.get(TractorShotComponent);
+            if (mode === undefined) {
+                mode = toFirer.lengthSquared
+                    > TRACTOR_PULL_RANGE * TRACTOR_PULL_RANGE
+                    ? 'pull' : 'brake';
+                shot?.components.set(TractorShotComponent, mode);
+            }
+            if (mode === 'pull') {
+                // A pulling shot PULLS toward the firer, each axis held
+                // at the top speed (reference "A tractor beam's rate with
+                // Mass and distance (the KB leftover)", wave 50: a still
+                // 50 t Probe 500 px out went to 181-185 px/s toward the
+                // beamer in one shot).
                 // The cap is the hull's own (outfitted) top speed, not
                 // this tick's effective maxVelocity: that one rises to
                 // meet an overspeed while it bleeds off, so the pull's own
                 // diagonal 1.4 x would lift every later axis cap with it.
-                movementState.velocity = pulledVelocity(
-                    movementState.velocity,
-                    toFirer.normalize(scaled * TRACTOR_PULL_PER_IMPACT),
-                    shipPhysics?.speed ?? movementPhysics.maxVelocity);
+                // A hull right on the firer has no direction to be pulled.
+                if (toFirer.lengthSquared > 0) {
+                    movementState.velocity = pulledVelocity(
+                        movementState.velocity,
+                        toFirer.normalize(scaled * TRACTOR_PULL_PER_IMPACT),
+                        shipPhysics?.speed ?? movementPhysics.maxVelocity);
+                }
                 return;
             }
-            // Within it, it does NOT pull: it brakes the target's
+            // A braking shot does NOT pull: it brakes the target's
             // velocity toward its FIRER's, never past it (reference "A
             // tractor beam (the KB leftover)", wave 48: Kit Probe A at
             // rest 250 px out never moved under four shots; coasting at
@@ -568,12 +598,11 @@ export const KnockbackSystem = new System({
             // stopped dead, and stayed put; wave 50: still at 350 and 425
             // px too). The rate: TRACTOR_BRAKE_PER_IMPACT (GUESS, fitted
             // to about 19 px/s a Count-30 shot of Impact -20 on 50 t).
-            // The two never mix: each hit (each beam unit) either pulls or
-            // brakes, by where the target is when it lands, so a hull
-            // pulled in from afar is braked to the firer's velocity once
-            // it comes inside the range, and one that coasts back out is
-            // pulled in again (wave 50's tra_a, flung past the beamer and
-            // pulled back).
+            // The two never mix within a shot; across shots each starts
+            // afresh, so a hull pulled in from afar is braked by the next
+            // shot that starts with it inside the range, and one that
+            // coasts back out is pulled in again by the next shot (wave
+            // 50's tra_a, flung past the beamer and pulled back).
             movementState.velocity = tractoredVelocity(
                 movementState.velocity,
                 Vector.fromVectorLike(firerMovement.velocity),
@@ -640,6 +669,8 @@ export const DeathPlugin: Plugin = {
     build(world) {
         world.resources.get(SerializerResource)?.addEvent(DeathEvent, passthroughType<Time>('DeathEventType'));
         world.resources.get(SerializerResource)?.addEvent(ZeroArmorEvent, passthroughType<Time>('ZeroArmorEventType'));
+        world.resources.get(SerializerResource)?.addComponent(
+            TractorShotComponent, TractorModeType);
         //const runQuery = world.resources.get(RunQuery)!;
         //const emit = world.resources.get(Emit)!;
         world.addSystem(DamageSystem);
