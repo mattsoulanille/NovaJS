@@ -149,6 +149,14 @@ export interface SystemGraphOptions {
      * dashed ring.
      */
     miniMap?: boolean;
+    /**
+     * The colour of the ordinary hyperspace lanes. Defaults to the star
+     * map's #4a4a4a (starmap_draw.ts LANE_COLOR), or in destination-picker
+     * mode to the original gate map's nearly black #080808
+     * (GATE_MAP_LANE_COLOR). The gate map passes its own: grey unless the
+     * player turned the `enhGateMapLanes` enhancement off.
+     */
+    laneColor?: number;
 }
 
 export class SystemGraph {
@@ -217,6 +225,9 @@ export class SystemGraph {
      */
     private readonly drawn: Set<string>;
     private readonly miniMap: boolean;
+    /** The colour the ordinary hyperspace lanes are drawn in
+     * ({@link SystemGraphOptions.laneColor}). */
+    readonly laneColor: number;
 
     constructor(systems: SystemData[], private currentSystem: string,
         options: SystemGraphOptions = {}) {
@@ -232,6 +243,11 @@ export class SystemGraph {
             ?? (() => false);
         this.discoveryOf = options.discoveryOf ?? (() => DISCOVERY_LANDED);
         this.miniMap = options.miniMap ?? false;
+        // The original's gate map draws the hyperspace lanes nearly black,
+        // its star map grey (starmap_draw.ts GATE_MAP_LANE_COLOR /
+        // LANE_COLOR); the gate map passes its own (laneColor).
+        this.laneColor = options.laneColor
+            ?? (this.selectable ? GATE_MAP_LANE_COLOR : LANE_COLOR);
         const size = options.size ?? { x: 456, y: 419 };
         // NCB-hidden systems don't exist for the player: they aren't drawn,
         // clicked, linked, or routed through. The current system is always
@@ -352,10 +368,7 @@ export class SystemGraph {
         if (options.territoryOf) {
             this.drawBorders(options.territoryOf);
         }
-        // The gate map draws the hyperspace lanes nearly black, the star
-        // map grey (starmap_draw.ts GATE_MAP_LANE_COLOR / LANE_COLOR).
-        drawLinks(this.linkGraphics, this.links,
-            this.selectable ? GATE_MAP_LANE_COLOR : LANE_COLOR);
+        drawLinks(this.linkGraphics, this.links, this.laneColor);
         if (this.selectable) {
             this.drawSelection();
         } else {

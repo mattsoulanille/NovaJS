@@ -9,17 +9,20 @@ import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { gateMapClearancePlayer } from '../display/gate_map_plugin.js';
+import {
+    ENHANCEMENTS, overrideEnhancements,
+} from '../enhancements.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import {
     DISCOVERY_ENTERED, DiscoveryLevel, MissionsComponent,
 } from '../nova_plugin/player/index.js';
 import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
-import { GateMap } from './gate_map.js';
+import { GateMap, gateMapLaneColor } from './gate_map.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { MenuControls } from './menu_controls.js';
 import { MapClearancePlayer, Starmap } from './starmap.js';
 import {
-    SYSTEM_INHABITED_COLOR,
+    GATE_MAP_LANE_COLOR, LANE_COLOR, SYSTEM_INHABITED_COLOR,
     SYSTEM_REFUSING_CLEAN_COLOR, SYSTEM_REFUSING_COLOR,
     SYSTEM_UNINHABITED_COLOR,
 } from './starmap_draw.js';
@@ -43,6 +46,7 @@ import { SystemGraph } from './system_graph.js';
 describe('the hypergate map\'s dot colours are the star map\'s', () => {
     beforeAll(() => installHeadlessPixi());
     afterEach(() => {
+        overrideEnhancements({});
         expect(MenuControls.focused).toBeUndefined();
     });
 
@@ -180,5 +184,40 @@ describe('the hypergate map\'s dot colours are the star map\'s', () => {
         expect(read.missions).toEqual(new Map());
         expect(read.bribes).toBeUndefined();
         expect(read.now).toBe(1234);
+    });
+
+    describe('the "Jump lanes on the hypergate map" enhancement', () => {
+        it('is listed, default on', () => {
+            expect(ENHANCEMENTS.some(e => e.key === 'enhGateMapLanes'))
+                .toBeTrue();
+            expect(gateMapLaneColor()).toBe(LANE_COLOR);
+        });
+
+        it('draws the ordinary lanes the star map\'s grey when on, the '
+            + 'original\'s near-black when off', async () => {
+                const data = gameData();
+                overrideEnhancements({ enhGateMapLanes: true });
+                expect((await gateMapGraph(data)).laneColor)
+                    .toBe(LANE_COLOR);
+                expect((await starmapGraph(data)).laneColor)
+                    .toBe(LANE_COLOR);
+                overrideEnhancements({ enhGateMapLanes: false });
+                expect(gateMapLaneColor()).toBe(GATE_MAP_LANE_COLOR);
+                expect((await gateMapGraph(data)).laneColor)
+                    .toBe(GATE_MAP_LANE_COLOR);
+                expect(GATE_MAP_LANE_COLOR).toBe(0x080808);
+                expect(LANE_COLOR).toBe(0x4a4a4a);
+            });
+
+        it('keeps the cyan gate arrows above the lanes', async () => {
+            const graph = await gateMapGraph(gameData());
+            const layers = graph as unknown as {
+                linkGraphics: PIXI.Graphics, gateGraphics: PIXI.Graphics,
+            };
+            const parent = layers.gateGraphics.parent;
+            expect(layers.linkGraphics.parent).toBe(parent);
+            expect(parent.getChildIndex(layers.gateGraphics))
+                .toBeGreaterThan(parent.getChildIndex(layers.linkGraphics));
+        });
     });
 });

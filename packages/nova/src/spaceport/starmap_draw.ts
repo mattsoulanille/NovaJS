@@ -21,9 +21,12 @@ import {
  */
 export const LANE_COLOR = 0x4a4a4a;
 /**
- * The gate map's ordinary hyperspace lanes: drawn, but as 1 px #080808,
- * nearly black (measured, reference "Gate map, wave 27": N1 - Kit Gate
- * Lane and N1 - Kit Map Permit on the original's gate map at Kit Gate N1).
+ * The gate map's ordinary hyperspace lanes ON THE ORIGINAL: drawn, but as
+ * 1 px #080808, nearly black (measured, reference "Gate map, wave 27": N1 -
+ * Kit Gate Lane and N1 - Kit Map Permit on the original's gate map at Kit
+ * Gate N1). NovaJS draws them {@link LANE_COLOR} like the star map's unless
+ * the player turns the `enhGateMapLanes` enhancement off (gate_map.ts
+ * gateMapLaneColor).
  */
 export const GATE_MAP_LANE_COLOR = 0x080808;
 // System-dot colors, sampled off the original at 1:1 in

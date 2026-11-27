@@ -4,6 +4,7 @@ import * as PIXI from "pixi.js";
 import { Observable } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
+import { enhancementEnabled } from "../enhancements.js";
 import { ControlEvent, landable } from '../nova_plugin/core/index.js';
 import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DiscoveryLevel,
@@ -21,7 +22,7 @@ import { MissionUniverse } from "./mission_universe.js";
 import {
     MapClearancePlayer, MapDotRule, mapDotRule, refusingSystems,
 } from "./starmap.js";
-import { MapRefusal } from "./starmap_draw.js";
+import { GATE_MAP_LANE_COLOR, LANE_COLOR, MapRefusal } from "./starmap_draw.js";
 import { MISSION_MARK_ACTIVE_CICN } from "./starmap_marks.js";
 import {
     HAZARDS_VALUE_X, HAZARDS_Y, PORTS_LABEL_X, PORTS_VALUE_X, PORTS_Y,
@@ -71,6 +72,20 @@ export interface GateMapResult {
      * as `missionMarks`. Omitted, no system is drawn orange or red.
      */
     clearancePlayer?: MapClearancePlayer;
+}
+
+/**
+ * The colour the gate map draws the ORDINARY hyperspace lanes in. The
+ * original draws them nearly black, #080808 (measured, reference "Gate map,
+ * wave 27"); NovaJS draws them the star map's #4a4a4a so the routes between
+ * gates read at a glance (Matthew's playtest, 2026-11-26: "we should do it
+ * since it makes it easier to see"), unless the player turns the
+ * `enhGateMapLanes` enhancement off. The cyan gate arrows stay above them
+ * either way (SystemGraph's gate layer is over the lanes and the dots).
+ */
+export function gateMapLaneColor(
+    showLanes = enhancementEnabled('enhGateMapLanes')): number {
+    return showLanes ? LANE_COLOR : GATE_MAP_LANE_COLOR;
 }
 
 /** The column's first caption once a destination is picked (reference
@@ -344,10 +359,14 @@ export function gateMapGraphOptions(gateLinks: [string, string][],
      * exist under them, as the star map does. Omitted means no bits. */
     playerBits?: ReadonlySet<number>,
     /** {@link GateMapView.routes}: the lanes each pick whitens. */
-    gateRoutes?: ReadonlyMap<string, [string, string][]>): SystemGraphOptions {
+    gateRoutes?: ReadonlyMap<string, [string, string][]>,
+    /** The ordinary lanes' colour ({@link gateMapLaneColor}); omitted, the
+     * original's nearly black one. */
+    laneColor = GATE_MAP_LANE_COLOR): SystemGraphOptions {
     return {
         gateLinks,
         selectable,
+        laneColor,
         ...(gateRoutes ? { gateRoutes } : {}),
         missionMarks,
         ...(playerBits ? { playerBits } : {}),
@@ -633,7 +652,8 @@ export class GateMap extends Menu<GateMapResult> {
                 mapDotRule(id => this.planets.get(id),
                     this.refusingSystems(input.clearancePlayer,
                         input.legalRecords)),
-                id => this.discoveryOf(id), playerBits, view.routes));
+                id => this.discoveryOf(id), playerBits, view.routes,
+                gateMapLaneColor()));
         // The original's opening scale, the star map's (Kit Gate A1 -> A2,
         // 120 map units, 212 px apart: "Gate map, wave 24").
         this.systemGraph.zoomBy(DEFAULT_ZOOM);

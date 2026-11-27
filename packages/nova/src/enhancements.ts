@@ -27,6 +27,7 @@ export type EnhancementKey =
     | 'enhTextScrollWheel'
     | 'enhShopSearch'
     | 'enhMiniMapHiddenNoClicks'
+    | 'enhGateMapLanes'
     | 'enhShipStorage';
 
 /** One row of the NovaJS Enhancements dialog. */
@@ -91,6 +92,14 @@ export const ENHANCEMENTS: readonly EnhancementSpec[] = [
         novajs: 'Once the h minimap has faded, clicks there reach space.',
         original: 'Its hidden area still picks systems for about 8 s '
             + 'after it was shown.',
+    },
+    {
+        // spaceport/gate_map.ts gateMapLaneColor.
+        key: 'enhGateMapLanes',
+        label: 'Jump lanes on the hypergate map',
+        novajs: 'The hypergate map draws the hyperspace lanes in the '
+            + 'star map\'s grey.',
+        original: 'The lanes are drawn nearly black, all but invisible.',
     },
     {
         // Hides the UI only: the stored ships stay stored, and the
