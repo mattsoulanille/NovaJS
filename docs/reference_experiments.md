@@ -25902,6 +25902,45 @@ Confidence: high for 1 and 3 (three runs), high for 2 on this geometry
 `mj3_a/fr/arr.png`, `mjh_a/fr/status.png`, `tools/mjpilot.mjs`,
 `tools/feed.sh` (re-sent mj3_a's steps to its retry).
 
+### The tractor's pull edge on a still hull (the KB leftover), wave 52: it lies between 475 and 500 px: a still Kit Probe A 450 and 475 px from the beamer (on its axis) was NOT pulled by three and two whole shots, as at 425; wave 50 pulled it from 500 px (on the diagonal) (2026-11-27)
+
+**Question** (the wave-51 leftover): where between 425 (held) and 500
+(pulled) does a tractor stop braking / holding and start pulling?
+
+**Rig** (`wave52Resources` "TR"). sÿst 1502 / 1503 Kit Tractor Range 450 /
+475: wave 50's Kit Tractor Range layout (a port at the centre, the knock
+grid's moons, the marker 450 / 475 px WEST of the port), mïsn 998 / 999
+(bits 9348 / 9349) putting wave 48's Kit Tractor Beamer 20 (Impact -20,
+Count 30, one shot every 7.15 s, 175 t) on the marker. Pilots `w52_tr450`
+/ `w52_tr475`: Kit Probe A (50 t, inertial) on the port; land, accept,
+Leave, 30 s still. Places on the moon grid every frame
+(`tools/padsum.sh <run> pad`), the beam's frames (`tools/beamcount.py`).
+
+| run | distance | shots in the window | the hull's place (grid, px) through 30 s |
+|---|---|---|---|
+| tr450_a | 450 (axis) | 34.0, 41.0, 48.1 s (22 / 30 / 30 frames) | **(5.1, 5.7) unchanged** from the Leave (33.1 s) to 67 s |
+| tr475_a | 475 (axis) | 33.0, 40.1, 47.3 s (28 / 30 / 30 frames) | **(5.1, 5.7) unchanged** from the Leave (32.3 s) to 60 s |
+| wave 50 tr425_a / tr350_a | 425 / 350 | | held |
+| waves 50-51 (Kit Knock Grid's first moon) | 500 (the -143 deg diagonal) | | pulled to 181-330 px/s in one shot |
+
+**Finding.** A still hull is held, not pulled, at 450 and 475 px: the
+pull starts beyond 475 px (and by 500). The 500 px readings were on the
+diagonal and these on the axis; a square (max(|dx|, |dy|)) range would
+put the diagonal 500 at 400 and hold it, so the range is a circle (or
+wider on the diagonal), GUESS a circle of 480-500 px.
+
+**NovaJS (main 14052c16):** `TRACTOR_PULL_RANGE` = 450
+(`N/nova_plugin/ship/death_plugin.ts:438`, tested per unit at
+`:548-549`): **mismatch** for a still hull 450-475 px out (NovaJS pulls
+it from just past 450, the original holds it). **Proposed:**
+`TRACTOR_PULL_RANGE` 490 (GUESS inside (475, 500]; a rig at 490 would
+pin it), decided once per shot (the section on a shot that crosses the
+edge, above). Confidence: high for "held at 450 and 475" (three and two
+shots, the hull still to 0.1 px), the edge's exact place unread.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w52/tr450_a/`,
+`tr475_a/` (`recording.mp4`), `tr450_a.pos.txt`, `tr475_a.pos.txt`.
+
 ### Reliability notes (for anyone running the reference)
 
 - **Stock mission bits live above 9000 too (wave 51 `trb40_a` / `_b`):**
