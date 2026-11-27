@@ -27,7 +27,9 @@ import {
 import { offerSubstitutions, rollOffers } from '../../spaceport/mission_offers.js';
 import { expandMissionText } from './mission_text.js';
 import { buildMissionShipSpawns } from './mission_ship_spawn.js';
-import { GOAL_DESTROY, goalSupported } from '../player/index.js';
+import {
+    GOAL_DESTROY, GOAL_OBSERVE, goalSupported, registerShip, shipObserved,
+} from '../player/index.js';
 import { shipGoalOfferable } from './mission_ship_logic.js';
 import { ControlBitsComponent } from '../ncb/index.js';
 import { MissionShipComponent } from '../player/index.js';
@@ -516,6 +518,84 @@ describe('missions against real Nova data', () => {
         expect(ships.length).toBe(1);
         expect(ships[0].name).toBe(active.shipName);
     });
+
+    /**
+     * Matthew's report (2026-11-26): trouble completing "Auroran 19:
+     * Observe Auroran Border" (nova:676). Offered in the Rimerta bar
+     * (b225 & !b226), OnAccept b995 — which swaps BOTH SPC-1421 (nova:308
+     * -> nova:765, the ShipSyst) and Unin (nova:327 -> nova:767, home of the
+     * ReturnStel Auroran LP V) for their stacked b995 copies. Two "Large
+     * Heraan War Ships" (düde nova:264, AI 4, cloakless Aurora Cruisers),
+     * ShipGoal 4. Pinned end to end: they spawn in whichever SPC-1421 copy
+     * the player is in, come back on re-entry while unobserved, and once
+     * observed the landing at LP V completes (b226, S788).
+     */
+    it('completes "Auroran 19: Observe Auroran Border" (nova:676)',
+        async () => {
+            const gameData = await getIntegrationGameData();
+            const universe = MissionUniverse.shared(gameData);
+            await universe.load();
+
+            const start = await gameData.data.PlayerStart.get('nova:128');
+            const entity = makeShip(await gameData.data.Ship.get(start.ship));
+            entity.components.set(GameDateComponent, { ...start.date });
+            entity.components.set(CreditsComponent, { credits: 0 });
+            entity.components.set(ControlBitsComponent, new Set([225]));
+            entity.components.set(CombatRatingComponent, { kills: 2500 });
+            entity.components.set(CargoComponent, new Map());
+
+            const session = await MissionSession.create(
+                entity, gameData, universe, 'nova:335');
+            const mission = universe.getMission('nova:676')!;
+            const ctx = session.machinery.offerContext();
+            expect(missionMatchesLocation(mission, LOCATION_BAR, ctx))
+                .toBe(true);
+            const offer = makeMissionOffer(mission, ctx)!;
+            expect(offer.shipObjective).toEqual(jasmine.objectContaining({
+                goal: GOAL_OBSERVE, systemId: 'nova:765',
+                dudeId: 'nova:264', total: 2,
+            }));
+            acceptOffer(session.machinery, offer, session.outfits);
+            session.commit();
+            const bits = entity.components.get(ControlBitsComponent)!;
+            expect(bits.has(995)).toBe(true);
+            expect(universe.systemIdOfPlanet('nova:347', bits))
+                .toBe('nova:767');
+
+            // Either copy of SPC-1421 gets the pair; unobserved, they are
+            // all built again at the next entry.
+            for (const systemId of ['nova:765', 'nova:308', 'nova:765']) {
+                const ships = await buildMissionShipSpawns(entity, 'owner',
+                    systemId, gameData, universe);
+                expect(ships.length).withContext(systemId).toBe(2);
+            }
+            // Landing at LP V before observing them completes nothing.
+            let events = await processEntityLanding(
+                entity, gameData, universe, 'nova:347');
+            expect(events.find(e => e.type === 'completed')).toBeUndefined();
+
+            // The shared sim's co-presence observation (mission_ship_plugin
+            // MissionShipTrackSystem), on the two hulls of an entry.
+            const objective = entity.components.get(MissionsComponent)!
+                .get('nova:676')!.shipObjective!;
+            const ships = await buildMissionShipSpawns(entity, 'owner',
+                'nova:765', gameData, universe);
+            ships.forEach((_, i) => {
+                registerShip(objective, `ship ${i}`);
+                shipObserved(objective, `ship ${i}`);
+            });
+            expect(objective.complete).toBe(true);
+            expect(await buildMissionShipSpawns(entity, 'owner',
+                'nova:765', gameData, universe)).toEqual([]);
+
+            events = await processEntityLanding(
+                entity, gameData, universe, 'nova:347');
+            expect(events.find(e => e.type === 'completed')).toBeDefined();
+            expect(bits.has(226) || entity.components
+                .get(ControlBitsComponent)!.has(226)).toBe(true);
+            expect([...entity.components.get(MissionsComponent)!.keys()])
+                .toEqual(['nova:788']);
+        });
 
     it('fails a mission whose ship goal failed, at the next landing',
         async () => {

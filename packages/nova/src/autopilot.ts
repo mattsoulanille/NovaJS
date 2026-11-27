@@ -62,6 +62,32 @@ function angleDifference(a: number, b: number) {
     return difference;
 }
 
+/**
+ * The fastest approach speed (px/s) from which a ship can still stop
+ * within `distance` px: it first coasts for `turnSeconds` while it turns
+ * its nose retrograde, then brakes at `acceleration`, so
+ * v·turnSeconds + v²/(2a) = distance, solved for v.
+ *
+ * The turn is what an inertial hull needs and the plain bang-bang
+ * v = sqrt(2·a·d) left out. A nimble hull flips in a fraction of a second
+ * and barely notices; a heavy one does not. Matthew's Auroran Thunderforge
+ * (turn 1.18 rad/s, so 2.7 s to turn round, at 166 px/s) coasted about
+ * 440 px before it could brake at all, sailed through the 28 px window
+ * of the 17 x 31 Auroran LP V and swung back and forth across it for
+ * five minutes without landing (the return of "Auroran 19: Observe
+ * Auroran Border", nova:676). The half-turn is the worst case (the nose
+ * pointed at the planet); an inertialess ship stops when its throttle
+ * does, so it passes 0.
+ */
+export function stoppableSpeed(acceleration: number, turnSeconds: number,
+    distance: number): number {
+    if (acceleration <= 0 || distance <= 0) {
+        return 0;
+    }
+    return acceleration * (Math.sqrt(turnSeconds * turnSeconds
+        + 2 * distance / acceleration) - turnSeconds);
+}
+
 export class Autopilot {
     private planetUuid?: string;
     private analogSent = false;
@@ -143,12 +169,11 @@ export class Autopilot {
 
         const distance = Math.sqrt(distanceSquared);
         const speed = Math.sqrt(speedSquared);
-        // Bang-bang braking distance with margin: the fastest approach
-        // that can still stop is v = sqrt(2·a·remaining); track a bit
-        // under it so the ship settles inside the landing window.
         const desiredSpeed = Math.min(physics.maxVelocity,
-            0.8 * Math.sqrt(2 * physics.acceleration
-                * Math.max(0, distance - stopMargin)));
+            0.8 * stoppableSpeed(physics.acceleration,
+                physics.movementType === MovementType.INERTIALESS
+                    ? 0 : Math.PI / Math.max(physics.turnRate, 1e-3),
+                Math.max(0, distance - stopMargin)));
 
         if (physics.movementType === MovementType.INERTIALESS) {
             // Velocity follows the nose; point at the planet and match

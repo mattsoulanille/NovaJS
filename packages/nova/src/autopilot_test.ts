@@ -6,14 +6,14 @@ import {
 } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
-import { Autopilot } from './autopilot.js';
+import { Autopilot, stoppableSpeed } from './autopilot.js';
 import { getSyntheticGameData } from './communication/simulation_test_fixture.js';
 import { makeSystem } from './nova_plugin/make_system.js';
 import {
     applyAnalogControl, applyControlEvents, ControlledByComponent,
     PlayerShipSelector,
 } from './nova_plugin/player/index.js';
-import { makeShip } from './nova_plugin/ship/index.js';
+import { makeShip, ShipPhysicsComponent } from './nova_plugin/ship/index.js';
 import { completeEntity } from './nova_plugin/spawn/index.js';
 import {
     LandEvent, LandingBlockedEvent, LandingClearedEvent, landingDistance,
@@ -68,10 +68,28 @@ function fly(world: World, autopilot: Autopilot, maxTicks: number) {
 }
 
 describe('Autopilot landing on the square zone', () => {
+    /**
+     * Matthew's Auroran Thunderforge as flown into Auroran LP V for
+     * "Auroran 19: Observe Auroran Border" (nova:676), read off the live
+     * player entity: Accel 101.9 px/s², top speed 165.6 px/s, and a turn
+     * of 1.18 rad/s, so turning round to brake takes about 2.7 s. The
+     * braking curve ignored that turn and the ship sailed through the 28
+     * px window of the 17 x 31 station for five minutes without landing.
+     */
+    const SLOW_TURNING_HULL = {
+        acceleration: 101.88, maxVelocity: 165.6, turnRate: 1.178,
+    };
     const cases: Array<{
         name: string, frame: [number, number], offset: [number, number],
         inertialess?: boolean,
+        physics?: typeof SLOW_TURNING_HULL,
     }> = [
+        { name: 'a 17x31 station in a slow-turning heavy hull (Auroran LP V '
+            + 'in a Thunderforge)', frame: [17, 31], offset: [-300, 150],
+            physics: SLOW_TURNING_HULL },
+        { name: 'a 17x31 station in a slow-turning heavy hull, from afar',
+            frame: [17, 31], offset: [1400, -900],
+            physics: SLOW_TURNING_HULL },
         { name: 'a tiny 15x21 station, straight on',
             frame: [15, 21], offset: [0, 900] },
         { name: 'a tiny 15x21 station, on the diagonal',
@@ -85,16 +103,30 @@ describe('Autopilot landing on the square zone', () => {
         { name: 'a 250 px planet (window 435, clearance zone 249)',
             frame: [250, 250], offset: [1000, 0] },
     ];
-    for (const { name, frame, offset, inertialess } of cases) {
+    for (const { name, frame, offset, inertialess, physics } of cases) {
         it(`lands on ${name}`, async () => {
             const { world, ship, planet } = await harness(frame,
                 SYNTHETIC.ships.skiff);
-            if (inertialess) {
-                ship.components.set(MovementPhysicsComponent, {
-                    ...ship.components.get(MovementPhysicsComponent)!,
-                    movementType: MovementType.INERTIALESS,
-                });
+            // Through ShipPhysicsComponent, the per-tick source: the
+            // EffectiveMovementPhysicsSystem rewrites MovementPhysics from
+            // it every tick, so an override of MovementPhysics itself
+            // would last one tick.
+            ship.components.set(ShipPhysicsComponent, {
+                ...ship.components.get(ShipPhysicsComponent)!,
+                ...(physics ? {
+                    acceleration: physics.acceleration,
+                    speed: physics.maxVelocity,
+                    turnRate: physics.turnRate,
+                } : {}),
+                ...(inertialess ? { inertialess: true } : {}),
+            });
+            world.step();
+            const flown = ship.components.get(MovementPhysicsComponent)!;
+            if (physics) {
+                expect(flown.turnRate).toBeCloseTo(physics.turnRate, 6);
             }
+            expect(flown.movementType).toBe(inertialess
+                ? MovementType.INERTIALESS : MovementType.INERTIAL);
             const centre = planet.components.get(MovementStateComponent)!
                 .position;
             const movement = ship.components.get(MovementStateComponent)!;
@@ -119,6 +151,20 @@ describe('Autopilot landing on the square zone', () => {
                 at.position.y - centre.y)).toBeLessThanOrEqual(range);
         }, 60_000);
     }
+
+    it('approaches no faster than it can turn round and stop from', () => {
+        // No turn to make: the plain bang-bang sqrt(2 a d).
+        expect(stoppableSpeed(100, 0, 200)).toBeCloseTo(200, 9);
+        // The Thunderforge's 2.7 s half-turn at 300 px out: coasting
+        // 2.7 s, then braking, ends exactly at the planet.
+        const turn = Math.PI / SLOW_TURNING_HULL.turnRate;
+        const v = stoppableSpeed(SLOW_TURNING_HULL.acceleration, turn, 300);
+        expect(v * turn + v * v / (2 * SLOW_TURNING_HULL.acceleration))
+            .toBeCloseTo(300, 6);
+        expect(v).toBeLessThan(Math.sqrt(2 * 101.88 * 300) / 2);
+        expect(stoppableSpeed(100, 2, 0)).toBe(0);
+        expect(stoppableSpeed(0, 2, 100)).toBe(0);
+    });
 
     it('taps land at once from a corner of the square, outside the circle '
         + 'of the same half-width', async () => {
