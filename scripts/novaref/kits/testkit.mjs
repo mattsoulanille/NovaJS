@@ -318,6 +318,7 @@ export default {
         ...wave44Resources(),
         ...wave45Resources(),
         ...wave46Resources(),
+        ...wave47Resources(),
     ].map(wave15Patches).map(wave46Patches).map(withoutRunningLights),
 };
 
@@ -396,6 +397,90 @@ function wave46Resources() {
     // Anchor, a distinct dark 40 px planet decoration (spöb 143's art, flags 0) at (-1200, -160) in wave 45's Kit Zone Bravo
     // (sÿst 1477, its 16th stellar: wave46Patches), on screen at a standard arrival (about 1,350 px west of the centre).
     out.push(spob(1161, "Kit Zone Anchor", -1200, -160, 143, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] }));
+    return out;
+}
+
+/**
+ * Wave-47 experiments (docs/reference_experiments.md, "... wave 47"): the
+ * wave-46 leftovers and the set strings in flight. RETIRED: wave 13's mïsn
+ * 1070 / 1071 / 1072 (bits 9131 / 9133 / 9135, the Raczak rescues; 1073
+ * stays) and wave 10's shïp 844 / 847 / 848 (Kit Mass Hull 100 / 155 / 50).
+ * Used: sÿst 1484-1485, spöb 1162-1164, shïp 844 / 847 / 848, düde 549,
+ * wëap 319-321, oütf 506-509, mïsn 1070-1072, bits 9296-9305. Map row y =
+ * -3120 (x -800 .. -760). The next free ids: sÿst 1486+, spöb 1165-1399
+ * (and 518-999), shïp NONE (retire an old kit hull: wave 10's 843 Kit Sub
+ * Target Big is unused since wave 41; 836 is T's target), düde 548 / 550+,
+ * përs: override a stock one, ränk 205+, mïsn: wave 12's 1063, wave 13's
+ * 1073 (then retire another old kit mission), gövt 283 and below, flët
+ * 324+, wëap 322+, oütf 510+, jünk 205+, bits 9306+, rlëD 1113+.
+ *
+ *  T   sÿst 1484 Kit Blind Spin: port spöb 1162 at the centre (nav default
+ *      1), a marker decoration spöb 1163 at (0, -300) (nav default 2); mïsn
+ *      1070 (bit 9305) puts wave 10's immobile magenta Kit Sub Target (shïp
+ *      836, düde 319: AI 1, 30000 armor) ON the marker. The player spins on
+ *      the port: its bolts are read where they leave the planet's disc. wëap 319 / 320 /
+ *      321 Kit Spin Rear / Side / Front: a 1-damage turret bolt (Reload 3,
+ *      Speed 1000, Count 60, Impact 0) with the wëap blind-spot flag 0x4000
+ *      / 0x2000 / 0x1000 (oütf 506-508); oütf 509 Kit Slow Turn (ModType 9,
+ *      -260: Turn 30 -> 4, about 12 deg/s, GUESS). The player (Kit Plain
+ *      Ring 893, Flags 0) turns slowly with Left held and Space held: where
+ *      the stream of bolts stops and starts is the blind sector's edge.
+ *  SD  sÿst 1485 Kit Flight Bits: port spöb 1164 at the centre; traffic
+ *      (avgShips 4) of düde 549, half shïp 869 Kit Shipping (the green AI 1
+ *      disc, ungated: the arrivals' control) and half shïp 847 Kit Bit Disc
+ *      (the magenta AI 1 disc, AppearOn "b9296 | b9297"): a magenta arrival
+ *      in flight shows the bit set in flight. mïsn 1071 (bit 9298) puts
+ *      wave 12's Kit Anchored Trader (düde 356) on the port, ShipGoal 0
+ *      (destroy), OnShipDone b9296, ReturnStel 1164, OnSuccess b9300.
+ *  SF  mïsn 1072 (bit 9299) at the same port: wave 45's prize (düde 540,
+ *      300 armor) as a ShipBehav-1 / ShipGoal-3 protector; destroying it in
+ *      flight fails the mission: OnFailure b9297.
+ *  ED  shïp 848 Kit Deal Escort (the yellow disc; UpgradeTo 844 for 1,000,
+ *      EscSellValue 5,000, OnPurchase b9303, OnRetire b9301) and shïp 844
+ *      Kit Deal Upgraded (the cyan disc; OnPurchase b9302, OnRetire b9304):
+ *      a captured 848 escort (pilot) upgraded or sold from its hail, settled
+ *      at Kit Port's shipyard: which hull set strings run?
+ */
+function wave47Resources() {
+    const out = [];
+    const Y = -3120;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const decoration = (id, name, x = 0, y = 0) => spob(id, name, x, y, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] });
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const RLED = { yellow: 1974, magenta: 1975, cyan: 1976 };
+    // --- T: sÿst 1484, spöb 1162-1163, wëap 319-321, oütf 506-509, mïsn 1070 (wave 13's, retired), bit 9305.
+    out.push(system(1484, "Kit Blind Spin", nextX(), Y, 363, [1162, 1163]),
+        spob(1162, "Kit Blind Spin Port", 0, 0, 138, { flags: 0x43 }), decoration(1163, "Kit Blind Spin Marker", 0, -300));
+    const spin = { reload: 3, duration: 60, speed: 1000, armorDamage: 1, shieldDamage: 1, guidance: 4, impact: 0, ionization: 0 };
+    [[319, "Kit Spin Rear", 0x4000, 506], [320, "Kit Spin Side", 0x2000, 507], [321, "Kit Spin Front", 0x1000, 508]].forEach(([wid, name, flags, oid]) =>
+        out.push(weap(wid, name, 131, { ...spin, flags }), gun(oid, name, wid)));
+    const slow = gun(509, "Kit Slow Turn", 0);
+    slow.set = { ...slow.set, modType: 9, modVal: -260, max: 1 };
+    out.push(slow);
+    out.push(...misn(1070, "Kit T spin target on the marker", 9305, { availStel: 1162, shipCount: 1, shipDude: 319, shipGoal: -1, shipBehav: -1,
+        shipStart: -2, onAccept: "!b9305" }));
+    // --- SD / SF: sÿst 1485, spöb 1164, shïp 847, düde 549, mïsn 1071 / 1072 (wave 13's, retired), bits 9296-9300.
+    out.push(...shareRled(847, "Kit Bit Disc", RLED.magenta, 24, { accel: 300, speed: 300, turn: 30, armor: 3000, shield: 3000, mass: 50,
+        freeMass: 100, cargo: 10, ai: 1, strength: 10, crew: 10, flags: 0, flags2: 0, appearOn: "b9296 | b9297" }));
+    const mixed = dude(549, "Kit Bit Traffic", 1, 363, 869);
+    mixed.set = { ...mixed.set, ships: [869, 847, ...none16.slice(2)], probs: [50, 50, ...zero16.slice(2)] };
+    const bits = system(1485, "Kit Flight Bits", nextX(), Y, 363, [1164]);
+    bits.set = { ...bits.set, avgShips: 4, dudes: [549, ...none8].slice(0, 8), dudeProbs: [100, ...zero8].slice(0, 8) };
+    out.push(mixed, bits, spob(1164, "Kit Flight Bits Port", 0, 0, 138, { flags: 0x43 }));
+    out.push(...misn(1071, "Kit SD destroy the trader", 9298, { availStel: 1164, shipCount: 1, shipDude: 356, shipGoal: 0, shipBehav: -1,
+        shipStart: -1, returnStel: 1164, onAccept: "!b9298", onShipDone: "b9296", onSuccess: "b9300" }));
+    out.push(...misn(1072, "Kit SF protect the prize", 9299, { availStel: 1164, shipCount: 1, shipDude: 540, shipGoal: 3, shipBehav: 1,
+        shipStart: -1, onAccept: "!b9299", onFailure: "b9297" }));
+    // --- ED: shïp 848 / 844 (wave 10's, retired).
+    const deal = { accel: 300, speed: 300, turn: 30, armor: 3000, shield: 3000, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 50,
+        crew: 10, flags: 0, flags2: 0, cost: 100000, escortType: 0 };
+    out.push(...shareRled(848, "Kit Deal Escort", RLED.yellow, 24, { ...deal, escortUpgradeTo: 844, escortUpgradeCost: 1000, escortSellValue: 5000,
+        onPurchase: "b9303", onRetire: "b9301" }));
+    out.push(...shareRled(844, "Kit Deal Upgraded", RLED.cyan, 24, { ...deal, onPurchase: "b9302", onRetire: "b9304" }));
     return out;
 }
 
@@ -4732,15 +4817,15 @@ function wave13Resources() {
     // Kit Port, where the player takes off).
     const raczak = { shipCount: 1, shipSyst: -1, shipDude: 258, shipGoal: 5, shipBehav: -1, shipNameID: 25002, compGovt: 144, compReward: 10,
         cargoType: 27, cargoQty: 1, pickupMode: 2, dropoffMode: 1, scanMask: 520, flags: 0x1214, flags2: 0x0001, returnStel: 2100, availShipType: 127 };
-    out.push(...misn(1070, "Kit R Raczak ShipStart 2", 9131, { ...raczak, shipStart: 2, onAccept: "!b9131", onSuccess: "b9132" }));
-    out.push(...misn(1071, "Kit R Raczak at Kit Port", 9133, { ...raczak, shipStart: -1, onAccept: "!b9133", onSuccess: "b9134" }));
+    // mïsn 1070 (bit 9131, Raczak ShipStart 2) and 1071 (bit 9133, Raczak at Kit Port) were retired in wave 47
+    // (wave47Resources: T the spin target, SD the ship-done target).
     // 1071 boarded ("You retrieved Admiral Raczak from this ship."), where
     // wave 11's kit rescues were refused. Which difference? mïsn 1072 (bit
     // 9135) = 1071 without the mission cargo (CargoType -1, PickupMode -1);
     // mïsn 1073 (bit 9137) = 1072 with the kit's düde 330 (Kit Ally Pointer,
     // gövt 360) instead of the stock Raczak düde.
     const noCargo = { cargoType: -1, cargoQty: 0, pickupMode: -1, dropoffMode: -1 };
-    out.push(...misn(1072, "Kit R Raczak no cargo", 9135, { ...raczak, ...noCargo, shipStart: -1, onAccept: "!b9135", onSuccess: "b9136" }));
+    // mïsn 1072 (bit 9135, Raczak no cargo) was retired in wave 47 (wave47Resources: SF the in-flight failure).
     out.push(...misn(1073, "Kit R kit dude no cargo", 9137, { ...raczak, ...noCargo, shipDude: 330, shipStart: -1, onAccept: "!b9137", onSuccess: "b9138" }));
 
     // --- G: a xenophobe's guided missile at its own govt.
@@ -5388,7 +5473,9 @@ function wave10Resources() {
         out.push(o);
     });
     // shïp 846 (Kit Mass Hull 37) was retired in wave 46 (wave46Resources: KB the inertialess coast trader).
-    [[844, 100], [845, 300], [847, 155], [848, 50]].forEach(([id, mass]) =>
+    // shïp 844 / 847 / 848 (Kit Mass Hull 100 / 155 / 50) were retired in wave 47 (wave47Resources: ED the escort deal hulls,
+    // SD the bit-gated traffic disc).
+    [[845, 300]].forEach(([id, mass]) =>
         out.push(...ship(id, `Kit Mass Hull ${mass}`, 128, { mass, freeMass: 25, cargo: 20, armor: 300, shield: 300, maxGuns: 4, maxTurrets: 4, ai: 1, strength: 10, cost: 100000 })));
     return out;
 }

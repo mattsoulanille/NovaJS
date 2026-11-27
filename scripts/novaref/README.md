@@ -698,6 +698,24 @@ marker 250 px west of the port, the player takes off at rest and is pushed
 east along a moon ruler; an immobile shooter needs a Turn (a Turn-0 one
 250 px away never fired). Scenarios `w46_space_interactive.json` /
 `w46_space_early.json` / `w46_capture_use.json` (inbox `w46.jsonl`).
+Wave 47 used sÿst 1484-1485, spöb 1162-1164, düde 549, wëap 319-321, oütf
+506-509 and bits 9296-9305, and RETIRED wave 13's mïsn 1070 (bit 9131),
+1071 (bit 9133) and 1072 (bit 9135) and wave 10's shïp 844 / 847 / 848 (Kit
+Mass Hull 100 / 155 / 50), using them for its own. Next free: sÿst 1486,
+spöb 1165-1399 (and 518-999), shïp **none** (retire an old kit hull: wave
+10's 843 Kit Sub Target Big is unused), düde 548 / 550, ränk 205, mïsn:
+wave 12's 1063 and wave 13's 1073 (then retire another old kit mission),
+përs: override a stock one, wëap 322, oütf 510, gövt 283 and below, flët
+324, jünk 205, bits 9306, rlëD 1113. A **blind-spot spin** (sÿst 1484 Kit
+Blind Spin): the player spins on the port with Left and Space held, its
+turret's bolts read where they leave the planet's disc
+(`tools/spinsum.mjs`). An **in-flight bit reader** (sÿst 1485 Kit Flight
+Bits): traffic half ungated green, half magenta with AppearOn on the bits
+under test. Escort deals: a pilot can hold a CAPTURED escort
+(`escorts: [{ship}]`); the escort hail's buttons in the window are Upgrade
+Escort (306, 327), Sell Escort (305, 355), Release (306, 383), Close
+Channel (306, 411). Scenarios `w47_space_interactive.json` /
+`w47_space_early.json` (inbox `w47.jsonl`).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they

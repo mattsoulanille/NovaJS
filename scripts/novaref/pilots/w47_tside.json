@@ -1,0 +1,39 @@
+{
+  "name": "novaref-w47-tside",
+  "edits": {
+    "ship": 893,
+    "stellar": 1162,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1484": 2
+    },
+    "missionBits": {
+      "9305": true
+    },
+    "nickname": "Probe",
+    "shipName": "w47-tside",
+    "weapons": {
+      "128": 0,
+      "320": 1
+    },
+    "outfits": {
+      "128": 0,
+      "507": 1,
+      "509": 1
+    },
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}
