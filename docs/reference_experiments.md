@@ -25636,6 +25636,56 @@ hulls, every one on its whole-degree line within 2 %, the continuous rates
 `c_t95/`, `c_t25/`, `k6_t95/` (`recording.mp4`), `*.hd1.txt` (headings
 per frame, the last line the total), `tools/e6b.sh`, `tools/hough.py`.
 
+### A tractor shot that starts outside the pull range and crosses inside it (the hub's extra, KB), wave 52 (re-read of wave 51's runs, no new run): the pull goes on for the WHOLE shot: the pulled hull passed 425 px (where a still hull is never pulled) about 0.6-0.7 s into the 1 s beam and kept speeding up toward the beamer to the beam's end, never braked; so the pull / brake choice is made per SHOT, not per beam unit (2026-11-27)
+
+**Question** (the hub, with wave 51's tractor fix landing): NovaJS decides
+pull or brake per beam UNIT by the distance (`TRACTOR_PULL_RANGE` 450).
+Does a shot that starts outside the range keep pulling after the target
+crosses inside, or switch to braking mid-shot?
+
+**Data** (wave 51's `trb_c` and `trb40_d`, "A tractor beam's pull frame
+by frame ... wave 51"): Kit Probe B (50 t) at rest 500 px from the
+immobile beamer, one Count-30 shot (1.0 s). Integrating the measured speed
+toward the beamer (every 0.1 s from the beam's first frame) gives the
+distance during the shot:
+
+| run | 0.4 s | 0.5 s | 0.6 s | 0.7 s | 0.8 s | 0.9 s | 1.0 s (beam out) |
+|---|---|---|---|---|---|---|---|
+| trb_c (Impact 20): distance px | 477 | 464 | 447 | 426 | 401 | 373 | 343 |
+| trb_c: speed toward the beamer, px/s | 114 | 149 | 194 | 228 | 264 | 296 | 317 |
+| trb40_d (Impact 40): distance px | 477 | 457 | 431 | 399 | 364 | 327 | 289 |
+| trb40_d: speed px/s | 162 | 237 | 296 | 343 (x at its cap) | 363 | 374 (both caps) | 374 |
+
+Wave 50 held a STILL hull at 425 px (and 350, 250) through whole shots:
+a shot that starts inside 425 never pulls (and brakes a moving lighter
+hull, wave 51 `tr350m_*`).
+
+**Finding.** Once a shot starts pulling it pulls to its end: in trb_c the
+hull was inside 425 px for the last 0.3 s and inside 400 for the last 0.2
+s and kept gaining 30-35 px/s every 0.1 s (the same steady 345 px/s² as
+outside), and the Impact-40 shot pulled on from 431 px to 289 px until
+both velocity axes met their cap. A per-unit choice at any edge in the
+measured 425-500 bracket would have braked those last units toward zero.
+So the original chooses pull or brake when the SHOT starts (by the
+distance then), GUESS: the same per shot for the brake (a shot that starts
+braking inside the range brakes to its end even if the hull leaves it).
+
+**NovaJS (main 07be7182):** per beam unit: each unit tests the current
+distance against `TRACTOR_PULL_RANGE` (450) and pulls beyond it, brakes
+inside (`N/nova_plugin/ship/death_plugin.ts:438`, `:548-555`):
+**mismatch** for a hull that crosses 450 during a pulling shot (NovaJS
+would brake its last units: trb_c's from about 0.55 s). **Proposed:** fix
+the mode per shot at its first unit (store pull / brake with the beam
+entity, beam_plugin.ts) and apply it to every unit of that shot.
+Confidence: medium-high (two shots of two Impacts, distances integrated
+from the measured speeds within about 10 px; the exact edge in 425-500 is
+still unread).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w51/trb_c/`,
+`trb40_d/` (`recording.mp4`), the wave-51 section's speed table;
+`~/.local/share/novaref/evidence/20261127-w50/` (the still hulls at 250 /
+350 / 425 px).
+
 ### Reliability notes (for anyone running the reference)
 
 - **Stock mission bits live above 9000 too (wave 51 `trb40_a` / `_b`):**
