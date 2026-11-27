@@ -236,11 +236,17 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // FORMATION_SLOT_DEADBAND of its slot stops closing on it), so
             // its fleet escorts park short of their slots. Genesis,
             // Thessaly and both Random states did not move.
+            //
+            // Genesis and stepped hashes of both systems were re-pinned for
+            // "Traffic respawn (A11), wave 41": the spawner's nextSpawn
+            // starts at NPC_RESPAWN_NONE_PENDING (-1) rather than 0 (a
+            // replacement is now a drawn 4-10 s after a shortfall). Both
+            // Random states did not move (no shortfall in 300 steps).
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
-                [THESSALY, '995fb3e5', '62533f82',
+                [THESSALY, '27100915', '2219917e',
                     [2692022053, 1542226132, 2680743810, 396450618]],
-                [SYNTHETIC.systems.kestrel, '67bfe0b2', '48188948',
+                [SYNTHETIC.systems.kestrel, 'dac4a238', '683e83d3',
                     [2312166265, 2407210324, 1413610751, 1491742322]],
             ];
             for (const [systemId, genesis, stepped, random] of pins) {
