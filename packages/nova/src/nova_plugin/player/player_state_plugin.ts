@@ -238,7 +238,9 @@ export const CronStatesComponent = new Component<CronStates>('CronStates');
  * and drained into the spaceport notices at the next landing so the
  * player still sees "Mission failed: ...". Kept minimal and
  * serializer-registered so it rides through rollback/sync like the
- * other player-state components.
+ * other player-state components. Written into the pilot save while
+ * non-empty (save_game.ts `pendingNotices`), so a save-and-quit between an
+ * in-flight failure and the next landing still shows its FailText there.
  */
 export const PendingMissionNoticeType = t.intersection([t.type({
     missionId: t.string,
@@ -291,7 +293,8 @@ export const PendingMissionNoticesComponent =
  * (shipyard_rules.ts CARRIED_COMPONENTS) and written into the pilot save
  * while non-empty (save_game.ts `autoAbortShips`), so neither a shipyard
  * visit nor a save-and-quit between the warning and the lift-off loses
- * the squad. (The notices are still not saved; that gap stands.)
+ * the squad. (The queued notices are saved the same way: save_game.ts
+ * `pendingNotices`.)
  */
 export const PendingAutoAbortShipType = t.intersection([t.type({
     /** The auto-aborted mïsn, for the düde / aux / name lookups. */

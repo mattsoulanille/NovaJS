@@ -66,7 +66,9 @@ string: their NCB fields are tests.
   failure, so a disable goal disabled and then destroyed runs OnShipDone
   then OnFailure, as the date advance does), and the apply pays only the
   sender's own owed mission, so each runs once. The failure's notices
-  (its FailText) still wait for the next spaceport, as before. The
+  (its FailText) still wait for the next spaceport, as before, and ride
+  the pilot save until then (`pendingNotices`), since the mission they
+  came from is already off the list. The
   special ships of an in-flight failure stay as ordinary ships until the
   owner leaves (they used to stay, still the mission's, until the
   landing); a ShipBehav-1 escort leaves the owner's flock (GUESS).

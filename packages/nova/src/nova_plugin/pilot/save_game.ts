@@ -30,6 +30,12 @@ import {
     MissionsComponent,
     PendingAutoAbortShipsComponent,
     PendingAutoAbortShipsType,
+    PendingMissionNotices,
+    PendingMissionNoticesComponent,
+    PendingMissionNoticesType,
+    PendingStellarSetStrings,
+    PendingStellarSetStringsComponent,
+    PendingStellarSetStringsType,
     PlayerNamesComponent,
     ReinforcementCallsComponent,
     sanitizeShipName,
@@ -316,6 +322,28 @@ export const SaveData = t.intersection([
         // `reinforcementCalls`: absent means none, which is what every
         // older save meant. Written only when non-empty.
         dominated: t.array(t.string),
+        // The mission notices queued in flight for the next spaceport
+        // (PendingMissionNoticesComponent): an in-flight failure's
+        // FailText (its `missionSetString` record takes the mission off
+        // the list and queues the notice in the same tick), a jump's
+        // deadline failure, a deferred 'shipDone' event. Without this a
+        // save-and-quit between the event and the next landing lost the
+        // text, since the mission it came from is no longer in the save.
+        // Optional, with no migration, like `dominated`: absent means
+        // none, which is what every older save meant. Written only when
+        // non-empty; the landing drains the queue, so the save after it
+        // carries none and each notice shows once.
+        pendingNotices: PendingMissionNoticesType,
+        // The stellar OnDominate / OnRelease strings the simulation owes
+        // the pilot and the owner's display has not paid yet
+        // (PendingStellarSetStringsComponent). `dominated` above already
+        // records the domination itself, so a save written between the
+        // domination and its `stellarSetString` record would otherwise
+        // keep the stellar dominated and lose its string for good.
+        // Restored onto the entity, the debt is paid by the restored
+        // pilot's display (StellarSetStringSystem) as it would have been.
+        // Optional, no migration; written only while an entry is owed.
+        stellarSetStrings: PendingStellarSetStringsType,
         // A v5-or-older save's PER-GÖVT legal records, parked here by the
         // v5 -> v6 migration (which cannot see game data) for
         // restorePlayerState to seed into `legalRecords` with the
@@ -448,6 +476,15 @@ export function extractSaveData(entity: Entity, systemId: string,
     const dominated = entity.components.get(DominatedComponent);
     if (dominated && dominated.length > 0) {
         save.dominated = [...dominated].sort();
+    }
+    const notices = entity.components.get(PendingMissionNoticesComponent);
+    if (notices && notices.length > 0) {
+        save.pendingNotices = copyNotices(notices);
+    }
+    const stellarStrings =
+        entity.components.get(PendingStellarSetStringsComponent);
+    if (stellarStrings && stellarStrings.pending.length > 0) {
+        save.stellarSetStrings = copyStellarSetStrings(stellarStrings);
     }
     const calls = entity.components.get(ReinforcementCallsComponent);
     if (calls && calls.size > 0) {
@@ -593,6 +630,23 @@ export function restorePlayerState(entity: Entity, save: SaveData,
     } else {
         entity.components.delete(DominatedComponent);
     }
+    // Replaced or removed, like the cooldowns above: a notice queued in
+    // flight before the save shows at the restored pilot's next landing
+    // (drainPendingMissionNotices), once.
+    if (save.pendingNotices && save.pendingNotices.length > 0) {
+        entity.components.set(PendingMissionNoticesComponent,
+            copyNotices(save.pendingNotices));
+    } else {
+        entity.components.delete(PendingMissionNoticesComponent);
+    }
+    // Replaced or removed; an owed string is paid by the restored pilot's
+    // display (StellarSetStringSystem) once it is in a world again.
+    if (save.stellarSetStrings && save.stellarSetStrings.pending.length > 0) {
+        entity.components.set(PendingStellarSetStringsComponent,
+            copyStellarSetStrings(save.stellarSetStrings));
+    } else {
+        entity.components.delete(PendingStellarSetStringsComponent);
+    }
     // Every save this build writes and every pre-v3 save it migrates has a
     // 'kills' entry, but the codec only requires `[string, number]` pairs,
     // so a v3 payload hand-edited (or written by another tool) to a list
@@ -653,6 +707,20 @@ function restoredLegalRecords(save: SaveData,
         }
     }
     return records;
+}
+
+/** Pending mission notices with no record shared. */
+function copyNotices(notices: PendingMissionNotices): PendingMissionNotices {
+    return notices.map(notice => ({ ...notice }));
+}
+
+/** Pending stellar set strings with no record shared. */
+function copyStellarSetStrings(owed: PendingStellarSetStrings):
+    PendingStellarSetStrings {
+    return {
+        next: owed.next,
+        pending: owed.pending.map(entry => ({ ...entry })),
+    };
 }
 
 /** A stored-ship record with none of its arrays shared. */

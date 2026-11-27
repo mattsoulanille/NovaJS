@@ -42,6 +42,10 @@ import {
     MissionsComponent,
     PendingAutoAbortShips,
     PendingAutoAbortShipsComponent,
+    PendingMissionNotices,
+    PendingMissionNoticesComponent,
+    PendingStellarSetStrings,
+    PendingStellarSetStringsComponent,
     StoredShips,
     StoredShipsComponent,
 } from '../player/index.js';
@@ -278,6 +282,110 @@ describe('save_game schema', () => {
             restorePlayerState(bare, decodeSave(encodeSave(emptied))!);
             expect(bare.components.has(PendingAutoAbortShipsComponent))
                 .toBe(false);
+        });
+
+    it('round-trips the mission notices queued in flight, and writes none '
+        + 'when nothing is queued', () => {
+            // An in-flight failure takes its mission off the list at once
+            // and queues the FailText for the next spaceport; the queue is
+            // the only trace of it, so it rides the save.
+            const notices: PendingMissionNotices = [{
+                missionId: 'nova:200', missionName: 'Courier Run',
+                type: 'failed', text: 'You let the convoy die.',
+                pict: 'nova:9000',
+            }, {
+                missionId: 'nova:201', missionName: 'Escort',
+                type: 'shipDone', text: 'The pirates are gone.',
+                specialShipName: 'Black Hand',
+            }];
+            const entity = new Entity('player');
+            entity.components.set(ShipComponent, { id: 'nova:164' });
+            entity.components.set(PendingMissionNoticesComponent, notices);
+
+            const saved = extractSaveData(entity, 'nova:130')!;
+            expect(saved.pendingNotices).toEqual(notices);
+            expect(saved.pendingNotices).not.toBe(notices);
+            const decoded = decodeSave(encodeSave(saved))!;
+            expect(decoded).toEqual(saved);
+            const restored = new Entity('restored');
+            restored.components.set(PendingMissionNoticesComponent, [{
+                missionId: 'nova:999', missionName: 'Another pilot\'s',
+                type: 'failed', text: 'stale',
+            }]);
+            restorePlayerState(restored, decoded);
+            expect(restored.components.get(PendingMissionNoticesComponent))
+                .toEqual(notices);
+            expect(restored.components.get(PendingMissionNoticesComponent)![0])
+                .not.toBe(decoded.pendingNotices![0]);
+
+            // The landing drains the queue to an empty list, which writes
+            // the payload a pilot with no component writes.
+            entity.components.set(PendingMissionNoticesComponent, []);
+            const drained = extractSaveData(entity, 'nova:130')!;
+            expect(drained).toEqual({
+                ...saveDefaults(), ship: 'nova:164', outfits: [],
+                system: 'nova:130',
+            });
+        });
+
+    it('restores no notices from a save written before they were saved, '
+        + 'and replaces a previous pilot\'s', () => {
+            // An older save has no `pendingNotices`: it decodes, and means
+            // none (the notices of that era were simply not saved).
+            const old = decodeSave(JSON.stringify({
+                version: SAVE_VERSION, data: SAMPLE,
+            }))!;
+            expect(old).toEqual(SAMPLE);
+            expect('pendingNotices' in old).toBeFalse();
+            const restored = new Entity('restored');
+            restored.components.set(PendingMissionNoticesComponent, [{
+                missionId: 'nova:999', missionName: 'Another pilot\'s',
+                type: 'failed', text: 'stale',
+            }]);
+            restorePlayerState(restored, old);
+            expect(restored.components.has(PendingMissionNoticesComponent))
+                .toBeFalse();
+            // A v1 save, migrated, likewise.
+            const v1 = decodeSave(JSON.stringify({
+                version: 1, data: LEGACY_MINIMAL,
+            }))!;
+            expect(v1.pendingNotices).toBeUndefined();
+        });
+
+    it('round-trips the stellar set strings still owed, and writes none '
+        + 'once they are paid', () => {
+            // The domination itself is saved (`dominated`); without the
+            // debt a save between it and its record lost the OnDominate.
+            const owed: PendingStellarSetStrings = {
+                next: 3,
+                pending: [
+                    { seq: 1, planetId: 'nova:128', kind: 'dominate' },
+                    { seq: 2, planetId: 'nova:129', kind: 'release' },
+                ],
+            };
+            const entity = new Entity('player');
+            entity.components.set(ShipComponent, { id: 'nova:164' });
+            entity.components.set(PendingStellarSetStringsComponent, owed);
+            const saved = extractSaveData(entity, 'nova:130')!;
+            expect(saved.stellarSetStrings).toEqual(owed);
+            const decoded = decodeSave(encodeSave(saved))!;
+            expect(decoded).toEqual(saved);
+            const restored = new Entity('restored');
+            restorePlayerState(restored, decoded);
+            expect(restored.components.get(PendingStellarSetStringsComponent))
+                .toEqual(owed);
+            expect(restored.components.get(PendingStellarSetStringsComponent)!
+                .pending).not.toBe(decoded.stellarSetStrings!.pending);
+
+            // Paid: an empty list (with its `next`) writes nothing, and an
+            // older save without the field restores none.
+            entity.components.set(PendingStellarSetStringsComponent,
+                { next: 3, pending: [] });
+            expect(extractSaveData(entity, 'nova:130')!.stellarSetStrings)
+                .toBeUndefined();
+            restorePlayerState(restored, SAMPLE);
+            expect(restored.components.has(PendingStellarSetStringsComponent))
+                .toBeFalse();
         });
 
     it('round-trips the pilot\'s stored ships, and writes an empty list '

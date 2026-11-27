@@ -28,7 +28,10 @@ import {
     CargoComponent, DamagedEvent, DeathEvent, makeShip, OutfitsStateComponent,
 } from '../nova_plugin/ship/index.js';
 import { completeEntity, makeNpcShip } from '../nova_plugin/spawn/index.js';
-import { advanceEntityDate } from './mission_session.js';
+import {
+    decodeSave, encodeSave, extractSaveData, restorePlayerState,
+} from '../nova_plugin/pilot/index.js';
+import { advanceEntityDate, processEntityLanding } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 import {
     buildDeferredAutoAbort, buildMissionSetString,
@@ -62,7 +65,8 @@ describe('a mission\'s OnShipDone and in-flight OnFailure', () => {
     } as never;
 
     beforeEach(() => {
-        // The courier run with an OnShipDone and a countable OnFailure.
+        // The courier run with an OnShipDone, a countable OnFailure and a
+        // FailText.
         const original = MissionUniverse.prototype.getMission;
         spyOn(MissionUniverse.prototype, 'getMission').and.callFake(
             function (this: MissionUniverse, id: string) {
@@ -71,6 +75,7 @@ describe('a mission\'s OnShipDone and in-flight OnFailure', () => {
                     ...mission,
                     onShipDone: `^b${SHIP_DONE_BIT}`,
                     onFailure: `${mission.onFailure} ^b${FAILURE_BIT}`,
+                    failText: 'The convoy is lost.',
                 } as MissionData : mission;
             });
     });
@@ -264,6 +269,56 @@ describe('a mission\'s OnShipDone and in-flight OnFailure', () => {
             expect(a.components.get(PendingMissionNoticesComponent)?.length)
                 .toBe(1);
         }, 60_000);
+
+    it('keeps an in-flight failure\'s FailText across a save-and-quit: '
+        + 'the restored pilot\'s next landing shows it once', async () => {
+        // The failure takes the mission off the list at once, so the
+        // queued notice is the only trace of it left; before the save
+        // carried `pendingNotices` a save-and-quit here lost the text.
+        const { gameData, universe, world, a } = await flying(GOAL_ESCORT);
+        expect(await kill(world, 'special')).toBeTrue();
+        const owed = owedMissionSetString(a.components.get(MissionsComponent)!);
+        const record = await buildMissionSetString(a, owed!, gameData,
+            universe, { systemId: THESSALY });
+        await apply(world, 'a', record!);
+        const failText = record!.notices![0].text;
+        expect(failText).withContext('the FailText')
+            .toBe('The convoy is lost.');
+
+        // Save in flight, then quit: the save goes through its JSON envelope.
+        const saved = extractSaveData(a, THESSALY)!;
+        expect(saved.missions.map(([id]) => id)).not.toContain(COURIER);
+        expect(saved.pendingNotices?.map(notice => [notice.type, notice.text]))
+            .toEqual([['failed', failText]]);
+        const loaded = decodeSave(encodeSave(saved))!;
+        expect(loaded).toEqual(saved);
+
+        // Reload: a fresh hull, the save restored onto it.
+        const restored = makeShip(
+            await gameData.data.Ship.get(SYNTHETIC.ships.skiff));
+        restorePlayerState(restored, loaded);
+        expect(restored.components.get(PendingMissionNoticesComponent))
+            .toEqual(a.components.get(PendingMissionNoticesComponent)!);
+
+        // The next landing shows it, once.
+        const landing = await processEntityLanding(restored, gameData,
+            universe, SYNTHETIC.planets.port);
+        expect(landing.filter(event => event.missionId === COURIER)
+            .map(event => [event.type, event.text]))
+            .toEqual([['failed', failText]]);
+        // Drained: the save after the landing carries none, and neither a
+        // second landing nor a reload of that save shows it again.
+        const after = extractSaveData(restored, THESSALY)!;
+        expect(after.pendingNotices).toBeUndefined();
+        const again = await processEntityLanding(restored, gameData,
+            universe, SYNTHETIC.planets.port);
+        expect(again.filter(event => event.missionId === COURIER)).toEqual([]);
+        const reloaded = makeShip(
+            await gameData.data.Ship.get(SYNTHETIC.ships.skiff));
+        restorePlayerState(reloaded, decodeSave(encodeSave(after))!);
+        expect(reloaded.components.has(PendingMissionNoticesComponent))
+            .toBeFalse();
+    }, 60_000);
 
     it('fails a mission the sim failed for the pilot (Flags2 0x0004), and '
         + 'its live special ship stays, no longer the mission\'s', async () => {

@@ -90,10 +90,11 @@ export type PendingStellarSetString =
  *
  * Per-pilot like DominatedComponent: it follows the pilot across hull
  * changes (missions/mission_ship_change.ts PLAYER_STATE_COMPONENTS) and is
- * always written as a NEW value. NOT saved: a save in the few frames
- * between the domination and the record loses the string (GUESS that this
- * window is too short to matter; the record normally lands within a
- * round trip).
+ * always written as a NEW value. Written into the pilot save while an
+ * entry is owed (pilot/save_game.ts `stellarSetStrings`): the save keeps
+ * the domination itself (`dominated`), so a save in the frames between the
+ * domination and the record would otherwise keep the stellar dominated and
+ * lose its string. The restored pilot's display pays it.
  */
 export const PendingStellarSetStringsType = t.type({
     next: t.number,
