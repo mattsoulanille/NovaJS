@@ -1589,13 +1589,11 @@ export const scenarios = [
     // fighting the physics gate. The frames are the game PICTs, centered.
     // The plunder button SET now matches the original: Energy / Cargo / Ammo
     // (top row), Credits / Capture Ship (second row), Abort (centered) — the
-    // Ammo action transfers the victim's compatible ammunition. Remaining
-    // CONTENT divergences (not MOVE): the booty-readout formatting, and the
-    // capture-assignment dialog is drawn as a standalone 8516 frame with
-    // "Keep as Escort" / "Release" rather than the original's escort-question
-    // inset over the plunder dialog with a "Use As My Ship" swap seam. What we
-    // measure/fix (MOVE) is the frame, title, body and button-block PLACEMENT
-    // within the frame.
+    // Ammo action transfers the victim's compatible ammunition. The capture
+    // prompt is the original's: the escort-or-trade-places question inset
+    // (8516 scaled into 257x114) over the still-open plunder dialog, with
+    // Use As My Ship over Use As Escort. What we measure/fix (MOVE) is the
+    // frame, title, body and button-block PLACEMENT within the frame.
     // ========================================================================
     {
         id: 'boarding_plunder',
@@ -1625,16 +1623,14 @@ export const scenarios = [
     },
     {
         id: 'boarding_capture_assignment',
-        title: 'Boarding — capture-assignment dialog (8516)',
-        description: 'The capture-assignment dialog after a successful capture '
-            + 'roll (injected capture:"succeeded"). Compares the 8516 frame, '
-            + 'the "You have captured the ship!" title and the '
-            + 'Keep as Escort / Release buttons against '
-            + 'space/capture_assignment.png. The original composites an escort '
-            + 'question INSET over the still-visible plunder dialog with a '
-            + 'ship-swap option; ours is a standalone 8516 frame with two '
-            + 'buttons — a documented structural/CONTENT divergence. The MOVE '
-            + 'signal is that the title and buttons sit INSIDE the 8516 frame.',
+        title: 'Boarding — capture prompt (8516 inset over 8515)',
+        description: 'The capture prompt after a successful capture roll '
+            + '(injected capture:"succeeded"): the stock STR# 2002 #117 '
+            + 'question in PICT 8516 scaled into a 257x114 inset at screen '
+            + '(832,483), laid over the still-open plunder dialog, with Use '
+            + 'As My Ship over Use As Escort — against '
+            + 'space/capture_assignment.png (spaceport/hail_layout.ts '
+            + 'CAPTURE_FRAME has the measurements).',
         params: { ship: 'nova:164', system: 'nova:130' },
         hideDebug: true,
         setup: async (page, driver) => {
@@ -1644,12 +1640,16 @@ export const scenarios = [
             { name: 'capture_assignment', file: 'space/capture_assignment.png' },
         ],
         regions: [
-            // 8516 frame renders at screen 827,476 267x128 (measured).
-            region('assign_frame', 'Whole capture-assignment frame',
-                827, 476, 267, 128),
-            region('assign_title', 'Title line', 835, 484, 262, 18),
-            region('assign_buttons', 'Escort / Release buttons',
-                868, 520, 190, 80),
+            // The inset: 8516 scaled into 257x114 at screen 832,483.
+            region('assign_frame', 'Whole capture prompt inset',
+                832, 483, 257, 114),
+            region('assign_question', 'The question (three lines)',
+                837, 488, 246, 42),
+            region('assign_buttons', 'Use As My Ship / Use As Escort',
+                887, 534, 146, 57),
+            // The plunder dialog's top-left, still showing around it.
+            region('assign_plunder_behind', 'Plunder title and Cargo row',
+                810, 448, 270, 30),
         ],
     },
 

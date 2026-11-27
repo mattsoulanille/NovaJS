@@ -524,8 +524,8 @@ export async function hideDebugOverlays(page) {
 }
 
 /**
- * Opens the boarding plunder dialog (PICT 8515), or the capture-assignment
- * dialog (PICT 8516) when `capture: 'succeeded'` is passed.
+ * Opens the boarding plunder dialog (PICT 8515), or the capture prompt laid
+ * over it (PICT 8516, scaled) when `capture: 'succeeded'` is passed.
  *
  * Boarding is normally reached by disabling a ship, pulling alongside
  * (close / speed-matched / axis-aligned) and pressing 'b' — a physics setup

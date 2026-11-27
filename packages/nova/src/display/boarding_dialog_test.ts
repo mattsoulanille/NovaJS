@@ -10,8 +10,13 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { STANDARD_CARGO_NAMES } from '../nova_plugin/missions/index.js';
 import { MAX_ESCORTS_MESSAGE } from '../nova_plugin/escorts/index.js';
 import {
-    boardingDialogPhase, cargoKeyDisplayName, plunderDialogContent,
+    boardingDialogPhase, CAPTURE_PROMPT_BUTTONS, CAPTURE_PROMPT_INDEX,
+    CAPTURE_PROMPT_STRING_TABLE, CAPTURE_PROMPT_TEXT, cargoKeyDisplayName,
+    plunderDialogContent,
 } from './boarding_plugin.js';
+import {
+    captureAssignedMessage,
+} from './status_bar_content.js';
 
 /**
  * The plunder dialog's rules, read off the synced boarding state and the
@@ -362,5 +367,48 @@ describe('plunder dialog content', () => {
             victim(), 100);
         expect(enabledByAction['plunderCargo']).toBeFalse();
         expect(enabledByAction['plunderCapture']).toBeFalse();
+    });
+});
+
+/**
+ * The capture prompt (space/capture_assignment.png; reference "Capture,
+ * wave 33"): the stock question, Use As My Ship over Use As Escort, and no
+ * third button. The geometry is pinned in spaceport/hail_layout_test.ts.
+ */
+describe('the capture prompt', () => {
+    it('asks the stock question (STR# 2002 0-based 117)', () => {
+        expect(CAPTURE_PROMPT_STRING_TABLE).toEqual('nova:2002');
+        expect(CAPTURE_PROMPT_INDEX).toEqual(117);
+        expect(CAPTURE_PROMPT_TEXT).toEqual('Do you want to use this ship '
+            + 'as an escort, or would you rather trade places with its '
+            + 'captain and use it as your own ship?');
+    });
+
+    it('offers Use As My Ship over Use As Escort, and nothing else', () => {
+        expect(CAPTURE_PROMPT_BUTTONS.map(b => [b.label, b.action])).toEqual([
+            ['Use As My Ship', 'plunderCaptureShip'],
+            ['Use As Escort', 'plunderCaptureEscort'],
+        ]);
+    });
+
+    it('is up, over the plunder dialog, only while the capture stands', () => {
+        const boarding = {
+            target: 't', creditsAvailable: 0, ammoAvailable: 0,
+            captureOdds: 75, cargoTaken: false, creditsTaken: false,
+            fuelTaken: false, ammoTaken: false, crimeApplied: true,
+        };
+        expect(boardingDialogPhase({ ...boarding, capture: 'succeeded' },
+            false)).toEqual('capture');
+        expect(boardingDialogPhase({ ...boarding, capture: 'none' }, false))
+            .toEqual('plunder');
+    });
+
+    it('answers on the status line with the stock lines (GUESS)', () => {
+        expect(captureAssignedMessage('escort', false))
+            .toEqual('You assigned this ship to your fleet of escorts.');
+        expect(captureAssignedMessage('ship', true))
+            .toEqual('You retained your old ship as an escort.');
+        expect(captureAssignedMessage('ship', false))
+            .toEqual('You were unable to retain your old ship as an escort.');
     });
 });

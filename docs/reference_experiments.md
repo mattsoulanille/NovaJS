@@ -16086,6 +16086,29 @@ odds row and shows the STR# 2002 #123 note (rulings #161 / #250), where
 the original reads "Capture Odds: 0%" beside the grey button with no
 line (finding 7); matching it is the maintainer's call.
 
+**Applied (the capture prompt, 2026-11-26).** The C outcome's prompt is now
+the original's: `N/display/boarding_plugin.ts` draws STR# 2002 #117 in PICT
+8516 scaled into a 257x114 inset at screen (832,483), OVER the still-open
+plunder dialog (measured on `space/capture_assignment.png`: the art scaled
+nearest-neighbour fits the inset at RMSE 3.4; `N/spaceport/hail_layout.ts`
+CAPTURE_FRAME), with Use As My Ship over Use As Escort and no Release (the
+old standalone "You have captured the ship!" box with Keep as Escort /
+Release is gone). Use As Escort is the old keep. Use As My Ship is new
+(`tradePlacesWithCaptain` in `N/nova_plugin/encounters/boarding_plugin.ts`):
+the pilot moves into the prize where it lies (its class, its outfits, its
+condition with armor lifted just over the disable line, its fuel), the
+pilot's persistent outfits (oütf 0x0004) and as much of the pilot's hold as
+fits go with them, and the old hull stays where it was as a captured escort
+with the rest. Every part of what the answer does is a GUESS (the prompt
+was never answered): the old hull kept as an escort (STR# 2002 #303 / #304
+on the status line), the outfits, holds and condition, no rename prompt
+(the original's #118 "Now rename this captured ship:" is not modelled),
+the status lines #122 / #303 after each answer, the keys on the prompt (A
+answers Use As Escort; Escape and Return do nothing), and no OnCapture /
+OnRetire. At the escort cap the prompt never appears (finding 7: Capture
+Ship is grey). Schema: one control action and one display event (Also
+under 8, a7b47d05196b53ff).
+
 ### Landing leftovers, wave 33: a STATION's clearance lapses on the planets' clock (docked at 23.55-24.15 s, lapsed at 24.44 s); the cleared window of the 250 px planet reaches 432 px (landed) but not 439 (too far), past 1.7 W = 425; the cleared-line pieces pool to 16 : 9 : 7 and Commence 18 : Welcome 14; a gate whose clearance lapses CLOSES its sprite at the lapse (about 24.6 s), silently (2026-11-25)
 
 **Questions** (brief item 4; wave-32 leftovers): a station's lapse (planets

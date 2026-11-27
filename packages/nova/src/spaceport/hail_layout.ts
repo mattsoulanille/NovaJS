@@ -508,32 +508,48 @@ export const PLUNDER_BUTTONS: PlunderButtonSpec[] = [
 ];
 
 /**
- * The capture-assignment frame — PICT 8516, 267x128.
+ * The capture prompt — PICT 8516 (267x128 art), DRAWN SCALED into a 257x114
+ * rect over the still-open plunder dialog. Reference:
+ * space/capture_assignment.png (reference "Capture, wave 33": "Do you want
+ * to use this ship as an escort, or would you rather trade places with its
+ * captain and use it as your own ship?" with Use As My Ship over Use As
+ * Escort, the plunder dialog's title, Cargo row and Abort still showing
+ * around it).
  *
- * PARTLY measurable only. In the original this is not a standalone dialog: it
- * is an INSET drawn over the still-open plunder dialog
- * (space/capture_assignment.png shows the plunder frame still at 806,441
- * behind it), it is sized to its text rather than blitted whole (the visible
- * inset runs screen y 483..597, 114px, against the art's 128), and it offers a
- * third choice NovaJS does not model — "Use As My Ship", the ship swap — above
- * "Use As Escort". NovaJS draws a standalone centred 8516 with Keep as Escort
- * / Release; that structural divergence is out of scope here.
- *
- * What IS pinned: the inset is horizontally centred (its edges sit at screen
- * x 827..1093, and 827 = round((1920-267)/2)), and its two pills are centred
- * in it at screen x=887 — frame-local x=60 — 120 wide with a 32px pitch.
+ * MEASURED on that screenshot (1920x1080, the plunder frame at 806,441):
+ *  - the inset's rect is screen (832,483)-(1088,596): 257x114, centred on
+ *    the screen as the plunder frame is (frameOrigin(257, 114) puts it at
+ *    960-128, 540-57). The art is SCALED into it, nearest-neighbour sampled
+ *    at pixel centres, not cropped: 8516 scaled so fits the inset's metal
+ *    and borders at RMSE 3.4 (of 255), against 36.5 for the art blitted
+ *    1:1 and 25.9 for the haggle popup's 8514 scaled the same way. (The
+ *    original's QuickDraw DrawPicture into a smaller rect.)
+ *  - the question's ink starts at frame (9,9), Geneva 9 on a 12 px pitch,
+ *    three lines breaking after "or would" and "use it" (the longest ink
+ *    ends at frame x 237 of a well that runs x 5..250).
+ *  - the pills: sprite left x=55 (screen 887), 120 wide (146 with caps,
+ *    ending at 1032: centred on 960), tops at y 51 and 83 (screen 534 /
+ *    566), Use As My Ship above Use As Escort.
  */
 export const CAPTURE_FRAME = {
     pict: 'nova:8516',
-    width: 267,
-    height: 128,
-    /** The question well, from the art: x 5..260, y 4..52. */
-    well: { x: 5, y: 4, width: 256, height: 49 } as Rect,
-    /** Question text pen, using the wells' usual ~8px inset. */
-    text: { x: 14, y: 12 - INK_TO_BOX },
-    /** Pills centred in the frame: x=60, 120 wide, 32px pitch. */
-    buttonX: 60,
-    buttonTop: 58,
+    /** The rect the art is scaled into... */
+    width: 257,
+    height: 114,
+    /** ...and the art's own size. */
+    artWidth: 267,
+    artHeight: 128,
+    /** The question well, as drawn: x 5..250, y 5..46. */
+    well: { x: 5, y: 5, width: 246, height: 42 } as Rect,
+    /** Question text pen: ink at frame (9,9). */
+    text: { x: 9, y: 9 - INK_TO_BOX },
+    /** The question's line pitch (screen rows 492 / 504 / 516). */
+    lineHeight: 12,
+    /** Wrap width: "...or would" (228 px of ink) fits, "...or would you"
+     * does not. */
+    textWrapWidth: 238,
+    buttonX: 55,
+    buttonTop: 51,
     buttonPitch: 32,
     buttonWidth: 120,
 };

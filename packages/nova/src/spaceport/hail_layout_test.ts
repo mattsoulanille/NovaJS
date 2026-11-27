@@ -60,7 +60,8 @@ describe('comm frame layouts', () => {
         expect([COMM_ESCORT.width, COMM_ESCORT.height]).toEqual([424, 259]);
         expect([COMM_HAGGLE.width, COMM_HAGGLE.height]).toEqual([262, 107]);
         expect([PLUNDER_FRAME.width, PLUNDER_FRAME.height]).toEqual([309, 198]);
-        expect([CAPTURE_FRAME.width, CAPTURE_FRAME.height]).toEqual([267, 128]);
+        // The capture prompt's 8516 (267x128) is drawn scaled into 257x114.
+        expect([CAPTURE_FRAME.width, CAPTURE_FRAME.height]).toEqual([257, 114]);
     });
 
     it('keeps every well and pane inside its frame', () => {
@@ -297,9 +298,26 @@ describe('PLUNDER_BUTTONS', () => {
         expect(centre).toBeCloseTo(PLUNDER_FRAME.width / 2, 0);
     });
 
-    it('centres the capture-assignment pills in their frame', () => {
+    it('centres the capture prompt\'s pills in their frame', () => {
         const centre = CAPTURE_FRAME.buttonX
             + (CAPTURE_FRAME.buttonWidth + 26) / 2;
         expect(centre).toBeCloseTo(CAPTURE_FRAME.width / 2, 0);
+    });
+
+    /** space/capture_assignment.png: the prompt's rect at screen
+     * (832,483)-(1088,596) and its pills at (887,534) / (887,566), on the
+     * 1920x1080 screen the plunder frame sits at (806,441) on. */
+    it('puts the capture prompt where the original draws it', () => {
+        const { x, y } = frameOrigin(CAPTURE_FRAME.width, CAPTURE_FRAME.height);
+        const plunder = frameOrigin(PLUNDER_FRAME.width, PLUNDER_FRAME.height);
+        // Screen centre (960,540); the plunder frame at 806,441.
+        expect([960 + plunder.x, 540 + plunder.y]).toEqual([806, 441]);
+        expect([960 + x, 540 + y]).toEqual([832, 483]);
+        expect([960 + x + CAPTURE_FRAME.width - 1,
+            540 + y + CAPTURE_FRAME.height - 1]).toEqual([1088, 596]);
+        expect([960 + x + CAPTURE_FRAME.buttonX,
+            540 + y + CAPTURE_FRAME.buttonTop,
+            540 + y + CAPTURE_FRAME.buttonTop + CAPTURE_FRAME.buttonPitch])
+            .toEqual([887, 534, 566]);
     });
 });

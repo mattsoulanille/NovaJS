@@ -50,7 +50,8 @@ import { SpaceportAmbientSystem } from "./spaceport_plugin.js";
 const SHIP_DONE_WAIT_FRAMES = 60;
 
 /**
- * The plunder (PICT 8515) and capture-assignment (PICT 8516) dialogs.
+ * The plunder dialog (PICT 8515) and the capture prompt laid over it (PICT
+ * 8516, scaled).
  *
  * These are modal overlays that OPEN AND CLOSE by watching the synced
  * BoardingComponent on the local player's ship (BoardingUiSystem): the
@@ -62,8 +63,8 @@ const SHIP_DONE_WAIT_FRAMES = 60;
  * boarding_plugin.ts) — so the take/capture is replayed identically on
  * every peer, not applied locally.
  *
- * Layout is eyeballed against PICT 8515/8516 (capture_assignment.png);
- * pixel fidelity comes in the dedicated visual pass. Containers and
+ * Layout is measured off space/board_ship.png and capture_assignment.png
+ * (spaceport/hail_layout.ts PLUNDER_FRAME / CAPTURE_FRAME). Containers and
  * buttons are named for headless driving ('PlunderDialog',
  * 'CaptureAssignment', 'Button:Take Cargo', ...).
  */
@@ -309,7 +310,8 @@ export function plunderDialogContent(boarding: BoardingState,
  *  'offerOnly'  that text has been read, and it was the WHOLE boarding:
  *               nothing else is shown and the session is ended (see
  *               below).
- *  'capture'    the ship was taken; the assignment dialog is up.
+ *  'capture'    the ship was taken; the capture prompt is up, over the
+ *               plunder dialog.
  *  'missionWait' the boarded hull is one of the local player's own
  *               board/rescue special ships and the simulation has not yet
  *               said what the boarding did to the goal. Nothing is shown
@@ -589,14 +591,50 @@ class PlunderDialog {
     }
 }
 
-/** The capture-assignment dialog (PICT 8516): keep the captured ship as
- * an escort, or release it (Done). Bible alternatives (swap to it, sell
- * it) are seams that need the ship-swap / dock-sell paths. */
+/** The capture prompt's question: stock STR# 2002 0-based 117, verbatim. The
+ * dialog reads it out of the game data and keeps this as the fallback. */
+export const CAPTURE_PROMPT_TEXT = 'Do you want to use this ship as an '
+    + 'escort, or would you rather trade places with its captain and use it '
+    + 'as your own ship?';
+export const CAPTURE_PROMPT_STRING_TABLE = 'nova:2002';
+export const CAPTURE_PROMPT_INDEX = 117;
+
+/**
+ * The capture prompt's two answers, top to bottom, as the original stacks
+ * them (space/capture_assignment.png): Use As My Ship over Use As Escort.
+ * There is no third (NovaJS used to offer a "Release" the original does
+ * not have). The prompt only ever appears below the escort cap: at the cap
+ * the plunder dialog greys Capture Ship (reference "Capture, wave 33",
+ * finding 7), so no capture can succeed there.
+ */
+export const CAPTURE_PROMPT_BUTTONS: readonly {
+    label: string, action: ControlAction,
+}[] = [
+    { label: 'Use As My Ship', action: 'plunderCaptureShip' },
+    { label: 'Use As Escort', action: 'plunderCaptureEscort' },
+];
+
+/**
+ * The capture prompt (PICT 8516 scaled into CAPTURE_FRAME's 257x114 rect),
+ * laid over the still-open plunder dialog (BoardingUi's 'capture' phase
+ * keeps it up underneath, as the original does). Its full-screen shield
+ * keeps the plunder buttons behind it from being clicked, and its
+ * MenuControls, bound on top of the plunder dialog's, take the keyboard.
+ *
+ * KEYS, GUESS (unmeasured): `accept` (A) answers Use As Escort, the answer
+ * that changes least; Escape and Return do nothing, so the prompt is only
+ * ever closed by one of its two answers.
+ */
 class CaptureAssignmentDialog {
     readonly container = new PIXI.Container();
     private controls: MenuControls;
+    private question = new PIXI.Text(CAPTURE_PROMPT_TEXT, {
+        ...TITLE_FONT, wordWrap: true,
+        wordWrapWidth: CAPTURE_FRAME.textWrapWidth,
+        lineHeight: CAPTURE_FRAME.lineHeight,
+    });
 
-    constructor(displayAssets: DisplayAssetDataInterface,
+    constructor(private displayAssets: DisplayAssetDataInterface,
         controlEvents: Observable<ControlEvent>,
         send: (action: ControlAction) => void) {
         this.container.name = 'CaptureAssignment';
@@ -611,11 +649,20 @@ class CaptureAssignmentDialog {
         let background: PIXI.Sprite;
         try {
             background = displayAssets.spriteFromPict(CAPTURE_FRAME.pict);
+            // Scaled, nearest-neighbour, into the measured rect (see
+            // CAPTURE_FRAME): the original draws the 267x128 art into
+            // 257x114.
+            background.texture.baseTexture.scaleMode =
+                PIXI.SCALE_MODES.NEAREST;
+            // As a scale, not a width: the texture may still be loading.
+            background.scale.set(
+                CAPTURE_FRAME.width / CAPTURE_FRAME.artWidth,
+                CAPTURE_FRAME.height / CAPTURE_FRAME.artHeight);
         } catch {
             const g = new PIXI.Graphics().beginFill(0x101820, 0.95)
                 .lineStyle(1, 0x88aacc)
-                .drawRect(CAP_ORIGIN_X, CAP_ORIGIN_Y,
-                    CAPTURE_FRAME.width, CAPTURE_FRAME.height).endFill();
+                .drawRect(0, 0, CAPTURE_FRAME.width, CAPTURE_FRAME.height)
+                .endFill();
             background = new PIXI.Sprite();
             background.addChild(g);
         }
@@ -624,36 +671,41 @@ class CaptureAssignmentDialog {
         background.interactive = true;
         this.container.addChild(background);
 
-        // The question goes in the 8516 frame's own black well. The original
-        // asks a longer question (escort vs. trading places with her captain)
-        // and offers a third choice NovaJS does not model — see
-        // CAPTURE_FRAME's note.
-        const title = new PIXI.Text('You have captured the ship!', {
-            ...TITLE_FONT, wordWrap: true,
-            wordWrapWidth: CAPTURE_FRAME.well.width - 18,
-        });
-        title.position.set(CAP_ORIGIN_X + CAPTURE_FRAME.text.x,
+        this.question.name = 'CapturePromptText';
+        this.question.position.set(CAP_ORIGIN_X + CAPTURE_FRAME.text.x,
             CAP_ORIGIN_Y + CAPTURE_FRAME.text.y);
-        this.container.addChild(title);
+        this.container.addChild(this.question);
 
-        // Two pills centred in the frame at 120 wide with a 32px pitch, as
-        // capture_assignment.png's inset shows them.
-        const capButton = (label: string, row: number) =>
-            new Button(displayAssets, label, CAPTURE_FRAME.buttonWidth, {
-                x: CAP_ORIGIN_X + CAPTURE_FRAME.buttonX - BUTTON_CAP_INSET,
-                y: CAP_ORIGIN_Y + CAPTURE_FRAME.buttonTop
-                    + row * CAPTURE_FRAME.buttonPitch,
-            });
-        const escort = capButton('Keep as Escort', 0);
-        escort.click.subscribe(() => send('plunderCaptureEscort'));
-        const release = capButton('Release', 1);
-        release.click.subscribe(() => send('plunderDone'));
-        this.container.addChild(escort.container, release.container);
+        CAPTURE_PROMPT_BUTTONS.forEach(({ label, action }, row) => {
+            const button = new Button(displayAssets, label,
+                CAPTURE_FRAME.buttonWidth, {
+                    x: CAP_ORIGIN_X + CAPTURE_FRAME.buttonX - BUTTON_CAP_INSET,
+                    y: CAP_ORIGIN_Y + CAPTURE_FRAME.buttonTop
+                        + row * CAPTURE_FRAME.buttonPitch,
+                });
+            button.click.subscribe(() => send(action));
+            this.container.addChild(button.container);
+        });
 
         this.controls = new MenuControls(controlEvents, {
             accept: () => send('plunderCaptureEscort'),
-            depart: () => send('plunderDone'),
         });
+        void this.loadQuestion();
+    }
+
+    /** The question out of STR# 2002, keeping the built-in wording when the
+     * data set has none (the mission board's pattern). */
+    private async loadQuestion() {
+        try {
+            const table = await this.displayAssets.data.StringTable
+                .get(CAPTURE_PROMPT_STRING_TABLE);
+            const text = table.strings[CAPTURE_PROMPT_INDEX];
+            if (text?.trim() && !this.question.destroyed) {
+                this.question.text = text;
+            }
+        } catch {
+            // Keep the built-in wording.
+        }
     }
 
     open() {
@@ -871,7 +923,13 @@ class BoardingUi {
                 }
                 return;
             case 'capture':
-                this.plunder.close();
+                // The prompt is laid OVER the plunder dialog, which stays
+                // up (and current) beneath it, as in the original
+                // (space/capture_assignment.png). Opened first, so the
+                // prompt's MenuControls go on top of the plunder's.
+                this.plunder.open();
+                this.plunder.refresh(boarding!, target, playerCrew,
+                    atEscortCap);
                 this.assignment.open();
                 return;
             case 'missionWait':
