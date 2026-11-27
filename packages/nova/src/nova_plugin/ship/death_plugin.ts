@@ -305,6 +305,43 @@ export function knockbackDirection(targetPosition: Position,
     return difference.normalize();
 }
 
+/**
+ * A ship's velocity after a knockback `impulse`: the sum, limited so a
+ * hit can never take the ship past its own top speed (`topSpeed`), nor
+ * past the speed it already had when that was higher (an afterburner's
+ * leftover overspeed keeps bleeding off at its own rate, untouched). A
+ * hit can still turn a ship at its cap: only the length is limited.
+ *
+ * WHY. Nothing else bounded a knocked ship. MovementSystem's clamp is
+ * the DECAYED cap (decayedSpeedCap, afterburner_plugin.ts), which rises
+ * to meet any overspeed and bleeds it at 0.7 x the hull's acceleration,
+ * and an inertialess hull is only pulled back toward its heading at 2 x
+ * its acceleration (inertialessControls) — while a thrusting one's
+ * targetSpeed climbed with that risen cap and held the speed for good.
+ * Light hulls take far more than that bleed under sustained fire: impact
+ * x 5 / mass a hit, and a beam lands its impact once per Count unit (a
+ * Thunderhead Lance shot is 10 of them, 250 px/s on a mass-10
+ * Hyperioid). Under a Kestrel's guns a Hyperioid (top speed 90 px/s)
+ * reached 1,000 px/s in the first second and 9,300 px/s in ten, a Vell-os
+ * Dart 12,500 and even an inertial Shuttle 6,100.
+ *
+ * GUESS (not measured for knockback): the cap is the hull's top speed,
+ * as the original measurably caps the other outside push, spöb gravity
+ * (reference "A Gravity-5 ramp from far out, and the swing's cap ...,
+ * wave 42": the swing IS capped at the hull's top speed). The only
+ * knockback reading — a still 50-ton hull drifting off at about 12 px/s
+ * a hit of a 20-impact bolt (reference "Acceleration under ionization
+ * (E6 leftover), wave 44", finding 2) — stays far below any cap.
+ *
+ * Deterministic: one add, one compare, and a correctly-rounded sqrt in
+ * shortenToLength; no state.
+ */
+export function knockedVelocity(velocity: Vector, impulse: Vector,
+    topSpeed: number): Vector {
+    const limit = Math.max(velocity.length, topSpeed);
+    return velocity.add(impulse).shortenToLength(limit);
+}
+
 const MovementQuery = new Query([MovementStateComponent, Optional(BlastDamageComponent)] as const);
 export const KnockbackSystem = new System({
     name: 'KnockbackSystem',
@@ -328,8 +365,13 @@ export const KnockbackSystem = new System({
         if (!direction) {
             return;
         }
-        movementState.velocity = movementState.velocity.add(
-            direction.scale(damage.knockback * scale / targetMass * 5));
+        // Capped at the hull's top speed (knockedVelocity). maxVelocity is
+        // this tick's effective cap (EffectiveMovementPhysicsSystem: the
+        // ion / strict / afterburner / jump-burn ceiling, or the speed
+        // already held while an overspeed bleeds off).
+        movementState.velocity = knockedVelocity(movementState.velocity,
+            direction.scale(damage.knockback * scale / targetMass * 5),
+            movementPhysics.maxVelocity);
     },
     // #237 pin (shared: *): the DamagedEvent handlers run damage first,
     // knockback second.

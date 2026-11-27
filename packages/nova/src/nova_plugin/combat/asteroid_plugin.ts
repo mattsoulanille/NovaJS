@@ -82,8 +82,9 @@ const ASTEROID_MAX_SPEED = 50;
  * Ceiling on an asteroid's speed, px/s.
  *
  * Why one is needed: an asteroid has no MovementPhysicsComponent, so
- * MovementSystem's `shortenToLength(maxVelocity)` — the thing that stops
- * a knocked-around *ship* from running away — never applies to it, and
+ * the top-speed cap that stops a knocked-around *ship* from running away
+ * (knockedVelocity in KnockbackSystem, ship/death_plugin.ts) never
+ * applies to it, and
  * AsteroidMotionSystem's drift has no drag. Every knockback impulse
  * (AsteroidDamageSystem below) therefore accumulates forever. A beam is
  * the worst case, because BeamDamageSystem re-emits DamagedEvent every

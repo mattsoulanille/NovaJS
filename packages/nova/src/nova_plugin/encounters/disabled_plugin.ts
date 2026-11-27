@@ -4,7 +4,7 @@ import { EcsEvent } from 'nova_ecs/events';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
-import { MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movement_plugin';
+import { MovementPhysicsComponent, MovementStateComponent, MovementSystem, MovementType } from 'nova_ecs/plugins/movement_plugin';
 import { RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
@@ -311,23 +311,40 @@ export const JumpDisableCancelSystem = new System({
  * DISABLED_COAST_TIME_CONSTANT_S, measured on the original in reference
  * "A disabled ship's coast, wave 25") and snaps to zero below
  * DISABLED_REST_SPEED. The direction is kept.
+ *
+ * AN INERTIALESS HULK COASTS THE SAME WAY. MovementSystem flies an
+ * inertialess hull toward its heading at `targetSpeed`, which no thrust
+ * change touches once the ship is dead (accelerating is zeroed above, and
+ * an inertialess hull holds its speed until it brakes). Left alone that
+ * pull undid the drag every step: a disabled Hyperioid or Raven kept
+ * cruising at its pre-disable speed indefinitely (still 90 / 101 px/s 20 s
+ * after the last hit). Its targetSpeed now follows the coasted speed, so
+ * the pull has nothing to restore and the hulk comes to rest on the
+ * measured coast; a hull repaired mid-coast keeps the speed it has, as an
+ * inertialess hull does. GUESS: the coast was measured on an inertial
+ * hull only. Inertial hulls never read targetSpeed and are left alone.
  */
 export const DisabledMovementSystem = new System({
     name: 'DisabledMovementSystem',
-    args: [DisabledComponent, MovementStateComponent, TimeResource] as const,
-    step(_disabled, movement, time) {
+    args: [DisabledComponent, MovementStateComponent, TimeResource,
+        Optional(MovementPhysicsComponent)] as const,
+    step(_disabled, movement, time, physics) {
         movement.accelerating = 0;
         movement.turning = 0;
         movement.turnBack = false;
         movement.turnTo = null;
 
         const speed = movement.velocity.length;
+        let next = 0;
         if (speed > 0) {
-            const next = disabledCoastSpeed(speed, time.delta_s);
+            next = disabledCoastSpeed(speed, time.delta_s);
             // Replace (never mutate in place) the velocity vector.
             movement.velocity = next <= 0
                 ? new Vector(0, 0)
                 : movement.velocity.scale(next / speed);
+        }
+        if (physics?.movementType === MovementType.INERTIALESS) {
+            movement.targetSpeed = next;
         }
     },
     after: [TimeSystem, ShipDisableSystem, ControlShipSystem,
