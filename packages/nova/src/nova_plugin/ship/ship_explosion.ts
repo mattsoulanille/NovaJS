@@ -159,7 +159,10 @@ export const SHIP_EXPLOSION_REACH_PER_DAMAGE = 2;
  *
  * Below the damage cut-off the square keeps the same formula (51-58 px
  * for 0-99 t): such a blast hurts nothing, but its knockback still
- * shoves what is inside (the knockback is unmeasured and unchanged). A
+ * shoves what is inside (GUESS: unmeasured, kept; see
+ * SHIP_EXPLOSION_KNOCKBACK_PER_TON). A damaging blast's push reaches
+ * exactly this square (MEASURED, reference "The ship-explosion push",
+ * wave 47). A
  * degenerate mass reaches 51 px rather than NaN.
  */
 export function shipExplosionReach(mass: number): number {
@@ -197,19 +200,50 @@ export const FINAL_FIREBALL_MIN_RADIUS = 20;
 export const FINAL_FIREBALL_MAX_RADIUS = 200;
 
 /**
- * Knockback ("impact strength", per the Bible's Mass entry) per ton.
- * KnockbackSystem divides by the VICTIM's mass, which is the other half
- * of the Bible's rule (wëap Impact is "inversely proportional to the
- * ship's mass"), so this constant only fixes the scale. KnockbackSystem
- * applies the weapon law to it (KNOCKBACK_PER_IMPACT x impact / mass,
- * death_plugin.ts; measured 30 for wëap Impact, reference "Knockback (the
- * hub's KNOCKBACK), wave 46"), so a 10,000-ton wreck's 500 shoves a
- * 98-ton Starbridge at ~153 px/s (capped at its top speed; ~25 px/s at
- * the old x 5). GUESS: the explosion's push was never measured; this
- * per-ton value was set against the x 5 law and kept as it was when the
- * law went to x 30. TUNABLE.
+ * The knockback ("impact strength", the Bible's Mass entry) of every
+ * DAMAGING ship explosion (SHIP_EXPLOSION_DAMAGE_MIN_MASS tons up): ONE
+ * fixed impact, whatever the wreck weighed. KnockbackSystem applies the
+ * weapon law to it (KNOCKBACK_PER_IMPACT x impact / the VICTIM's mass,
+ * death_plugin.ts), radially away from the wreck, capped at the victim's
+ * top speed.
+ *
+ * MEASURED (reference "The ship-explosion push (the hub's knockback
+ * follow-up), wave 47"): 2,000, 5,000 and 10,000 t wrecks each threw a
+ * 300 t hull to 73-74 px/s (no growth with the wreck, no fall-off with
+ * distance inside the square), and the 2,000 t one threw a 1,200 t
+ * cruiser to 18.5: 300 x 73.5 = 22,050 and 1,200 x 18.5 = 22,200 t px/s,
+ * one impulse of about 22,100 t px/s, so 22,100 / 30 = about 737 impact
+ * units (good to about 2%). A 50 t hull was thrown to its top speed
+ * (132.8 against 131 px/s). The push reaches exactly as far as the damage
+ * (nothing just outside the square at 210 / 470 / 820 px): it rides the
+ * blast's own square gate (insideShipExplosion, BlastCollisionSystem).
+ *
+ * Was 0.05 x the wreck's tons (SHIP_EXPLOSION_KNOCKBACK_PER_TON, GUESS):
+ * 10 / 25 / 50 px/s on the 300 t hull where the original gave 73-74.
+ */
+export const SHIP_EXPLOSION_KNOCKBACK = 737;
+
+/**
+ * The knockback per ton of a DAMAGELESS ship explosion (under
+ * SHIP_EXPLOSION_DAMAGE_MIN_MASS tons): main's old per-ton law, kept for
+ * that band only. GUESS: whether a blast that hurts nothing pushes at all
+ * was not run (the wave-47 section's proposal guesses no push); it keeps
+ * the push it had (at most 4.95 impact units, a 99 t wreck's) until it is
+ * measured. TUNABLE.
  */
 export const SHIP_EXPLOSION_KNOCKBACK_PER_TON = 0.05;
+
+/**
+ * The final explosion's knockback, from the wreck's mass: the measured
+ * fixed SHIP_EXPLOSION_KNOCKBACK from SHIP_EXPLOSION_DAMAGE_MIN_MASS tons
+ * up, SHIP_EXPLOSION_KNOCKBACK_PER_TON x tons below (GUESS). Pure.
+ */
+export function shipExplosionKnockback(mass: number): number {
+    const tons = mass > 0 ? mass : 0;
+    return tons >= SHIP_EXPLOSION_DAMAGE_MIN_MASS
+        ? SHIP_EXPLOSION_KNOCKBACK
+        : tons * SHIP_EXPLOSION_KNOCKBACK_PER_TON;
+}
 
 /**
  * How far above the disable threshold a ship-explosion's armor damage
@@ -254,7 +288,7 @@ export function shipExplosionDamage(mass: number): WeaponDamage {
         ionization: 0,
         ionizationColor: 0xffffff,
         passThroughShield: 0,
-        knockback: tons * SHIP_EXPLOSION_KNOCKBACK_PER_TON,
+        knockback: shipExplosionKnockback(tons),
     };
 }
 

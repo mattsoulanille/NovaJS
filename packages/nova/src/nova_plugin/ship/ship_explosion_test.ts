@@ -32,9 +32,12 @@ import {
     nonLethalArmor, nonLethalArmorFloor, secondaryExplosionsDue,
     secondaryExplosionTotal, SHIP_EXPLOSION_DAMAGE_BASE,
     SHIP_EXPLOSION_DAMAGE_MIN_MASS, SHIP_EXPLOSION_DAMAGE_PER_TON,
-    SHIP_EXPLOSION_KNOCKBACK_PER_TON, shipExplosionDamage,
-    shipExplosionReach,
+    SHIP_EXPLOSION_KNOCKBACK, SHIP_EXPLOSION_KNOCKBACK_PER_TON,
+    shipExplosionDamage, shipExplosionKnockback, shipExplosionReach,
 } from './ship_explosion.js';
+import { KNOCKBACK_PER_IMPACT } from './death_plugin.js';
+import { ShipPhysicsComponent } from './ship_plugin.js';
+import { MovementPhysicsComponent } from 'nova_ecs/plugins/movement_plugin';
 
 /** Synthetic hulls whose numbers the simulation specs below lean on. */
 const HEAVY = SYNTHETIC.ships.hulk;   // Bastion Hulk: 10000 t, 150 frames
@@ -149,10 +152,29 @@ describe('ship explosion scaling', () => {
             expect(shipExplosionDamage(-5000).armor).toEqual(0);
         });
 
-    it('scales knockback linearly with mass', () => {
+    it('pushes with one fixed impact from 100 t up, whatever the wreck '
+        + 'weighs (reference "The ship-explosion push", wave 47)', () => {
+            // 22,100 t px/s on the 30 x Impact / Mass law.
+            expect(SHIP_EXPLOSION_KNOCKBACK).toBe(737);
+            expect(SHIP_EXPLOSION_KNOCKBACK * KNOCKBACK_PER_IMPACT)
+                .toBeCloseTo(22_100, -2);
+            for (const mass of [100, 400, 2000, 5000, 10000, 30000]) {
+                expect(shipExplosionDamage(mass).knockback)
+                    .withContext(`${mass} t`)
+                    .toEqual(SHIP_EXPLOSION_KNOCKBACK);
+            }
+            // GUESS (unmeasured): a damageless blast keeps main's
+            // per-ton push.
+            expect(shipExplosionKnockback(50))
+                .toBeCloseTo(50 * SHIP_EXPLOSION_KNOCKBACK_PER_TON, 9);
+            expect(shipExplosionKnockback(99))
+                .toBeLessThan(SHIP_EXPLOSION_KNOCKBACK);
+            expect(shipExplosionKnockback(NaN)).toEqual(0);
+            expect(shipExplosionKnockback(-5000)).toEqual(0);
+        });
+
+    it('carries no shield-piercing and no ionization', () => {
         const leviathan = shipExplosionDamage(10000);
-        expect(leviathan.knockback)
-            .toBeCloseTo(10000 * SHIP_EXPLOSION_KNOCKBACK_PER_TON, 9);
         // An explosion is a shock wave, not a shield-piercer, and it
         // ionizes nothing.
         expect(leviathan.passThroughShield).toEqual(0);
@@ -513,6 +535,77 @@ describe('final explosion area damage (simulation)', () => {
         expect(shieldOf(victim).current).toEqual(shield);
         expect(armorOf(victim).current).toEqual(armor);
     }, 120_000);
+
+    describe('push (reference "The ship-explosion push (the hub\'s '
+        + 'knockback follow-up), wave 47")', () => {
+        /** The victim's velocity one tick after the wreck blows. */
+        async function pushOf(exploderId: string, x: number,
+            victimId: string, y = 0) {
+            const { world, victim } = await battlefield(exploderId, x,
+                victimId, { victimY: y });
+            const movement = () =>
+                victim.components.get(MovementStateComponent)!;
+            expect(movement().velocity.length).toEqual(0);
+            explodeNow(world);
+            world.step();
+            return {
+                velocity: movement().velocity,
+                mass: victim.components.get(ShipPhysicsComponent)!.mass,
+                top: victim.components.get(MovementPhysicsComponent)!
+                    .maxVelocity,
+            };
+        }
+
+        it('throws a hull at 22,100 t px/s over its mass whatever the '
+            + 'wreck weighs: a 400 t wreck and a 10,000 t one alike, near '
+            + 'or far inside the square, radially', async () => {
+                // The Heron Warden (400 t, top speed above the push) as
+                // the victim, like the section's 300 t Mass Hull.
+                const warden = SYNTHETIC.ships.warden;
+                const fromHeavyNear = await pushOf(HEAVY, 60, warden);
+                const fromHeavyFar = await pushOf(HEAVY, 700, warden);
+                const fromLight = await pushOf(warden, 60, warden);
+                const expected = SHIP_EXPLOSION_KNOCKBACK
+                    * KNOCKBACK_PER_IMPACT / fromHeavyNear.mass;
+                expect(expected).toBeLessThan(fromHeavyNear.top);
+                for (const push of [fromHeavyNear, fromHeavyFar, fromLight]) {
+                    // Straight away from the wreck at (0, 0).
+                    expect(push.velocity.x).toBeCloseTo(expected, 6);
+                    expect(push.velocity.y).toBeCloseTo(0, 9);
+                }
+                // On the section's hulls the law gives its readings: 300 t
+                // 73.7 (73-74 read), 1,200 t 18.4 (18.5 read).
+                expect(SHIP_EXPLOSION_KNOCKBACK * KNOCKBACK_PER_IMPACT / 300)
+                    .toBeCloseTo(73.5, 0);
+                expect(SHIP_EXPLOSION_KNOCKBACK * KNOCKBACK_PER_IMPACT / 1200)
+                    .toBeCloseTo(18.5, 0);
+                // Off the axis: still radial.
+                const diagonal = await pushOf(HEAVY, 300, warden, 400);
+                expect(diagonal.velocity.length).toBeCloseTo(expected, 6);
+                expect(diagonal.velocity.y / diagonal.velocity.x)
+                    .toBeCloseTo(400 / 300, 6);
+            }, 120_000);
+
+        it('caps a light hull at its top speed (Probe A: 132.8 against '
+            + 'its 131)', async () => {
+                // The 30 t Wren Skiff: the law gives 737 px/s.
+                const push = await pushOf(HEAVY, 60, VICTIM_HULL);
+                expect(SHIP_EXPLOSION_KNOCKBACK * KNOCKBACK_PER_IMPACT
+                    / push.mass).toBeGreaterThan(push.top);
+                expect(push.velocity.length).toBeCloseTo(push.top, 6);
+            }, 120_000);
+
+        it('pushes nothing just outside the damage square (none at 210 / '
+            + '470 / 820 px)', async () => {
+                const reach = shipExplosionReach(10000);
+                const outside = await pushOf(HEAVY, reach + 4,
+                    SYNTHETIC.ships.warden);
+                expect(outside.velocity.length).toEqual(0);
+                const inside = await pushOf(HEAVY, reach - 4,
+                    SYNTHETIC.ships.warden);
+                expect(inside.velocity.length).toBeGreaterThan(0);
+            }, 120_000);
+    });
 
     it('hits by the larger coordinate: a square, not a circle (wave 28)',
         async () => {

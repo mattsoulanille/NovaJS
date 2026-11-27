@@ -320,9 +320,10 @@ export function knockbackDirection(targetPosition: Position,
  * hull twice (30 x 2, finding 3). Was 5, six times too small.
  *
  * Every knockback shares it: weapon hits and beams (KnockbackSystem), a
- * ship's final explosion (SHIP_EXPLOSION_KNOCKBACK_PER_TON, ship_explosion
- * .ts: its impact goes through KnockbackSystem; GUESS, the explosion's
- * push was not measured) and the push on an asteroid
+ * ship's final explosion (SHIP_EXPLOSION_KNOCKBACK, ship_explosion.ts: one
+ * fixed impact of 737 through KnockbackSystem, MEASURED as 1 / the
+ * victim's mass, reference "The ship-explosion push", wave 47) and the
+ * push on an asteroid
  * (AsteroidDamageSystem; GUESS, the same law on a röid's Mass).
  */
 export const KNOCKBACK_PER_IMPACT = 30;
