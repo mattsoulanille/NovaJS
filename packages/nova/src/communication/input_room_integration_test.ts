@@ -1716,5 +1716,24 @@ describe('Input-driven rooms', () => {
             expect(hashWorld(peerA.world, PEER_LOCAL_COMPONENTS).hash)
                 .toEqual(hashWorld(peerB.world, PEER_LOCAL_COMPONENTS).hash);
         }, 240_000);
+
+        it('keeps its own record inside the rollback window until the relay '
+            + 'has placed it, however long its uplink stalls', async () => {
+            // 320 ticks of stalled uplink: past the 240-tick ring. Before
+            // the relay confirmed records, A stepped on, its record's local
+            // tick left the ring and its `sentRecords` entry with it, and
+            // the retimed echo was taken for a pre-resync one and ignored:
+            // A kept its input at the old tick, a silent fork (Gemini
+            // Neon's review of the 2026-11-27 incident). Now A holds 200
+            // ticks past its unechoed record, so the echo still moves it.
+            const { peerA, peerB, reports, log } = await run(320, 'uplink');
+            expect(log).toContain('holdForRelay');
+            expect(log).toContain('retimed');
+            expect(log).not.toContain('retimeTooOld');
+            expect(log).not.toContain('resync');
+            expectAgreement(reports);
+            expect(hashWorld(peerA.world, PEER_LOCAL_COMPONENTS).hash)
+                .toEqual(hashWorld(peerB.world, PEER_LOCAL_COMPONENTS).hash);
+        }, 240_000);
     });
 });

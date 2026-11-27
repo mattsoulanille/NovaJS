@@ -609,6 +609,19 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         }
         this.scheduleReinsertions();
         this.integrateRemoteInputs();
+        if (this.resyncing) {
+            // Integration found a fork it cannot roll back (lateRecord,
+            // retimeTooOld, rollbackTooOld) and started a resync, which
+            // restored genesis and replaced `this.rollback` before its
+            // first await. Stepping on would advance the genesis world,
+            // and publish this tick's inputs from it: sent after the
+            // resync's joinRequest, such a record is not in the catch-up
+            // log, and its echo, arriving after the catch-up cleared
+            // `sentRecords`, is taken for a pre-resync one and dropped —
+            // the room applies the input and this peer never does. The
+            // queue waits for the rebuilt timeline, as during any resync.
+            return;
+        }
         for (let i = 0; i < count; i++) {
             // Never step into ticks a record still on its way could not
             // be rolled back to (see MAX_UNCONFIRMED_TICKS): hold, and
@@ -685,9 +698,17 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             this.rollback.step();
         }
         // Sent records that fell behind the rollback horizon can no
-        // longer be moved by an echo.
+        // longer be moved by an echo — but one whose echo is still due
+        // stays: if that echo retimes it, integrateRemoteInputs must see
+        // retimeTooOld (and resync), not an unknown seq it would take for
+        // a pre-resync echo and ignore, leaving this peer forked. While
+        // the relay's clock confirms, step() holds before an unechoed
+        // record ages out of the ring, so this matters only unconfirmed
+        // (no tickSync yet, a relay without a clock); the echo timeout
+        // and the catch-up's clear bound the entries kept.
         for (const [seq, tick] of this.sentRecords) {
-            if (tick <= this.rollback.earliestTick) {
+            if (tick <= this.rollback.earliestTick
+                && !this.unconfirmedRecords.has(seq)) {
                 this.sentRecords.delete(seq);
             }
         }
@@ -734,6 +755,11 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 const chunk = Math.min(remaining, CATCH_UP_CHUNK_TICKS);
                 const before = this.rollback.tick;
                 this.step(chunk);
+                if (this.resyncing || this.resyncFailed) {
+                    // step() started a resync: the world is back at
+                    // genesis and the resync's join catches it up.
+                    return stepped;
+                }
                 const advanced = this.rollback.tick - before;
                 stepped += advanced;
                 remaining -= chunk;
@@ -1040,6 +1066,12 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                         seq: record.seq, from: oldTick, to: record.tick,
                     });
                     void this.resync();
+                    if (this.resyncing) {
+                        // The resync replaced `this.rollback` with a
+                        // genesis one; the rest of this batch is in the
+                        // log its catch-up replays.
+                        return;
+                    }
                     continue;
                 }
                 this.logRollbackEvent('retimed', {
@@ -1081,6 +1113,11 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                     peer: record.peerId ?? 'unknown',
                 });
                 void this.resync();
+                if (this.resyncing) {
+                    // As for retimeTooOld: nothing more goes into the
+                    // abandoned timeline (or the genesis one replacing it).
+                    return;
+                }
             }
             this.addRecord(tick, { ...record, tick });
             if (tick <= this.rollback.tick) {
