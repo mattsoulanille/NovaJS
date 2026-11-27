@@ -84,8 +84,9 @@ export function listedMissions(entity: Entity, universe: MissionUniverse):
             // FAILED in flight: on the original such a mission is gone the
             // moment it fails ("Mission failed.", then `i` answers "You have
             // no active missions."; reference "Reviving a disabled ally,
-            // wave 11"), while NovaJS keeps the record until the next
-            // landing runs its OnFailure.
+            // wave 11"), while NovaJS keeps the record until the owner's
+            // `missionSetString` record runs its OnFailure, a moment
+            // later.
             && !active.shipObjective?.failed)
         : [];
 }
@@ -395,7 +396,8 @@ export class MissionInfoDialog {
      * mission is gone the moment it fails — disabling a mission's escort
      * printed "Mission failed." and `i` then answered "You have no active
      * missions." (reference "Reviving a disabled ally, wave 11") — while
-     * NovaJS keeps the record until the next landing runs its OnFailure.
+     * NovaJS keeps the record until the owner's `missionSetString`
+     * record runs its OnFailure, a moment later.
      */
     private listedMissions(entity: Entity): [string, ActiveMission][] {
         const missions = entity.components.get(MissionsComponent);

@@ -20,9 +20,9 @@ flight, the owner's client runs it against a detached copy of the pilot
 | mïsn | OnAccept | 186 | `nova_plugin/missions/mission_accept_offer.ts:121`, `:301` | docked (`spaceport/mission_board.ts:576`, `spaceport/offer_popup.ts:722`, `spaceport/mission_offers.ts:114`); in flight (`spaceport/ship_mission_accept.ts:473`, `acceptMission` record) |
 | mïsn | OnRefuse | 102 | `nova_plugin/missions/mission_accept_offer.ts:315` | docked (`spaceport/offer_popup.ts:730`); in flight (`spaceport/ship_mission_accept.ts:560`, `refuseMission` record) |
 | mïsn | OnSuccess | 407 | `nova_plugin/missions/mission_transitions.ts:160` | at the landing that completes it (`spaceport/mission_session.ts:530` `processLanding`) |
-| mïsn | OnFailure | 74 | `nova_plugin/missions/mission_transitions.ts:113` | at the next date advance or landing (`spaceport/mission_session.ts:1013`, `:530`); a failure the sim flags in flight waits for it |
+| mïsn | OnFailure | 74 | `nova_plugin/missions/mission_transitions.ts:113` | a failure the sim flags in flight (a ship goal made unachievable: MEASURED, wave 48; the owner disabled / destroyed, plundered, scanned: GUESS) runs AT ONCE: `failMissionInFlight` (`nova_plugin/missions/mission_landing.ts:144`) via `spaceport/ship_mission_accept.ts:682` (`buildMissionSetString`) from `display/mission_set_string_plugin.ts:61`, applied by `nova_plugin/missions/mission_set_string_record.ts:128` (`missionSetString` record); a deadline at the date advance that passes it (`spaceport/mission_session.ts`, `processInFlightMissions`) or at a landing (`processLanding`), which are also the fallback for a record that never went out |
 | mïsn | OnAbort | 189 | `nova_plugin/missions/mission_transitions.ts:78`; auto-aborts `mission_accept_offer.ts:155`, `mission_landing.ts:212` | docked 'i' (`spaceport/spaceport.ts:712`); in flight (`spaceport/ship_mission_accept.ts:611`, `abortMission` record); the deferred përs auto-abort at the board (`:647`) |
-| mïsn | OnShipDone | 76 | `nova_plugin/missions/mission_landing.ts:46` | at the next date advance or landing (`spaceport/mission_session.ts:1009`); the ShipDoneText itself shows at once |
+| mïsn | OnShipDone | 76 | `nova_plugin/missions/mission_landing.ts:125` (`runShipDoneSetString`), `:46` (the fallback) | AT ONCE, the moment the special ships' goal completes (MEASURED, wave 48): the `missionSetString` record as for OnFailure, which marks the goal `onShipDoneRun`; the next date advance or landing settles the goal (the ShipDoneText event) and runs the string only if no record did. A deferred auto-abort's own record runs a pending one first (`buildDeferredAutoAbort`). The ShipDoneText itself shows at once (`display/mission_ship_done_plugin.ts`) |
 | nëbu | OnExplore | (not parsed) | **NOT RUN** | — |
 | oütf | OnPurchase | 11 | `spaceport/outfitter.ts:843` | an outfitter purchase |
 | oütf | OnSell | 3 | `spaceport/outfitter.ts:921` | an outfitter sale |
@@ -53,16 +53,23 @@ string: their NCB fields are tests.
   no NovaDataInterface type. Needs a NebulaData type, a parser, and a
   "visible" test on the explored-systems set (the Bible: re-evaluated every
   time, bits-only). About half a day.
-- **Timing gaps (run, but late):** mïsn OnShipDone and an in-flight
-  OnFailure run at the next date advance or landing rather than the moment
-  the goal completes or fails. Moving them onto the pending-and-record
-  pattern used for OnDominate is about half a day each (the in-flight
-  failure paths are several). Reference wave 47 ("OnShipDone and an
-  in-flight OnFailure ..."): traffic gated on the bits did not appear in
-  3.5 minutes of flight after either event and appeared at the next
-  take-off, which is consistent with the late run (that reader cannot
-  tell "late" from "AppearOn is only checked when a visit's traffic is
-  built"); no change until a stronger reader exists.
+- **OnShipDone and an in-flight OnFailure: measured, now run at once.**
+  Reference wave 48 ("OnShipDone and an in-flight OnFailure, read by a
+  person's hail ..."): a përs whose hail offers a mission only while the
+  bit is set offered it seconds after the special ship's death and
+  seconds after "Mission failed.", having refused it a minute before
+  (wave 47's traffic reader was blind: AppearOn is read only when a
+  visit's traffic is built). Both now ride the in-flight record pattern
+  (`missions/mission_set_string_record.ts`): the sim's own marks
+  (`shipDonePending`, a `failed` mission or goal) are the debt, the
+  owner's client pays one string at a time (every OnShipDone before any
+  failure, so a disable goal disabled and then destroyed runs OnShipDone
+  then OnFailure, as the date advance does), and the apply pays only the
+  sender's own owed mission, so each runs once. The failure's notices
+  (its FailText) still wait for the next spaceport, as before. The
+  special ships of an in-flight failure stay as ordinary ships until the
+  owner leaves (they used to stay, still the mission's, until the
+  landing); a ShipBehav-1 escort leaves the owner's flock (GUESS).
 - **Escort upgrade and sale (measured, reference wave 47):** an escort
   UPGRADE runs neither the new hull's OnPurchase nor the old hull's
   OnRetire, and an escort SALE runs no OnRetire, in the original as in

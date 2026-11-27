@@ -26,7 +26,7 @@ import {
 } from "../nova_plugin/encounters/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import {
-    AbortedMission, AcceptedMission, RefusedMission,
+    AbortedMission, AcceptedMission, MissionSetString, RefusedMission,
 } from "../nova_plugin/missions/index.js";
 import { canonicalDesyncHash, DesyncDump, RollbackLogEntry, SpeedVote, STATE_HASH_INTERVAL, wrapRollbackMessage } from "./rollback_protocol.js";
 import { InputRefusedNotice, relayServer, requestCatchUp, subscribeRollbackMessages } from "./rollback_messages.js";
@@ -1824,6 +1824,17 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     async stellarSetString(record: StellarSetString) {
         await loadSetStringEffectsGameData(this.world, record);
         this.schedule({ kind: 'stellarSetString', record });
+    }
+
+    /**
+     * A mission's OnShipDone or in-flight OnFailure
+     * (missions/mission_set_string_record.ts MissionSetStringType): the
+     * deltas of the string the simulation marked owed. What the string
+     * names is staged BEFORE scheduling, as for an abort.
+     */
+    async missionSetString(record: MissionSetString) {
+        await loadSetStringEffectsGameData(this.world, record);
+        this.schedule({ kind: 'missionSetString', record });
     }
 
     snapshot(): SimulationFrame {

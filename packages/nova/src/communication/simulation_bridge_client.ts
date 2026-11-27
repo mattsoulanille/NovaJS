@@ -7,7 +7,7 @@ import {
     CapturedShip, HailAction, StellarSetString,
 } from "../nova_plugin/encounters/index.js";
 import {
-    AbortedMission, AcceptedMission, RefusedMission,
+    AbortedMission, AcceptedMission, MissionSetString, RefusedMission,
 } from "../nova_plugin/missions/index.js";
 import { AnalogControlState } from "../nova_plugin/player/index.js";
 import { SimulationBridgeHostApi } from "./simulation_bridge_api.js";
@@ -92,6 +92,10 @@ export class SimulationBridgeClient {
 
     stellarSetString(record: StellarSetString) {
         return this.host.stellarSetString(structuredClone(record));
+    }
+
+    missionSetString(record: MissionSetString) {
+        return this.host.missionSetString(structuredClone(record));
     }
 
     addEntity(uuid: string, entity: Entity) {

@@ -7,10 +7,12 @@ import { CargoComponent, OutfitsStateComponent, ShipComponent } from '../nova_pl
 import {
     abortMission, AbortedMission,
     AcceptedMission, AcceptedMissionShip, acceptOffer, EncodedActiveMission,
+    failMissionInFlight, failureOwed,
     LOCATION_SHIP, makeMissionOffer, MissionEvent, MissionOffer,
+    MissionSetString, MissionSetStringKind,
     missionMatchesLocation, RefusedMission, refuseOffer, runDeferredAutoAbort,
-    runMissionSetString, SetStringEffects, setStringPrefix, ShipChange,
-    SystemMove,
+    runMissionSetString, runShipDoneSetString, SetStringEffects,
+    setStringPrefix, ShipChange, shipDoneOwed, SystemMove,
 } from '../nova_plugin/missions/index.js';
 import {
     ShipObjective, ActiveMission, ActiveMissionType, CreditsComponent, GameDateComponent, MissionsComponent,
@@ -23,7 +25,9 @@ import {
 import {
     CombatRatingComponent, LegalGeography, LegalRecordsComponent,
 } from '../nova_plugin/reputation/index.js';
-import { MissionSession, replaceMap } from './mission_session.js';
+import {
+    MissionSession, missionNotices, replaceMap,
+} from './mission_session.js';
 import { warmChangeShipTargets } from './change_ship_targets.js';
 import { buildChangedShip } from './shipyard_rules.js';
 import { MissionUniverse } from './mission_universe.js';
@@ -644,6 +648,11 @@ export async function buildDeferredAutoAbort(player: Entity,
     }
     const { session, before, outcome } = await detachedSession(player,
         gameData, universe, options.systemId);
+    // A goal the board itself completed (a rescue) owes its OnShipDone
+    // first, as the date advance runs it before the auto-abort; the
+    // `missionSetString` record leaves an auto-aborting mission to this
+    // one (mission_set_string_record.ts shipDoneOwed).
+    runShipDoneSetString(session.machinery, missionId, session.outfits);
     if (!runDeferredAutoAbort(session.machinery, missionId,
         session.outfits)) {
         return null;
@@ -652,6 +661,56 @@ export async function buildDeferredAutoAbort(player: Entity,
     const effects = diffSetStringEffects(before, session.target, missionId,
         outcome, universe.legalGeography());
     return { events, record: { missionId, ...effects } };
+}
+
+/**
+ * The owner's half of a mission's OnShipDone or in-flight OnFailure
+ * (nova_plugin/missions/mission_set_string_record.ts), resolved IN FLIGHT
+ * against a detached copy of the player the moment the simulation has
+ * marked it owed (shipDoneOwed / failureOwed on the player's own list):
+ * runShipDoneSetString or failMissionInFlight — the date advance's own
+ * transitions — under the mïsn's writer prefix, returned as the
+ * `missionSetString` record. The notices the date advance would have
+ * queued ride the record (the ShipDoneText's own event excepted: the
+ * display shows it now and the date advance queues it later, as before).
+ *
+ * Null when there is nothing to send: the mission is not on the list, or
+ * not owed that string. A mission whose data fails to load is still
+ * paid (empty), so the debt cannot wedge the queue. `player` is the
+ * display world's mirror, read and never written.
+ */
+export async function buildMissionSetString(player: Entity,
+    owed: { kind: MissionSetStringKind, missionId: string },
+    gameData: SimulationGameDataInterface, universe: MissionUniverse,
+    options: { systemId?: string } = {}): Promise<MissionSetString | null> {
+    await universe.load();
+    const { kind, missionId } = owed;
+    const active = player.components.get(MissionsComponent)?.get(missionId);
+    if (!active
+        || !(kind === 'shipDone' ? shipDoneOwed(active)
+            : failureOwed(active))) {
+        return null;
+    }
+    const { session, before, outcome } = await detachedSession(player,
+        gameData, universe, options.systemId);
+    if (kind === 'shipDone') {
+        runShipDoneSetString(session.machinery, missionId, session.outfits);
+    } else {
+        failMissionInFlight(session.machinery, missionId, session.outfits);
+    }
+    const notices = missionNotices(session.commit()
+        .filter(event => event.type !== 'shipDone'));
+    // An OnShipDone's own mission is not the record's to remove: diffed
+    // as a bystander, so a string that ends it (an `Axxx` naming itself)
+    // ends it through missionsEnded. A failure's apply removes it.
+    const effects = diffSetStringEffects(before, session.target,
+        kind === 'shipDone' ? '' : missionId, outcome,
+        universe.legalGeography());
+    return {
+        missionId, kind,
+        ...(notices.length ? { notices } : {}),
+        ...effects,
+    };
 }
 
 /**

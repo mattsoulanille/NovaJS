@@ -497,9 +497,11 @@ function failPlayerMissionsOnLoss(missions: Missions): boolean {
 /**
  * Fails the owner's flagged missions when the owner's ship becomes
  * disabled (mïsn Flags2 0x0004). Runs on every peer identically off the
- * shared DisabledComponent; the actual OnFailure/notice happens at the
- * next landing (processLanding reads active.failed), matching how
- * special-ship goal failures surface.
+ * shared DisabledComponent; the owner's client then runs the actual
+ * OnFailure at once (the `missionSetString` record,
+ * mission_set_string_record.ts), the next landing being the fallback
+ * (processLanding reads active.failed), as for special-ship goal
+ * failures.
  */
 const MissionPlayerDisabledSystem = new System({
     name: 'MissionPlayerDisabledSystem',

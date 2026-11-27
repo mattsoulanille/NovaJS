@@ -19,12 +19,11 @@ import { decodePayVal } from '../reputation/index.js';
  */
 
 /**
- * Runs a mission's OnShipDone (and queues its ShipDoneText event) if the
- * shared sim flagged its ship goal complete (shipDonePending). The Bible
- * runs OnShipDone the moment the goal completes; the set string mutates
- * control bits player-locally, so the earliest deterministic, owner-
- * driven point is the next date advance (jump or landing). Clears the
- * pending flag so it runs exactly once.
+ * Settles a mission whose ship goal the shared sim flagged complete
+ * (shipDonePending): runs its OnShipDone unless that already ran in
+ * flight (`onShipDoneRun`, the `missionSetString` record — the usual
+ * case, see runShipDoneSetString), and queues its ShipDoneText event.
+ * Clears the pending flag, so it settles exactly once.
  *
  * THE TEXT IS NOT DEFERRED — only the set string is. The owner's DISPLAY
  * shows the ShipDoneText at the moment the goal completes, off the same
@@ -43,8 +42,10 @@ function runShipDoneIfPending(machinery: MissionMachineryContext,
         return;
     }
     objective.shipDonePending = false;
-    runMissionSetString(machinery, mission.onShipDone,
-        setStringPrefix(mission), outfits);
+    if (!objective.onShipDoneRun) {
+        runMissionSetString(machinery, mission.onShipDone,
+            setStringPrefix(mission), outfits);
+    }
     if (mission.shipDoneText) {
         machinery.state.events.push({
             missionId: mission.id,
@@ -58,11 +59,11 @@ function runShipDoneIfPending(machinery: MissionMachineryContext,
 }
 
 /**
- * Runs OnShipDone for every active mission whose ship goal just
- * completed (shipDonePending), appending any ShipDoneText events.
- * Called at each date advance (jump or landing) so OnShipDone fires at
- * the first player-local opportunity after the goal completes rather
- * than waiting for a landing. Returns how many ran.
+ * Settles every active mission whose ship goal just completed
+ * (shipDonePending; runShipDoneIfPending), appending any ShipDoneText
+ * events. Called at each date advance (jump or landing): the fallback for
+ * an OnShipDone whose in-flight record never went out. Returns how many
+ * settled.
  */
 export function runPendingShipDone(machinery: MissionMachineryContext,
     outfits?: Map<string, number>): number {
@@ -90,6 +91,65 @@ export function runPendingShipDone(machinery: MissionMachineryContext,
         ran++;
     }
     return ran;
+}
+
+/**
+ * The OnShipDone of `missionId` alone, IN FLIGHT, on the owner's detached
+ * copy (spaceport/ship_mission_accept.ts buildMissionSetString): runs the
+ * set string when the sim has flagged the goal complete
+ * (`shipDonePending`) and it has not run yet (`onShipDoneRun`), and marks
+ * it run on the copy. Neither clears the pending flag nor queues the
+ * ShipDoneText event: the text is the display's at this moment and the
+ * date advance's later (runShipDoneIfPending), as before. Returns whether
+ * it ran.
+ *
+ * MEASURED (reference "OnShipDone and an in-flight OnFailure, read by a
+ * person's hail (the SD / SF leftover), wave 48"): a përs whose hail
+ * offers a mission only while OnShipDone's bit is set offered it seconds
+ * after the special ship died, having refused it a minute before.
+ */
+export function runShipDoneSetString(machinery: MissionMachineryContext,
+    missionId: string, outfits?: Map<string, number>): boolean {
+    const active = machinery.state.missions.get(missionId);
+    const objective = active?.shipObjective;
+    if (!active || !objective?.shipDonePending || objective.onShipDoneRun) {
+        return false;
+    }
+    // Replaced, not edited: the copy's objective may be shared with the
+    // mirror it was detached from.
+    machinery.state.missions.set(missionId, {
+        ...active, shipObjective: { ...objective, onShipDoneRun: true },
+    });
+    const mission = machinery.getMission(missionId);
+    if (mission) {
+        runMissionSetString(machinery, mission.onShipDone,
+            setStringPrefix(mission), outfits);
+    }
+    return true;
+}
+
+/**
+ * Fails `missionId` IN FLIGHT, on the owner's detached copy, the moment
+ * the shared sim has marked it failed (`failed`, or its ship goal's
+ * `failed`): the very failMission the date advance would run — OnFailure,
+ * the CompReward change, the mission cargo unloaded, the 'failed' event —
+ * with the cause the landing would give it. Returns whether it failed.
+ *
+ * MEASURED for a ship goal made unachievable (reference "OnShipDone and
+ * an in-flight OnFailure ..., wave 48": a hail gated on OnFailure's bit
+ * offered seconds after "Mission failed."); the sim's other failures
+ * (the owner disabled or destroyed, plundered, scanned) are run at once
+ * too, a GUESS that they fail the same way.
+ */
+export function failMissionInFlight(machinery: MissionMachineryContext,
+    missionId: string, outfits?: Map<string, number>): boolean {
+    const active = machinery.state.missions.get(missionId);
+    if (!active || !(active.failed || active.shipObjective?.failed)) {
+        return false;
+    }
+    failMission(machinery, missionId, outfits, 0,
+        active.failed ? simFailOutcome(active) : 'fail');
+    return true;
 }
 
 /**

@@ -25,7 +25,7 @@ import {
 } from "../nova_plugin/encounters/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import {
-    AbortedMission, AcceptedMission, RefusedMission,
+    AbortedMission, AcceptedMission, MissionSetString, RefusedMission,
 } from "../nova_plugin/missions/index.js";
 import { makeSystem } from "../nova_plugin/make_system.js";
 import { SimulationBridgeHost } from "./simulation_bridge_host.js";
@@ -147,6 +147,10 @@ class BrowserSimulationBridgeHost implements BrowserSimulationBridgeWorkerApi {
 
     async stellarSetString(record: StellarSetString) {
         await this.requireBridge().stellarSetString(record);
+    }
+
+    async missionSetString(record: MissionSetString) {
+        await this.requireBridge().missionSetString(record);
     }
 
     async step(count?: number) {

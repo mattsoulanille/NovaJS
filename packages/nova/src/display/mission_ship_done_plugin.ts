@@ -106,30 +106,19 @@ import { showStatusMessage } from './status_message_plugin.js';
  * the next landing — the old behaviour, kept as the fallback.
  *
  * ============================================================================
- * OnShipDone IS STILL DEFERRED
+ * OnShipDone RUNS NOW TOO, ON ITS OWN RECORD
  * ============================================================================
  *
- * The Bible runs OnShipDone at the same moment it shows the text. NovaJS
- * runs it at the owner's next date advance (mission_logic's
- * runPendingShipDone), and this change does not move it, because moving
- * it is a much larger job than moving the text:
- *
- *  - a set string is not a popup. It can start, abort and fail OTHER
- *    missions (Sxxx/Axxx/Fxxx), grant outfits and ranks, and pay — so an
- *    in-flight OnShipDone needs an input record carrying a whole
- *    MISSIONS-MAP delta, where the established in-flight record
- *    (mission_accept.ts) carries exactly one mission and a set of scalar
- *    deltas. It also produces its own accept/abort/fail notices, which
- *    would need presenting here too.
- *
- *  - nothing in the shipped content can tell. Of the stock mïsn set,
- *    76 missions have a non-empty OnShipDone and NONE of them has a
- *    ShipDoneText; the one stock mission that has a ShipDoneText
- *    (nova:741, "Rescue Heraan Operatives") has an EMPTY OnShipDone, as
- *    do the two Hyperioid missions this bug was reported against. The
- *    text and the set string are disjoint in practice, so showing the
- *    text now and running the set string at the next jump or landing is
- *    never observable as an ordering.
+ * The Bible runs OnShipDone at the same moment it shows the text, and so
+ * does the original (reference "OnShipDone and an in-flight OnFailure,
+ * read by a person's hail (the SD / SF leftover), wave 48"). The set
+ * string is not this module's: display/mission_set_string_plugin.ts sees
+ * the same `shipDonePending` flag, resolves the string and sends it as a
+ * `missionSetString` record (missions/mission_set_string_record.ts), whose
+ * apply marks the goal `onShipDoneRun` and leaves `shipDonePending` set,
+ * so this module's cue and the boarding dialog's 'show' are untouched.
+ * Of the stock mïsn set, 76 missions have a non-empty OnShipDone and NONE
+ * of them has a ShipDoneText, so the two rarely meet.
  *
  * The one thing that MUST agree is the text: the deferred pass queues a
  * 'shipDone' event carrying the same dësc, and the landing popups render
@@ -414,9 +403,12 @@ export async function presentShipDoneText(world: World,
  * killed, a disable target destroyed) are announced the same way; they
  * were not measured separately.
  *
- * The mission's OnFailure still runs at the next landing (processLanding
- * reads `objective.failed`), like every other sim-marked failure; the
- * Mission Info list hides it from this moment (spaceport/mission_info.ts).
+ * The mission's OnFailure runs at once too, and the mission leaves the
+ * list: display/mission_set_string_plugin.ts sends it as a
+ * `missionSetString` record (reference "OnShipDone and an in-flight
+ * OnFailure ..., wave 48"); the next landing is only the fallback. Until
+ * the record lands the Mission Info list already hides it
+ * (spaceport/mission_info.ts).
  */
 export const MISSION_FAILED_MESSAGE = 'Mission failed.';
 

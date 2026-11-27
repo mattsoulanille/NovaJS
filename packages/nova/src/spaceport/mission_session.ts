@@ -4,7 +4,7 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import {
     addDays, dayNumber, playerDiscovery, CreditsComponent, CronStatesComponent, GameDateComponent,
     MissionsComponent, PendingAutoAbortShipsComponent, PendingMissionNoticesComponent,
-    DominatedComponent, EscortPayrollComponent,
+    DominatedComponent, EscortPayrollComponent, PendingMissionNotice,
 } from '../nova_plugin/player/index.js';
 import {
     CargoComponent, FuelComponent, OutfitsStateComponent, ShipComponent, ShipPhysicsComponent,
@@ -967,9 +967,11 @@ function commitCronOutfits(entity: Entity,
  * any landing is processed:
  *  - fails missions whose deadline has passed or which the shared sim
  *    marked failed (running OnFailure), and
- *  - runs OnShipDone for missions whose ship goal the sim just completed
- *    (shipDonePending), so it fires at the first player-local
- *    opportunity rather than only at a landing.
+ *  - settles missions whose ship goal the sim just completed
+ *    (shipDonePending), running OnShipDone unless it already ran.
+ * A sim-marked failure and OnShipDone normally ran already, in flight, on
+ * the owner's `missionSetString` record
+ * (display/mission_set_string_plugin.ts); this is their fallback.
  * Any resulting notices are queued for the next spaceport screen. A
  * no-op — skipping the session build — when nothing is due, so the
  * common date advance stays cheap.
@@ -1015,8 +1017,8 @@ async function processInFlightMissions(entity: Entity,
     // been read: the display shows it the moment the goal completes, in
     // flight, which is where the original shows it (see
     // display/mission_ship_done_plugin.ts). Taking the mark drops the
-    // duplicate popup while leaving OnShipDone — the half that really is
-    // deferred — to run here as before. Nothing else about the event is
+    // duplicate popup (OnShipDone itself ran in flight, or ran above if
+    // its record never went out). Nothing else about the event is
     // suppressed, and a text the client never got to show (the player
     // quit between the goal completing and this date advance) carries no
     // mark, so it still surfaces at the next spaceport.
@@ -1037,18 +1039,30 @@ function queueMissionNotices(entity: Entity, events: MissionEvent[]): void {
     const existing =
         entity.components.get(PendingMissionNoticesComponent) ?? [];
     entity.components.set(PendingMissionNoticesComponent,
-        [...existing, ...events.map(e => ({
-            missionId: e.missionId,
-            missionName: e.missionName,
-            type: e.type,
-            text: e.text,
-            payment: e.payment,
-            // Only a present (non-null) pict rides the serialized
-            // partial; a null dësc-graphic is simply omitted.
-            ...(e.pict ? { pict: e.pict } : {}),
-            ...(e.specialShipName
-                ? { specialShipName: e.specialShipName } : {}),
-        }))]);
+        [...existing, ...missionNotices(events)]);
+}
+
+/**
+ * `events` as the notices PendingMissionNoticesComponent keeps for the
+ * next spaceport screen (the date advance's queue above, and the in-flight
+ * `missionSetString` record's `notices`).
+ */
+export function missionNotices(events: MissionEvent[]):
+    PendingMissionNotice[] {
+    return events.map(e => ({
+        missionId: e.missionId,
+        missionName: e.missionName,
+        type: e.type,
+        text: e.text,
+        // Only a present payment rides the record: an absent optional
+        // must not become an explicit `undefined` on the wire.
+        ...(e.payment !== undefined ? { payment: e.payment } : {}),
+        // Only a present (non-null) pict rides the serialized
+        // partial; a null dësc-graphic is simply omitted.
+        ...(e.pict ? { pict: e.pict } : {}),
+        ...(e.specialShipName
+            ? { specialShipName: e.specialShipName } : {}),
+    }));
 }
 
 /**

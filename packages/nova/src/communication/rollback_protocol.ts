@@ -1006,6 +1006,21 @@ export const STATE_HASH_INTERVAL = 60;
 //    schema fingerprint changes (096d8b66658e5381 -> 06013457e08bd2e5);
 //    every other kind and field is unchanged, and the join gate keeps older
 //    and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): a mission's OnShipDone and an in-flight
+//    OnFailure run at once (reference wave 48 SD / SF). The owning client
+//    pays what the sim marked owed (a goal's `shipDonePending`, a failed
+//    mission or goal) with the new `missionSetString` input kind
+//    (missions/mission_set_string_record.ts MissionSetStringType: the
+//    mïsn id, `kind` 'shipDone' | 'failure', an OPTIONAL `notices` list of
+//    PendingMissionNotice, plus the same OPTIONAL set-string delta fields
+//    an abort carries); the sim applies it only against the SENDER's own
+//    owed mission (a duplicate is a no-op). ShipObjective gains the
+//    OPTIONAL `onShipDoneRun` flag the shipDone apply sets. New union
+//    member and one new optional field, so the derived wire schema
+//    fingerprint changes (06013457e08bd2e5 -> 22e64bb746b73e86); every
+//    other kind and field is unchanged, and the join gate keeps older and
+//    newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

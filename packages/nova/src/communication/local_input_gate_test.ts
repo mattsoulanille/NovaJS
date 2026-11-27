@@ -145,6 +145,9 @@ describe('the local input gate', () => {
         { name: 'captureShip, as an escort', valid: true, input: { kind: 'captureShip', capture: { name: '', escort: true, bitsSet: [8888] } } },
         { name: 'stellarSetString', valid: true, input: { kind: 'stellarSetString', record: { seq: 0, planetId: 'nova:128', bitsSet: [6100] } } },
         { name: 'stellarSetString, no seq', valid: false, input: { kind: 'stellarSetString', record: { planetId: 'nova:128', bitsSet: [6100] } } },
+        { name: 'missionSetString', valid: true, input: { kind: 'missionSetString', record: { missionId: 'nova:128', kind: 'shipDone', bitsSet: [9001] } } },
+        { name: 'missionSetString, a failure with its notice', valid: true, input: { kind: 'missionSetString', record: { missionId: 'nova:128', kind: 'failure', notices: [{ missionId: 'nova:128', missionName: 'Courier', type: 'failed', text: 'You failed.' }], bitsCleared: [100] } } },
+        { name: 'missionSetString, an unknown string', valid: false, input: { kind: 'missionSetString', record: { missionId: 'nova:128', kind: 'onSuccess', bitsSet: [9001] } } },
         { name: 'escortAction', valid: true, input: { kind: 'escortAction', action: { kind: 'queueUpgrade', target: 'escort', toShip: 'nova:130' } } },
         { name: 'escortAction, upgrade without a class', valid: false, input: { kind: 'escortAction', action: { kind: 'queueUpgrade', target: 'escort' } } },
         { name: 'refundFighter', valid: true, input: { kind: 'refundFighter', refund: { carrier: 'carrier', bayWeaponId: 'nova:200' } } },
@@ -170,7 +173,7 @@ describe('the local input gate', () => {
         const members = (SimulationInputType as unknown as {
             types: { type: { props: { kind: { value: string } } } }[],
         }).types.map(member => member.type.props.kind.value).sort();
-        expect(members.length).toBe(17);
+        expect(members.length).toBe(18);
         const kindsOf = (valid: boolean) => [...new Set(cases
             .filter(c => c.valid === valid)
             .map(c => (c.input as { kind: string }).kind))]

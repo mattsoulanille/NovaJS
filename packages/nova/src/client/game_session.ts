@@ -27,6 +27,7 @@ import type { AsyncSimulationBridgeClient } from '../communication/async_simulat
 import { warnedUnsyncableEntities } from '../communication/apply_simulation_frame.js';
 import { CaptureShipEvent, PlunderActionEvent } from '../display/boarding_plugin.js';
 import { StellarSetStringEvent } from '../display/stellar_set_string_plugin.js';
+import { MissionSetStringEvent } from '../display/mission_set_string_plugin.js';
 import { LeaveGateMapEvent } from '../display/gate_map_plugin.js';
 import {
     EscortActionEvent, HailRequestEvent,
@@ -229,6 +230,15 @@ function wireWorld(runtime: ClientRuntime, pump: FramePump): WorldWiring {
         world.events.get(StellarSetStringEvent).subscribe(({ data }) => {
             void bridge.stellarSetString(data.record).catch(e => {
                 console.warn('Failed to send a stellar set string:', e);
+            });
+        });
+        // A mission's OnShipDone or in-flight OnFailure, resolved by
+        // display/mission_set_string_plugin.ts the moment the simulation
+        // marked it, on its own input kind
+        // (missions/mission_set_string_record.ts MissionSetStringType).
+        world.events.get(MissionSetStringEvent).subscribe(({ data }) => {
+            void bridge.missionSetString(data.record).catch(e => {
+                console.warn('Failed to send a mission set string:', e);
             });
         });
         world.events.get(LandEvent).subscribe(({ data, entities }) => {

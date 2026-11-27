@@ -10,10 +10,10 @@
  * simulation (ShipObjective.shipDonePending) and the OWNER's display
  * presents the text off that flag (display/mission_ship_done_plugin.ts).
  *
- * The set string beside it, OnShipDone, still runs at the owner's next
- * DATE ADVANCE (jump or landing) — see runPendingShipDone — because it
- * needs the mission universe and a player entity the client may commit
- * to. That deferred pass also QUEUES a 'shipDone' event carrying the same
+ * The set string beside it, OnShipDone, runs at that moment too, on its
+ * own input record (display/mission_set_string_plugin.ts). The goal is
+ * SETTLED at the owner's next DATE ADVANCE (jump or landing) — see
+ * runPendingShipDone — which QUEUES a 'shipDone' event carrying the same
  * text, which is what the landing popups render. Without a word between
  * them the player would read the text twice: once in space and once on
  * the ground.

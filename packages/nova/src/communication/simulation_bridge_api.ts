@@ -5,7 +5,7 @@ import {
     CapturedShip, HailAction, StellarSetString,
 } from "../nova_plugin/encounters/index.js";
 import {
-    AbortedMission, AcceptedMission, RefusedMission,
+    AbortedMission, AcceptedMission, MissionSetString, RefusedMission,
 } from "../nova_plugin/missions/index.js";
 import { AnalogControlState } from "../nova_plugin/player/index.js";
 import { SimulationFrame } from "./simulation_frame.js";
@@ -34,6 +34,9 @@ export interface SimulationBridgeHostApi {
     captureShip(capture: CapturedShip): void | Promise<void>;
     /** A stellar's OnDominate / OnRelease, resolved on the owning client. */
     stellarSetString(record: StellarSetString): void | Promise<void>;
+    /** A mission's OnShipDone or in-flight OnFailure, resolved on the
+     * owning client. */
+    missionSetString(record: MissionSetString): void | Promise<void>;
     step(count?: number): void;
     /** System entry: step straight to the room clock's pacing target;
      * returns the ticks stepped (SimulationBridgeHost.catchUpToRoomClock). */
@@ -89,6 +92,7 @@ export interface AsyncSimulationBridgeHostApi {
     abortMission(aborted: AbortedMission): Promise<void>;
     captureShip(capture: CapturedShip): Promise<void>;
     stellarSetString(record: StellarSetString): Promise<void>;
+    missionSetString(record: MissionSetString): Promise<void>;
     step(count?: number): Promise<void>;
     catchUpToRoomClock(): Promise<number>;
     snapshot(): Promise<SimulationFrame>;

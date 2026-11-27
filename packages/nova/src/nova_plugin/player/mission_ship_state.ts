@@ -104,9 +104,16 @@ export const ShipObjectiveType = t.intersection([t.type({
     /** The goal can no longer be achieved; fail the mission on landing. */
     failed: t.boolean,
     /**
-     * The ship goal has just completed and OnShipDone has not run yet
-     * (it runs at the next date advance — the first jump or landing
-     * after the goal completes).
+     * The ship goal has just completed and the date advance has not yet
+     * settled it (the first jump or landing after the goal completes:
+     * runShipDoneIfPending, which clears it and queues the ShipDoneText
+     * event for the landing popups).
+     *
+     * OnShipDone itself normally runs before that, IN FLIGHT: the owner's
+     * client sees this flag, resolves the set string and sends a
+     * `missionSetString` record (missions/mission_set_string_record.ts),
+     * whose apply sets `onShipDoneRun` below. The date advance runs it
+     * only when that never happened.
      *
      * ALSO THE DISPLAY'S CUE for the mïsn ShipDoneText, which the
      * original shows at this very moment rather than at that landing:
@@ -129,6 +136,17 @@ export const ShipObjectiveType = t.intersection([t.type({
      * modelled, which are frozen at their next spawn.
      */
     shipId: t.string,
+    /**
+     * The mïsn OnShipDone has run, in flight, the moment the goal
+     * completed (the `missionSetString` record's apply). MEASURED
+     * (reference "OnShipDone and an in-flight OnFailure, read by a
+     * person's hail (the SD / SF leftover), wave 48": a hail gated on its
+     * bit offered seconds after the special ship's death). Once set it
+     * stays: the date advance that later clears `shipDonePending` skips
+     * the set string and only queues the text. ADDITIVE: absent until
+     * then, and in saves written before it existed.
+     */
+    onShipDoneRun: t.boolean,
 })]);
 export type ShipObjective = t.TypeOf<typeof ShipObjectiveType>;
 

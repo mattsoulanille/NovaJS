@@ -156,9 +156,11 @@ export const ActiveMissionType = t.intersection([t.type({
     /**
      * Set true by the shared sim when a fail condition it can observe
      * has occurred (the owner was disabled or destroyed while
-     * failIfPlayerDisabledOrDestroyed is set). Landing processing turns
-     * this into an actual failure (OnFailure, failure notice). Mirrors
-     * the shipObjective.failed marker for special-ship goals.
+     * failIfPlayerDisabledOrDestroyed is set). The owner's client turns
+     * this into an actual failure (OnFailure, failure notice) at once,
+     * with a `missionSetString` record; the next date advance or landing
+     * does it when that never happened. Mirrors the shipObjective.failed
+     * marker for special-ship goals.
      */
     failed: t.boolean,
     /**
