@@ -29,7 +29,11 @@ import {
     ShieldComponent, TargetComponent,
 } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
-import { AI_AFTERBURNER_FACTOR, npcAfterburning } from './npc_afterburner.js';
+import {
+    ADVANCED_RATING_SPELL_MS, advancedRatingBurns, advancedRatingBurnShare,
+    advancedRatingSpell, AI_AFTERBURNER_FACTOR, npcAfterburning,
+} from './npc_afterburner.js';
+import { CombatRatingComponent } from '../reputation/index.js';
 import {
     cloakSustainable, NPC_CLOAK_RESUME_FRACTION, NPC_CLOAK_REVEAL_AFTER_STAY_MS,
     npcCloaksWhileFlying,
@@ -75,6 +79,7 @@ const MISSILE_ONLY = 'test:missile-only';
 const MISSILE_ONLY_NO_FLAG = 'test:missile-only-no-flag';
 const GUN_AND_MISSILE = 'test:gun-and-missile';
 const BURNER = 'test:burner';
+const RATING_BURNER = 'test:rating-burner';
 const CONTROL = 'test:control';
 const STANDOFF = 'test:standoff';
 const CLOAKER = 'test:cloaker';
@@ -143,6 +148,8 @@ async function hullWorld() {
         hull(GUN_AND_MISSILE, { runsAwayWhenOutOfAmmo: true },
             { [GUN_OUTFIT]: 1, [MISSILE_OUTFIT]: 1, [MISSILES]: 5 }),
         hull(BURNER, { alwaysHasAfterburner: true }, { [GUN_OUTFIT]: 1 }),
+        hull(RATING_BURNER, { afterburnerAtAdvancedRating: true },
+            { [GUN_OUTFIT]: 1 }),
         hull(CONTROL, {}, { [GUN_OUTFIT]: 1 }),
         hull(STANDOFF, { prefersStandoff: true }, { [GUN_OUTFIT]: 1 }),
         hull(CLOAKER, flyingAround, { [CLOAK]: 1 }),
@@ -393,6 +400,110 @@ describe('hull AI flags (reference W1 / C1 wave 15)', () => {
             expect(npcOf(world, 'burner')?.mode).toBe('patrol');
             expect(top).toBeLessThanOrEqual(SPEED + 1e-6);
         });
+    });
+
+    describe('AI afterburner at an advanced rating (shïp Flags 0x0020; '
+        + 'reference "The Flags 0x0020 afterburner (A13\'s other half), '
+        + 'wave 42")', () => {
+        const flag = { afterburnerAtAdvancedRating: true };
+
+        it('burns only in an attack whose spell drew a burn', () => {
+            expect(npcAfterburning({ aiType: 3, mode: 'attack' }, flag,
+                false, true)).toBeTrue();
+            expect(npcAfterburning({ aiType: 3, mode: 'attack' }, flag,
+                false, false)).toBeFalse();
+            expect(npcAfterburning({ aiType: 3, mode: 'patrol' }, flag,
+                false, true)).toBeFalse();
+            expect(npcAfterburning({ aiType: 3, mode: 'attack' }, flag,
+                true, true)).toBeFalse();
+            // The draw means nothing to a hull without the flag.
+            expect(npcAfterburning({ aiType: 3, mode: 'attack' }, {},
+                false, true)).toBeFalse();
+        });
+
+        it('never burns against rating 0, always from 6,400, and in '
+            + 'between on a share rising with the rating (GUESS: rating / '
+            + '6,400)', () => {
+                expect(advancedRatingBurnShare(0)).toBe(0);
+                expect(advancedRatingBurnShare(1600)).toBe(0.25);
+                expect(advancedRatingBurnShare(3200)).toBe(0.5);
+                expect(advancedRatingBurnShare(6400)).toBe(1);
+                expect(advancedRatingBurnShare(1_000_000)).toBe(1);
+                const spells = 400;
+                const share = (rating: number) => {
+                    let burning = 0;
+                    for (let i = 0; i < spells; i++) {
+                        burning += advancedRatingBurns('ship', rating,
+                            i * ADVANCED_RATING_SPELL_MS) ? 1 : 0;
+                    }
+                    return burning / spells;
+                };
+                expect(share(0)).toBe(0);
+                expect(share(6400)).toBe(1);
+                expect(share(25_600)).toBe(1);
+                expect(share(1600)).toBeGreaterThan(0.15);
+                expect(share(1600)).toBeLessThan(0.35);
+                expect(share(3200)).toBeGreaterThan(0.4);
+                expect(share(3200)).toBeLessThan(0.6);
+            });
+
+        it('holds its answer through a 25 s spell, offset per ship', () => {
+            for (const uuid of ['a', 'b', 'c', 'd']) {
+                const spell = advancedRatingSpell(uuid, 100_000);
+                const answer = advancedRatingBurns(uuid, 1600, 100_000);
+                let sameSpell = 0;
+                for (let dt = -30_000; dt <= 30_000; dt += 250) {
+                    const t = 100_000 + dt;
+                    if (advancedRatingSpell(uuid, t) === spell) {
+                        sameSpell++;
+                        expect(advancedRatingBurns(uuid, 1600, t))
+                            .toBe(answer);
+                    }
+                }
+                // 25 s of 250 ms samples.
+                expect(sameSpell).toBe(ADVANCED_RATING_SPELL_MS / 250);
+            }
+            const spellsAt = new Set(['a', 'b', 'c', 'd', 'e', 'f'].map(
+                uuid => advancedRatingSpell(uuid, 12_345)));
+            const changesAt = ['a', 'b', 'c', 'd', 'e', 'f'].map(uuid => {
+                let t = 0;
+                while (advancedRatingSpell(uuid, t + 1000)
+                    === advancedRatingSpell(uuid, t)) {
+                    t += 1000;
+                }
+                return t;
+            });
+            expect(spellsAt.size + new Set(changesAt).size)
+                .toBeGreaterThan(2);
+        });
+
+        async function attackRun(rating: number | undefined) {
+            const { world, addShip } = await hullWorld();
+            const enemy = await addShip('enemy', TARGET_HULL, 0, 3000, THEM);
+            if (rating !== undefined) {
+                enemy.components.set(CombatRatingComponent,
+                    { kills: rating });
+            }
+            await addShip('burner', RATING_BURNER, -100, 0, US,
+                { aiType: 3 });
+            let top = 0;
+            let attacked = false;
+            runFor(world, 12, () => {
+                top = Math.max(top, speedOf(world, 'burner'));
+                attacked ||= npcOf(world, 'burner')?.mode === 'attack';
+            });
+            expect(attacked).toBeTrue();
+            return top;
+        }
+
+        it('runs at the 0x0040 burn\'s speed against a 1,000,000 player '
+            + 'and at its own against a rating-0 one or an NPC', async () => {
+                expect(await attackRun(1_000_000))
+                    .toBeCloseTo(SPEED * AI_AFTERBURNER_FACTOR, 0);
+                expect(await attackRun(0)).toBeLessThanOrEqual(SPEED + 1e-6);
+                expect(await attackRun(undefined))
+                    .toBeLessThanOrEqual(SPEED + 1e-6);
+            });
     });
 
     describe('standoff (shïp Flags2 0x0002)', () => {
