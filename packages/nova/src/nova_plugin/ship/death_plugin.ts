@@ -426,6 +426,14 @@ export function tractoredVelocity(velocity: Vector, toward: Vector,
  * Kit Probe A 500 px out (diagonal) was pulled at once; at 425, 350 and
  * 250 px (on the axis) it never moved. A range, not a law in the
  * distance, on one far geometry.
+ *
+ * OPEN (wave 51): NovaJS decides pull or brake per beam UNIT, by where
+ * the target is when that unit lands. Wave 51's trb_c pulled Kit Probe B
+ * steadily for the whole ~1 s shot from 500 px, about 170 px of travel,
+ * so it went on pulling well inside this range; the decision may be the
+ * shot's (where the target is when the beam first reaches it), not the
+ * unit's. Unchanged here (latching it per shot needs synced per-beam
+ * state); NovaJS's shorter beam (Count / 56 s) crosses less of the range.
  */
 export const TRACTOR_PULL_RANGE = 450;
 
@@ -435,18 +443,32 @@ export const TRACTOR_PULL_RANGE = 450;
  * x I / M px/s toward the firer (a beam: once per Count unit), each
  * velocity axis capped at the hull's top speed (pulledVelocity).
  *
- * MEASURED (the same section, finding 1; medium confidence, two hulls):
- * the Count-30 Impact -20 beam took a still 50 t Kit Probe A from rest at
- * about 300-325 px/s² until its x axis held at its top speed (128-136 of
- * 131 px/s) and then y caught up, ending at 181-185 px/s on the diagonal
- * (two runs alike); a 150 t Star Liner (87.5 px/s) reached about 100 px/s
- * at about 115 px/s², its x axis held at 85-90. About 15,000 / Mass px/s²
- * for Impact 20, i.e. 0.86 of the push law's 30 x |Impact| / Mass a 1/30 s
- * tick: 25.8 x 20 x 30 / 150 = 103 px/s a shot on the Liner, 310 on the
- * Probe (cut to its per-axis cap). GUESS that it scales with Impact like
- * the push (only Mass was varied).
+ * MEASURED (reference "A tractor beam's pull frame by frame, its Impact
+ * scaling and the brake's Mass gate (the hub's item 3, the KB leftover),
+ * wave 51", findings 1-2): the push law's own 30 x |Impact| / Mass a
+ * unit. Read frame by frame on Kit Probe B (50 t, a 262 px/s axis cap
+ * that a whole Impact-20 shot stays under on y), the Count-30 Impact -20
+ * beam built the speed toward the beamer steadily, 33-35 px/s every 0.1 s
+ * (about 11.5 a unit: 30 x 20 / 50 = 12), to 330 px/s at the shot's end
+ * (x at its cap, y 203; this law: 360 uncapped, x at the cap and y 216);
+ * Impact 40 built 1.97 x as fast until both axes held at the cap (372).
+ * Was 0.86 x 30 (wave 50), which had been read off a Probe A whose axes
+ * met their 131 px/s cap within the shot. Wave 50's 150 t Star Liner
+ * reading (about 100 px/s a shot, x at its 87.5 cap) lies under this law's
+ * 113 (x at the cap, y 72): its y was not read on its own.
+ *
+ * OPEN, left for the next wave: the CLOCK the units land on. The original
+ * NPC tractor's Count-30 beam showed for about 1 s (30 units a second), and
+ * the pull lasted as long, while the player's Count-30 fixed beam in the
+ * same system showed for 16-17 frames (Count / 56, wave 41's
+ * BEAM_COUNT_RATE, which NovaJS uses for every beam). Whether that is NPC
+ * against player or turret against fixed (the tractor is Guidance 3) is
+ * unread (a player turret beam and an NPC fixed beam), so NovaJS still
+ * lands a Count-30 tractor's 30 units over 30 / 56 s: the same total a
+ * shot as the original, built about twice as fast (about 670 px/s² on 50 t
+ * at Impact 20 against the original's 345).
  */
-export const TRACTOR_PULL_PER_IMPACT = 0.86 * KNOCKBACK_PER_IMPACT;
+export const TRACTOR_PULL_PER_IMPACT = KNOCKBACK_PER_IMPACT;
 
 /**
  * A velocity after a tractor's PULL `impulse`: the sum, with EACH AXIS
@@ -507,10 +529,16 @@ export const KnockbackSystem = new System({
             // Only hulls LIGHTER than the firer are moved (the Bible's
             // "smaller ships"; wave 50, finding 3: 50 and 150 t were
             // pulled by the 175 t beamer, 255 and 300 t never moved, at
-            // rest or coasting). GUESS: strictly lighter, and for the
-            // brake below too (its one measured hull, wave 48's, was 50
-            // t). A firer with no hull Mass (none in the data fires a
-            // tractor) does not gate it.
+            // rest or coasting). The brake below is gated too, MEASURED
+            // (reference "A tractor beam's pull frame by frame, its
+            // Impact scaling and the brake's Mass gate", wave 51, finding
+            // 4): a 50 t Probe A coasting toward the 175 t beamer inside
+            // the range was braked 28.5 -> 9-10 -> 0 px/s (twice), while
+            // wave 50's 300 t trm_b coasted 40.8 px/s through a whole shot
+            // 357-360 px from it untouched. GUESS: the line is the
+            // firer's own Mass, strictly (the 175-300 t gap is unread). A
+            // firer with no hull Mass (none in the data fires a tractor)
+            // does not gate it.
             if (firerPhysics && !(targetMass < (firerPhysics.mass || 1))) {
                 return;
             }

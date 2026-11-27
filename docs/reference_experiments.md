@@ -25496,6 +25496,30 @@ heavier hull (one run, a whole shot unchanged).
 (the 300 t hull); `trb40_a/`, `trb40_b/` are the stock-bit failures (see
 the reliability notes).
 
+**Applied 2026-11-27**: `TRACTOR_PULL_PER_IMPACT` = `KNOCKBACK_PER_IMPACT`
+(30, MEASURED; was 0.86 x 30) in `N/nova_plugin/ship/death_plugin.ts`:
+360 px/s of pull a Count-30 Impact -20 shot on 50 t, which on Kit Probe B's
+diagonal is x at its 262 cap and y 216 (read 261-263 and 203, 330 in all),
+and Impact 40 twice as hard until both axes hold (372 read). The brake's
+Mass gate comment is now MEASURED (finding 4; strictness and the 175-300 t
+gap still GUESS). The beam Count clock is unchanged: the NPC-vs-player (or
+turret-vs-fixed) question is written at `TRACTOR_PULL_PER_IMPACT`, so
+NovaJS still lands the 30 units over 30 / 56 s (about 670 px/s² on 50 t
+against the read 345). Wave 50's Star Liner reading (about 100 px/s) now
+lies under the law's 111 (x at its 87.5 cap, y 69). Found while pinning
+these: NovaJS decides pull or brake per beam UNIT by where the target is,
+so from wave 51's own 500 px start the pulled Probe B crosses
+`TRACTOR_PULL_RANGE` (450) about two thirds into its shot and is braked
+from there (about 253 px/s at the shot's end, not 330), while trb_c went
+on pulling steadily for the whole second, about 170 px of travel and far
+inside 450: the decision looks like the shot's, not the unit's. Left open
+(latching it per shot needs synced per-beam state; noted at
+`TRACTOR_PULL_RANGE`); the specs start Probe B 700 px out. Specs: the
+build one push-law unit a beam unit (11.25 px/s a 1/32 share), the shot's
+end, Impact 40 at twice Impact 20, the lighter coasting hull braked 28.5
+-> 9-10 -> 0 at 350 px (tr350m_a / _b), the 300 t hull at 357 px untouched
+(trm_b).
+
 ### Not reached in wave 51: CD's parked craft, A13's spells, R18's surviving guards, KB's thrusting excess on a second hull, the tractor's range edge (2026-11-27)
 
 - **CD**: wave 46's parked craft (a rig with idle fighters at the kill).

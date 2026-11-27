@@ -564,34 +564,42 @@ describe('a tractor beam\'s pull (reference KB, wave 50)', () => {
         return { world, movement };
     }
 
-    /** One Count-30 Impact -20 shot, its units shared over 32 ticks as
-     * BeamDamageSystem shares them. */
-    function shot(world: World) {
+    /** One Count-30 tractor unit's share (of 32 ticks, as
+     * BeamDamageSystem shares them). */
+    function unit(world: World, impact = -20) {
+        world.emit(DamagedEvent, {
+            damage: {
+                shield: 0, armor: 0, ionization: 0,
+                ionizationColor: DEFAULT_IONIZE_COLOR,
+                passThroughShield: 0, knockback: impact,
+                disableOnly: false,
+            },
+            damager: BEAM, scale: 30 / 32, beam: true,
+        }, [TARGET]);
+        world.step();
+    }
+
+    /** One Count-30 shot (Impact -20 unless given), its units shared
+     * over 32 ticks as BeamDamageSystem shares them. */
+    function shot(world: World, impact = -20) {
         for (let i = 0; i < 32; i++) {
-            world.emit(DamagedEvent, {
-                damage: {
-                    shield: 0, armor: 0, ionization: 0,
-                    ionizationColor: DEFAULT_IONIZE_COLOR,
-                    passThroughShield: 0, knockback: -20,
-                    disableOnly: false,
-                },
-                damager: BEAM, scale: 30 / 32, beam: true,
-            }, [TARGET]);
-            world.step();
+            unit(world, impact);
         }
     }
 
     // tra_a / tra_b: the beamer on the first moon, 500 px up-left.
     const DIAGONAL_500 = new Position(-400, -300);
 
-    it('pulls at 0.86 x the push law beyond 450 px', () => {
-        expect(TRACTOR_PULL_RANGE).toBe(450);
-        expect(TRACTOR_PULL_PER_IMPACT).toBeCloseTo(0.86 * 30, 12);
-        // About 15,000 / Mass px/s² for Impact 20 at 30 units a second.
-        expect(TRACTOR_PULL_PER_IMPACT * 20 * 30 / 50).toBeCloseTo(310, -1);
-        expect(TRACTOR_PULL_PER_IMPACT * 20 * 30 / 150)
-            .toBeCloseTo(103, 0);
-    });
+    it('pulls at the push law\'s own 30 x |Impact| / Mass a unit beyond '
+        + '450 px (wave 51: about 11.5 px/s a unit on 50 t at Impact 20)',
+        () => {
+            expect(TRACTOR_PULL_RANGE).toBe(450);
+            expect(TRACTOR_PULL_PER_IMPACT).toBe(30);
+            // 12 px/s a unit; 360 a Count-30 shot (read 345 uncapped).
+            expect(TRACTOR_PULL_PER_IMPACT * 20 / 50).toBe(12);
+            expect(Math.abs(TRACTOR_PULL_PER_IMPACT * 20 / 50 - 11.5))
+                .toBeLessThan(0.6);
+        });
 
     it('pulls a still 50 t Kit Probe A 500 px out toward the beamer to '
         + 'its top speed on EACH axis in one shot (tra_a / tra_b: 181-185 '
@@ -612,21 +620,22 @@ describe('a tractor beam\'s pull (reference KB, wave 50)', () => {
             expect(Math.abs(Math.abs(x) - Math.abs(y))).toBeLessThan(10);
         }, 60_000);
 
-    it('pulls a still 150 t Star Liner to about 100 px/s a shot (trs_a)',
+    it('pulls a still 150 t Star Liner its x axis to the 87.5 cap in one '
+        + 'shot (trs_a: x 85-90, about 100 px/s in all; this law 113)',
         async () => {
             const { world, movement } = await rig({
                 mass: 150, speed: 87.5, beamerAt: DIAGONAL_500,
             });
             shot(world);
             const { x, y } = movement.velocity;
-            expect(movement.velocity.length).toBeGreaterThan(95);
-            expect(movement.velocity.length).toBeLessThan(106);
-            // Along the line to the beamer (-0.8, -0.6), x under its
-            // 87.5 cap (read 85-90).
-            expect(x).toBeLessThan(0);
-            expect(y).toBeLessThan(0);
-            expect(y / x).toBeCloseTo(0.75, 1);
+            // 120 px/s of pull along (-0.8, -0.6): x 96 cut to its cap
+            // (read 85-90), y 72 (not read on its own; the read total,
+            // about 100, implies about 50), less the overspeed bleed.
             expect(x).toBeGreaterThanOrEqual(-87.5);
+            expect(x).toBeLessThan(-85);
+            expect(Math.abs(y + 72)).toBeLessThan(5);
+            expect(movement.velocity.length).toBeGreaterThan(100);
+            expect(movement.velocity.length).toBeLessThan(115);
         }, 60_000);
 
     it('never moves a hull heavier than the beamer, at rest or coasting '
@@ -647,7 +656,9 @@ describe('a tractor beam\'s pull (reference KB, wave 50)', () => {
             expect(coasting.movement.velocity.y).toBeCloseTo(0, 9);
         }, 60_000);
 
-    it('does not brake a heavier hull inside the range either (GUESS)',
+    it('does not brake a heavier hull inside the range either (wave 51 '
+        + 'finding 4: wave 50\'s trm_b, 300 t coasting 40.8 px/s 357-360 px '
+        + 'from the 175 t beamer, kept all of it through a shot)',
         async () => {
             const { world, movement } = await rig({
                 mass: 300, speed: 100, beamerAt: new Position(-100, 0),
@@ -655,6 +666,28 @@ describe('a tractor beam\'s pull (reference KB, wave 50)', () => {
             });
             shot(world);
             expect(movement.velocity.x).toBeCloseTo(-30, 9);
+            const trm = await rig({
+                mass: 300, speed: 100, beamerAt: new Position(-357, 0),
+                velocity: new Vector(0, 40.8),
+            });
+            shot(trm.world);
+            expect(trm.movement.velocity.x).toBeCloseTo(0, 9);
+            expect(trm.movement.velocity.y).toBeCloseTo(40.8, 9);
+        }, 60_000);
+
+    it('brakes a LIGHTER hull coasting toward the beamer inside the range '
+        + '(wave 51 tr350m_a / tr350m_b: 28.5 -> 9-10 px/s over a shot, 0 '
+        + 'at the next)', async () => {
+            const { world, movement } = await rig({
+                mass: 50, speed: 131, beamerAt: new Position(-350, 0),
+                velocity: new Vector(-28.5, 0),
+            });
+            shot(world);
+            expect(-movement.velocity.x).toBeGreaterThan(8.5);
+            expect(-movement.velocity.x).toBeLessThan(10.5);
+            expect(movement.velocity.y).toBeCloseTo(0, 9);
+            shot(world);
+            expect(movement.velocity.length).toBe(0);
         }, 60_000);
 
     it('never moves an inertialess hull 500 px out (trg_a)', async () => {
@@ -698,6 +731,65 @@ describe('a tractor beam\'s pull (reference KB, wave 50)', () => {
             });
             shot(inside.world);
             expect(inside.movement.velocity.length).toBe(0);
+        }, 60_000);
+
+    // Wave 51's Kit Probe B: 50 t, a 262 px/s axis cap (Speed 600 on the
+    // reference clock), still on the -143 deg diagonal from the beamer.
+    // Read 500 px out, where the original pulled it for the whole 1 s
+    // shot (about 170 px of travel, so ending well inside
+    // TRACTOR_PULL_RANGE); NovaJS judges pull or brake per unit, so here
+    // the rig starts 700 px out for the whole shot to stay a pull (see
+    // TRACTOR_PULL_PER_IMPACT, the open per-shot question).
+    const DIAGONAL_700 = new Position(-560, -420);
+    const PROBE_B = { mass: 50, speed: 262, beamerAt: DIAGONAL_700 };
+
+    it('builds the pull steadily, one push-law unit a beam unit, to 340 '
+        + 'px/s a Count-30 Impact -20 shot on 50 t (trb_c / trb_a: 33-35 '
+        + 'px/s every 0.1 s, 330 at the end with x at its cap)', async () => {
+            const { world, movement } = await rig(PROBE_B);
+            const speeds: number[] = [];
+            for (let i = 0; i < 32; i++) {
+                unit(world);
+                speeds.push(movement.velocity.length);
+            }
+            // Every unit adds the same 30 x 20 / 50 x 30 / 32 = 11.25
+            // px/s toward the beamer until x meets its cap.
+            for (let i = 1; i < 20; i++) {
+                expect(speeds[i] - speeds[i - 1]).withContext(`${i}`)
+                    .toBeCloseTo(11.25, 6);
+            }
+            // 360 px/s of pull along (-0.8, -0.6): x 288 held at its cap
+            // (read 261-263), y 216 (read 203), less the overspeed bleed
+            // (OVERSPEED_DECAY_FACTOR) once past the 262 total.
+            const { x, y } = movement.velocity;
+            expect(x).toBeGreaterThanOrEqual(-262);
+            expect(x).toBeLessThan(-255);
+            expect(Math.abs(y + 216)).toBeLessThan(10);
+            expect(Math.abs(movement.velocity.length - 330)).toBeLessThan(15);
+        }, 60_000);
+
+    it('pulls in proportion to Impact: Impact -40 twice as hard, until both '
+        + 'axes hold at the cap (trb40_c / trb40_d: 1.97 x, 372 px/s at '
+        + '-135 deg)', async () => {
+            const at20 = await rig(PROBE_B);
+            const at40 = await rig(PROBE_B);
+            for (let i = 0; i < 8; i++) {
+                unit(at20.world, -20);
+                unit(at40.world, -40);
+            }
+            expect(at40.movement.velocity.length
+                / at20.movement.velocity.length).toBeCloseTo(2, 9);
+            for (let i = 8; i < 32; i++) {
+                unit(at40.world, -40);
+            }
+            // Both axes at the cap, less the overspeed bleed.
+            const { x, y } = at40.movement.velocity;
+            for (const axis of [x, y]) {
+                expect(axis).toBeGreaterThanOrEqual(-262);
+                expect(axis).toBeLessThan(-255);
+            }
+            expect(Math.abs(at40.movement.velocity.length - 372))
+                .toBeLessThan(10);
         }, 60_000);
 
     it('pulledVelocity holds each axis at the top speed, never cutting '
