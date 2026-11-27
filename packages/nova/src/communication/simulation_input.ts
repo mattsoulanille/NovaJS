@@ -18,6 +18,7 @@ import {
 import { JumpRouteComponent, applySetPlanetTarget } from '../nova_plugin/travel/index.js';
 import {
     PlayerShipSelector, applyAnalogControl, applyControlEvents, ControlledByComponent,
+    applySetTurretAim,
 } from '../nova_plugin/player/index.js';
 import { applySetTarget } from "../nova_plugin/combat/index.js";
 import {
@@ -58,6 +59,10 @@ export type SimulationInput =
     | { kind: 'setTarget', target: string | null }
     /** Explicit stellar selection (tap/click on a planet); null clears. */
     | { kind: 'setPlanetTarget', target: string | null }
+    /** The sender's own turret aim (player/turret_aim.ts): the exact
+     * intercept (`accurate`) or the original's first-order lead, from the
+     * Enhancements toggle "Accurate turret aim" as it changes in flight. */
+    | { kind: 'setTurretAim', accurate: boolean }
     /** A hail dialog action (request assistance / bribe) against a ship. The
      * effect (repair, credit change, pacify) is recomputed sim-side. */
     | { kind: 'hail', action: HailAction }
@@ -204,6 +209,7 @@ export const SimulationInputType: t.Type<SimulationInput, unknown> = t.union([
     }),
     t.strict({ kind: t.literal('setTarget'), target: t.union([t.string, t.null]) }),
     t.strict({ kind: t.literal('setPlanetTarget'), target: t.union([t.string, t.null]) }),
+    t.strict({ kind: t.literal('setTurretAim'), accurate: t.boolean }),
     t.strict({ kind: t.literal('hail'), action: HailActionType }),
     t.strict({ kind: t.literal('acceptMission'), accepted: AcceptedMissionType }),
     t.strict({ kind: t.literal('refuseMission'), refused: RefusedMissionType }),
@@ -683,6 +689,10 @@ function applySimulationInput(world: World, input: SimulationInput,
         }
         case 'setPlanetTarget': {
             applySetPlanetTarget(world, peerId, input.target);
+            break;
+        }
+        case 'setTurretAim': {
+            applySetTurretAim(world, peerId, input.accurate);
             break;
         }
         case 'hail': {

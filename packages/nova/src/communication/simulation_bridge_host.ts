@@ -1877,6 +1877,10 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         this.schedule({ kind: 'setPlanetTarget', target });
     }
 
+    setTurretAim(accurate: boolean) {
+        this.schedule({ kind: 'setTurretAim', accurate });
+    }
+
     hail(action: HailAction) {
         this.schedule({ kind: 'hail', action });
     }

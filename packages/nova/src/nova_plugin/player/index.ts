@@ -27,6 +27,7 @@ export * from './player_state_plugin.js';
 export * from './reinforcement_calls.js';
 export * from './ship_control.js';
 export * from './stored_ships.js';
+export * from './turret_aim.js';
 
 import { Domain, domainPlugin } from '../core/index.js';
 import { PlayerStatePlugin } from './player_state_plugin.js';

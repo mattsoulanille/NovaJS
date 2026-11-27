@@ -10,6 +10,7 @@ import {
     ReinforcementCallsComponent, ReinforcementCallsType,
 } from './reinforcement_calls.js';
 import { StoredShipsComponent, StoredShipsType } from './stored_ships.js';
+import { TurretAimComponent, TurretAimType } from './turret_aim.js';
 
 /**
  * Serializable per-player gameplay state: the game date, credits, and
@@ -386,6 +387,11 @@ export const PlayerStatePlugin: Plugin = {
         // that rides the lift-off's insertion record like the credits.
         deltaMaker.addComponent(StoredShipsComponent, {
             componentType: StoredShipsType,
+        });
+        // The player's turret-aim choice (turret_aim.ts): sim state, set
+        // by the insertion record and the setTurretAim input.
+        deltaMaker.addComponent(TurretAimComponent, {
+            componentType: TurretAimType,
         });
     }
 };

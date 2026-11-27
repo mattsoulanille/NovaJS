@@ -1,7 +1,8 @@
 import 'jasmine';
 import {
     currentEnhancements, defaultEnhancements, enhancementEnabled,
-    ENHANCEMENTS, invalidateEnhancements, overrideEnhancements,
+    ENHANCEMENTS, invalidateEnhancements, onEnhancementsChanged,
+    overrideEnhancements,
     resolveEnhancements, setEnhancementsSource, StoredEnhancements,
 } from './enhancements.js';
 import { PilotProfile, PrefsStorage } from './title/client_prefs.js';
@@ -54,6 +55,21 @@ describe('NovaJS Enhancements', () => {
         expect(resolved.enhMapAutoRoute).toBeFalse();
         expect(resolved.enhShopSearch).toBeTrue();
         expect(resolved.enhLiveTargetView).toBeTrue();
+    });
+
+    it('tells its listeners when the values may have changed (the turret '
+        + 'aim toggle must be sent to the simulation)', () => {
+        let calls = 0;
+        const stop = onEnhancementsChanged(() => { calls++; });
+        expect(enhancementEnabled('enhAccurateTurretAim')).toBeTrue();
+        overrideEnhancements({ enhAccurateTurretAim: false });
+        expect(calls).toBe(1);
+        expect(enhancementEnabled('enhAccurateTurretAim')).toBeFalse();
+        invalidateEnhancements();
+        expect(calls).toBe(2);
+        stop();
+        overrideEnhancements({});
+        expect(calls).toBe(2);
     });
 
     it('is ON everywhere with no source (node specs, the worker)', () => {

@@ -95,6 +95,10 @@ export class AsyncSimulationBridgeClient {
         await this.guard(() => this.host.setPlanetTarget(target));
     }
 
+    async setTurretAim(accurate: boolean) {
+        await this.guard(() => this.host.setTurretAim(accurate));
+    }
+
     async hail(action: HailAction) {
         await this.guard(() => this.host.hail(action));
     }

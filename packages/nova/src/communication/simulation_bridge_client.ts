@@ -62,6 +62,10 @@ export class SimulationBridgeClient {
         this.host.setPlanetTarget(target);
     }
 
+    setTurretAim(accurate: boolean) {
+        this.host.setTurretAim(accurate);
+    }
+
     hail(action: HailAction) {
         this.host.hail(structuredClone(action));
     }

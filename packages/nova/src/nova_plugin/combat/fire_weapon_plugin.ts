@@ -50,6 +50,7 @@ import { PointDefenseCandidate, selectPointDefenseTarget } from './point_defense
 import { ShipComponent, ShipDataComponent, ShipDataProvider } from '../ship/index.js';
 import { TargetComponent } from '../ship/index.js';
 import { WeaponsStateComponent } from '../ship/index.js';
+import { aimsTurretsAccurately } from '../player/index.js';
 import { ShotEnd, submunitionFires } from './submunition_rule.js';
 
 // Re-exported so the ~40 existing importers of these three keep working.
@@ -351,11 +352,15 @@ export abstract class WeaponEntry {
      * a projectile turret (wëap Guidance 4), MEASURED (reference "A
      * turret's lead, and a lead into a blind sector (the T leftover),
      * wave 50"; only the Guidance-4 turret was flown, so the others keep
-     * the intercept). BeamWeaponEntry points every beam straight at its
-     * target instead.
+     * the intercept). `accurate` (a player's own ship with the
+     * Enhancements toggle "Accurate turret aim" on, player/turret_aim.ts
+     * aimsTurretsAccurately) keeps that turret on the exact intercept:
+     * Matthew's ruling, the original's turrets are rather inaccurate.
+     * BeamWeaponEntry points every beam straight at its target instead.
      */
-    protected guidance(exitPoint: Position, source: MovementState, target: MovementState) {
-        if (this.data.guidance === 'turret') {
+    protected guidance(exitPoint: Position, source: MovementState,
+        target: MovementState, accurate = false) {
+        if (this.data.guidance === 'turret' && !accurate) {
             return firstOrderLead(exitPoint, source.velocity, target.position,
                 target.velocity, this.data.shotSpeed);
         }
@@ -613,7 +618,8 @@ export abstract class WeaponEntry {
                 || this.data.guidance === 'turret'
                 || this.data.guidance === 'beamTurret')
                 && targetMovement && !blind) {
-                angle = this.guidance(exitPoint, movement, targetMovement);
+                angle = this.guidance(exitPoint, movement, targetMovement,
+                    aimsTurretsAccurately(entity));
             }
 
             if (this.data.guidance === 'pointDefense' ||

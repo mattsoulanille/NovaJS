@@ -5,8 +5,9 @@ import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { ShipData } from 'novadatainterface/ship_data';
 import {
     EscortCommandComponent, PlayerEscortComponent, ControlledByComponent,
-    NO_DEAL,
+    NO_DEAL, TurretAimComponent,
 } from '../nova_plugin/player/index.js';
+import { enhancementEnabled } from '../enhancements.js';
 import { FiringGroupComponent, ShipDataComponent } from '../nova_plugin/ship/index.js';
 import {
     FormationComponent, formationSlotPosition, formationSpacing,
@@ -223,6 +224,12 @@ export async function insertPlayerAndFleet(args: FleetInsertion):
         player.components.set(ControlledByComponent, { peerId: ownerUuid });
         player.components.set(MultiplayerData, { owner: ownerUuid });
     }
+    // The player's turret-aim choice (nova_plugin/player/turret_aim.ts),
+    // read from the live Enhancements pref at every entry and re-entry so
+    // the insertion record carries it; a change in flight goes in as a
+    // setTurretAim input (game_session.ts).
+    player.components.set(TurretAimComponent,
+        { accurate: enhancementEnabled('enhAccurateTurretAim') });
     // The player first. A rejection here means NOTHING went in: rethrow
     // with the caller's rosters untouched.
     await bridge.addEntity(playerUuid, player);

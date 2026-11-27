@@ -24876,6 +24876,14 @@ turrets and point-defence beams point straight at the target
 room's default `simple` mode points at the target, `smart` takes the
 exact intercept); fixed guns and the AI's own facing do not lead. The
 blind test stays on the target's quadrant (finding 2 matches).
+MAINTAINER RULING (Matthew, 2026-11-27): "the original game's turrets are
+rather inaccurate. We can have a toggle for the player ship to use one or
+the other." NPC turrets (escorts' and bay fighters' included) always lead
+to first order; a player's OWN ship aims at the exact intercept unless
+its pilot turns off the Enhancements toggle "Accurate turret aim"
+(`enhAccurateTurretAim`, default on). The choice is synced ship state
+(`TurretAim`, `N/nova_plugin/player/turret_aim.ts`), stamped by every
+insertion record and changed in flight by a `setTurretAim` input record.
 
 ### The ion charge read directly (E6, the hub's item 2), wave 50: each hit adds its Ionization; Deionize 1 drains 0.29 a second (0.01 a frame at the 29-30 Hz tick, HALF NovaJS's 0.56); the tint line is ONE THIRD of IonizeMax (about 33 of 100) and the no-turn line TWO THIRDS (64-67); wave 42 had missed the hits before its analysis window, which is where 16 / 38 and the 56 fps drain came from (2026-11-27)
 

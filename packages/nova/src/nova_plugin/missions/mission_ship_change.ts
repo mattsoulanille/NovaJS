@@ -25,7 +25,7 @@ import {
     PendingAutoAbortShipsComponent, PendingMissionNoticesComponent,
     DominatedComponent, PendingStellarSetStringsComponent,
     PlayerNamesComponent, PlayerShipSelector, ReinforcementCallsComponent,
-    StoredShipsComponent, StrictPlayComponent,
+    StoredShipsComponent, StrictPlayComponent, TurretAimComponent,
 } from '../player/index.js';
 import { CombatRatingComponent, LegalRecordsComponent } from '../reputation/index.js';
 import {
@@ -164,6 +164,10 @@ export const PLAYER_STATE_COMPONENTS: readonly Component<any>[] = [
     // Strict play (StrictPlayComponent) is the PILOT's setting: a strict
     // pilot who buys a ship still flies it at the strict top speed.
     StrictPlayComponent,
+    // The player's turret-aim choice (player/turret_aim.ts) is the
+    // pilot's too: a new hull aims its turrets the way the old one did.
+    // Replaced, never mutated, so safe to share.
+    TurretAimComponent,
     // The pilot's name and the ship's name (player_names.ts). The pilot's
     // is the pilot's whatever they fly. The ship's name follows a Cxxx /
     // Exxx / Hxxx change of hull unchanged: GUESS — the original keeps one

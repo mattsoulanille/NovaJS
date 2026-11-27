@@ -1045,6 +1045,26 @@ export const STATE_HASH_INTERVAL = 60;
 //    an older peer ignores the extra echoes (same tick, nothing to move),
 //    but a newer peer under an older relay would never see its unretimed
 //    records confirmed.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the player's turret aim (Matthew's ruling on
+//    reference "A turret's lead, and a lead into a blind sector (the T
+//    leftover), wave 50": NPC turrets lead to first order as the
+//    original's do; each player picks first order or the exact intercept
+//    for their own ship with the Enhancements toggle "Accurate turret
+//    aim"). The new `setTurretAim` input kind (`accurate`: boolean),
+//    applied to the SENDER's own ship only (nova_plugin/player/
+//    turret_aim.ts applySetTurretAim); one new serializer- and
+//    delta-registered player component, TurretAim (`{accurate}`), stamped
+//    on the player's ship by every insertion record and carried across a
+//    change of hull (PLAYER_STATE_COMPONENTS). No message kind changes.
+//    Sim-rule changes alongside (wave 50, no schema): a Guidance-4 turret
+//    on anything but a player's ship aims at the first-order lead; ion
+//    charge drains 0.01 x Deionize a 1/30 s frame, tints above a third of
+//    IonizeMax, stops the turn above two thirds, thrust 1 - 0.9 q down to
+//    0.4; a tractor pulls a lighter hull from beyond 450 px. New union
+//    member, so the derived wire schema fingerprint changes
+//    (22e64bb746b73e86 -> 156d366e51953a65); every other kind and field is
+//    unchanged, and the join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

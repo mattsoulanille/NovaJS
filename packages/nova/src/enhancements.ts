@@ -4,12 +4,19 @@
  * "NovaJS Enhancements..."). ON is the NovaJS behaviour Matthew chose and
  * the default; OFF restores what the original does.
  *
- * EVERY TOGGLE HERE IS CLIENT-SIDE ONLY. A toggle may change what this
- * player sees, or which inputs their UI lets them make, but never how the
- * simulation runs: two peers with different toggles must stay in lock
- * step. A departure that changes a SIM rule (capture odds, submunitions,
- * repair, ...) is a room rule instead, and is listed in
- * docs/novajs_enhancements.md, not here.
+ * EVERY TOGGLE HERE IS CLIENT-SIDE ONLY, with one ruled exception. A
+ * toggle may change what this player sees, or which inputs their UI lets
+ * them make, but never how the simulation runs: two peers with different
+ * toggles must stay in lock step. A departure that changes a SIM rule
+ * (capture odds, submunitions, repair, ...) is a room rule instead, and is
+ * listed in docs/novajs_enhancements.md, not here.
+ *
+ * The exception (Matthew, 2026-11-27): `enhAccurateTurretAim` picks how
+ * THIS player's own ship's turrets aim. It reaches the simulation only as
+ * synced state on that ship (nova_plugin/player/turret_aim.ts), stamped on
+ * the ship at every insertion and sent as a `setTurretAim` input record
+ * when it changes (onEnhancementsChanged), so every peer still runs the
+ * same simulation.
  *
  * The values persist per pilot beside the original's Game Settings
  * (GameSettingsOverride, saved with the pilot on the Preferences dialog's
@@ -28,7 +35,8 @@ export type EnhancementKey =
     | 'enhShopSearch'
     | 'enhMiniMapHiddenNoClicks'
     | 'enhGateMapLanes'
-    | 'enhShipStorage';
+    | 'enhShipStorage'
+    | 'enhAccurateTurretAim';
 
 /** One row of the NovaJS Enhancements dialog. */
 export interface EnhancementSpec {
@@ -111,6 +119,17 @@ export const ENHANCEMENTS: readonly EnhancementSpec[] = [
             + 'Option-click Buy Ship to keep your old one.',
         original: 'No ship storage: you fly one ship and trade it in.',
     },
+    {
+        // Sim state on the player's own ship, synced through an input
+        // record (nova_plugin/player/turret_aim.ts); NPC turrets always
+        // lead the original's way.
+        key: 'enhAccurateTurretAim',
+        label: 'Accurate turret aim',
+        novajs: 'Your ship\'s turrets aim where a moving target will be '
+            + 'when the shot reaches it.',
+        original: 'Your turrets lead to first order, as the original\'s '
+            + 'do, and miss fast crossing targets.',
+    },
 ];
 
 /** Every enhancement's current state. */
@@ -156,17 +175,44 @@ let cache: Enhancements | undefined;
 /** Session-only overrides from the console / harness (never persisted). */
 let overrides: Partial<Enhancements> = {};
 
+/** Who hears that the live values may have changed. */
+const listeners = new Set<() => void>();
+
+/**
+ * Calls `listener` whenever the live values may have changed (the source
+ * repointed, the stored values rewritten, the overrides replaced); the
+ * listener reads what it needs and compares. Returns the unsubscribe.
+ * For the one toggle the simulation sees (enhAccurateTurretAim), whose
+ * change must be sent as an input record.
+ */
+export function onEnhancementsChanged(listener: () => void): () => void {
+    listeners.add(listener);
+    return () => { listeners.delete(listener); };
+}
+
+function notify() {
+    for (const listener of [...listeners]) {
+        try {
+            listener();
+        } catch (e) {
+            console.error('Enhancements listener failed:', e);
+        }
+    }
+}
+
 /** Points the live values at a settings reader (the active pilot's). */
 export function setEnhancementsSource(
     read: () => StoredEnhancements | undefined): void {
     source = read;
     cache = undefined;
+    notify();
 }
 
 /** Drops the cached values so the next read sees the stored ones: called
  * whenever the pilot registry or the legacy settings slot is written. */
 export function invalidateEnhancements(): void {
     cache = undefined;
+    notify();
 }
 
 /**
@@ -177,6 +223,7 @@ export function invalidateEnhancements(): void {
  */
 export function overrideEnhancements(next: Partial<Enhancements>): void {
     overrides = { ...next };
+    notify();
 }
 
 /** Every enhancement's live state (stored values plus overrides). */

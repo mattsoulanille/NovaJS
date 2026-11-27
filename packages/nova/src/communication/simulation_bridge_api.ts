@@ -21,6 +21,8 @@ export interface SimulationBridgeHostApi {
     analogControl(control: AnalogControlState): void;
     setTarget(target: string | null): void;
     setPlanetTarget(target: string | null): void;
+    /** The sender's own turret aim (player/turret_aim.ts). */
+    setTurretAim(accurate: boolean): void;
     hail(action: HailAction): void;
     escortAction(action: EscortAction): void | Promise<void>;
     /** A lost bay fighter's round back to its carrier (issue #258). */
@@ -84,6 +86,7 @@ export interface AsyncSimulationBridgeHostApi {
     analogControl(control: AnalogControlState): Promise<void>;
     setTarget(target: string | null): Promise<void>;
     setPlanetTarget(target: string | null): Promise<void>;
+    setTurretAim(accurate: boolean): Promise<void>;
     hail(action: HailAction): Promise<void>;
     escortAction(action: EscortAction): Promise<void>;
     refundFighter(refund: FighterRefund): Promise<void>;

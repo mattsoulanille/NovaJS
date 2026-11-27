@@ -78,6 +78,7 @@ import { fetchSystemResources, NextHopPrefetch } from './next_hop_prefetch.js';
 import { followIdentity } from './identity.js';
 import { preparePlayerStart, PlayerStartOptions } from './player_start.js';
 import { ClientRuntime, sendToBridge } from './runtime.js';
+import { enhancementEnabled, onEnhancementsChanged } from '../enhancements.js';
 import { jumpTo, teardownLiveSystem, WorldWiring } from './system_entry.js';
 import {
     followGateTransit, followHyperspaceJump, followMissionSystemMove,
@@ -102,6 +103,7 @@ export interface SessionHost {
 // installed exactly once (not per session).
 let tapTargetingInstalled = false;
 let touchControlsInstalled = false;
+let turretAimSyncInstalled = false;
 
 /**
  * Whether a carry event belongs to the LOCAL player, so other peers'
@@ -648,6 +650,28 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
         installTouchControls({
             sinks: controlSinks,
             onMovementInput: () => runtime.autopilot?.cancel(),
+        });
+    }
+
+    // The one Enhancements toggle the simulation sees: "Accurate turret
+    // aim" (nova_plugin/player/turret_aim.ts). Every insertion stamps the
+    // pref on the ship (fleet_insertion.ts); a change in flight goes in as
+    // a setTurretAim input record, so every peer aims this player's
+    // turrets the same way. Installed once; reads the live bridge through
+    // the runtime state, so it survives re-entries. A change while docked
+    // finds no ship (the input is a no-op) and the next lift-off's
+    // insertion carries it.
+    if (!turretAimSyncInstalled) {
+        turretAimSyncInstalled = true;
+        let lastTurretAim = enhancementEnabled('enhAccurateTurretAim');
+        onEnhancementsChanged(() => {
+            const accurate = enhancementEnabled('enhAccurateTurretAim');
+            if (accurate === lastTurretAim) {
+                return;
+            }
+            lastTurretAim = accurate;
+            sendToBridge(liveSystem(state.state)?.bridge.setTurretAim(accurate),
+                'Turret aim');
         });
     }
 
