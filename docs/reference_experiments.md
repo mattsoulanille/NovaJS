@@ -25550,6 +25550,88 @@ end, Impact 40 at twice Impact 20, the lighter coasting hull braked 28.5
   turret beam of Count 30, an NPC fixed beam).
 - **T**: leads in the front / side blind sectors.
 
+### The UNCHARGED base turn on every hull (the hub's item 1, E6), wave 52: whole degrees a frame, max(1, floor(Turn / 10)): Turn 7, 9 and 15 all turn 1 degree a frame (29 deg/s), Turn 25 two (58.5, again), 35 three (87.5), 55 five (146), 95 nine (262); a saturated Turn-95 hull turns 2 a frame (58), so the charge is held at q 0.7 (floor), not 2/3 (2026-11-27)
+
+**Question** (the hub's item 1; wave 51 saw Turn 25 turn as Turn 20): is
+the uncharged turn whole degrees a frame for EVERY hull? If so it moves
+the 102 stock hulls whose Turn is not a multiple of 10 (and the five
+Aurora Carriers at Turn 7-11). And the wave-51 leftover: is the
+saturation hold floor at q 0.7 or "strictly below" at q 2/3 (a saturated
+Turn-95 hull turns 2 or 3 degrees a frame)?
+
+**Rig** (`wave52Resources` "E6B"). Wave 51's Kit Ring Ion (the white-spoke
+inertialess ring, IonizeMax 100, Deionize 1) at Turn 7 / 9 / 15 / 35 / 55
+/ 95 (shïp 606-611, wave 40's E11 hulls retired) and wave 51's T25 (776),
+pilots `w52_t<Turn>` at Kit Knock Grid Port. `c_t<n>`: Enter Ship (no
+landing: no mission, no charge), off the port (Up 0.8 s, Down), Right
+held 20 s (30 s for Turn 7 / 9). `k6_t95`: land, accept mïsn 963 (the Kit
+Ion Shot Target, 30 a hit), Leave and turn at once, Tab + the Kit Beam
+Turret kill it 19 s later after six hits (q about 1.8), Right held 30 s
+more. The spoke's heading on every frame (`tools/e6b.sh`: headings.mjs
+SPOKE=vw step 1), the rate by `tools/hough.py`'s phase vote over the whole
+hold and per 5 s window, and the unwrapped total turn over the hold.
+
+| Turn | continuous (NovaJS) deg/s | whole degrees a frame (deg/s at 29.15 Hz) | measured: phase vote over the hold | total turn / time | degrees a frame |
+|---|---|---|---|---|---|
+| 7 | 20.4 | 0 (floor) / 1 | **29.0** (58 % of 870 samples) | 864 deg / 29.06 s = **29.7** | **1** |
+| 9 | 26.2 | 0 (floor) / 1 | **30.0** (61 %) | 838 / 29.07 = **28.8** | **1** |
+| 15 | 43.7 | 1 = 29.2 | **29.5** (57 %) | 551 / 19.07 = **28.9** | **1** |
+| 25 (again) | 72.9 | 2 = 58.3 | **58.5** (69 %) | 1,123 / 19.07 = **58.9** | **2** |
+| 35 | 102.0 | 3 = 87.5 | **87.5** (69 %) | 1,619 / 19.07 = **84.9** | **3** |
+| 55 | 160.3 | 5 = 145.8 | **146.0** (66 %) | 2,837 / 19.07 = **148.8** | **5** |
+| 95 | 276.9 | 9 = 262.4 | **262.0** (68 %) | 4,993 / 19.07 = **261.8** | **9** |
+| 95 saturated (k6_t95, 56-84 s, q 1.5-1.8) | 0 (NovaJS's no-turn third) | 2 (q held 0.7) / 3 (q 2/3) | **58.0** (97 % of 354 samples; every 5 s window 58.5-65.5) | | **2** |
+
+The 5 s windows of the slow hulls scatter (Turn 15: 17.5-47.5; a slow
+ring reads +-20 deg a frame, wave 51's note), so the whole-hold vote and
+the total are the readings; the fast hulls' windows sit on the line
+(Turn 95: 263-264 in every full window).
+
+**Findings.**
+1. **The uncharged turn is whole degrees a frame on every hull**: Turn
+   35, 55 and 95 turn exactly 3, 5 and 9 degrees a frame (87.5, 146, 262
+   deg/s), Turn 25 two again: floor(Turn / 10).
+2. **But never below one degree a frame**: Turn 7 and 9 (floor 0) and 15
+   (floor 1) all turn 1 degree a frame (29 deg/s): Turn 7 turns 45 %
+   FASTER than its Turn says, Turn 9 11 % faster. So the uncharged law is
+   max(1, floor(Turn / 10)) for any Turn > 0 (Turn 1-6 unread; the stock
+   minimum is 7).
+3. **The ion cut has no such floor**: wave 51's Turn 10 never turned once
+   hit (floor(1 x (1 - q)) = 0 from the first point of charge), so the
+   minimum of 1 applies to the uncharged turn only (GUESS: the game takes
+   floor(Turn / 10 x (1 - q)) when ionized and max(1, floor(Turn / 10))
+   otherwise; a charged Turn-7 hull would then stop dead, unread).
+4. **The saturation hold is q = 0.7 with floor**: a saturated Turn-95
+   hull turned 2 degrees a frame (floor(9.5 x 0.3) = 2), not 3 (strictly
+   below 9.5 / 3 = 3.17). With wave 51's Turn 200 (6 a frame saturated:
+   20 (1 - q) in [6, 7) gives q in (0.65, 0.70]) the hold sits in (0.684,
+   0.70]: 0.7, the thrust's hold too (wave 51's 0.28-0.32).
+
+**NovaJS (main 99e600ed):** the base turn rate is Turn x
+`ShipTurnRateConversionFactor`, continuous (`P/parsers/ship_parse.ts:432`),
+and the ion factor multiplies it by thirds (`N/nova_plugin/ship/
+ionization_plugin.ts:155-195`, applied at `N/nova_plugin/travel/
+afterburner_plugin.ts:168`): **mismatch** for every hull whose Turn is
+not a multiple of 10 (Turn 35, the 18 stock Star Liner / Terrapin /
+Argosy / IDA Frigate / Valkyrie / Rebel Destroyer class hulls, 102 against
+87.5 deg/s; Turn 55: 160 against 146; Turn 45: 131 against 117) and
+**mismatch** the other way for Turn 7-9 (the Aurora Carriers nova:297-300:
+20-26 against 29 deg/s); Turn 10-19 hulls (Turn 11, 14) turn 32-41 in
+NovaJS against 29. **Proposed:** the base turn rate max(1, floor(Turn /
+10)) degrees per 1/30 s frame (i.e. that x 10 x the conversion factor in
+place of Turn x the factor) for Turn > 0, and under charge floor(Turn / 10
+x (1 - min(q, 0.7))) degrees a frame with no floor (wave 51's staircase,
+its hold now measured at 0.7). The ship parser should keep the raw Turn
+(the ion law cuts the RAW Turn, wave 51's Turn 25 finding) and derive the
+uncharged rate from it. GUESS for Turn 1-6 and for a charged Turn < 10.
+Confidence: high (seven hulls, every one on its whole-degree line within
+2 %, the continuous rates 8-46 % away; the saturated Turn 95 on 2 a frame
+in every window).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w52/c_t7/` ..
+`c_t95/`, `c_t25/`, `k6_t95/` (`recording.mp4`), `*.hd1.txt` (headings
+per frame, the last line the total), `tools/e6b.sh`, `tools/hough.py`.
+
 ### Reliability notes (for anyone running the reference)
 
 - **Stock mission bits live above 9000 too (wave 51 `trb40_a` / `_b`):**
