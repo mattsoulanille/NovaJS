@@ -112,18 +112,13 @@ export const JumpStateType = t.intersection([t.type({
      * passes through on its way to `to`, in route order. The ship never
      * enters them — it leaves the origin and arrives in `to` as a single
      * jump, one fuel charge, one arrival (jump_plugin.ts
-     * resolveJumpHops). Read by the client for what passing through still
-     * costs or earns (the date, the map: client/transit.ts). Absent on an
-     * ordinary single-hop jump. ADDITIVE.
+     * resolveJumpHops). Read by the star map, which drops the committed
+     * hops off the shown route (display/starmap_plugin.ts); passing
+     * through earns nothing (the systems stay unexplored, wave 52's MJ).
+     * Absent on an ordinary single-hop jump. A multi-jump arrives on its
+     * DEPARTURE heading, `direction` (wave 52's MJ finding 2). ADDITIVE.
      */
     via: t.array(t.string),
-    /**
-     * The heading (radians, map space) the ship ARRIVES on when that is not
-     * `direction`: a multi-jump departs toward its first hop but comes in
-     * from the last system it passed through. Absent: `direction`.
-     * ADDITIVE.
-     */
-    arrivalDirection: t.number,
 })]);
 export type JumpState = t.TypeOf<typeof JumpStateType>;
 export const JumpComponent = new Component<JumpState>('JumpSequence');

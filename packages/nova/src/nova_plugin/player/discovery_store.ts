@@ -454,12 +454,6 @@ export function markDiscovered(systemId: string,
     return defaultDiscoveryStore().mark(systemId, level);
 }
 
-/** {@link DiscoveryStore.markMany} on the client's store. */
-export function markManyDiscovered(systemIds: Iterable<string>,
-    level: DiscoveryLevel): boolean {
-    return defaultDiscoveryStore().markMany(systemIds, level);
-}
-
 /** Every system the player has at least entered. */
 export function discoveredSystems(): string[] {
     return defaultDiscoveryStore().systems();

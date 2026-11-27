@@ -353,7 +353,7 @@ describe('a multi-jump (ModType 32)', () => {
             // What beginJump writes for a two-hop multi-jump.
             player.components.set(JumpComponent, {
                 to: DESTINATION, stage: 'stopping', direction: 0,
-                via: ['test:passed'], arrivalDirection: Math.PI / 2,
+                via: ['test:passed'],
             });
             world.step();
             for (const uuid of ['quick', 'plain', 'slow']) {

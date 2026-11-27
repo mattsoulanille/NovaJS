@@ -20,9 +20,9 @@ export interface ShipPhysics extends SpaceObjectPhysics {
     // Fuel burned per second while the afterburner is engaged.
     // 0 means the ship has no afterburner.
     afterburner: number;
-    // Number of EXTRA consecutive hyperspace jumps performed from a single
-    // jump initiation ("multi-jump" outfits, ModType 32; summed across
-    // outfits). 0 means a normal single jump.
+    // Number of hyperspace hops IN ALL one jump initiation flies ("multi-jump"
+    // outfits, ModType 32; summed across outfits): ModVal 2 goes two
+    // systems (reference MJ, wave 52). 0 or 1 means a normal single jump.
     multiJump: number;
     // Whether the ship slowly regenerates hyperspace fuel on its own
     // ("auto-refueller" outfits, ModType 19). Granted if any outfit has it.

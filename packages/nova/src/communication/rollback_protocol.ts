@@ -1108,6 +1108,18 @@ export const STATE_HASH_INTERVAL = 60;
 //    or message kind changes. The derived wire schema fingerprint changes
 //    (8057c916e5bb0080 -> 624186b4119d5d2b), and the join gate keeps older
 //    and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the multi-jump's arrival (reference "The
+//    multi-jump outfit (the hub's item 3, oütf ModType 32), wave 52": the
+//    ship arrives on its DEPARTURE heading, not from the last system it
+//    passed through). JumpSequence loses its OPTIONAL `arrivalDirection`;
+//    a multi-jump arrives on `direction` like any jump. Sim-rule changes
+//    alongside (no further schema): ModVal counts the hops in all, not the
+//    extra hops (resolveJumpHops), and the client no longer marks the
+//    systems passed through explored. No input or message kind changes.
+//    The derived wire schema fingerprint changes (624186b4119d5d2b ->
+//    34e9ddc679dcfa8f), and the join gate keeps older and newer builds
+//    apart.
 
 export const PROTOCOL_VERSION = 8;
 

@@ -302,9 +302,10 @@ export interface OutfitData extends BaseData {
      */
     autoRefuel: boolean,
     /**
-     * Number of extra consecutive hyperspace jumps this outfit grants when the
-     * player initiates a jump (ModType 32, "multi-jump"). Summed across
-     * outfits. Zero for non-multi-jump outfits.
+     * Number of hyperspace hops in all one jump initiation flies with this
+     * outfit (ModType 32, "multi-jump"; the ModVal counts the hops, not the
+     * Bible's "extra jumps": reference MJ, wave 52). Summed across outfits.
+     * Zero for non-multi-jump outfits.
      */
     multiJump: number,
     /**

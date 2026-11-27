@@ -448,14 +448,20 @@ export const JumpFromSystem = new System({
 });
 
 /**
- * THE MULTI-JUMP (oütf ModType 32, "number of extra jumps to perform when
- * the user initiates a hyperspace jump"): the route hops ONE jump initiation
+ * THE MULTI-JUMP (oütf ModType 32): the route hops ONE jump initiation
  * takes the ship through, the last of which is where it arrives. Up to
- * `extraJumps` hops past the first, each a hyperlink of the one before it;
- * the walk stops early at the route's end, at a hop that cannot be flown
- * from the previous one (hopIsUnflyableFromHere: the same system, a stacked
- * twin, anything that is not a link) or at one whose record is not staged.
- * Empty when even the first hop cannot be flown.
+ * `multiJump` hops in all (at least one: an ordinary jump), each a
+ * hyperlink of the one before it; the walk stops early at the route's end,
+ * at a hop that cannot be flown from the previous one
+ * (hopIsUnflyableFromHere: the same system, a stacked twin, anything that
+ * is not a link) or at one whose record is not staged. Empty when even
+ * the first hop cannot be flown.
+ *
+ * ModVal COUNTS THE HOPS, not the extra hops (the Bible's "number of extra
+ * jumps to perform"). MEASURED (reference "The multi-jump outfit (the
+ * hub's item 3, oütf ModType 32), wave 52", finding 1): ModVal 2 took a
+ * three-hop route to its SECOND system, ModVal 3 a six-hop route to its
+ * third. GUESS: two multi-jump outfits add their ModVals (outfit_parse).
  *
  * ONE JUMP, NOT A CHAIN (Matthew, 2026-11-27: "1 jump of fuel is used for
  * any number of multi-jumps. A multi jump looks just like a normal jump.
@@ -471,15 +477,18 @@ export const JumpFromSystem = new System({
  * #380), so each getCached here answers the same on the browser worker,
  * the server archive and the node worker.
  *
- * GUESS (unmeasured on the original): an unexplored system on the way does
- * not stop the walk; only a hop that cannot be flown does.
+ * An unexplored system on the way does not stop the walk; only a hop that
+ * cannot be flown does. MEASURED (wave 52's MJ finding 4: a route through
+ * an unexplored system the map draws flew through it in one press; the
+ * router only plots through drawn systems, spaceport/route.ts). A
+ * "blocked" system on the route is unread.
  */
 export function resolveJumpHops(systemId: string, route: readonly string[],
-    extraJumps: number, gameData: SimulationGameDataInterface): string[] {
+    multiJump: number, gameData: SimulationGameDataInterface): string[] {
     const hops: string[] = [];
     let from = systemId;
     for (const hop of route) {
-        if (hops.length > Math.max(0, extraJumps)
+        if (hops.length >= Math.max(1, multiJump)
             || hopIsUnflyableFromHere(hop, from, gameData)
             || !gameData.data.System.getCached(hop)) {
             break;
@@ -494,10 +503,10 @@ export function resolveJumpHops(systemId: string, route: readonly string[],
  * Attaches a JumpComponent for a jump through `hops` (resolveJumpHops: the
  * first is the next system on the route, the last is where the ship
  * arrives; more than one for a multi-jump), resolving the departure heading
- * (origin -> first hop) and the arrival heading (the last system passed
- * through -> the destination) from the systems' map positions. Shifts the
- * hops off the route. Returns false (and does nothing) when there is no
- * hop or a system's data is not cached.
+ * (origin -> first hop) from the systems' map positions; the ship arrives
+ * on that same heading, a multi-jump too. Shifts the hops off the route.
+ * Returns false (and does nothing) when there is no hop or a system's
+ * data is not cached.
  *
  * Every getCached read is provably warm (the staging contract for in-sim
  * getCached): makeSystem stages this world's own system, its links and
@@ -513,10 +522,8 @@ function beginJump(entity: Entity, systemId: string, hops: readonly string[],
     }
     const origin = gameData.data.System.getCached(systemId);
     const first = gameData.data.System.getCached(hops[0]!);
-    const dest = gameData.data.System.getCached(destination);
-    const lastPassed = hops.length > 1
-        ? gameData.data.System.getCached(hops[hops.length - 2]!) : origin;
-    if (!origin || !first || !dest || !lastPassed) {
+    if (!origin || !first
+        || !gameData.data.System.getCached(destination)) {
         return false;
     }
     jumpRoute.route.splice(0, hops.length);
@@ -527,14 +534,16 @@ function beginJump(entity: Entity, systemId: string, hops: readonly string[],
         to: destination,
         // Ships with "fast jumping" skip coming to a stop.
         stage: shipPhysics.canJumpWithoutSlowing ? 'aligning' : 'stopping',
-        // GUESS: a multi-jump turns onto its FIRST hop (the heading an
-        // ordinary jump there takes) and arrives from the last system it
-        // passed through (as an ordinary jump from there would).
+        // A multi-jump turns onto its FIRST hop (the heading an ordinary
+        // jump there takes) and ARRIVES on that same heading, opposite its
+        // departure side, not from the last system it passed through.
+        // MEASURED (reference "The multi-jump outfit (the hub's item 3,
+        // oütf ModType 32), wave 52", finding 2: leaving Alpha east, the
+        // ship came out on the WEST side of Charlie and of Delta heading
+        // east, where the last system passed was north / east). GUESS for
+        // a departure that is not eastward (one route direction flown).
         direction: mapHeading(origin.position, first.position),
-        ...(hops.length > 1 ? {
-            via: hops.slice(0, -1),
-            arrivalDirection: mapHeading(lastPassed.position, dest.position),
-        } : {}),
+        ...(hops.length > 1 ? { via: hops.slice(0, -1) } : {}),
     });
     return true;
 }
@@ -688,11 +697,12 @@ const PlayerJumpControl = new System({
         if (blocked !== undefined || destination === undefined) {
             return;
         }
-        // "multi-jump" (ModType 32): a single jump initiation performs up to
-        // multiJump EXTRA jumps along the route, as ONE jump to the last of
+        // "multi-jump" (ModType 32): a single jump initiation flies up to
+        // multiJump hops in all along the route, as ONE jump to the last of
         // them (resolveJumpHops), for one jump's fuel: the gate above asks
         // for FUEL_PER_JUMP whatever the hop count. A held key then chains
-        // on from the arrival exactly as after any other jump.
+        // on from the arrival exactly as after any other jump (MEASURED,
+        // wave 52's MJ finding 3: whole multi-jumps, a day each).
         beginJump(entity, systemId,
             resolveJumpHops(systemId, jumpRoute.route,
                 shipPhysics.multiJump, gameData),
@@ -1067,22 +1077,19 @@ export const JumpSequenceSystem = new System({
                     // Measured for a positive mod only; a negative one
                     // arrives here too (GUESS).
                     //
-                    // A multi-jump comes in on its own arrival heading,
-                    // from the last system it passed through.
-                    const arrivalHeading = jump.arrivalDirection === undefined
-                        ? target : new Angle(jump.arrivalDirection);
+                    // A multi-jump comes in on its departure heading too,
+                    // whatever systems it passed through (beginJump; wave
+                    // 52's MJ finding 2).
                     const basePhysics = getShipMovementPhysics(shipPhysics);
                     const arrivalDistance = JUMP_DISTANCE
                         + basePhysics.maxVelocity * PLAYER_JUMP_ARRIVAL_MARGIN_S;
-                    const unit = arrivalHeading.getUnitVector();
+                    const unit = target.getUnitVector();
                     teleport(movement,
                         new Position(-unit.x * arrivalDistance,
                             -unit.y * arrivalDistance),
                         unit.scale(basePhysics.maxVelocity));
-                    movement.rotation = arrivalHeading;
-                    // This tick's turn order was the departure heading;
-                    // the ship must not swing back toward it on the way in.
-                    movement.turnTo = arrivalHeading;
+                    movement.rotation = target;
+                    movement.turnTo = target;
                     movement.targetSpeed = basePhysics.maxVelocity;
                     jump.stage = 'arriving';
                     jump.stageStart = undefined;

@@ -1278,12 +1278,18 @@ describe('a multi-jump (ModType 32) is one jump', () => {
             expect(jump.via).toEqual([KESTREL]);
             expect(ship.components.get(JumpRouteComponent)!.route)
                 .toEqual([]);
-            // It turns onto its first hop, as a jump there would...
-            expect(jump.direction).toBeCloseTo(
-                await heading(gameData, THESSALY, KESTREL), 6);
-            // ...and comes in from the last system it passed through.
-            const arrivalHeading = await heading(gameData, KESTREL, VAEL);
-            expect(jump.arrivalDirection).toBeCloseTo(arrivalHeading, 6);
+            // It turns onto its first hop, as a jump there would, and
+            // ARRIVES on that same heading, not from the last system it
+            // passed through (reference "The multi-jump outfit (the hub's
+            // item 3, oütf ModType 32), wave 52", finding 2: leaving east,
+            // it came out on the west side of the final system).
+            const arrivalHeading = await heading(gameData, THESSALY, KESTREL);
+            expect(jump.direction).toBeCloseTo(arrivalHeading, 6);
+            const fromLastPassed = await heading(gameData, KESTREL, VAEL);
+            expect(Math.abs(new Angle(arrivalHeading)
+                .distanceTo(new Angle(fromLastPassed)).angle))
+                .withContext('the synthetic route bends at Kestrel Drift')
+                .toBeGreaterThan(0.5);
 
             stepUntil(world, () => finishes.length > 0);
             world.step();
@@ -1296,7 +1302,7 @@ describe('a multi-jump (ModType 32) is one jump', () => {
             expect(movement.velocity.angle.angle)
                 .toBeCloseTo(arrivalHeading, 6);
             expect(movement.rotation.angle).toBeCloseTo(arrivalHeading, 6);
-            // On the side of Vael Hollow facing Kestrel Drift.
+            // On the side of Vael Hollow opposite its departure heading.
             expect(movement.position.angle.angle)
                 .toBeCloseTo(new Angle(arrivalHeading + Math.PI).angle, 4);
 
@@ -1324,12 +1330,14 @@ describe('a multi-jump (ModType 32) is one jump', () => {
         expect(ship.components.get(JumpComponent)?.to).toEqual(VAEL);
     }, 60_000);
 
-    it('caps the hops at the outfit\'s extra jumps and at the route',
+    it('caps the hops at the outfit\'s ModVal (the hops in all, wave 52\'s '
+        + 'MJ finding 1: ModVal 2 went two systems, 3 three) and at the route',
         async () => {
             const cases: [number, string, string[] | undefined, string[]][] = [
                 [0, THESSALY, undefined, [KESTREL, VAEL]],
-                [1, KESTREL, [THESSALY], [VAEL]],
-                [2, VAEL, [THESSALY, KESTREL], []],
+                [1, THESSALY, undefined, [KESTREL, VAEL]],
+                [2, KESTREL, [THESSALY], [VAEL]],
+                [3, VAEL, [THESSALY, KESTREL], []],
                 [10, VAEL, [THESSALY, KESTREL], []],
             ];
             for (const [multiJump, to, via, rest] of cases) {
@@ -1361,7 +1369,7 @@ describe('a multi-jump (ModType 32) is one jump', () => {
     it('lets a held key chain on from the arrival, as after any jump',
         async () => {
             const { gameData, world, ship } =
-                await multiJumper(OSSORY, [THESSALY, KESTREL, VAEL], 1);
+                await multiJumper(OSSORY, [THESSALY, KESTREL, VAEL], 2);
             let finish: FinishJump | undefined;
             world.events.get(FinishJumpEvent).subscribe(
                 ({ data }) => { finish = data; });

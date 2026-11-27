@@ -25,11 +25,9 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import type { SimulationGameDataInterface } from './gamedata/simulation_game_data.js';
+import { daysPerJump } from '../nova_plugin/player/index.js';
 import {
-    daysPerJump, DISCOVERY_ENTERED, markManyDiscovered,
-} from '../nova_plugin/player/index.js';
-import {
-    GateArrivalComponent, JumpComponent, planGateTransitRecovery,
+    GateArrivalComponent, planGateTransitRecovery,
     planHyperspaceJumpRecovery,
 } from '../nova_plugin/travel/index.js';
 import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship/index.js';
@@ -63,15 +61,15 @@ export function followHyperspaceJump(runtime: ClientRuntime,
     // advance included: an exit-to-title during the (possibly long)
     // advance waits for this to bail rather than letting the jumpTo below
     // start into a torn-down session.
-    // A MULTI-JUMP (ModType 32) passed through these systems without
-    // entering them (jump_plugin.ts resolveJumpHops). GUESSES, unmeasured
-    // on the original: each still counts as explored on the map (the
-    // pilot flew through it). The date advances ONCE, one jump's days, for
-    // the whole multi-jump (Matthew, 2026-11-27). Nothing else happens
-    // there: no world is built, so no traffic, no mission ships, no hails,
-    // no arrival.
-    const passedThrough = data.entity.components.get(JumpComponent)?.via ?? [];
-    markManyDiscovered(passedThrough, DISCOVERY_ENTERED);
+    // A MULTI-JUMP (ModType 32) passed through its route's systems without
+    // entering them (jump_plugin.ts resolveJumpHops), and nothing happens
+    // there: they stay UNEXPLORED on the map (MEASURED, reference "The
+    // multi-jump outfit (the hub's item 3, oütf ModType 32), wave 52",
+    // finding 4: an unexplored system passed through was still 0 in the
+    // pilot and an unnamed ring on the map), no world is built, so no
+    // traffic, no mission ships (finding 5), no hails, no arrival. The
+    // date advances ONCE, one jump's days, for the whole multi-jump
+    // (Matthew, 2026-11-27).
     void runtime.transitions.run(async () => {
         await advanceDateForJump(runtime, data.entity);
         // A rejection here used to be unobserved: the ship (already

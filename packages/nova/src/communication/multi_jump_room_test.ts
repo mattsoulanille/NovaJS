@@ -35,7 +35,7 @@ import { getSyntheticGameData } from './simulation_test_fixture.js';
  * A multi-jump (oütf ModType 32) across real rooms: "A multi jump looks
  * just like a normal jump" (Matthew, 2026-11-27). The traveller leaves
  * Thessaly Reach with a two-hop route (Kestrel Drift, Vael Hollow) and an
- * outfit worth one extra jump; a second player sits in Kestrel Drift, the
+ * outfit worth two hops (ModVal 2); a second player sits in Kestrel Drift, the
  * system passed through. One departure (one FinishJumpEvent, to Vael), one
  * fuel charge, the same on the peer and the archive and through a rollback
  * replay; the carried entity's multi-jump fields cross the wire; and the
@@ -161,7 +161,7 @@ describe('a multi-jump across rooms', () => {
 
             const origin = await makeRoom(SYNTHETIC.systems.thessaly,
                 TRAVELLER);
-            const traveller = await makePlayerShip(TRAVELLER, 1);
+            const traveller = await makePlayerShip(TRAVELLER, 2);
             await completeEntity(origin.world, traveller);
             await origin.client.addEntity(SHIP_A, traveller);
             await origin.step(5);
@@ -169,7 +169,7 @@ describe('a multi-jump across rooms', () => {
                 [SYNTHETIC.systems.kestrel, SYNTHETIC.systems.vael]);
             await origin.step(5);
             expect(origin.world.entities.get(SHIP_A)!
-                .components.get(ShipPhysicsComponent)?.multiJump).toBe(1);
+                .components.get(ShipPhysicsComponent)?.multiJump).toBe(2);
             const fuelBefore = origin.world.entities.get(SHIP_A)!
                 .components.get(FuelComponent)!.current;
             origin.host.controlEvents(

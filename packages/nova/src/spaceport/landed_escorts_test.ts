@@ -356,7 +356,7 @@ describe('carried batch roster policy', () => {
             to: 'test:destination',
             stage: 'arriving',
             direction: 0,
-            ...(via === undefined ? {} : { via, arrivalDirection: 1 }),
+            ...(via === undefined ? {} : { via }),
         });
         return player;
     }
