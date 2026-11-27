@@ -744,20 +744,43 @@ describe('SimulationBridge', () => {
         describe('the entry catch-up (catchUpToRoomClock)', () => {
             it('steps straight onto the clock target, leaving no drift '
                 + 'for the slew', async () => {
+                // A fake clock: wall time passes only as the catch-up
+                // steps (each tick "costs" STEP_COST_MS), so the result
+                // is exact rather than dependent on machine load.
+                let now = 10_000;
+                spyOn(performance, 'now').and.callFake(() => now);
                 const { host, sync } = makePacedHost();
                 sync(500);
+                const STEP_COST_MS = 2;
+                const step = host.step.bind(host);
+                spyOn(host, 'step').and.callFake((count = 1) => {
+                    step(count);
+                    now += count * STEP_COST_MS;
+                });
                 const stepped = await host.catchUpToRoomClock();
-                // Server tick 500 (plus whatever real time the steps
-                // took) and the 4-tick send-ahead lead.
-                expect(stepped).toBeGreaterThanOrEqual(504);
+                // Server tick 500 and the 4-tick send-ahead lead, plus
+                // the server ticks that passed while stepping: re-
+                // targeted until the gap is under a tick.
+                expect(stepped).toBeGreaterThan(504);
                 expect(host.status().tick).toBe(stepped);
                 const pacing = host.snapshot().pacing!;
-                expect(pacing.behindTicks).toBeGreaterThan(-1);
+                expect(pacing.behindTicks).toBeGreaterThanOrEqual(0);
                 expect(pacing.behindTicks).toBeLessThan(1);
                 // The smoothed drift was reset with the jump: no
-                // leftover slew against the old position.
-                expect(pacing.rate).toBeGreaterThan(0.99);
+                // leftover slew against the old position, only the
+                // under-a-tick remainder (1% per tick of drift).
+                expect(pacing.rate).toBeGreaterThanOrEqual(1);
                 expect(pacing.rate).toBeLessThan(1.01);
+            });
+
+            it('lands exactly on the target when no time passes', async () => {
+                spyOn(performance, 'now').and.returnValue(10_000);
+                const { host, sync } = makePacedHost();
+                sync(500);
+                expect(await host.catchUpToRoomClock()).toBe(504);
+                const pacing = host.snapshot().pacing!;
+                expect(pacing.behindTicks).toBe(0);
+                expect(pacing.rate).toBe(1);
             });
 
             it('is a no-op with no room clock (offline play)', async () => {
@@ -768,6 +791,7 @@ describe('SimulationBridge', () => {
 
             it('never steps a peer that is already at or ahead of the '
                 + 'clock (steady state is the pacing\'s)', async () => {
+                spyOn(performance, 'now').and.returnValue(10_000);
                 const { host, sync } = makePacedHost();
                 host.step(60);
                 sync(0);
