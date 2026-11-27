@@ -1,6 +1,8 @@
 import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
 import { Optional } from 'nova_ecs/optional';
-import { MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movement_plugin';
+import {
+    MovementPhysicsComponent, MovementStateComponent, MovementSystem,
+} from 'nova_ecs/plugins/movement_plugin';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
@@ -33,10 +35,10 @@ export const FormationSystem = new System({
     args: [FormationComponent, MovementStateComponent, ShipPhysicsComponent,
         Optional(NpcComponent), Optional(EscortCommandComponent),
         Optional(EscortLandingComponent), Optional(JumpComponent),
-        Optional(DisabledComponent), AllFormationsQuery, TimeResource,
-        Entities, GetEntity, UUID] as const,
+        Optional(DisabledComponent), Optional(MovementPhysicsComponent),
+        AllFormationsQuery, TimeResource, Entities, GetEntity, UUID] as const,
     step(formation, movement, physics, npc, escortCommand, landing, jump,
-        disabled, allFormations, time, entities, entity) {
+        disabled, movementPhysics, allFormations, time, entities, entity) {
         if (disabled) {
             // A hulk drifts. DisabledMovementSystem runs after this one and
             // erases steering intent, but the RCS regime writes
@@ -121,10 +123,15 @@ export const FormationSystem = new System({
         // this leader counts, bay fighters and escorts alike: the original
         // flies them as one formation (F1c; its fighters hold their slots
         // about 7 px more loosely, which is not modelled).
+        // The effective movement physics go along too: an INERTIALESS
+        // hull is flown by a controller of its own (heading plus throttle,
+        // steerInertialessFormation), which converts a speed change into a
+        // throttle with the acceleration the integrator will apply.
         steerFormation(movement, leader, formation,
             physics.acceleration, time.delta_s,
             rank < 0 ? formation.slot : rank, physics.turnRate,
-            formationSpacing(frameWidth), siblingSlots.length);
+            formationSpacing(frameWidth), siblingSlots.length,
+            movementPhysics);
     },
     after: [TimeSystem, NpcDecisionSystem],
     before: [MovementSystem],

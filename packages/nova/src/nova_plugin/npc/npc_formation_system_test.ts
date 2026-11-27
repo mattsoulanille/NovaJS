@@ -13,7 +13,8 @@ import { World } from 'nova_ecs/world';
 import { SIMULATION_STEP_MS } from '../make_system.js';
 import { BayFighterComponent, ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
 import {
-    FormationCell, FormationComponent, FORMATION_SLOT_DEADBAND, formationSpacing,
+    FormationCell, FormationComponent, FORMATION_SLOT_DEADBAND,
+    formationSlotPosition, formationSpacing,
 } from './npc_formation.js';
 import { FormationSystem } from './npc_formation_system.js';
 
@@ -221,4 +222,240 @@ describe('FormationSystem count layouts (reference F1c)', () => {
             near(2, [1, 1]);
             near(0, [2, 0]);
         });
+});
+
+/**
+ * ============================================================================
+ * Inertialess escorts settle into their slots and hold them (Matthew's
+ * playtest, 2026-11-26: they "spin around towards their desired position")
+ * ============================================================================
+ *
+ * An inertialess hull's velocity is its heading times a throttled
+ * targetSpeed (movement_plugin's inertialessControls). The inertial
+ * controller never braked it and its RCS nudges were undone every tick, so
+ * every stock inertialess escort looped through its slot for good, the
+ * nose sweeping all the way round. These fly the real MovementPlugin
+ * integrator, 60 Hz, with hulls of the stock inertialess figures (shïp
+ * Speed/Accel/Turn converted): the Vell-os Dart (nimble, 32 px frame), the
+ * Vell-os Javelin and the Raven (slow, 192 px frame: the 59.5 px step).
+ */
+describe('FormationSystem flying INERTIALESS escorts', () => {
+    interface Hull {
+        name: string, speed: number, acceleration: number, turnRate: number,
+        frame: number
+    }
+    /** A held heading (rad): steady to well under a pixel's turn of a
+     * 192 px hull. */
+    const HEADING_STEADY = 1e-3;
+    const HULLS: Hull[] = [
+        { name: 'Dart', speed: 270, acceleration: 225, turnRate: 5.236, frame: 32 },
+        { name: 'Javelin', speed: 168.75, acceleration: 90, turnRate: 2.094, frame: 88 },
+        { name: 'Raven', speed: 101.25, acceleration: 63, turnRate: 2.094, frame: 192 },
+    ];
+
+    function inertialessShip(h: Hull, position: Position,
+        rotation = 0): Entity {
+        const data: ShipData = {
+            ...getDefaultShipData(), spriteFrameWidth: h.frame,
+            physics: {
+                ...getDefaultShipPhysics(), speed: h.speed,
+                acceleration: h.acceleration, turnRate: h.turnRate,
+                inertialess: true,
+            },
+        };
+        const entity = ship(data, position);
+        entity.components.set(MovementPhysicsComponent, {
+            acceleration: h.acceleration, maxVelocity: h.speed,
+            movementType: MovementType.INERTIALESS, turnRate: h.turnRate,
+        });
+        entity.components.get(MovementStateComponent)!.rotation =
+            new Angle(rotation);
+        return entity;
+    }
+
+    /** Six inertialess escorts of hull `h` scattered round a leader at
+     * the origin facing up, at rest (its own hull: inertial, never
+     * steered). The even slots are coming back from elsewhere (a fight, a
+     * jump in) at full speed on their own headings; the odd ones sit
+     * still. */
+    async function inertialessWorld(h: Hull) {
+        const world = await formationWorld(h.frame, []);
+        for (let slot = 0; slot < 6; slot++) {
+            const escort = inertialessShip(h,
+                new Position(70 * slot - 175, 120 + 40 * (slot % 2)),
+                slot * 1.1);
+            if (slot % 2 === 0) {
+                const state = escort.components.get(MovementStateComponent)!;
+                state.velocity = state.rotation.getUnitVector().scale(h.speed);
+                state.targetSpeed = h.speed;
+            }
+            escort.components.set(FormationComponent, { leader: LEADER, slot });
+            world.entities.set(`escort-${slot}`, escort);
+        }
+        return world;
+    }
+
+    function leaderState(world: World) {
+        return world.entities.get(LEADER)!.components
+            .get(MovementStateComponent)!;
+    }
+
+    function setLeader(world: World, velocity: Vector, rotation: Angle) {
+        const leader = leaderState(world);
+        leader.velocity = velocity;
+        leader.rotation = rotation;
+    }
+
+    /**
+     * Steps `seconds` (calling `each` before every step) and returns, per
+     * escort: the largest distance from its slot, how far it moved RELATIVE
+     * to the leader, how often its turn direction reversed, and its heading
+     * spread.
+     */
+    function watch(world: World, seconds: number, each?: () => void) {
+        const a = formationSpacing(world.entities.get(LEADER)!.components
+            .get(ShipDataComponent)!.spriteFrameWidth!);
+        const stats = new Map<string, {
+            maxError: number, minError: number, drift: number,
+            reversals: number, minHeading: number, maxHeading: number,
+            first?: Vector, lastHeading?: number, lastTurn: number,
+        }>();
+        for (let i = 0; i < seconds * 1000 / SIMULATION_STEP_MS; i++) {
+            each?.();
+            world.step();
+            const leader = leaderState(world);
+            for (let slot = 0; slot < 6; slot++) {
+                const uuid = `escort-${slot}`;
+                const state = world.entities.get(uuid)!.components
+                    .get(MovementStateComponent)!;
+                const s = stats.get(uuid) ?? {
+                    maxError: 0, minError: Infinity, drift: 0, reversals: 0,
+                    minHeading: Infinity, maxHeading: -Infinity, lastTurn: 0,
+                };
+                stats.set(uuid, s);
+                const station = formationSlotPosition(
+                    Position.fromVectorLike(leader.position),
+                    Angle.fromAngleLike(leader.rotation), slot, a, 6);
+                const error = station.subtract(state.position).length;
+                s.maxError = Math.max(s.maxError, error);
+                s.minError = Math.min(s.minError, error);
+                const offset = Position.fromVectorLike(state.position)
+                    .subtract(leader.position);
+                s.first ??= offset;
+                s.drift = Math.max(s.drift, offset.subtract(s.first).length);
+                // Unwrapped heading: the turn since the last step.
+                const heading = state.rotation.angle;
+                if (s.lastHeading !== undefined) {
+                    const turn = new Angle(s.lastHeading)
+                        .distanceTo(new Angle(heading)).angle;
+                    const sign = Math.abs(turn) < 1e-9 ? 0 : Math.sign(turn);
+                    if (sign !== 0 && s.lastTurn !== 0 && sign !== s.lastTurn) {
+                        s.reversals++;
+                    }
+                    if (sign !== 0) {
+                        s.lastTurn = sign;
+                    }
+                }
+                s.lastHeading = heading;
+                s.minHeading = Math.min(s.minHeading, heading);
+                s.maxHeading = Math.max(s.maxHeading, heading);
+            }
+        }
+        return stats;
+    }
+
+    for (const h of HULLS) {
+        it(`${h.name}: settles in from scattered starts (some at full `
+            + 'speed) within 20 s and '
+            + 'then holds its slot still, facing the leader\'s heading',
+            async () => {
+                const world = await inertialessWorld(h);
+                stepSeconds(world, 20);
+                const held = watch(world, 10);
+                for (const [uuid, s] of held) {
+                    const context = `${h.name} ${uuid}`;
+                    expect(s.maxError).withContext(context)
+                        .toBeLessThanOrEqual(FORMATION_SLOT_DEADBAND);
+                    expect(s.drift).withContext(context).toBeLessThan(0.5);
+                    expect(s.maxHeading - s.minHeading).withContext(context)
+                        .toBeLessThan(HEADING_STEADY);
+                    const state = world.entities.get(uuid)!.components
+                        .get(MovementStateComponent)!;
+                    expect(Math.abs(state.rotation.distanceTo(new Angle(0))
+                        .angle)).withContext(context).toBeLessThan(HEADING_STEADY);
+                    expect(state.velocity.length).withContext(context)
+                        .toBeLessThan(0.05);
+                }
+            });
+
+        it(`${h.name}: follows a cruising leader, then stops with it within `
+            + '10 s and holds, with no heading churn', async () => {
+                const world = await inertialessWorld(h);
+                stepSeconds(world, 20);
+                // Cruise "up" at 60% of the escorts' top speed.
+                const cruise = new Vector(0, -0.6 * h.speed);
+                setLeader(world, cruise, new Angle(0));
+                stepSeconds(world, 10);
+                const cruising = watch(world, 10);
+                // The leader stops dead.
+                setLeader(world, new Vector(0, 0), new Angle(0));
+                stepSeconds(world, 10);
+                const stopped = watch(world, 10);
+                for (const [uuid, s] of cruising) {
+                    const context = `${h.name} ${uuid} cruising`;
+                    expect(s.maxError).withContext(context)
+                        .toBeLessThanOrEqual(FORMATION_SLOT_DEADBAND);
+                    expect(s.drift).withContext(context).toBeLessThan(0.5);
+                    expect(s.maxHeading - s.minHeading).withContext(context)
+                        .toBeLessThan(HEADING_STEADY);
+                }
+                for (const [uuid, s] of stopped) {
+                    const context = `${h.name} ${uuid} stopped`;
+                    expect(s.maxError).withContext(context)
+                        .toBeLessThanOrEqual(FORMATION_SLOT_DEADBAND);
+                    expect(s.drift).withContext(context).toBeLessThan(0.5);
+                    expect(s.maxHeading - s.minHeading).withContext(context)
+                        .toBeLessThan(HEADING_STEADY);
+                }
+            });
+
+        it(`${h.name}: holds station round a leader turning at cruise `
+            + 'without chattering its nose', async () => {
+                // The Dart sat on the old dead band's edge here, its nose
+                // kicked a full turn step either way every few ticks.
+                const world = await inertialessWorld(h);
+                stepSeconds(world, 20);
+                const speed = 0.6 * h.speed;
+                const rate = 0.4;
+                let heading = 0;
+                const turn = () => {
+                    heading += rate * SIMULATION_STEP_MS / 1000;
+                    const angle = new Angle(heading);
+                    setLeader(world, angle.getUnitVector().scale(speed), angle);
+                };
+                for (let i = 0; i < 15 * 60; i++) {
+                    turn();
+                    world.step();
+                }
+                const turning = watch(world, 10, turn);
+                for (const [uuid, s] of turning) {
+                    const context = `${h.name} ${uuid}`;
+                    // Turning steadily one way, with the leader.
+                    expect(s.reversals).withContext(context).toBe(0);
+                }
+                // The front row holds a STEADY offset: it trails its slot
+                // by a constant lag (its pull balancing the slot's swing,
+                // which the leader's velocity alone does not feed forward;
+                // the outer ranks of a big hull cannot keep up at all,
+                // their slots outrunning its top speed).
+                for (const uuid of ['escort-0', 'escort-1']) {
+                    const s = turning.get(uuid)!;
+                    const context = `${h.name} ${uuid}`;
+                    expect(s.maxError - s.minError).withContext(context)
+                        .toBeLessThan(0.5);
+                    expect(s.maxError).withContext(context)
+                        .toBeLessThan(3 * FORMATION_SLOT_DEADBAND);
+                }
+            });
+    }
 });

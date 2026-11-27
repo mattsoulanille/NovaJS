@@ -4,7 +4,9 @@ import { EntityMap } from 'nova_ecs/entity_map';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
-import { MovementState } from 'nova_ecs/plugins/movement_plugin';
+import {
+    MovementPhysics, MovementState, MovementType,
+} from 'nova_ecs/plugins/movement_plugin';
 
 /**
  * Formation state, slot geometry and the follower controller. The
@@ -452,27 +454,45 @@ export function formationSlotPosition(leaderPosition: Position,
  * moving leader with zero position error, and an escort parked inside
  * the dead band keeps its offset at cruise (wave 36). Pure so tests can check
  * convergence and that RCS never turns the ship.
+ *
+ * `physics` is the follower's effective MovementPhysics. An INERTIALESS
+ * follower flies the same desired velocity through a controller of its
+ * own instead of either regime (steerInertialessFormation): neither
+ * turn-and-burn nor RCS can steer a hull whose velocity is its heading
+ * times its throttled speed.
  */
 export function steerFormation(movement: MovementState, leader: MovementState,
     formation: Formation, acceleration: number, delta_s: number,
     rank = formation.slot, turnRate = Infinity,
-    spacing = FORMATION_MIN_SPACING, count?: number): void {
+    spacing = FORMATION_MIN_SPACING, count?: number,
+    physics?: MovementPhysics): void {
     const slotPosition = formationSlotPosition(
         Position.fromVectorLike(leader.position),
         Angle.fromAngleLike(leader.rotation), rank, spacing, count);
     const error = slotPosition.subtract(movement.position);
     // Desired velocity: the leader's, plus a closing velocity toward the
     // slot, proportional to the distance but no faster than the follower
-    // can brake from or turn onto; none inside the slot dead band.
+    // can brake from or turn onto; none inside the slot dead band. An
+    // inertialess follower's proportional term counts only the distance
+    // past INERTIALESS_SLOT_RADIUS, so its pull has no step (see there).
     const distance = error.length;
-    const closing = distance <= FORMATION_SLOT_DEADBAND ? 0
-        : Math.min(distance * FORMATION_POSITION_GAIN,
+    const inertialess = physics?.movementType === MovementType.INERTIALESS;
+    const pulled = inertialess
+        ? distance - INERTIALESS_SLOT_RADIUS
+        : distance <= FORMATION_SLOT_DEADBAND ? 0 : distance;
+    const closing = pulled <= 0 ? 0
+        : Math.min(pulled * FORMATION_POSITION_GAIN,
             Math.sqrt(2 * FORMATION_BRAKE_FRACTION * acceleration * distance),
             FORMATION_TURN_CLOSING_FRACTION * turnRate * distance);
     const desired = closing > 0
         ? Vector.fromVectorLike(leader.velocity)
             .add(error.normalize(closing))
         : Vector.fromVectorLike(leader.velocity);
+    if (physics && inertialess) {
+        steerInertialessFormation(movement, leader, error, closing,
+            physics.acceleration, delta_s);
+        return;
+    }
     const correction = desired.subtract(movement.velocity);
 
     // Hysteresis: engage RCS below the low threshold, drop it above
@@ -509,4 +529,124 @@ export function steerFormation(movement: MovementState, leader: MovementState,
     movement.turnBack = false;
     const misalignment = movement.rotation.distanceTo(heading).angle;
     movement.accelerating = Math.abs(misalignment) < 0.7 ? 1 : 0;
+}
+
+/**
+ * An INERTIALESS follower's slot radius (px): its closing pull is
+ * proportional to the distance PAST this radius (none inside it) instead
+ * of the inertial dead band's step from nothing to 1.2 x 12 px/s at the
+ * band's edge. An inertial follower takes that step on RCS, without
+ * turning; an inertialess one can only move where it points, so the step
+ * became a heading kick each time it touched the edge. On a leader
+ * turning at cruise (the slot then moves at other than the leader's
+ * velocity, so velocity matching alone drifts the follower out to the
+ * edge) the stock Vell-os Dart chattered on it every few ticks, its nose
+ * jumping a full turn step either way. A continuous pull holds it at the
+ * distance where pull and drift balance, with the nose turning smoothly.
+ * GUESS: half the dead band. A follower closing on a leader at rest ends
+ * inside the dead band facing the leader's way (INERTIALESS_NOSE_PULL_
+ * SLACK): crept up toward this radius when its slot lies ahead of it,
+ * left where it stopped otherwise. Inertialess escorts were not measured.
+ */
+export const INERTIALESS_SLOT_RADIUS = FORMATION_SLOT_DEADBAND / 2;
+
+/**
+ * The part of the pull (px/s) an inertialess follower's NOSE ignores: the
+ * pull at the dead band's edge, so the nose chases the slot only from
+ * outside the band, and by an amount growing from nothing at its edge.
+ * The throttle still flies the whole pull along wherever the nose points,
+ * so inside the band a slot ahead is crept up to and one behind or to the
+ * side is left where the follower stopped: it parks inside the band like
+ * the inertial escorts, which stop where they come to rest (reference
+ * "F1c re-flow offsets, wave 36").
+ */
+export const INERTIALESS_NOSE_PULL_SLACK = FORMATION_POSITION_GAIN
+    * (FORMATION_SLOT_DEADBAND - INERTIALESS_SLOT_RADIUS);
+
+/**
+ * With its nose not chasing the slot, an inertialess follower points along
+ * its leader's velocity plus this much (px/s) along the leader's heading:
+ * exactly the leader's heading with the leader at rest, so a parked escort
+ * faces the way its leader does, and the direction of travel at cruise.
+ * GUESS, not measured.
+ *
+ * Only while the nose is NOT chasing the slot: a blend of slot bearing and
+ * leader heading stalls a follower at rest just short of the band, nose
+ * held off its leader's way, wherever the blend turns the nose square to
+ * the pull (the throttle only flies the pull's part along the nose). A
+ * pure position-to-heading rule cannot both bring a slot BEHIND the
+ * follower in and end facing forward, so the nose switches at the band's
+ * edge: one turn onto the leader's heading as the follower comes in (it
+ * is moving inward and the throttle never backs it out). At cruise the
+ * switch moves the nose by under this over the leader's speed, and not at
+ * all while the leader flies along its heading.
+ */
+export const INERTIALESS_HEADING_BIAS = 2;
+
+/**
+ * The formation controller for an INERTIALESS follower (shïp Flags2
+ * 0x0040; movement_plugin's inertialessControls). Such a hull has no
+ * momentum to manage: its velocity is its heading times `targetSpeed`,
+ * and `targetSpeed` only changes with the throttle (`accelerating`,
+ * negative to brake; reference "U9 and the inertialess hulls": it keeps
+ * its speed when thrust is released and Down brakes it to a stop). So
+ * instead of turn-and-burn on a velocity correction (built for a hull
+ * that coasts) it is flown directly: POINT along the desired velocity and
+ * THROTTLE the speed to it.
+ *
+ * The inertial regimes do not work on it, which is what Matthew's
+ * playtest saw (2026-11-26: they "spin around towards their desired
+ * position"): turn-and-burn never sets a negative throttle, so the hull
+ * could never shed `targetSpeed`; and the RCS nudge (a quarter of the
+ * acceleration) is undone every tick by the integrator, which pulls the
+ * velocity back onto heading x targetSpeed at twice the acceleration.
+ * With the heading pinned to the leader's under RCS the escort flew
+ * straight past its slot at the speed it last had, dropped back to
+ * turn-and-burn, swung round to the slot and did it again: a loop through
+ * the slot, for good, on every stock inertialess hull.
+ *
+ * - Heading: along the leader's velocity plus the pull less
+ *   INERTIALESS_NOSE_PULL_SLACK (continuous at the dead band's edge, so
+ *   station-keeping at cruise never kicks the nose); inside the band
+ *   along the leader's velocity leaning onto its heading
+ *   (INERTIALESS_HEADING_BIAS), so a parked escort faces the leader's
+ *   way.
+ * - Speed: the desired velocity's component along the CURRENT heading
+ *   (none while facing away from it), so the hull slows to turn and
+ *   speeds up as it comes round, rather than flying a wide arc at speed
+ *   through its slot. The closing caps of steerFormation (the braking and
+ *   the turn-rate one) still bound how fast it closes.
+ * - The throttle is the speed change over this tick's (effective)
+ *   acceleration, clamped to full thrust and full brake, so targetSpeed
+ *   lands on the wanted speed instead of hunting around it. `accelerating`
+ *   is only positive while gaining speed, so the engine glow shows thrust,
+ *   not station-keeping.
+ *
+ * Never uses RCS: there is no momentum for it to correct. Leaves
+ * `formation.rcs` alone (sim state, the inertial regime's hysteresis).
+ */
+function steerInertialessFormation(movement: MovementState,
+    leader: MovementState, error: Vector, closing: number,
+    acceleration: number, delta_s: number): void {
+    const leaderVelocity = Vector.fromVectorLike(leader.velocity);
+    const leaderHeading = Angle.fromAngleLike(leader.rotation);
+    // Flown: the leader's velocity plus the whole pull.
+    const desired = closing > 0
+        ? leaderVelocity.add(error.normalize(closing)) : leaderVelocity;
+    // Pointed at: the leader's velocity plus the pull less its slack, or,
+    // inside the band, plus a lean along the leader's heading.
+    const nosePull = closing - INERTIALESS_NOSE_PULL_SLACK;
+    const pointing = nosePull > 0
+        ? leaderVelocity.add(error.normalize(nosePull))
+        : leaderVelocity.add(leaderHeading.getUnitVector()
+            .scale(INERTIALESS_HEADING_BIAS));
+    movement.turnBack = false;
+    movement.turnTo = pointing.lengthSquared > 0
+        ? pointing.angle : leaderHeading;
+    const forward = movement.rotation.getUnitVector();
+    const speed = Math.max(0, forward.x * desired.x + forward.y * desired.y);
+    const current = movement.targetSpeed ?? movement.velocity.length;
+    const step = acceleration * delta_s;
+    movement.accelerating = step > 0
+        ? Math.max(-1, Math.min(1, (speed - current) / step)) : 0;
 }

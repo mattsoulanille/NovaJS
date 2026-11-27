@@ -3,7 +3,9 @@ import { getDefaultGovtData } from 'novadatainterface/govt_data';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
-import { MovementState } from 'nova_ecs/plugins/movement_plugin';
+import {
+    MovementPhysics, MovementState, MovementType,
+} from 'nova_ecs/plugins/movement_plugin';
 import { ShipAccelerationConversionFactor, ShipSpeedConversionFactor } from 'novaparse/parsers/constants';
 import { govtDisposition, effectiveStrength, oddsFavorable } from '../reputation/index.js';
 import {
@@ -625,6 +627,59 @@ describe('steerFormation', () => {
                 leader, state, ACCEL, DT);
             expect(state.rcs).toBeTrue();
         });
+
+    describe('an INERTIALESS follower', () => {
+        const INERTIALESS: MovementPhysics = {
+            acceleration: ACCEL, maxVelocity: 300, turnRate: Math.PI,
+            movementType: MovementType.INERTIALESS,
+        };
+        const onSlot = () => formationSlotPosition(new Position(0, 0),
+            new Angle(0), 0, FORMATION_MIN_SPACING);
+
+        it('brakes the speed it does not want and points the leader\'s way '
+            + 'on station (the inertial regimes never braked it)', () => {
+                const follower = movement({
+                    position: onSlot(), rotation: new Angle(2),
+                    velocity: new Angle(2).getUnitVector().scale(80),
+                    targetSpeed: 80,
+                });
+                const state = formation();
+                steerFormation(follower, movement({}), state, ACCEL, DT, 0,
+                    Math.PI, FORMATION_MIN_SPACING, 1, INERTIALESS);
+                expect(follower.accelerating).toBe(-1);
+                expect((follower.turnTo as Angle).angle).toBeCloseTo(0, 9);
+                // Never the RCS regime: no direct velocity write, and its
+                // hysteresis state is left alone.
+                expect(follower.velocity.length).toBeCloseTo(80, 9);
+                expect(state.rcs).toBeUndefined();
+            });
+
+        it('throttles exactly to a cruising leader\'s speed', () => {
+            const cruise = new Vector(0, -100);
+            const follower = movement({
+                position: onSlot(), velocity: cruise, targetSpeed: 99,
+            });
+            steerFormation(follower, movement({ velocity: cruise }),
+                formation(), ACCEL, DT, 0, Math.PI, FORMATION_MIN_SPACING,
+                1, INERTIALESS);
+            expect(follower.accelerating).toBeCloseTo(1 / (ACCEL * DT), 9);
+        });
+
+        it('flies the pull only along its nose: none while facing away '
+            + 'from its slot', () => {
+                // 200 px behind its slot, facing straight away from it.
+                const slot = onSlot();
+                const follower = movement({
+                    position: new Position(slot.x, slot.y + 200),
+                    rotation: new Angle(Math.PI), targetSpeed: 0,
+                });
+                steerFormation(follower, movement({}), formation(), ACCEL, DT,
+                    0, Math.PI, FORMATION_MIN_SPACING, 1, INERTIALESS);
+                expect(follower.accelerating).toBe(0);
+                expect(Math.abs((follower.turnTo as Angle).angle))
+                    .toBeCloseTo(0, 9);
+            });
+    });
 });
 
 describe('steerFormation flying a real hull (finite turn rate, 60 Hz)', () => {
