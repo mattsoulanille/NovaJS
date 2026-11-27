@@ -55,6 +55,22 @@ async function parse(fields: Partial<ShipResource>) {
 }
 
 describe("ShipParse", () => {
+    describe("Deionize", () => {
+        it("reads 100 as one point of ion charge a 1/30 s frame", async () => {
+            const ship = await parse({ deionize: 100 });
+            expect(ship.physics.deionize).toBeCloseTo(FPS, 9);
+        });
+
+        it("reads a ZERO Deionize as 100, not as no drain (reference "
+            + "\"Ionization below a full charge (E6 leftover), wave 41\")",
+            async () => {
+                const zero = await parse({ deionize: 0 });
+                expect(zero.physics.deionize).toBeCloseTo(FPS, 9);
+                const one = await parse({ deionize: 1 });
+                expect(one.physics.deionize).toBeCloseTo(FPS / 100, 9);
+            });
+    });
+
     describe("Holds (EVN Bible ~:2346)", () => {
         it("keeps a positive hold as written and allows mass expansions",
             async () => {

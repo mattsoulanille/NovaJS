@@ -7,7 +7,7 @@ import { System } from 'nova_ecs/system';
 import { EscortCommandComponent } from '../player/index.js';
 import {
     DisabledComponent, getShipMovementPhysics, IonizationComponent,
-    ionSlowdown, IsIonizedComponent,
+    ionSlowdown,
     ShipDataComponent, ShipPhysicsComponent,
 } from '../ship/index.js';
 import { EffectiveMovementPhysicsSystem, GravitySystem, JumpComponent } from '../travel/index.js';
@@ -101,16 +101,16 @@ export const NpcAfterburnerSystem = new System({
     args: [NpcComponent, ShipDataComponent, ShipPhysicsComponent,
         MovementPhysicsComponent,
         Optional(EscortCommandComponent), Optional(JumpComponent),
-        Optional(DisabledComponent), Optional(IsIonizedComponent),
+        Optional(DisabledComponent),
         Optional(IonizationComponent)] as const,
     step(npc, shipData, shipPhysics, movementPhysics,
-        escortCommand, jump, disabled, isIonized, ionization) {
+        escortCommand, jump, disabled, ionization) {
         if (jump || disabled || !npcAfterburning(npc, shipData.aiFlags,
             escortCommand !== undefined)) {
             return;
         }
         const base = getShipMovementPhysics(shipPhysics);
-        const ion = ionSlowdown(ionization, isIonized);
+        const ion = ionSlowdown(ionization);
         movementPhysics.maxVelocity = Math.max(movementPhysics.maxVelocity,
             base.maxVelocity * ion.maxVelocity * AI_AFTERBURNER_FACTOR);
         movementPhysics.acceleration =

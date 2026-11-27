@@ -76,6 +76,21 @@ export type WeaponOutfitMap = ShipPictMap;
 /** Maps a weapon's global id to the outfit that is its ammo. */
 export type AmmoOutfitMap = ShipPictMap;
 
+
+/**
+ * shïp Deionize as the hull's drain, in Deionize units (100 = one point of
+ * ion charge a 1/30 s frame). A ZERO field is not "never drains": MEASURED
+ * (reference "Ionization below a full charge (E6 leftover), wave 41") a
+ * Deionize-0 hull of IonizeMax 100 shed each 20-point hit within about 20
+ * frames and was never ion-tinted across twenty hits, where a Deionize-1
+ * hull kept its charge. GUESS: 0 falls back to 100 (about 1 a frame, the
+ * drain time read). Any other value is used as given.
+ */
+export const DEIONIZE_ZERO_FALLBACK = 100;
+export function shipDeionize(deionize: number): number {
+    return deionize === 0 ? DEIONIZE_ZERO_FALLBACK : deionize;
+}
+
 export function ShipParseClosure(shipPictMap: ShipPictMap,
     weaponOutfitMap: WeaponOutfitMap,
     ammoOutfitMap: AmmoOutfitMap,
@@ -377,7 +392,8 @@ export async function ShipParse(ship: ShipResource,
         // Frames per unit -> units per second. 0 means no regeneration.
         energyRecharge: ship.energyRecharge === 0 ? 0 : FPS / ship.energyRecharge,
         ionization: ship.ionization,
-        deionize: ship.deionize / 100 * FPS, // 100 is 1 point of ion energy per 1/30th of a second (evn bible)
+        // 100 is 1 point of ion energy per 1/30th of a second (evn bible).
+        deionize: shipDeionize(ship.deionize) / 100 * FPS,
         speed: ship.speed * ShipSpeedConversionFactor,
         acceleration: ship.acceleration * ShipAccelerationConversionFactor,
         turnRate: ship.turnRate * ShipTurnRateConversionFactor,

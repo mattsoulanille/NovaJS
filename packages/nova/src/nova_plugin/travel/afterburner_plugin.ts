@@ -8,7 +8,6 @@ import { DisabledComponent } from '../ship/index.js';
 import { FuelComponent } from '../ship/index.js';
 import {
     IonizationComponent, IonizationRechargeSystem, ionSlowdown,
-    IsIonizedComponent,
 } from '../ship/index.js';
 import { JumpComponent, JumpSequenceSystem, JUMP_BASE_SPEED, jumpBurnMs } from './jump_plugin.js';
 import { ShipControlStateComponent, StrictPlayComponent } from '../player/index.js';
@@ -120,11 +119,11 @@ export const EffectiveMovementPhysicsSystem = new System({
     args: [ShipPhysicsComponent, MovementPhysicsComponent,
         MovementStateComponent, TimeResource,
         Optional(ShipControlStateComponent), Optional(FuelComponent),
-        Optional(IsIonizedComponent), Optional(IonizationComponent),
+        Optional(IonizationComponent),
         Optional(JumpComponent),
         Optional(DisabledComponent), Optional(StrictPlayComponent)] as const,
     step(shipPhysics, movementPhysics, movementState, time,
-        controlState, fuel, isIonized, ionization, jump, disabled,
+        controlState, fuel, ionization, jump, disabled,
         strictPlay) {
         let afterburning = false;
         // A disabled ship cannot burn: DisabledMovementSystem erases the
@@ -141,7 +140,7 @@ export const EffectiveMovementPhysicsSystem = new System({
         }
 
         const base = getShipMovementPhysics(shipPhysics);
-        const ion = ionSlowdown(ionization, isIonized);
+        const ion = ionSlowdown(ionization);
         const boost = afterburning ? afterburnerFactor(base.maxVelocity) : 1;
         // A strict pilot's top speed only: not its acceleration, not its
         // turn rate (reference #316 wave 10).

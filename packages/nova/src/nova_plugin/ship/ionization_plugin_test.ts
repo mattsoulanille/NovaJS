@@ -7,20 +7,22 @@ import { DamagedEvent } from './death_plugin.js';
 import { completeEntity } from '../spawn/index.js';
 import { IonizationComponent } from './health_plugin.js';
 import {
-    ION_FULL_ACCELERATION_FACTOR, ionizedNow, ionSlowdown, IsIonizedComponent,
-    NO_ION_SLOWDOWN,
+    ION_FULL_ACCELERATION_FACTOR, ION_IONIZED_FRACTION, ionizedNow,
+    ionSlowdown, IsIonizedComponent, NO_ION_SLOWDOWN,
 } from './ionization_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem } from '../make_system.js';
 
 /**
  * Maintainer ruling #153 (ionization_plugin.ts): "ionized" is a LEVEL
- * test — the charge is above half of IonizeMax — with no hysteresis. The
- * slowdown is the measured one (reference "Ionization (E6), wave 39"): at
- * a full charge no turn, a third of the acceleration, the top speed kept;
- * linear from the half line (GUESS). What #124 fixed alongside
- * stays pinned here: a hull with no ion capacity is never ionized and
- * never shows a NaN percent.
+ * test with no hysteresis; the line is ION_IONIZED_FRACTION (0.3) of
+ * IonizeMax (reference "Ionization below a full charge (E6 leftover),
+ * wave 41"). The slowdown is the measured one (reference "Ionization
+ * (E6), wave 39"): no turn, a third of the acceleration, the top speed
+ * kept, from the ionized line up; below it linear in the charge from
+ * nothing (GUESS; wave 41: a sub-line charge already slows the turn). What
+ * #124 fixed alongside stays pinned here: a hull with no ion capacity is
+ * never ionized and never shows a NaN percent.
  */
 
 const SHIP_ID = 'test:ship';
@@ -63,11 +65,14 @@ function steps(world: World, n: number) {
 describe('ionizedNow (the level rule, #153)', () => {
     const stat = (current: number, max = 100) => ({ current, max, min: 0 });
 
-    it('holds above half of IonizeMax, and not at or below it', () => {
+    it('holds above 0.3 of IonizeMax, and not at or below it (E6 wave '
+        + '41: one 20-point hit no tint, two about 39 tinted)', () => {
+        expect(ION_IONIZED_FRACTION).toBe(0.3);
         expect(ionizedNow(stat(0))).toBeFalse();
-        expect(ionizedNow(stat(49))).toBeFalse();
-        expect(ionizedNow(stat(50))).toBeFalse();
-        expect(ionizedNow(stat(50.01))).toBeTrue();
+        expect(ionizedNow(stat(20))).toBeFalse();
+        expect(ionizedNow(stat(30))).toBeFalse();
+        expect(ionizedNow(stat(30.01))).toBeTrue();
+        expect(ionizedNow(stat(39))).toBeTrue();
         expect(ionizedNow(stat(100))).toBeTrue();
         expect(ionizedNow(stat(140))).toBeTrue();
     });
@@ -80,16 +85,16 @@ describe('ionizedNow (the level rule, #153)', () => {
 });
 
 describe('ionization in a live world', () => {
-    it('is not ionized at a charge below half of IonizeMax', async () => {
+    it('is not ionized at a charge below the ionized line', async () => {
         const { world, hit, ionized } = await ionWorld();
-        hit(0.4 * BASE.ionization);
+        hit(0.25 * BASE.ionization);
         steps(world, 2);
         expect(ionized()).toBeFalse();
     });
 
-    it('is ionized once the charge is past half of IonizeMax', async () => {
+    it('is ionized once the charge is past the ionized line', async () => {
         const { world, hit, ionized } = await ionWorld();
-        hit(0.6 * BASE.ionization);
+        hit(0.4 * BASE.ionization);
         world.step();
         expect(ionized()).toBeTrue();
     });
@@ -122,21 +127,21 @@ describe('ionization in a live world', () => {
             expect(ionized()).toBeTrue();
         });
 
-    it('frees the ship the tick its charge decays to half, not when it '
-        + 'is gone (no hysteresis)', async () => {
+    it('frees the ship the tick its charge decays to the line, not when '
+        + 'it is gone (no hysteresis)', async () => {
             const { world, hit, ionized, charge } = await ionWorld();
             hit(BASE.ionization);
             world.step();
             expect(ionized()).toBeTrue();
-            const half = BASE.ionization / 2;
-            // Above half, every tick of the way: still ionized.
+            const line = BASE.ionization * ION_IONIZED_FRACTION;
+            // Above the line, every tick of the way: still ionized.
             let droppedEarly = false;
-            while (charge().current > half) {
+            while (charge().current > line) {
                 droppedEarly ||= !ionized();
                 world.step();
             }
             expect(droppedEarly).toBeFalse();
-            // At or below half: free (one tick for the state to follow),
+            // At or below it: free (one tick for the state to follow),
             // with plenty of charge still on the hull.
             world.step();
             expect(charge().current).toBeGreaterThan(0);
@@ -173,17 +178,24 @@ describe('ionization in a live world', () => {
             expect(physics.turnRate).toBeCloseTo(0, 6);
         });
 
-    it('frees the movement again once the charge falls to half',
-        async () => {
+    it('gives the movement back as the charge drains below the line, '
+        + 'and all of it once the charge is gone', async () => {
             const { world, ship, hit, charge } = await ionWorld();
             hit(BASE.ionization);
-            while (charge().current > BASE.ionization / 2) {
+            const physics = () =>
+                ship.components.get(MovementPhysicsComponent)!;
+            while (charge().current > BASE.ionization * 0.15) {
+                world.step();
+            }
+            // Partway down: some turn back, not all of it.
+            expect(physics().turnRate).toBeGreaterThan(0);
+            expect(physics().turnRate).toBeLessThan(BASE.turnRate * 0.6);
+            while (charge().current > 0) {
                 world.step();
             }
             steps(world, 2);
-            const physics = ship.components.get(MovementPhysicsComponent)!;
-            expect(physics.turnRate).toBeCloseTo(BASE.turnRate, 6);
-            expect(physics.acceleration)
+            expect(physics().turnRate).toBeCloseTo(BASE.turnRate, 6);
+            expect(physics().acceleration)
                 .toBeCloseTo(BASE.acceleration, 6);
         });
 });
@@ -191,16 +203,15 @@ describe('ionization in a live world', () => {
 describe('ionSlowdown', () => {
     const charge = (current: number, max = 100) => ({ current, max });
 
-    it('is nothing for a ship that is not ionized', () => {
-        expect(ionSlowdown(charge(100), false)).toEqual(NO_ION_SLOWDOWN);
-        expect(ionSlowdown(charge(100), undefined)).toEqual(NO_ION_SLOWDOWN);
-        expect(ionSlowdown(undefined, true)).toEqual(NO_ION_SLOWDOWN);
-        expect(ionSlowdown(charge(10, 0), true)).toEqual(NO_ION_SLOWDOWN);
+    it('is nothing at no charge, or on a hull with no ion capacity', () => {
+        expect(ionSlowdown(charge(0))).toEqual(NO_ION_SLOWDOWN);
+        expect(ionSlowdown(undefined)).toEqual(NO_ION_SLOWDOWN);
+        expect(ionSlowdown(charge(10, 0))).toEqual(NO_ION_SLOWDOWN);
     });
 
-    it('is the measured cut at IonizeMax and past it', () => {
-        for (const current of [100, 250]) {
-            expect(ionSlowdown(charge(current), true)).toEqual({
+    it('is the measured full cut from the ionized line up', () => {
+        for (const current of [30, 39, 100, 250]) {
+            expect(ionSlowdown(charge(current))).toEqual({
                 maxVelocity: 1,
                 acceleration: ION_FULL_ACCELERATION_FACTOR,
                 turnRate: 0,
@@ -208,12 +219,26 @@ describe('ionSlowdown', () => {
         }
     });
 
-    it('scales linearly from the half line (GUESS)', () => {
-        const at = (current: number) => ionSlowdown(charge(current), true);
-        expect(at(50)).toEqual(NO_ION_SLOWDOWN);
-        expect(at(75).turnRate).toBeCloseTo(0.5, 9);
-        expect(at(75).acceleration).toBeCloseTo(2 / 3, 9);
-        expect(at(75).maxVelocity).toBe(1);
-        expect(at(90).turnRate).toBeCloseTo(0.2, 9);
+    it('already slows a charge below the line, linearly from nothing '
+        + '(E6 wave 41: a 20-of-100 hit, never tinted, cut the turn to '
+        + 'about two thirds as it drained; the ramp is a GUESS)', () => {
+        const at = (current: number) => ionSlowdown(charge(current));
+        expect(at(15).turnRate).toBeCloseTo(0.5, 9);
+        expect(at(15).acceleration).toBeCloseTo(2 / 3, 9);
+        expect(at(15).maxVelocity).toBe(1);
+        expect(at(5).turnRate).toBeCloseTo(5 / 6, 9);
+        // The dips read 58 / 68 deg/s against 87.8 over the 10-frame
+        // windows a 1-a-frame drain takes from 20 to 10 and 10 to 0.
+        const mean = (from: number, to: number) => {
+            let sum = 0;
+            for (let c = from; c > to; c--) {
+                sum += at(c - 0.5).turnRate;
+            }
+            return 87.8 * sum / (from - to);
+        };
+        expect(mean(20, 10)).toBeGreaterThan(40);
+        expect(mean(20, 10)).toBeLessThan(65);
+        expect(mean(10, 0)).toBeGreaterThan(65);
+        expect(mean(10, 0)).toBeLessThan(85);
     });
 });
