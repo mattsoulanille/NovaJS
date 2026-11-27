@@ -6,7 +6,10 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
-import { MovementState, MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movement_plugin';
+import {
+    MovementPhysicsComponent, MovementState, MovementStateComponent,
+    MovementSystem,
+} from 'nova_ecs/plugins/movement_plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
@@ -32,6 +35,9 @@ import { isFightingPlayerFlock, onSightDisposition } from '../combat/index.js';
 import { JumpComponent, JumpRouteReconcileSystem } from '../travel/index.js';
 import { chooseNearest, FormationComponent, isPacifiedToward, NpcComponent, NpcSteeringSystem, RCS_ACCEL_FRACTION } from '../npc/index.js';
 import { contrabandDetectedBy, NpcPlunderBoardSystem, ShootAllWeaponsComponent } from '../npc/index.js';
+import {
+    brakeInertialess, inertialessPhysics, SteeringPhysics, steerInertialessTo,
+} from '../npc/index.js';
 import {
     LegalRecordsComponent, LegalRecordsState, LocalLaw, localLawIn,
 } from '../reputation/index.js';
@@ -523,9 +529,26 @@ const HostileCandidatesQuery = new Query(
  * `standoff` is the range the escort stops closing at — normally
  * ESCORT_ATTACK_STANDOFF, but shorter for a ship whose killing blow only
  * lands closer than that (see attackStandoff).
+ *
+ * An INERTIALESS escort (`inertialess`: its effective physics) cannot
+ * coast: released thrust keeps its speed and the nose on the victim takes
+ * it straight in, so it flew through its victim at top speed and orbited
+ * it for good. It closes to the standoff with the speed it can brake and
+ * turn from, then matches the victim's velocity there, nose (and guns) on
+ * it (steerInertialessTo): it holds its range rather than circling.
+ * GUESS: the original's inertialess escorts were not measured.
  */
 function steerAttack(movement: MovementState, target: MovementState,
-    standoff: number) {
+    standoff: number, delta_s: number, inertialess?: SteeringPhysics) {
+    if (inertialess) {
+        const toTarget = target.position.subtract(movement.position);
+        steerInertialessTo(movement,
+            Position.fromVectorLike(target.position), inertialess, delta_s, {
+                goalVelocity: Vector.fromVectorLike(target.velocity),
+                standoff, heading: toTarget.angle,
+            });
+        return;
+    }
     const toTarget = target.position.subtract(movement.position);
     movement.turnTo = toTarget.angle;
     movement.turnBack = false;
@@ -566,9 +589,17 @@ function attackStandoff(weapons: Iterable<readonly [string, WeaponState]>): numb
  * spinning around. No anchor: if weapon hits knock the ship around, it
  * stops again WHERE IT IS (per the spec, it does not fly back to the
  * original hold point, and it does not return fire).
+ *
+ * An INERTIALESS escort (`inertialess`) just throttles to a stop, heading
+ * held: the retrograde burn would fly it the other way at the same speed
+ * and the damping is undone by its integrator.
  */
 function steerHold(movement: MovementState, acceleration: number,
-    delta_s: number) {
+    delta_s: number, inertialess?: SteeringPhysics) {
+    if (inertialess) {
+        brakeInertialess(movement, inertialess.acceleration, delta_s);
+        return;
+    }
     const speed = movement.velocity.length;
     movement.turnTo = null;
     if (speed <= HOLD_STOPPED_SPEED) {
@@ -702,10 +733,10 @@ export const EscortCommandBehaviorSystem = new System({
         UUID, GetEntity, Entities, HostileCandidatesQuery, TimeResource,
         SimulationGameDataResource, Optional(EscortLandingComponent),
         Optional(JumpComponent), Optional(DisabledComponent),
-        Optional(SystemIdResource)] as const,
+        Optional(SystemIdResource), Optional(MovementPhysicsComponent)] as const,
     step(command, movement, physics, weapons, target, uuid, entity,
         entities, candidates, time, gameData, landing, jump, disabled,
-        systemId) {
+        systemId, movementPhysics) {
         if (disabled) {
             // A hulk drifts and does not shoot. Same reasoning as the jump
             // bail below and as FormationSystem's disabled bail: steerHold
@@ -829,7 +860,8 @@ export const EscortCommandBehaviorSystem = new System({
                 }
                 target.target = command.target;
                 steerAttack(movement, victimMovement,
-                    attackStandoff(weapons));
+                    attackStandoff(weapons), time.delta_s,
+                    inertialessPhysics(movementPhysics, physics));
                 fireAt(command.target!);
                 return;
             }
@@ -889,12 +921,14 @@ export const EscortCommandBehaviorSystem = new System({
                 }
                 target.target = command.target;
                 steerAttack(movement, engagedMovement,
-                    attackStandoff(weapons));
+                    attackStandoff(weapons), time.delta_s,
+                    inertialessPhysics(movementPhysics, physics));
                 fireAt(command.target!);
                 return;
             }
             case 'holdPosition': {
-                steerHold(movement, physics.acceleration, time.delta_s);
+                steerHold(movement, physics.acceleration, time.delta_s,
+                    inertialessPhysics(movementPhysics, physics));
                 ceaseFire();
                 return;
             }

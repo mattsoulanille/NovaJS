@@ -3,7 +3,10 @@ import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Optional } from 'nova_ecs/optional';
-import { MovementState, MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movement_plugin';
+import {
+    MovementPhysicsComponent, MovementState, MovementStateComponent,
+    MovementSystem,
+} from 'nova_ecs/plugins/movement_plugin';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { DisabledComponent } from '../ship/index.js';
@@ -15,6 +18,9 @@ import {
 } from './npc_decision.js';
 import { chaserBlocksJump, departByJump, steerOutward } from './npc_departure.js';
 import { FormationComponent, offFormationBusiness } from './npc_formation.js';
+import {
+    brakeInertialess, inertialessPhysics, steerInertialessTo,
+} from './inertialess_steering.js';
 import { NPC_BOARD_RADIUS, NPC_BOARD_SPEED } from './npc_plunder.js';
 import {
     CONTRABAND_SCAN_RANGE, CONTRABAND_SIT_RADIUS, CONTRABAND_SIT_SPEED,
@@ -131,15 +137,39 @@ export function arriveSlowRadius(physics: {
     return Math.max(ARRIVE_SLOW_RADIUS, flip + brake);
 }
 
+/** The physics an NPC steering helper reads: ShipPhysics's fields, and its
+ * `inertialess` flag (NpcSteeringSystem hands an inertialess hull's
+ * EFFECTIVE numbers in, see inertialessPhysics). */
+export interface ArrivePhysics {
+    acceleration: number;
+    turnRate: number;
+    speed: number;
+    inertialess?: boolean;
+}
+
+/** The step an inertialess arrival throttles over when its caller names
+ * none: the simulation's fixed 60 Hz tick. Every in-simulation caller
+ * passes the tick's own delta. */
+const DEFAULT_DELTA_S = 1 / 60;
+
 /**
  * Point-and-thrust arrival: steer toward the goal and burn while far;
  * inside the slow radius, turn retrograde and brake until slow.
  * Built from the same movement primitives the jump sequence's
  * 'stopping' stage uses. Returns true once arrived.
+ *
+ * An INERTIALESS hull (`physics.inertialess`) is flown by
+ * arriveInertialess instead: turning retrograde and thrusting only flies
+ * it the other way at the speed it already has, so it never slowed and
+ * circled the goal for good. `delta_s` is the tick it throttles over.
  */
-export function steerArrive(movement: MovementState, physics: {
-    acceleration: number, turnRate: number, speed: number,
-}, goal: Position, arriveRadius: number, arriveSpeed: number): boolean {
+export function steerArrive(movement: MovementState, physics: ArrivePhysics,
+    goal: Position, arriveRadius: number, arriveSpeed: number,
+    delta_s = DEFAULT_DELTA_S): boolean {
+    if (physics.inertialess) {
+        return arriveInertialess(movement, physics, goal, arriveRadius,
+            arriveSpeed, delta_s);
+    }
     const toGoal = goal.subtract(movement.position);
     const distance = toGoal.length;
     const speed = movement.velocity.length;
@@ -243,6 +273,37 @@ export function steerArrive(movement: MovementState, physics: {
 }
 
 /**
+ * steerArrive for an INERTIALESS hull (inertialess_steering.ts): nose on
+ * the goal, throttled to the speed it can still brake and turn from
+ * (steerInertialessTo), so it comes in and stops on the goal rather than
+ * circling it. Arrived inside `arriveRadius` below `arriveSpeed`, as an
+ * inertial ship; then a speed-limited arrival (a planet, a hold point)
+ * brakes to a stop where it is, heading held, and one at top speed (a
+ * patrol waypoint) keeps its speed and heading, as an inertial ship
+ * coasts on. A top-speed arrival needs only the radius: an inertialess
+ * hull flies AT its cap, which `speed < arriveSpeed` may never pass.
+ */
+function arriveInertialess(movement: MovementState, physics: ArrivePhysics,
+    goal: Position, arriveRadius: number, arriveSpeed: number,
+    delta_s: number): boolean {
+    const distance = goal.subtract(movement.position).length;
+    const speedLimited = arriveSpeed < physics.speed;
+    if (distance < arriveRadius
+        && (!speedLimited || movement.velocity.length < arriveSpeed)) {
+        if (speedLimited) {
+            brakeInertialess(movement, physics.acceleration, delta_s);
+        } else {
+            movement.accelerating = 0;
+            movement.turnBack = false;
+            movement.turnTo = Angle.fromAngleLike(movement.rotation);
+        }
+        return true;
+    }
+    steerInertialessTo(movement, goal, physics, delta_s);
+    return false;
+}
+
+/**
  * Circles `centre` at `radius` (an interceptor, AI 4, round its home
  * planet), in the direction the old orbit waypoints advanced: the
  * direction of increasing clock angle about the centre.
@@ -308,17 +369,16 @@ export function steerOrbit(movement: MovementState, physics: {
  * the gövt 0x0010 retreat's band (npc_retreat.ts, RETREAT_STANDOFF_MIN-
  * MAX); a standoff hull (Flags2 0x0002) holds STANDOFF_HULL_DISTANCE.
  */
-export function steerStandoff(movement: MovementState, physics: {
-    acceleration: number, turnRate: number, speed: number,
-}, targetUuid: string, enemy: Position, min = RETREAT_STANDOFF_MIN,
-    max = RETREAT_STANDOFF_MAX) {
+export function steerStandoff(movement: MovementState, physics: ArrivePhysics,
+    targetUuid: string, enemy: Position, min = RETREAT_STANDOFF_MIN,
+    max = RETREAT_STANDOFF_MAX, delta_s = DEFAULT_DELTA_S) {
     const fromEnemy = movement.position.subtract(enemy);
     const mid = (min + max) / 2;
     const offset = fromEnemy.lengthSquared > 1e-12
         ? fromEnemy.normalize(mid)
         : movement.rotation.getUnitVector().scale(mid);
     const held = steerArrive(movement, physics, enemy.add(offset),
-        (max - min) / 2, RETREAT_STANDOFF_HOLD_SPEED);
+        (max - min) / 2, RETREAT_STANDOFF_HOLD_SPEED, delta_s);
     if (held) {
         movement.turnTo = targetUuid;
     }
@@ -332,13 +392,20 @@ export function steerStandoff(movement: MovementState, physics: {
  * (10-50 px/s), so a rock that drifts out of reach is simply approached
  * again. No PRNG.
  */
-export function steerMine(movement: MovementState, physics: {
-    acceleration: number, turnRate: number, speed: number,
-}, rockUuid: string, rock: Position, reach: number) {
+export function steerMine(movement: MovementState, physics: ArrivePhysics,
+    rockUuid: string, rock: Position, reach: number,
+    delta_s = DEFAULT_DELTA_S) {
     const fromRock = movement.position.subtract(rock);
     const distance = fromRock.length;
     if (distance <= reach
         && movement.velocity.length <= 2 * MINE_HOLD_SPEED) {
+        if (physics.inertialess) {
+            // Not drifting on into the rock at the speed it came in with
+            // (an inertialess hull keeps it): stop, facing the rock.
+            brakeInertialess(movement, physics.acceleration, delta_s,
+                rockUuid);
+            return;
+        }
         movement.turnTo = rockUuid;
         movement.turnBack = false;
         movement.accelerating = 0;
@@ -349,7 +416,7 @@ export function steerMine(movement: MovementState, physics: {
         ? fromRock.normalize(standoff)
         : movement.rotation.getUnitVector().scale(standoff);
     if (steerArrive(movement, physics, rock.add(offset), standoff / 2,
-        MINE_HOLD_SPEED)) {
+        MINE_HOLD_SPEED, delta_s)) {
         movement.turnTo = rockUuid;
     }
 }
@@ -366,10 +433,10 @@ export const NpcSteeringSystem = new System({
         TargetComponent, Optional(FormationComponent),
         Optional(EscortCommandComponent), Optional(EscortLandingComponent),
         Optional(DisabledComponent), Optional(JumpComponent),
-        Optional(WeaponsStateComponent),
+        Optional(WeaponsStateComponent), Optional(MovementPhysicsComponent),
         TimeResource, Entities, GetEntity] as const,
     step(npc, movement, physics, target, formation, escortCommand, landing,
-        disabled, jump, weapons, time, entities, entity) {
+        disabled, jump, weapons, movementPhysics, time, entities, entity) {
         // A 0x0800 trader's cloak (npc_cloak.ts), every tick, whatever
         // the arm below does or skips.
         updateNpcCloak(entity, npc, time.time);
@@ -394,11 +461,20 @@ export const NpcSteeringSystem = new System({
         if (escortCommand) {
             return; // Player-commanded: see escort_command_plugin.
         }
+        // What the arrival helpers fly by: the ship's own physics, or for
+        // an INERTIALESS hull the effective numbers the integrator applies
+        // this tick (its throttle converts a speed change with them) and
+        // the flag that hands it to arriveInertialess. An inertial ship's
+        // steering reads exactly what it always did.
+        const inertialess = inertialessPhysics(movementPhysics, physics);
+        const steering: ArrivePhysics = inertialess
+            ? { ...inertialess, inertialess: true } : physics;
         if (waitingForRescue(entity)) {
             // A ShipStart-2 rescue ship waiting for the player holds still
             // where it is (system_hold.ts; reference wave 19: "Waiting").
-            steerArrive(movement, physics,
-                Position.fromVectorLike(movement.position), 1, 1);
+            steerArrive(movement, steering,
+                Position.fromVectorLike(movement.position), 1, 1,
+                time.delta_s);
             return;
         }
         // Escorts holding formation are steered by FormationSystem —
@@ -433,9 +509,9 @@ export const NpcSteeringSystem = new System({
                         laneEnd && Position.fromVectorLike(laneEnd),
                         movement.position)
                     : Position.fromVectorLike(destination);
-                const arrived = steerArrive(movement, physics, goal,
+                const arrived = steerArrive(movement, steering, goal,
                     shuttle ? SHUTTLE_ARRIVE_RADIUS : PLANET_ARRIVE_RADIUS,
-                    PLANET_ARRIVE_SPEED);
+                    PLANET_ARRIVE_SPEED, time.delta_s);
                 if (arrived) {
                     npc.mode = 'dwell';
                     // A shuttle's lane of one stop is a single visit
@@ -454,6 +530,14 @@ export const NpcSteeringSystem = new System({
                 // must sit still between the stellars for good (reference
                 // "Shuttles wave 16"), where a 10 px/s drift carried it
                 // out of the arrival radius at every pause and back.
+                if (inertialess) {
+                    // An inertialess hull keeps its speed until it brakes:
+                    // brake to a standstill, heading held (it would fly
+                    // off along a retrograde turn at the same speed).
+                    brakeInertialess(movement, inertialess.acceleration,
+                        time.delta_s);
+                    break;
+                }
                 movement.turnTo = null;
                 movement.accelerating = 0;
                 const speed = movement.velocity.length;
@@ -492,9 +576,9 @@ export const NpcSteeringSystem = new System({
                 if (!npc.waypoint) {
                     return;
                 }
-                steerArrive(movement, physics,
+                steerArrive(movement, steering,
                     new Position(npc.waypoint[0], npc.waypoint[1]),
-                    WAYPOINT_RADIUS, physics.speed);
+                    WAYPOINT_RADIUS, steering.speed, time.delta_s);
                 break;
             }
             case 'board': {
@@ -515,9 +599,9 @@ export const NpcSteeringSystem = new System({
                     delete npc.boardUntil;
                     return;
                 }
-                steerArrive(movement, physics,
+                steerArrive(movement, steering,
                     Position.fromVectorLike(prizeMovement.position),
-                    NPC_BOARD_RADIUS, NPC_BOARD_SPEED);
+                    NPC_BOARD_RADIUS, NPC_BOARD_SPEED, time.delta_s);
                 break;
             }
             case 'scan': {
@@ -554,17 +638,19 @@ export const NpcSteeringSystem = new System({
                 if (settled && flownOff(npc.scanTarget, npc.scanSatOn,
                     Position.fromVectorLike(quarry.position)
                         .subtract(movement.position).lengthSquared)) {
-                    steerArrive(movement, physics,
+                    steerArrive(movement, steering,
                         Position.fromVectorLike(movement.position),
-                        CONTRABAND_SIT_RADIUS, CONTRABAND_SIT_SPEED);
+                        CONTRABAND_SIT_RADIUS, CONTRABAND_SIT_SPEED,
+                        time.delta_s);
                     break;
                 }
                 steerArrive(movement,
-                    settled ? { ...physics, speed: Math.min(physics.speed,
-                        CONTRABAND_SIT_SPEED) } : physics,
+                    settled ? { ...steering, speed: Math.min(steering.speed,
+                        CONTRABAND_SIT_SPEED) } : steering,
                     Position.fromVectorLike(quarry.position),
                     sitting ? CONTRABAND_SIT_RADIUS : CONTRABAND_SCAN_RANGE / 2,
-                    sitting ? CONTRABAND_SIT_SPEED : physics.speed);
+                    sitting ? CONTRABAND_SIT_SPEED : steering.speed,
+                    time.delta_s);
                 break;
             }
             case 'mine': {
@@ -582,8 +668,9 @@ export const NpcSteeringSystem = new System({
                     delete npc.mineTarget;
                     return;
                 }
-                steerMine(movement, physics, npc.mineTarget!,
-                    Position.fromVectorLike(rock.position), reach);
+                steerMine(movement, steering, npc.mineTarget!,
+                    Position.fromVectorLike(rock.position), reach,
+                    time.delta_s);
                 break;
             }
             case 'scoop': {
@@ -599,9 +686,9 @@ export const NpcSteeringSystem = new System({
                     delete npc.mineTarget;
                     return;
                 }
-                steerArrive(movement, physics,
+                steerArrive(movement, steering,
                     Position.fromVectorLike(box.position),
-                    SCOOP_ARRIVE_RADIUS, SCOOP_ARRIVE_SPEED);
+                    SCOOP_ARRIVE_RADIUS, SCOOP_ARRIVE_SPEED, time.delta_s);
                 break;
             }
             case 'attack': {
@@ -615,18 +702,21 @@ export const NpcSteeringSystem = new System({
                 if (npc.retreatSince !== undefined) {
                     // A gövt 0x0010 warship that is losing: hold off
                     // instead of closing (npc_retreat.ts).
-                    steerStandoff(movement, physics, target.target!,
-                        Position.fromVectorLike(other.position));
+                    steerStandoff(movement, steering, target.target!,
+                        Position.fromVectorLike(other.position),
+                        RETREAT_STANDOFF_MIN, RETREAT_STANDOFF_MAX,
+                        time.delta_s);
                     break;
                 }
                 if (entity.components.get(ShipDataComponent)
                     ?.aiFlags.prefersStandoff) {
                     // A standoff hull (Flags2 0x0002) holds still about
                     // 450 px out and never closes (W1 waves 16-17).
-                    steerStandoff(movement, physics, target.target!,
+                    steerStandoff(movement, steering, target.target!,
                         Position.fromVectorLike(other.position),
                         STANDOFF_HULL_DISTANCE - STANDOFF_HULL_BAND,
-                        STANDOFF_HULL_DISTANCE + STANDOFF_HULL_BAND);
+                        STANDOFF_HULL_DISTANCE + STANDOFF_HULL_BAND,
+                        time.delta_s);
                     break;
                 }
                 const toTarget = other.position.subtract(movement.position);

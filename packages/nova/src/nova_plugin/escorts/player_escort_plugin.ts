@@ -7,9 +7,11 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
+import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import {
-    MovementState, MovementStateComponent, MovementSystem,
+    MovementPhysicsComponent, MovementState, MovementStateComponent,
+    MovementSystem,
 } from 'nova_ecs/plugins/movement_plugin';
 import {
     EncodedEntity, Serializer, SerializerResource,
@@ -36,8 +38,9 @@ import {
 } from '../travel/index.js';
 import { MissionShipComponent } from '../player/index.js';
 import {
-    formationsIn, FormationComponent, FormationSystem, nextFormationSlot,
-    RCS_ACCEL_FRACTION,
+    formationsIn, FormationComponent, FormationSystem, inertialessPhysics,
+    nextFormationSlot, RCS_ACCEL_FRACTION, SteeringPhysics,
+    steerInertialessTo,
 } from '../npc/index.js';
 import { LandEvent, PlanetDataComponent } from '../travel/index.js';
 import {
@@ -492,9 +495,21 @@ export function sweepableEscorts(entities: EscortSweepEntities,
  * split formation keeping uses: turn-and-burn while the velocity
  * correction is large, a budgeted RCS nudge once it is small. Pure, so
  * convergence is unit-testable.
+ *
+ * An INERTIALESS escort (`inertialess`: its effective physics) is flown in
+ * by steerInertialessTo instead, nose on the stellar and throttled down to
+ * a stop on it: turn-and-burn never cut its speed and the RCS nudge is
+ * undone by its integrator, so a fast one circled the stellar and a slow
+ * one starting at rest crept in on the nudges' leftovers, neither inside
+ * the landing window.
  */
 export function steerToStellar(movement: MovementState, target: Position,
-    acceleration: number, maxVelocity: number, delta_s: number): void {
+    acceleration: number, maxVelocity: number, delta_s: number,
+    inertialess?: SteeringPhysics): void {
+    if (inertialess) {
+        steerInertialessTo(movement, target, inertialess, delta_s);
+        return;
+    }
     // Position subtraction yields the shortest toroidal delta.
     const error = target.subtract(movement.position);
     const distance = error.length;
@@ -1174,9 +1189,10 @@ export const EscortLandingSystem = new System({
     name: 'EscortLanding',
     args: [EscortLandingComponent, PlayerEscortComponent,
         MovementStateComponent, ShipPhysicsComponent, TimeResource,
-        Entities, GetEntity, UUID, Emit] as const,
+        Entities, GetEntity, UUID, Emit,
+        Optional(MovementPhysicsComponent)] as const,
     step(landing, owned, movement, physics, time, entities, entity, uuid,
-        emit) {
+        emit, movementPhysics) {
         const planetPosition = entities.get(landing.planet)?.components
             .get(MovementStateComponent)?.position;
         if (!planetPosition) {
@@ -1204,7 +1220,7 @@ export const EscortLandingSystem = new System({
             return;
         }
         steerToStellar(movement, target, physics.acceleration, physics.speed,
-            time.delta_s);
+            time.delta_s, inertialessPhysics(movementPhysics, physics));
     },
     // FormationSystem and IonizedSystem are #237 pins (shared: *):
     // PlayerEscortPlugin registers between NpcAiPlugin and IonizedPlugin.

@@ -11,6 +11,7 @@ export * from './allegiance.js';
 export * from './hail_component.js';
 export * from './npc_component.js';
 export * from './npc_formation.js';
+export * from './inertialess_steering.js';
 export * from './npc_plunder.js';
 export * from './let_go.js';
 export * from './npc_targeting.js';

@@ -7,6 +7,7 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import {
     MovementPhysics, MovementState, MovementType,
 } from 'nova_ecs/plugins/movement_plugin';
+import { flyInertialess } from './inertialess_steering.js';
 
 /**
  * Formation state, slot geometry and the follower controller. The
@@ -627,6 +628,9 @@ export const INERTIALESS_HEADING_BIAS_FADE_SPEED = 10;
  *   is only positive while gaining speed, so the engine glow shows thrust,
  *   not station-keeping.
  *
+ * The point-and-throttle step is flyInertialess (inertialess_steering.ts),
+ * which every other AI steering path flies its inertialess hulls with too.
+ *
  * Never uses RCS: there is no momentum for it to correct. Leaves
  * `formation.rcs` alone (sim state, the inertial regime's hysteresis).
  */
@@ -646,13 +650,7 @@ function steerInertialessFormation(movement: MovementState,
         : leaderVelocity.add(leaderHeading.getUnitVector()
             .scale(INERTIALESS_HEADING_BIAS * Math.max(0, 1
                 - leaderVelocity.length / INERTIALESS_HEADING_BIAS_FADE_SPEED)));
-    movement.turnBack = false;
-    movement.turnTo = pointing.lengthSquared > 0
-        ? pointing.angle : leaderHeading;
-    const forward = movement.rotation.getUnitVector();
-    const speed = Math.max(0, forward.x * desired.x + forward.y * desired.y);
-    const current = movement.targetSpeed ?? movement.velocity.length;
-    const step = acceleration * delta_s;
-    movement.accelerating = step > 0
-        ? Math.max(-1, Math.min(1, (speed - current) / step)) : 0;
+    flyInertialess(movement, desired,
+        pointing.lengthSquared > 0 ? pointing.angle : leaderHeading,
+        acceleration, delta_s);
 }

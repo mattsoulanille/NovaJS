@@ -79,10 +79,21 @@ describe('Autopilot landing on the square zone', () => {
     const SLOW_TURNING_HULL = {
         acceleration: 101.88, maxVelocity: 165.6, turnRate: 1.178,
     };
+    /** Stock inertialess hulls (base data): the nimble Vell-os Dart
+     * (nova:173), the slow-turning Wraith Adult (nova:185) and the Raven
+     * (nova:164). An inertialess hull keeps its speed until it brakes. */
+    const DART = { acceleration: 225, maxVelocity: 270, turnRate: 5.236 };
+    const WRAITH_ADULT = {
+        acceleration: 79.2, maxVelocity: 153, turnRate: 1.5708,
+    };
+    const RAVEN = { acceleration: 63, maxVelocity: 101.25, turnRate: 2.0944 };
     const cases: Array<{
         name: string, frame: [number, number], offset: [number, number],
         inertialess?: boolean,
         physics?: typeof SLOW_TURNING_HULL,
+        /** Engaged while flying ACROSS the line to the stellar at top
+         * speed, rather than from rest. */
+        flyingPast?: boolean,
     }> = [
         { name: 'a 17x31 station in a slow-turning heavy hull (Auroran LP V '
             + 'in a Thunderforge)', frame: [17, 31], offset: [-300, 150],
@@ -102,8 +113,18 @@ describe('Autopilot landing on the square zone', () => {
             frame: [325, 325], offset: [-1500, 200], inertialess: true },
         { name: 'a 250 px planet (window 435, clearance zone 249)',
             frame: [250, 250], offset: [1000, 0] },
+        { name: 'a 17x31 station in a Vell-os Dart flying past at top speed',
+            frame: [17, 31], offset: [600, -300], inertialess: true,
+            physics: DART, flyingPast: true },
+        { name: 'a 17x31 station in a Wraith Adult flying past at top speed',
+            frame: [17, 31], offset: [-200, 150], inertialess: true,
+            physics: WRAITH_ADULT, flyingPast: true },
+        { name: 'a 17x31 station in a Raven, from rest',
+            frame: [17, 31], offset: [900, 400], inertialess: true,
+            physics: RAVEN },
     ];
-    for (const { name, frame, offset, inertialess, physics } of cases) {
+    for (const { name, frame, offset, inertialess, physics, flyingPast }
+        of cases) {
         it(`lands on ${name}`, async () => {
             const { world, ship, planet } = await harness(frame,
                 SYNTHETIC.ships.skiff);
@@ -133,6 +154,15 @@ describe('Autopilot landing on the square zone', () => {
             movement.position = new Position(centre.x + offset[0],
                 centre.y + offset[1]);
             movement.velocity = new Vector(0, 0);
+            if (flyingPast) {
+                // Nose (and velocity) square to the line to the stellar.
+                const across = new Position(centre.x, centre.y)
+                    .subtract(movement.position).angle.add(Math.PI / 2);
+                movement.rotation = across;
+                movement.velocity = across.getUnitVector()
+                    .scale(flown.maxVelocity);
+                movement.targetSpeed = flown.maxVelocity;
+            }
 
             const autopilot = new Autopilot({
                 controlEvents: events =>
