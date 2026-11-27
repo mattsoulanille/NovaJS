@@ -806,6 +806,32 @@ Ion at Accel 900. A **self-granting outfitter**: sÿst 1493 Kit Self Grant
 `G514`), 515 Kit SG Drop (OnSell `D515`), 516 Kit SG Both, 517 Kit SG Giver
 (`G518`) and 518 Kit SG Gift, Max 3 each. Scenarios
 `w51_space_interactive.json` (inbox `w51.jsonl`).
+Wave 52 used sÿst 1494-1499 / 1501-1504, spöb 1216-1291, shïp 606-614, düde
+552-554, wëap 331-333, oütf 519-521, mïsn 967 / 996 / 998-999 / 1082-1084,
+bits 9336-9350, dësc 11320-11321, and RETIRED wave 40's E11 hulls 606-614,
+wave 14's mïsn 1082-1084 and wave 5's mïsn 996-999 (997 is free again).
+**The kit's resource NAME list is full** (16-bit name offsets: 65,518 of
+65,535 bytes; plugin-make fails "round trip failed for <type> <id>" on the
+last resource): new resources need short names, or retire old ones. Next
+free: sÿst 1513 (check 1514+), spöb 1292-1399 (and 518-999), shïp **none**
+(retire the rest of wave 40's E11 yard, 615-625), düde 555, ränk 205, mïsn
+997 (then retire another), përs: override a stock one, wëap 334, oütf 522
+(and 630 / 631), gövt 283 and below, flët 324, jünk 205, bits 9351 (not a
+stock bit), rlëD 1113. **More Turns**: shïp 606-611 Kit Ring Ion T7 / T9 /
+T15 / T35 / T55 / T95. **An NPC kill rig**: Kit FF Range's anchored hunter
+(mïsn 1060, the spaceport offer) with a Mission BBS prey job (mïsn 967:
+destroy shïp 612 Kit NK Prey 20; 1082: disable shïp 613 Kit NK Prey 100;
+CompText dësc 11320 / 11321). **Beams**: wëap 331 Kit Plain Beam Turret
+(oütf 519, the player's Count-30 turret beam), shïp 614 Kit Fixed Beamer
+(wëap 333 Kit Turret Red Beam; wëap 332 is its fixed twin) on Kit Knock
+Grid's first moon by mïsn 1083 (bit 9344). **Multi-jump**: oütf 520 / 521
+Kit Multi Jump 2 / 3 (ModType 32) and the U-shaped Kit MJ Alpha .. Golf
+(sÿst 1494-1499 / 1501), each with four 325 px ports (East / North / South
+at 1,350 px, West at 950), mïsn 1084 (bit 9345: observe a ship in Bravo);
+the map's Find "Kit MJ Alpha" centres Alpha at window (355, 264), 71 px a
+map step. **Tractor edge**: sÿst 1502-1504 Kit Tractor Range 450 / 475 /
+490 (mïsn 998 / 999 / 996, bits 9348-9350). Scenarios
+`w52_space_interactive.json` (inbox `w52.jsonl`).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they
