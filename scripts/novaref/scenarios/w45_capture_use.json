@@ -1,6 +1,6 @@
 {
  "name": "w45_capture_use",
- "_comment": "Wave 45, capture 'Use As My Ship' (the hub): Enter Ship at Kit Prize Port (sÿst 1473), land, accept mïsn 1054 (it puts Kit Prize Hull ON the port), Leave; Tab; loops/board.mjs as w33_capture (7 turret taps disable it, the board, Capture Ship at (463, 353)); then hand-driven steps (loops/interactive.mjs, inbox w45.jsonl): the prompt's answer and what follows. Pilot pulled at the end.",
+ "_comment": "Wave 45, capture 'Use As My Ship' (the hub): Enter Ship at Kit Prize Port (sÿst 1473), land, accept mïsn 1054 (it puts Kit Prize Hull ON the port), Leave; Tab; loops/board.mjs as w33_capture (the Kit Blast Bomb, one tap at a time, disables it: loops/disable.mjs, as wave 11's revive rig; the player's turret did not disable the protector in cu_b; then the board, Capture Ship at (463, 353)); then hand-driven steps (loops/interactive.mjs, inbox w45.jsonl): the prompt's answer and what follows. Pilot pulled at the end.",
  "pilot": {
   "as": "novaref-scenario"
  },
@@ -54,6 +54,18 @@
    "window": true
   },
   {
+   "script": "../loops/disable.mjs",
+   "args": {
+    "target": "tab",
+    "maxTaps": 12,
+    "waitMs": 1700
+   }
+  },
+  {
+   "shot": "disabled",
+   "window": true
+  },
+  {
    "script": "../loops/board.mjs",
    "args": {
     "speedPxS": 44,
@@ -68,10 +80,6 @@
       "capture"
      ]
     ],
-    "fire": {
-     "atPx": 150,
-     "keys": "Space wait 900 Space wait 900 Space wait 900 Space wait 900 Space wait 900 Space wait 900 Space wait 900 wait 2000"
-    },
     "retarget": 3,
     "fineBelowPx": 30,
     "fineStepMs": 50,

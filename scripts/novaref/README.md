@@ -668,6 +668,22 @@ alone plots nothing. Scenarios `scenarios/w44_space_interactive.json` /
 `w44_space_early.json` (inbox `w44.jsonl`), `w44_pers225_board.json` and
 `w44_pers225big_board.json` (with `kits/w44_pers225.mjs`: the person in sÿst
 1468 Kit Pers Big, whose 250 px port lets the player land after the board).
+Wave 45 used sÿst 1473-1481, spöb 1102-1143, shïp 889-894 / 416, düde
+540-543, wëap 313-315, oütf 500-505 and bits 9288-9292, and RETIRED wave
+12's mïsn 1052 (bit 9100) and 1054 (bit 9104; düde 338 / 342 stay), using
+them for its own. Next free: sÿst 1482, spöb 1144-1399 (and 518-999), shïp
+417-419 (then look for other stock gaps below 895), düde 544, ränk 205,
+mïsn **none** (wave 12's 1059 / 1061-1063 can still be retired; 1060 is
+wave 41's A13 hunter), përs: override a stock one, wëap 316, oütf 506,
+gövt 283 and below, flët 324, jünk 205, bits 9293, rlëD 1113. A **capture
+rig** (`scenarios/w45_capture_use.json`): a live mission's ship cannot be
+boarded, so the prize is a ShipBehav-1 / ShipGoal-3 protector placed ON the
+port, disabled with the Kit Blast Bomb by `loops/disable.mjs` (the mission
+fails and leaves an ordinary hulk), then `loops/board.mjs` and hand-driven
+steps; "Use As My Ship" is at (415, 309), and its rename alert takes
+`text:` and Return. A captured slow inertial hull lands with the evidence
+tool `tools/inertland.mjs`. Scenarios `w45_space_interactive.json` /
+`w45_space_early.json` (inbox `w45.jsonl`).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they
