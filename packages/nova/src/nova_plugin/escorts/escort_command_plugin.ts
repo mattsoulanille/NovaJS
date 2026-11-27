@@ -526,29 +526,36 @@ const HostileCandidatesQuery = new Query(
 /**
  * Point-and-thrust pursuit of a target (attack/defend engagements).
  *
- * `standoff` is the range the escort stops closing at — normally
+ * The escort stops closing at its standoff — normally
  * ESCORT_ATTACK_STANDOFF, but shorter for a ship whose killing blow only
- * lands closer than that (see attackStandoff).
+ * lands closer than that (see attackStandoff) — and coasts on from there.
  *
  * An INERTIALESS escort (`inertialess`: its effective physics) cannot
  * coast: released thrust keeps its speed and the nose on the victim takes
  * it straight in, so it flew through its victim at top speed and orbited
  * it for good. It closes to the standoff with the speed it can brake and
  * turn from, then matches the victim's velocity there, nose (and guns) on
- * it (steerInertialessTo): it holds its range rather than circling.
- * GUESS: the original's inertialess escorts were not measured.
+ * it (steerInertialessTo): it holds its range rather than circling. A
+ * SUICIDE ship (the Intelligent EMP Torpedo) closes on the victim itself
+ * instead, as its inertial twin coasts in: stopping at its warhead's
+ * reach it would only creep up on the edge of it and never fire. GUESS:
+ * the original's inertialess escorts were not measured.
  */
 function steerAttack(movement: MovementState, target: MovementState,
-    standoff: number, delta_s: number, inertialess?: SteeringPhysics) {
+    weapons: Iterable<readonly [string, WeaponState]>, delta_s: number,
+    inertialess?: SteeringPhysics) {
     if (inertialess) {
         const toTarget = target.position.subtract(movement.position);
+        const suicide = shortestSuicideReachOfStates(weapons) !== undefined;
         steerInertialessTo(movement,
             Position.fromVectorLike(target.position), inertialess, delta_s, {
                 goalVelocity: Vector.fromVectorLike(target.velocity),
-                standoff, heading: toTarget.angle,
+                standoff: suicide ? 0 : attackStandoff(weapons),
+                heading: toTarget.angle,
             });
         return;
     }
+    const standoff = attackStandoff(weapons);
     const toTarget = target.position.subtract(movement.position);
     movement.turnTo = toTarget.angle;
     movement.turnBack = false;
@@ -859,8 +866,7 @@ export const EscortCommandBehaviorSystem = new System({
                     return;
                 }
                 target.target = command.target;
-                steerAttack(movement, victimMovement,
-                    attackStandoff(weapons), time.delta_s,
+                steerAttack(movement, victimMovement, weapons, time.delta_s,
                     inertialessPhysics(movementPhysics, physics));
                 fireAt(command.target!);
                 return;
@@ -920,8 +926,7 @@ export const EscortCommandBehaviorSystem = new System({
                     break;
                 }
                 target.target = command.target;
-                steerAttack(movement, engagedMovement,
-                    attackStandoff(weapons), time.delta_s,
+                steerAttack(movement, engagedMovement, weapons, time.delta_s,
                     inertialessPhysics(movementPhysics, physics));
                 fireAt(command.target!);
                 return;
