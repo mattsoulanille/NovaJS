@@ -24,17 +24,21 @@ import { getShipMovementPhysics, ShipPhysicsComponent } from '../ship/index.js';
  * MEASURED on two hulls: x 1.5 on Kit Probe A (Speed 300, Accel 300: 4.05
  * -> 6.1 px a frame, reference "The player's afterburner (U4), wave 39")
  * and x 1.75 on Kit Probe B (Speed 600, Accel 150: 7.2 -> 12.6, "The
- * afterburner on a second hull (U4 leftover), wave 40"). Neither one
- * factor nor one added speed fits both. GUESS: the factor grows with the
- * Speed field, 1.25 + Speed / 1200, the straight line through the two
- * readings (the same two would fit one falling with Accel instead; a
- * third hull would separate them). The acceleration is boosted by the
- * same factor (not measured). Was a constant 1.5 (and 2 before that).
+ * afterburner on a second hull (U4 leftover), wave 40"), and x 1.53 on
+ * Kit Probe C (Speed 200, Accel 600: 2.95 -> 4.55, "The afterburner on a
+ * third hull (U4, the hub's question), wave 41"). No Accel rule fits (A
+ * and C, at Accel 300 and 600, both about 1.5). GUESS, the section's fit
+ * through all three: max(1.5, 1.25 + Speed / 1200), x 1.5 at least and
+ * more for a fast hull (a Speed-100 hull would test the floor). The
+ * acceleration is boosted by the same factor (not measured). Was 1.25 +
+ * Speed / 1200 alone (C: 1.42), a constant 1.5 and 2 before that.
  */
 export function afterburnerFactor(speed: number): number {
-    return AFTERBURNER_FACTOR_BASE
-        + speed / ShipSpeedConversionFactor / AFTERBURNER_SPEED_PER_FACTOR;
+    return Math.max(AFTERBURNER_FACTOR_FLOOR, AFTERBURNER_FACTOR_BASE
+        + speed / ShipSpeedConversionFactor / AFTERBURNER_SPEED_PER_FACTOR);
 }
+/** afterburnerFactor's floor: no hull boosts by less. */
+export const AFTERBURNER_FACTOR_FLOOR = 1.5;
 /** afterburnerFactor's intercept (a Speed-0 hull). */
 export const AFTERBURNER_FACTOR_BASE = 1.25;
 /** afterburnerFactor's slope: Speed field units per whole factor. */

@@ -61,6 +61,18 @@ describe('afterburner release', () => {
             expect(OVERSPEED_DECAY_FACTOR).toBe(0.5);
         });
 
+    it('boosts a slow hull 1.5 x at least (reference "The afterburner on a '
+        + 'third hull (U4, the hub\'s question), wave 41": Kit Probe C, '
+        + 'Speed 200, x 1.53)', () => {
+            expect(afterburnerFactor(200 * ShipSpeedConversionFactor))
+                .toBeCloseTo(1.5, 9);
+            expect(afterburnerFactor(100 * ShipSpeedConversionFactor))
+                .toBeCloseTo(1.5, 9);
+            // The floor meets the line at Speed 300.
+            expect(afterburnerFactor(360 * ShipSpeedConversionFactor))
+                .toBeCloseTo(1.55, 9);
+        });
+
     async function makeAfterburnerWorld(ionization = 0) {
         const gameData = new MockGameData();
         const shipData: ShipData = {
