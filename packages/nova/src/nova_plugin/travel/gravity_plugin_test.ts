@@ -12,7 +12,9 @@ import { World } from 'nova_ecs/world';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
 import { makeShip } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
-import { gravityAcceleration, gravityDeltaV } from './gravity_plugin.js';
+import {
+    gravityAcceleration, gravityDeltaV, gravityFalloff,
+} from './gravity_plugin.js';
 import { JumpComponent } from './jump_state.js';
 import { makePlanet } from './make_planet.js';
 
@@ -71,10 +73,30 @@ describe('gravityDeltaV', () => {
         expect(gravityAcceleration(-2)).toBe(-gravityAcceleration(2));
     });
 
-    it('does not fall off with distance', () => {
-        const near = gravityDeltaV([{ dx: 0, dy: 300, gravity: 10 }], 0.5);
-        const far = gravityDeltaV([{ dx: 0, dy: 2000, gravity: 10 }], 0.5);
-        expect(near.length).toBeCloseTo(far.length, 9);
+    it('falls off as (300 / d)^1.5 beyond 300 px (reference "A Gravity-5 '
+        + 'ramp from far out ..., wave 42": about 195 / 45 / 15 px/s² from '
+        + '300 / 1,000 / 2,000 px)', () => {
+            const at = (d: number) =>
+                gravityDeltaV([{ dx: 0, dy: d, gravity: 5 }], 1).length;
+            expect(at(300)).toBeCloseTo(195, 9);
+            expect(at(1000)).toBeCloseTo(195 * Math.pow(0.3, 1.5), 9);
+            expect(at(2000)).toBeCloseTo(195 * Math.pow(0.15, 1.5), 9);
+            // Within the reading's whole-pixel slack: 32 against 45, 11
+            // against 15.
+            expect(at(1000)).toBeGreaterThan(25);
+            expect(at(1000)).toBeLessThan(50);
+            expect(at(2000)).toBeGreaterThan(8);
+            expect(at(2000)).toBeLessThan(20);
+        });
+
+    it('holds the 300 px strength inside 300 px (GUESS)', () => {
+        expect(gravityFalloff(300)).toBe(1);
+        expect(gravityFalloff(50)).toBe(1);
+        expect(gravityFalloff(0)).toBe(1);
+        expect(gravityFalloff(1200)).toBeCloseTo(0.125, 12);
+        const near = gravityDeltaV([{ dx: 0, dy: 120, gravity: 10 }], 0.5);
+        const ref = gravityDeltaV([{ dx: 0, dy: 300, gravity: 10 }], 0.5);
+        expect(near.length).toBeCloseTo(ref.length, 9);
     });
 
     it('gives nothing from a well the ship sits exactly on, or Gravity 0',
@@ -106,6 +128,31 @@ describe('GravitySystem', () => {
             expect(velocity.x).toBeCloseTo(-gravityAcceleration(1), 3);
             expect(velocity.y).toBeCloseTo(0, 9);
             expect(state(ship).position.x).toBeLessThan(300);
+        });
+
+    it('ramps a Gravity-5 ship slowly from 2,000 px and faster from '
+        + '1,000 px (reference "A Gravity-5 ramp from far out ..., wave '
+        + '42": top speed after about 9 s and 3 s)', async () => {
+            // Kit Probe A: Speed 300, 135 px/s (about 4.5 px a frame).
+            const timeToTop = async (startX: number) => {
+                const { world, ship } = await gravityWorld(5, startX,
+                    { speed: 135 });
+                for (let i = 1; i < 30 * STEPS_PER_S; i++) {
+                    world.step();
+                    if (state(ship).velocity.length > 0.97 * 135) {
+                        return i / STEPS_PER_S;
+                    }
+                }
+                return Infinity;
+            };
+            const far = await timeToTop(2000);
+            const mid = await timeToTop(1000);
+            const near = await timeToTop(300);
+            expect(far).toBeGreaterThan(7);
+            expect(far).toBeLessThan(15);
+            expect(mid).toBeGreaterThan(2);
+            expect(mid).toBeLessThan(6);
+            expect(near).toBeLessThan(1);
         });
 
     it('caps the pull at the ship\'s own top speed', async () => {

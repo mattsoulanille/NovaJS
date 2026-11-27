@@ -32,15 +32,21 @@ import { ControlShipSystem } from './ship_controller_plugin.js';
  *    damping and strength (U7, the hub's questions), wave 41": the peak
  *    speed held 75 s at Gravity 5 and 10; what read as damping was the
  *    swing turning from one axis into the other).
- * 3. No falloff with distance (300 to 2,000 px alike at Gravity 100 /
- *    1000).
+ * 3. The pull FALLS with distance (reference "A Gravity-5 ramp from far
+ *    out, and the swing's cap (U7 leftover ...), wave 42": from rest a
+ *    Gravity-5 well pulled about 15 px/s² 2,000-1,450 px out, 45 from
+ *    1,000 px, 195 from 300 px, roughly 1 / d^1.5). Waves 40-41's "no
+ *    falloff" came from Gravity 100 / 1000, which reach the top-speed cap
+ *    within a frame at any range and so could not show one.
  * 4. A negative Gravity pushes the ship away the same way.
  * 5. An inertialess hull is not moved at all.
  *
  * So each tick an inertial ship's velocity gains gravityAcceleration(
- * Gravity) px/s² times the tick toward each well (away from a negative
- * one), and MovementSystem's ordinary top-speed clamp is the cap (and the
- * only brake: no damping, wave 41).
+ * Gravity) x gravityFalloff(distance) px/s² times the tick toward each
+ * well (away from a negative one), and MovementSystem's ordinary
+ * top-speed clamp is the cap (and the only brake: no damping, wave 41;
+ * the cap itself MEASURED in wave 42: the far fall-in levelled off at
+ * Probe A's own top speed).
  *
  * Not moved: inertialess ships (measured), ships whose hull sets shïp
  * Flags3 0x0010 "Ship ignores gravity" or that carry a "gravity
@@ -51,7 +57,7 @@ import { ControlShipSystem } from './ship_controller_plugin.js';
  * gravity "severely confuses the AI" says the AI feels it). Several wells
  * in one system add up (GUESS, not measured).
  *
- * Deterministic: arithmetic and a square root on synced state (the
+ * Deterministic: arithmetic and square roots on synced state (the
  * stellar's MovementState position, its cached PlanetData, the ship's
  * MovementState and physics, the tick's delta) — no trig, no PRNG, and
  * the velocity is replaced, never mutated in place.
@@ -61,18 +67,48 @@ export const GRAVITY_QUADRATIC = 3.2;
 
 /**
  * A well's pull, in px/s², from its spöb Gravity (signed: negative
- * pushes). The per-unit pull GROWS with the field: MEASURED from rest
+ * pushes), at GRAVITY_REFERENCE_DISTANCE (300 px) or closer; farther out
+ * it is scaled by gravityFalloff. The per-unit pull GROWS with the field: MEASURED from rest
  * about 39 px/s² a unit at Gravity 5 and 55 at Gravity 10 (reference
  * "Gravity damping and strength (U7, the hub's questions), wave 41": 1 ->
  * 5 px a frame in about 0.7 s and 0.27 s), and about 30 at Gravity 1
  * (wave 40). GUESS: a quadratic, 23 x G + 3.2 x G x |G|, through the
  * Gravity-5 and -10 readings exactly (195 and 550 px/s²), 26 at Gravity
  * 1 (the short ramps read in integer px steps, so the constants are
- * rough). Was linear, 30 a unit. Arithmetic only (no trig, no PRNG).
+ * rough). Was linear, 30 a unit. All three readings started from rest
+ * 300 px out, so gravityFalloff leaves them as they were. Arithmetic
+ * only (no trig, no PRNG).
  */
 export function gravityAcceleration(gravity: number): number {
     return GRAVITY_LINEAR * gravity
         + GRAVITY_QUADRATIC * gravity * Math.abs(gravity);
+}
+
+/**
+ * The distance, px, at which gravityAcceleration is the pull: every
+ * weak-well strength reading (waves 40-41, Gravity 1 / 5 / 10) started
+ * 300 px from the well.
+ */
+export const GRAVITY_REFERENCE_DISTANCE = 300;
+
+/**
+ * The fraction of a well's gravityAcceleration felt `distance` px from
+ * it: (300 / d)^1.5 beyond 300 px, MEASURED roughly (reference "A
+ * Gravity-5 ramp from far out ..., wave 42": 195 / 45 / 15 px/s² from 300
+ * / 1,000 / 2,000 px; the exponent a GUESS from three points read in
+ * whole-pixel star steps: this gives 32 and 11 at 1,000 and 2,000 px).
+ * Inside 300 px it stays 1 (GUESS, the section's proposal: nothing was
+ * measured closer in, and the ramp readings at 300 px, which hold
+ * unchanged, were taken as the ship fell inward from there). Written as
+ * r x sqrt(r) rather than Math.pow so it is exact IEEE arithmetic on
+ * every engine (determinism).
+ */
+export function gravityFalloff(distance: number): number {
+    if (!(distance > GRAVITY_REFERENCE_DISTANCE)) {
+        return 1;
+    }
+    const ratio = GRAVITY_REFERENCE_DISTANCE / distance;
+    return ratio * Math.sqrt(ratio);
 }
 
 /** Planets with a gravity field: their position and strength. */
@@ -94,7 +130,8 @@ export function gravityDeltaV(
         if (gravity === 0 || !(distance > 0)) {
             continue;
         }
-        const dv = gravityAcceleration(gravity) * delta_s / distance;
+        const dv = gravityAcceleration(gravity) * gravityFalloff(distance)
+            * delta_s / distance;
         x += dx * dv;
         y += dy * dv;
     }
