@@ -120,7 +120,11 @@ export interface CaptionSegment {
  * shrinking, a line too wide for its cell running on over the neighbours,
  * and an EMPTY ShortName drawing no caption at all (reference "Outfitter
  * long item names ..., wave 43": kit items with a blank ShortName showed
- * the icon cell only, on both grids).
+ * the icon cell only, on both grids; wave 44: the same for a ship in the
+ * shipyard and in the bar's hire-escort list, no fallback to its name).
+ * Only the first "\n" breaks the caption: later ones are dropped and the
+ * text either side joined, so there are never more than two lines
+ * (reference "Grid captions: a second "\n" ...", wave 44).
  *
  * An item with no ShortName FIELD (shortName undefined: not an oütf or a
  * shïp) falls back to its name with the "; developer note" suffix
@@ -129,7 +133,13 @@ export interface CaptionSegment {
 export function captionSegments(
     item: { name: string, shortName?: string }): CaptionSegment[] {
     const source = item.shortName ?? displayName(item.name);
-    return source.split(/\\n|\n/)
+    // Only the FIRST "\n" breaks; every later one is deleted, the text
+    // either side running together with no space (reference "Grid
+    // captions: a second "\n" ...", wave 44: "Kit Three\nLine\nCaption"
+    // draws "Kit Three" over "LineCaption", "Kit Gap\n\nLine" draws "Kit
+    // Gap" over "Line"), so a caption is at most two lines.
+    const [first, ...rest] = source.split(/\\n|\n/);
+    return [first, rest.join('')]
         .map(line => line.trim())
         .filter(line => line.length > 0)
         .map(text => ({ text, grey: !/^[a-zA-Z0-9]/.test(text) }));

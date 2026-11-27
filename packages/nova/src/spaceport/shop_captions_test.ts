@@ -83,6 +83,31 @@ describe('tile caption (shïp ShortName)', () => {
             .toEqual([{ text: 'Terrapin', grey: false }]);
     });
 
+    it('breaks only at the first "\\n", joining the rest with no space',
+        () => {
+            // Reference "Grid captions: a second "\n" ...", wave 44:
+            // oütf 497 / 498 and shïp 766 in the outfitter, the shipyard
+            // and the hire list alike.
+            expect(captionSegments({
+                name: 'x', shortName: 'Kit Three\\nLine\\nCaption',
+            })).toEqual([
+                { text: 'Kit Three', grey: false },
+                { text: 'LineCaption', grey: false },
+            ]);
+            expect(captionSegments({
+                name: 'x', shortName: 'Kit Gap\\n\\nLine',
+            })).toEqual([
+                { text: 'Kit Gap', grey: false },
+                { text: 'Line', grey: false },
+            ]);
+            expect(captionSegments({
+                name: 'x', shortName: 'Kit Three\\nLine\\nHull Name',
+            })).toEqual([
+                { text: 'Kit Three', grey: false },
+                { text: 'LineHull Name', grey: false },
+            ]);
+        });
+
     it('keeps the measured two-layout geometry', () => {
         // One line sits 8px lower than the first of two -- not a whole
         // line (11) lower. Measured on shipyard/earth_spaceport.png; see
