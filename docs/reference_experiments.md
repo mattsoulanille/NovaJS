@@ -24863,6 +24863,20 @@ edge (one clean crossing plus `tx_b`'s turn at about the edge).
 `tx_*.pos.txt`, `tx_*.hd.txt`, `tlead_all.txt` (the 47 shots),
 `tools/tlead.py`.
 
+**Applied 2026-11-27**: a projectile turret (wëap Guidance 4) aims with
+`firstOrderLead` (`N/nova_plugin/combat/guidance.ts`):
+`angle(d + dv x |d| / shotSpeed)` from the exit point, `dv` = target
+velocity - shooter velocity, no quadratic and no fallback (a zero shot
+speed points straight at the target); GUESS: first order at every range
+(the under-300 px drift is not modelled). Unchanged, as not measured:
+the quadrant guns' in-arc aim (Guidance 7 / 8) and projectile point
+defence (9) keep the exact intercept (`firstOrderWithFallback`); beam
+turrets and point-defence beams point straight at the target
+(`BeamWeaponEntry.guidance`); missiles steer by `guidanceAngle` (the
+room's default `simple` mode points at the target, `smart` takes the
+exact intercept); fixed guns and the AI's own facing do not lead. The
+blind test stays on the target's quadrant (finding 2 matches).
+
 ### The ion charge read directly (E6, the hub's item 2), wave 50: each hit adds its Ionization; Deionize 1 drains 0.29 a second (0.01 a frame at the 29-30 Hz tick, HALF NovaJS's 0.56); the tint line is ONE THIRD of IonizeMax (about 33 of 100) and the no-turn line TWO THIRDS (64-67); wave 42 had missed the hits before its analysis window, which is where 16 / 38 and the 56 fps drain came from (2026-11-27)
 
 **Question** (the hub's item 2): a direct reading of the ion charge (the

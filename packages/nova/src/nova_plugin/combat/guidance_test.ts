@@ -7,6 +7,7 @@ import {
     zeroOrderGuidance,
     firstOrderGuidance,
     firstOrderWithFallback,
+    firstOrderLead,
 } from './guidance.js';
 
 // The coordinate system used by Vector.angle is atan2(x, -y): a vector
@@ -128,5 +129,67 @@ describe('guidanceAngle', () => {
         // Simple points at the target now; smart aims ahead of it.
         expect(simple.angle).toEqual(0);
         expect(smart.angle).toBeGreaterThan(simple.angle);
+    });
+});
+
+/**
+ * Reference "A turret's lead, and a lead into a blind sector (the T
+ * leftover), wave 50", finding 1: the original's turret aims at
+ * angle(d + dv x |d| / shotSpeed), not at the exact intercept.
+ */
+describe('firstOrderLead (a projectile turret\'s aim)', () => {
+    // The rig's shape: the shooter coasting at about 220 px/s past a
+    // still target 500 px off its beam, a 300 px/s turret.
+    const shooter = new Position(0, 0);
+    const shooterVel = new Vector(220, 0);
+    const target = new Position(0, -500);
+    const still = new Vector(0, 0);
+    const shotSpeed = 300;
+
+    it('is angle(d + (v_target - v_shooter) x |d| / shotSpeed)', () => {
+        const lead = firstOrderLead(shooter, shooterVel, target, still,
+            shotSpeed);
+        // d = (0, -500), dv = (-220, 0), |d| / s = 5 / 3.
+        const expected = new Vector(-220 * 500 / 300, -500).angle;
+        expect(lead.angle).toBeCloseTo(expected.angle, 12);
+        // Aimed back against the shooter's own motion.
+        expect(lead.angle).toBeLessThan(0);
+    });
+
+    it('differs from the exact intercept against a fast crossing target '
+        + '(the original read 7-30 deg off the intercept)', () => {
+        const lead = firstOrderLead(shooter, shooterVel, target, still,
+            shotSpeed);
+        const intercept = firstOrderWithFallback(shooter, shooterVel,
+            target, still, shotSpeed);
+        const apart = Math.abs(lead.angle - intercept.angle) * 180 / Math.PI;
+        expect(apart).toBeGreaterThan(7);
+        expect(apart).toBeLessThan(30);
+        // First order leads LESS than the intercept here (aims short).
+        expect(Math.abs(lead.angle)).toBeLessThan(Math.abs(intercept.angle));
+    });
+
+    it('points straight at a target with no relative motion', () => {
+        const moving = new Vector(40, -10);
+        expect(firstOrderLead(shooter, moving, target, moving, shotSpeed)
+            .angle).toBeCloseTo(0, 12);
+    });
+
+    it('is defined where the intercept has no solution (no fallback '
+        + 'needed)', () => {
+        // Fleeing straight away at the shot speed: no intercept.
+        const fleeing = new Vector(0, -shotSpeed);
+        expect(firstOrderGuidance(shooter, still, target, fleeing,
+            shotSpeed)).toEqual([]);
+        const lead = firstOrderLead(shooter, still, target, fleeing,
+            shotSpeed);
+        expect(lead.angle).toBeCloseTo(0, 12);
+    });
+
+    it('points at the target for a shot that does not move', () => {
+        expect(firstOrderLead(shooter, shooterVel, target, still, 0))
+            .toEqual(zeroOrderGuidance(shooter, target));
+        expect(Number.isNaN(firstOrderLead(shooter, shooterVel, target,
+            still, NaN).angle)).toBeFalse();
     });
 });

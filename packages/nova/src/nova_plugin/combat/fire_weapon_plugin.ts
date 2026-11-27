@@ -44,7 +44,7 @@ import { FiringGroup, FiringGroupComponent } from '../ship/index.js';
 import { isInFlock } from './flock.js';
 import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
-import { firstOrderWithFallback } from './guidance.js';
+import { firstOrderLead, firstOrderWithFallback } from './guidance.js';
 import { isHostileTarget } from './hostility.js';
 import { PointDefenseCandidate, selectPointDefenseTarget } from './point_defense.js';
 import { ShipComponent, ShipDataComponent, ShipDataProvider } from '../ship/index.js';
@@ -344,7 +344,21 @@ export abstract class WeaponEntry {
         }
     }
 
+    /**
+     * Where an aimed shot points at `target`: the exact intercept
+     * (firstOrderWithFallback) for the quadrant turrets' in-arc aim and
+     * projectile point defence, the FIRST-ORDER lead (firstOrderLead) for
+     * a projectile turret (wëap Guidance 4), MEASURED (reference "A
+     * turret's lead, and a lead into a blind sector (the T leftover),
+     * wave 50"; only the Guidance-4 turret was flown, so the others keep
+     * the intercept). BeamWeaponEntry points every beam straight at its
+     * target instead.
+     */
     protected guidance(exitPoint: Position, source: MovementState, target: MovementState) {
+        if (this.data.guidance === 'turret') {
+            return firstOrderLead(exitPoint, source.velocity, target.position,
+                target.velocity, this.data.shotSpeed);
+        }
         return firstOrderWithFallback(exitPoint, source.velocity, target.position,
             target.velocity, this.data.shotSpeed);
     }
@@ -554,7 +568,12 @@ export abstract class WeaponEntry {
             // aiming below rather than after it because the aimed angle
             // is not what the rule tests: a rear-blind turret leading a
             // target off its bow fires happily even when the lead angle
-            // swings behind the beam.
+            // swings behind the beam. MEASURED (reference "A turret's
+            // lead, and a lead into a blind sector (the T leftover), wave
+            // 50", finding 2): the rear-blind Kit Fast Blind Ring fired
+            // with its aim 20 deg into the rear sector while the target
+            // sat at -128 / -134 deg, and held fire once the target
+            // passed about 135.
             //
             // What a blind target COSTS depends on the guidance, and the
             // rule is one sentence: a target in a blind sector is no

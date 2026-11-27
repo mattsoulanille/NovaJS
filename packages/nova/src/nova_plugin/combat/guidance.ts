@@ -95,10 +95,51 @@ export function firstOrderGuidance(position: Position, velocity: Vector,
     return hitTimes.map(time => pos.add(vel.scale(time)).angle);
 }
 
+/**
+ * The EXACT intercept (despite the name: `firstOrderGuidance` solves the
+ * quadratic for the meeting time), or straight at the target when there
+ * is none. Still used by smart missile guidance (guidanceAngle), the
+ * quadrant turrets' in-arc aim (wëap Guidance 7 / 8) and projectile
+ * point defence (Guidance 9); a projectile turret (Guidance 4) leads to
+ * first order instead (firstOrderLead).
+ */
 export function firstOrderWithFallback(position: Position, velocity: Vector,
     targetPosition: Position, targetVelocity: Vector, shotSpeed: number): Angle {
     const solutions = firstOrderGuidance(position, velocity, targetPosition, targetVelocity, shotSpeed);
     return solutions[0] ?? zeroOrderGuidance(position, targetPosition);
+}
+
+/**
+ * A projectile turret's aim (wëap Guidance 4): the target's place plus
+ * its velocity RELATIVE to the shooter times the distance over the shot
+ * speed, `angle(d + dv x |d| / shotSpeed)`, with `d` the target's offset
+ * from `position` (the exit point) and `dv` = target velocity - shooter
+ * velocity. No quadratic and no fallback: the lead is always defined.
+ *
+ * MEASURED (reference "A turret's lead, and a lead into a blind sector
+ * (the T leftover), wave 50", finding 1): over 47 coasting shots 380 px
+ * or more from the target (three runs, five passes) the original's aim
+ * lay 0.6 +- 0.9 deg from this first-order lead (range -1.9 .. +1.2)
+ * while the exact intercept (firstOrderWithFallback) was 7-30 deg off;
+ * the lead uses the shooter's own velocity (the target was still). So
+ * against a fast crossing target the turret aims short of the intercept.
+ * Under about 300 px the read aims drifted between the two (the line
+ * swings several degrees a frame there); GUESS: first order at every
+ * range.
+ *
+ * A shot speed of zero (or NaN) has nothing to lead with: straight at
+ * the target, as firstOrderWithFallback's fallback. Deterministic: one
+ * correctly-rounded sqrt (Vector.length), no trigonometry beyond the
+ * angle every aim already takes.
+ */
+export function firstOrderLead(position: Position, velocity: Vector,
+    targetPosition: Position, targetVelocity: Vector, shotSpeed: number): Angle {
+    if (!(shotSpeed > 0)) {
+        return zeroOrderGuidance(position, targetPosition);
+    }
+    const offset = Vector.fromVectorLike(targetPosition.subtract(position));
+    const relative = targetVelocity.subtract(velocity);
+    return offset.add(relative.scale(offset.length / shotSpeed)).angle;
 }
 
 /**
