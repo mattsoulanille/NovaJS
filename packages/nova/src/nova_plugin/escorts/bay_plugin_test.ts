@@ -567,18 +567,18 @@ describe('bay weapons', () => {
         });
 
     /**
-     * OrphanedBayFighterSystem's DEPART path: a bay fighter whose carrier
-     * has been destroyed is handed a graceful exit instead of being left
-     * steered by escort machinery that has no leader left.
+     * OrphanedBayFighterSystem: a bay fighter whose carrier has been
+     * destroyed, with no fight on, becomes an ordinary NPC warship instead
+     * of being left steered by escort machinery that has no leader left.
      *
-     * Three things about it were unpinned. It must actually retire the
-     * fighter (drop the escort wiring, hand it the departing NPC brain).
-     * It must NOT refund the round — the bay it came from no longer
-     * exists, and crediting a dead carrier's magazine would resurrect
-     * ammo that the docking path is the only legitimate source of. And it
-     * must draw NOTHING from the seeded RandomResource: it runs off entity
-     * state alone, so a carrier dying must not shift the PRNG stream for
-     * everything else on that tick.
+     * Three things about it are pinned. It must actually hand the fighter
+     * over (drop the escort wiring, give it the NPC brain with its
+     * departure already due). It must NOT refund the round — the bay it
+     * came from no longer exists, and crediting a dead carrier's magazine
+     * would resurrect ammo that the docking path is the only legitimate
+     * source of. And it must draw NOTHING from the seeded RandomResource:
+     * it runs off entity state alone, so a carrier dying must not shift
+     * the PRNG stream for everything else on that tick.
      */
     it('retires an orphaned fighter with no refund and no PRNG draw',
         async () => {
@@ -603,15 +603,71 @@ describe('bay weapons', () => {
             const stateBefore = random.getState();
             await stepWorld(world, 1);
 
-            // Retired: escort wiring gone, departing NPC brain in place.
-            expect(fighter.components.get(NpcComponent))
-                .toEqual({ aiType: 3, mode: 'depart' });
+            // Retired: escort wiring gone, a warship NPC brain in place
+            // whose departure is already due (it leaves once it has no
+            // fight; reference CD wave 45, GUESS on what removes it).
+            const npc = fighter.components.get(NpcComponent)!;
+            expect(npc.aiType).toBe(3);
+            expect(npc.departAt).toBe(0);
+            // Nothing hostile in this world, so its brain sends it out.
+            expect([undefined, 'depart']).toContain(npc.mode);
             expect(fighter.components.has(EscortCommandComponent)).toBeFalse();
             expect(fighter.components.has(FormationComponent)).toBeFalse();
             // The round is NOT banked back into the dead carrier.
             expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(1);
             // The seeded sequence is exactly where it was.
             expect(random.getState()).toEqual(stateBefore);
+        });
+
+    /**
+     * Reference "A carrier's fighters when it dies (the hub's question),
+     * wave 45": twelve seconds after a stock Fed Carrier blew up a Fed
+     * Viper was still attacking the player, and went on for 45 s. An
+     * orphan on an attack order keeps it while its victim lives, and is
+     * handed over to the NPC brain only once that fight is over.
+     */
+    it('lets an orphan on an attack order keep its fight, then hands it '
+        + 'over once the victim is gone', async () => {
+            const { world, carrier, gameData } = await makeTestWorld();
+            const [, fighter] = await launchOne(world, carrier);
+            const victim = makeShip(gameData.data.Ship.map.get(
+                FIGHTER_SHIP_ID)!);
+            victim.components.set(MovementStateComponent, {
+                accelerating: 0,
+                position: new Position(400, 0),
+                rotation: new Angle(0),
+                turnBack: false,
+                turning: 0,
+                velocity: new Vector(0, 0),
+            });
+            await completeEntity(world, victim);
+            world.entities.set('victim', victim);
+            fighter.components.set(EscortCommandComponent,
+                { command: 'attack', target: 'victim' });
+
+            world.entities.delete(CARRIER_UUID);
+            const random = world.resources.get(RandomResource)!;
+            const stateBefore = random.getState();
+            await stepWorld(world, 30);
+
+            // Still fighting: the order and its target stand, no NPC brain.
+            expect(fighter.components.get(EscortCommandComponent))
+                .toEqual({ command: 'attack', target: 'victim' });
+            expect(fighter.components.has(NpcComponent)).toBeFalse();
+            expect(world.entities.has(fighter.components.get(
+                SourceComponent)!)).toBeFalse();
+            expect(random.getState()).toEqual(stateBefore);
+
+            // The victim goes: the order reverts and the fighter becomes
+            // an ordinary NPC with its departure due.
+            world.entities.delete('victim');
+            await stepWorld(world, 3);
+            expect(fighter.components.has(EscortCommandComponent))
+                .toBeFalse();
+            expect(fighter.components.has(FormationComponent)).toBeFalse();
+            const npc = fighter.components.get(NpcComponent)!;
+            expect(npc.aiType).toBe(3);
+            expect(npc.departAt).toBe(0);
         });
 
     it('leaves an orphaned fighter alone once it has already been retired',

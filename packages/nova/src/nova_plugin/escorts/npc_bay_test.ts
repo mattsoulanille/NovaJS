@@ -353,8 +353,8 @@ describe('NPC carriers launching fighters', () => {
             expect(fighter.components.has(ReturnComponent)).toBeTrue();
         });
 
-    it('a wing flying home when its carrier vanishes departs instead',
-        async () => {
+    it('a wing flying home when its carrier vanishes becomes an ordinary '
+        + 'NPC and, with no fight left, departs', async () => {
             const { world, fighter, fighterUuid } = await fightThenStop();
             expect(fighter.components.has(ReturnComponent)).toBeTrue();
 
@@ -362,8 +362,11 @@ describe('NPC carriers launching fighters', () => {
             await stepWorld(world, 2);
             expect(world.entities.has(fighterUuid)).toBeTrue();
 
-            expect(fighter.components.get(NpcComponent))
-                .toEqual({ aiType: 3, mode: 'depart' });
+            // Its departure is due at once (departAt 0, no PRNG roll) and
+            // nothing is left to fight, so its brain sends it out.
+            expect(fighter.components.get(NpcComponent)).toEqual(
+                jasmine.objectContaining(
+                    { aiType: 3, departAt: 0, mode: 'depart' }));
             expect(fighter.components.has(ReturnComponent)).toBeFalse();
             expect(fighter.components.has(EscortCommandComponent)).toBeFalse();
         });
@@ -417,8 +420,15 @@ describe('NPC carriers launching fighters', () => {
                 .toBe('enemy');
         });
 
-    it('a fighter whose carrier died departs instead of drifting forever',
-        async () => {
+    /**
+     * Reference "A carrier's fighters when it dies (the hub's question),
+     * wave 45": a dead Fed Carrier's Viper went on attacking the player
+     * for 45 s. The orphan keeps its fight; once that is over it is an
+     * ordinary NPC warship, and with nothing left to fight it leaves
+     * (GUESS) instead of drifting forever.
+     */
+    it('a fighter whose carrier died keeps its fight, then departs '
+        + 'instead of drifting forever', async () => {
             const { world, carrier, addEnemy } = await makeWorld();
             await addEnemy('enemy');
             thinkNow(carrier);
@@ -427,12 +437,21 @@ describe('NPC carriers launching fighters', () => {
             expect(command(fighter)!.command).toBe('attack');
 
             world.entities.delete(CARRIER);
-            await stepWorld(world, 2);
+            await stepWorld(world, 20);
+            // Still on its attack order, the enemy alive.
+            expect(command(fighter)).toEqual(
+                { command: 'attack', target: 'enemy' });
+            expect(fighter.components.has(NpcComponent)).toBeFalse();
+            expect(fighter.components.get(TargetComponent)!.target)
+                .toBe('enemy');
 
-            // Handed back to ordinary NPC AI in depart mode: it flies out
-            // of the system and is deleted at the depart radius.
-            expect(fighter.components.get(NpcComponent))
-                .toEqual({ aiType: 3, mode: 'depart' });
+            world.entities.delete('enemy');
+            await stepWorld(world, 3);
+            // Handed to ordinary NPC AI with its departure due: nothing
+            // left to fight, so it flies out of the system.
+            expect(fighter.components.get(NpcComponent)).toEqual(
+                jasmine.objectContaining(
+                    { aiType: 3, departAt: 0, mode: 'depart' }));
             expect(fighter.components.has(EscortCommandComponent)).toBeFalse();
             expect(fighter.components.has(FormationComponent)).toBeFalse();
         });

@@ -323,9 +323,11 @@ describe('a mission carrier\'s bay fighters', () => {
      * its wing is then an orphaned NPC wing, and
      * bay_plugin's OrphanedBayFighterSystem — which exempts only
      * PlayerEscort-marked fighters, precisely the mark these no longer
-     * carry — hands each one the graceful exit every other orphaned wing
-     * gets: escort command and formation dropped, NPC 'depart' mode, flown
-     * out of the system and deleted at NPC_DEPART_RADIUS.
+     * carry — treats it like every other orphaned wing: a fighter keeps
+     * the fight it was in (reference CD wave 45: a dead carrier's Viper
+     * fought on), and once that is over it becomes an ordinary NPC
+     * warship (escort command and formation dropped) whose departure is
+     * already due. At no point does the player claim it.
      */
     it('retires them like any orphaned NPC wing when the carrier goes',
         async () => {
@@ -337,9 +339,22 @@ describe('a mission carrier\'s bay fighters', () => {
             world.entities.delete(CARRIER);
             await stepWorld(world, 3);
             for (const [uuid, fighter] of fighters(world)) {
-                expect(fighter.components.get(NpcComponent)?.mode)
-                    .withContext(`${uuid} departing`)
-                    .toBe('depart');
+                // Still on the carrier's fight against the xenophobe's
+                // enemy, which lives.
+                expect(fighter.components.get(EscortCommandComponent))
+                    .withContext(`${uuid} keeps its fight`)
+                    .toEqual({ command: 'attack', target: ENEMY });
+                expect(fighter.components.has(PlayerEscortComponent))
+                    .withContext(`${uuid} claimed by the player on the way out`)
+                    .toBeFalse();
+            }
+            // The fight ends: each becomes an ordinary NPC.
+            world.entities.delete(ENEMY);
+            await stepWorld(world, 3);
+            for (const [uuid, fighter] of fighters(world)) {
+                expect(fighter.components.get(NpcComponent)?.departAt)
+                    .withContext(`${uuid} an NPC, departure due`)
+                    .toBe(0);
                 expect(fighter.components.has(EscortCommandComponent))
                     .withContext(`${uuid} still under escort command`)
                     .toBeFalse();

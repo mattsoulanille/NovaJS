@@ -39,6 +39,7 @@ import { SoundEvent } from '../core/index.js';
 import { TargetComponent } from '../ship/index.js';
 import { WeaponsStateComponent } from '../ship/index.js';
 import { BayFighter, BayFighterComponent } from '../ship/index.js';
+import { ExplodingComponent } from '../ship/index.js';
 
 /** Exported so a landing order can cancel an in-progress return
  * (player_escort_plugin): a fighter whose carrier is leaving the system
@@ -582,50 +583,67 @@ const CollectableEscortAI = new System({
 });
 
 /**
- * An NPC carrier's fighters go home to nothing when the carrier dies:
- * this hands them a graceful exit.
+ * An NPC carrier's fighters outlive it: they finish their fight, then
+ * carry on as ordinary NPCs.
  *
- * WHAT HAPPENED BEFORE (the state this fixes): a bay fighter is steered
- * entirely by escort machinery, and every piece of it fails open when
- * the carrier entity vanishes. FormationSystem sees the leader is gone
- * and drops FormationComponent, so nothing station-keeps it — but only
- * when it runs at all, which it does not while the fighter is under a
- * non-formation command. EscortCommandBehaviorSystem keeps running with
- * a missing root: 'attack' still works while the victim lives, and the
- * moment it reverts to 'formation' the fighter has no leader to form on
- * and only the opportunistic formation-turret rule left. Meanwhile
- * NpcDecisionSystem and NpcSteeringSystem both bail on any ship holding
- * an EscortCommandComponent, and a bay fighter has no NpcComponent to
- * fall back to anyway. Net result: the fighter drifted forever on its
- * launch velocity, occasionally firing a turret, and never despawned.
+ * MEASURED (reference "A carrier's fighters when it dies (the hub's
+ * question), wave 45"): twelve seconds after a stock Fed Carrier blew up,
+ * two of its fighters were still targetable and a Fed Viper went on
+ * attacking the player for 45 s more, its shield recharging. Nothing
+ * like "every fighter gone in the same second". Was: an orphan turned at
+ * once into a plain NPC in 'depart' mode, breaking off and jumping out.
  *
- * WHAT IT DOES NOW: converts the orphan into a plain NPC in 'depart'
- * mode. NpcSteeringSystem then flies it out of the no-jump zone and
- * jumps it out (departByJump) — the same exit every other NPC uses —
- * once EscortCommandComponent is gone and the AI stops yielding to it.
- * A DISABLED orphan cannot jump and stays, like any disabled ship. It withdraws rather than finishing its current fight:
- * with the carrier dead there is no hangar to dock in, no ammo to
- * refund, and no one left to command it.
+ * WHY SOMETHING MUST HAPPEN AT ALL: a bay fighter is steered entirely by
+ * escort machinery that its carrier drives (NpcWingCommandSystem mirrors
+ * the carrier's fight onto it). With the carrier gone nothing re-orders
+ * it, FormationSystem has no leader to keep it on, and NpcDecisionSystem
+ * / NpcSteeringSystem bail on any ship holding an EscortCommandComponent
+ * (and a bay fighter has no NpcComponent to fall back to anyway): left
+ * alone, it would drift forever on its last velocity.
  *
- * DETERMINISM: 'depart' is set explicitly, so NpcDecisionSystem returns
- * at its `mode === 'depart'` guard BEFORE rolling `departAt`. That
- * matters — the roll draws from the shared seeded RandomResource, and a
- * draw whose count depended on how many carriers happened to die would
- * shift every later draw on that peer. This path consumes no randomness
- * at all. aiType 3 (warship) is a sane resting value that nothing reads
- * while the mode stays 'depart'.
+ * WHAT IT DOES:
+ *  - A fighter still on an 'attack' order against a live victim KEEPS IT:
+ *    nothing is touched, and EscortCommandBehaviorSystem flies the attack
+ *    as before (it needs no leader for that). The fight ends when the
+ *    victim is destroyed or leaves the system (the order reverts to
+ *    'formation'), and the next tick lands in the case below.
+ *  - Any other orphan (between victims, in formation, flying home to
+ *    dock) becomes an ordinary NPC warship of its carrier's government
+ *    (it flies its carrier's flag already: BayWeaponEntry.fire): escort
+ *    command, formation and the return-to-bay flow dropped, NpcComponent
+ *    AI 3 (GUESS: the warship brain; the hull's own InherentAI is not
+ *    read) with `departAt` already due (0). So it hunts any hostile in
+ *    reach like any warship and leaves by the ordinary jump-out only
+ *    when it has no fight left (GUESS: what removed the dead carrier's
+ *    other fighters within 12-20 s was not read; a blast, a jump-out and
+ *    a landing all fit).
+ *  - A DISABLED orphan cannot jump and stays, like any disabled ship.
+ *  - No refund: with the carrier dead there is no hangar to dock in.
+ *
+ * DETERMINISM: no PRNG draw and no clock read here. `departAt` is set
+ * explicitly, so NpcDecisionSystem skips its `rollDepartureTime` draw
+ * (a draw whose count depended on how many carriers happened to die
+ * would shift every later draw), and with the departure due the warship
+ * branch leaves before its patrol-waypoint draw. Whatever the fighter
+ * then does in a fight (a gövt 0x0010 retreat draw) is the ordinary NPC
+ * brain's, the same on every peer.
  *
  * PLAYER-LAUNCHED FIGHTERS ARE EXEMPT: PlayerEscortComponent is stamped
  * whenever the escort chain tops out at a player ship and is NEVER
  * cleared (that is the whole point of it — see player_escort.ts), so it
  * still marks a player's fighter after the carrier escort it flew from
- * has died. Those keep their existing re-attachment behavior.
+ * has died. Those stay the player's escorts-of-escort, under the escort
+ * command framework as before (the player's own carrier cannot die
+ * without ending the game; a dead carrier escort's wing is dropped at the
+ * next carry, save_game.ts's SavedFleetOwner note).
  */
 export const OrphanedBayFighterSystem = new System({
     name: 'OrphanedBayFighterAI',
     args: [BayFighterComponent, SourceComponent, Entities, GetEntity,
-        Optional(PlayerEscortComponent), Optional(NpcComponent)] as const,
-    step(_bayFighter, source, entities, entity, playerEscort, npc) {
+        Optional(PlayerEscortComponent), Optional(NpcComponent),
+        Optional(EscortCommandComponent)] as const,
+    step(_bayFighter, source, entities, entity, playerEscort, npc,
+        command) {
         if (playerEscort || npc) {
             // Not ours to retire, or already retired (idempotent: the
             // NpcComponent it gains below stops it running again).
@@ -634,6 +652,13 @@ export const OrphanedBayFighterSystem = new System({
         if (entities.has(source)) {
             return; // Carrier still alive.
         }
+        if (command?.command === 'attack' && command.target !== undefined) {
+            const victim = entities.get(command.target);
+            if (victim && !victim.components.has(ExplodingComponent)) {
+                // Still fighting: it keeps its fight (wave 45's Viper).
+                return;
+            }
+        }
         entity.components.delete(EscortCommandComponent);
         entity.components.delete(FormationComponent);
         // A wing that was flying home to dock (NpcWingCommandSystem's
@@ -641,7 +666,7 @@ export const OrphanedBayFighterSystem = new System({
         // would keep steering it at a carrier that is gone.
         entity.components.delete(ReturnComponent);
         entity.components.delete(CollectableEscortComponent);
-        entity.components.set(NpcComponent, { aiType: 3, mode: 'depart' });
+        entity.components.set(NpcComponent, { aiType: 3, departAt: 0 });
     },
     before: [NpcSteeringSystem],
     // #237 pin (shared: *): BayPlugin's registration order.
