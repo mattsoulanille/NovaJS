@@ -9,6 +9,7 @@ import { IonizationComponent } from './health_plugin.js';
 import {
     ION_FULL_ACCELERATION_FACTOR, ION_IONIZED_FRACTION, ION_NO_TURN_FRACTION,
     ION_NO_TURN_LINE_ACCELERATION_FACTOR, ION_TINT_LINE_ACCELERATION_FACTOR,
+    ION_FULL_ACCELERATION_FRACTION,
     ION_UNTINTED_ACCELERATION_FACTOR, ionizedNow, ionSlowdown,
     IsIonizedComponent, NO_ION_SLOWDOWN,
 } from './ionization_plugin.js';
@@ -187,6 +188,33 @@ describe('ionization in a live world', () => {
             expect(physics.turnRate).toBeCloseTo(0, 6);
         });
 
+    it('thrusts on the slide past the no-turn line, no step to 0.4 '
+        + '(reference "The ion thrust slide\'s ends (E6), wave 48": 0.52 / '
+        + '0.46 at 44 / 48 s, 0.4 near 56 s)', async () => {
+            const { world, ship, hit, charge } =
+                await ionWorld({ deionize: 0 });
+            const physics = () =>
+                ship.components.get(MovementPhysicsComponent)!;
+            // Past the no-turn line, short of the full cut.
+            hit(BASE.ionization * 0.47);
+            steps(world, 2);
+            const fraction = charge().current / BASE.ionization;
+            expect(fraction).toBeGreaterThan(ION_NO_TURN_FRACTION);
+            expect(fraction).toBeLessThan(ION_FULL_ACCELERATION_FRACTION);
+            expect(physics().turnRate).toBeCloseTo(0, 6);
+            expect(physics().acceleration / BASE.acceleration)
+                .toBeCloseTo(0.85 - (fraction - 0.16) * 0.25 / 0.22, 6);
+            expect(physics().acceleration / BASE.acceleration)
+                .toBeGreaterThan(0.45);
+            expect(physics().acceleration / BASE.acceleration)
+                .toBeLessThan(0.55);
+            // Charged on past the slide's end: the full cut.
+            hit(BASE.ionization * 0.2);
+            steps(world, 2);
+            expect(physics().acceleration / BASE.acceleration)
+                .toBeCloseTo(ION_FULL_ACCELERATION_FACTOR, 6);
+        });
+
     it('gives the movement back in steps as the charge drains, and all '
         + 'of it once the charge is gone', async () => {
             const { world, ship, hit, charge } = await ionWorld();
@@ -283,18 +311,24 @@ describe('ionSlowdown', () => {
         expect(ionSlowdown(charge(10, 0))).toEqual(NO_ION_SLOWDOWN);
     });
 
-    it('is the measured full cut above the second line (0.38)', () => {
-        expect(ION_NO_TURN_FRACTION).toBe(0.38);
-        // Wave 44: 19.6 / 22.3 px/s² against the control's 52.0 / 49.8.
-        expect(ION_FULL_ACCELERATION_FACTOR).toBe(0.4);
-        for (const current of [38.01, 41, 100, 250]) {
-            expect(ionSlowdown(charge(current))).toEqual({
-                maxVelocity: 1,
-                acceleration: ION_FULL_ACCELERATION_FACTOR,
-                turnRate: 0,
-            });
-        }
-    });
+    it('stops the turn above the second line (0.38), and cuts the thrust '
+        + 'to 0.4 once the slide reaches it (about 0.556)', () => {
+            expect(ION_NO_TURN_FRACTION).toBe(0.38);
+            // Wave 44: 19.6 / 22.3 px/s² against the control's 52.0 / 49.8.
+            expect(ION_FULL_ACCELERATION_FACTOR).toBe(0.4);
+            for (const current of [38.01, 41, 55]) {
+                expect(ionSlowdown(charge(current)).turnRate).toBe(0);
+                expect(ionSlowdown(charge(current)).acceleration)
+                    .toBeGreaterThan(ION_FULL_ACCELERATION_FACTOR);
+            }
+            for (const current of [56, 60, 100, 250]) {
+                expect(ionSlowdown(charge(current))).toEqual({
+                    maxVelocity: 1,
+                    acceleration: ION_FULL_ACCELERATION_FACTOR,
+                    turnRate: 0,
+                });
+            }
+        });
 
     it('comes in three steps, not a ramp (reference "Ion charge against '
         + 'the turn, in 5-point steps (E6), wave 42": about 60 deg/s '
@@ -315,30 +349,46 @@ describe('ionSlowdown', () => {
             expect(87.8 * at(30).turnRate).toBeCloseTo(30, -1);
         });
 
-    it('slides the thrust with the charge between the tint and no-turn '
-        + 'lines, not in steps (reference "Thrust under a rising ion '
-        + 'charge, pulse by pulse (E6 leftover), wave 47")', () => {
+    it('slides the thrust with the charge from the tint line down to 0.4, '
+        + 'not in steps (reference "Thrust under a rising ion charge, pulse '
+        + 'by pulse (E6 leftover), wave 47"; "The ion thrust slide\'s ends '
+        + '(E6), wave 48")', () => {
             const accel = (current: number) =>
                 ionSlowdown(charge(current)).acceleration;
             expect(ION_UNTINTED_ACCELERATION_FACTOR).toBe(0.96);
             expect(ION_TINT_LINE_ACCELERATION_FACTOR).toBe(0.85);
             expect(ION_NO_TURN_LINE_ACCELERATION_FACTOR).toBe(0.6);
             // Just past the tint line: 0.85; at the no-turn line: 0.6;
-            // halfway: halfway between; past it: the full cut.
+            // halfway: halfway between.
             expect(accel(16.000001)).toBeCloseTo(0.85, 5);
             expect(accel(27)).toBeCloseTo(0.725, 9);
             expect(accel(38)).toBeCloseTo(0.6, 9);
-            expect(accel(38.01)).toBe(ION_FULL_ACCELERATION_FACTOR);
-            // Every point of charge lowers it: no plateau.
+            // No step at the no-turn line: the same line runs on.
+            expect(accel(38.01)).toBeCloseTo(0.6, 3);
+            expect(accel(38.01)).toBeLessThan(accel(38));
+            // 0.4 at about 56 of IonizeMax 100 (1.45 x the no-turn line).
+            expect(ION_FULL_ACCELERATION_FRACTION).toBeCloseTo(0.556, 3);
+            expect(ION_FULL_ACCELERATION_FRACTION / ION_NO_TURN_FRACTION)
+                .toBeCloseTo(1.46, 1);
+            expect(accel(ION_FULL_ACCELERATION_FRACTION * 100))
+                .toBeCloseTo(0.4, 9);
+            // Every point of charge lowers it until the full cut: no
+            // plateau, no step.
             let last = Infinity;
-            for (let current = 16.5; current <= 38; current += 0.5) {
+            for (let current = 16.5; current <= 55.5; current += 0.5) {
                 expect(accel(current)).withContext(`${current}`)
                     .toBeLessThan(last);
+                if (last !== Infinity) {
+                    expect(last - accel(current)).withContext(`${current}`)
+                        .toBeLessThan(0.006);
+                }
                 last = accel(current);
             }
             // It scales with IonizeMax like the lines do.
             expect(ionSlowdown(charge(54, 200)).acceleration)
                 .toBeCloseTo(accel(27), 9);
+            expect(ionSlowdown(charge(90, 200)).acceleration)
+                .toBeCloseTo(accel(45), 9);
         });
 
     it('reproduces wave 42\'s 5-point and 20-point runs with Deionize 1 '
