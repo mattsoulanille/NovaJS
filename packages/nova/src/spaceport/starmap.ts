@@ -282,10 +282,8 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             this.systemGraph?.clearRoute();
         });
         this.buttons.find.click.subscribe(() => void this.openFind());
-        this.buttons.zoomOut.click.subscribe(
-            () => this.systemGraph?.zoomBy(1 / ZOOM_STEP ** 2));
-        this.buttons.zoomIn.click.subscribe(
-            () => this.systemGraph?.zoomBy(ZOOM_STEP ** 2));
+        this.buttons.zoomOut.click.subscribe(() => this.zoomOut());
+        this.buttons.zoomIn.click.subscribe(() => this.zoomIn());
 
         this.findDialog = new FindDialog(controlEvents);
 
@@ -301,7 +299,28 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             down: () => this.systemGraph?.pan(0, -KEY_PAN_STEP),
             left: () => this.systemGraph?.pan(KEY_PAN_STEP, 0),
             right: () => this.systemGraph?.pan(-KEY_PAN_STEP, 0),
+            // `=` and `-` zoom one step, the - / + buttons' step, and `f`
+            // opens Find (reference "Map keys, minimap routes and
+            // ctrl-clicks (K4, M2, M3), wave 41"). They ride the actions
+            // those keys carry by default (settings/controls.json): the
+            // display-scale pair, which a focused menu takes over (the
+            // scale never sees a press while the map is up), and the
+            // escorts' attack order. `+` is shift+`=` and so zooms in too
+            // (the original's shift+= was not separable from a clamp).
+            globalScaleUp: () => this.zoomIn(),
+            globalScaleDown: () => this.zoomOut(),
+            attack: () => void this.openFind(),
         });
+    }
+
+    /** One zoom step in: the + button and `=`. */
+    private zoomIn() {
+        this.systemGraph?.zoomBy(ZOOM_STEP ** 2);
+    }
+
+    /** One zoom step out: the - button and `-`. */
+    private zoomOut() {
+        this.systemGraph?.zoomBy(1 / ZOOM_STEP ** 2);
     }
 
     override async build() {

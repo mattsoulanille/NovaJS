@@ -45,6 +45,26 @@ export class FindDialog {
         return this.dialog.container;
     }
 
+    /** Whether the dialog is up. */
+    get shown(): boolean {
+        return this.dialog.shown;
+    }
+
+    /** Replaces the field's text (headless driving). */
+    type(text: string) {
+        this.dialog.type(text);
+    }
+
+    /** Presses Find (headless driving). */
+    confirm() {
+        this.dialog.confirm();
+    }
+
+    /** Presses Cancel (headless driving). */
+    cancel() {
+        this.dialog.cancel();
+    }
+
     /** Shows the dialog; resolves with the entered name or undefined. */
     async show(): Promise<string | undefined> {
         const name = await this.dialog.show({
