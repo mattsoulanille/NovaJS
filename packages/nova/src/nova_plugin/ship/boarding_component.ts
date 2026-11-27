@@ -924,7 +924,9 @@ export function boarderEffectiveCrew(shipCrew: number,
  * outcome: no capture, the hulk destroyed, as a plunder take's trip
  * (PLUNDER_SELF_DESTRUCT_CHANCE). MEASURED: 3 of 39 clicks (waves 33 and
  * 34, "Capture, wave 34", finding 5: at 75%, 32% and 75%), about 0.08, so
- * the rate 0.1 is kept (Wilson 95% about 0.03-0.20). GUESSES: a separate
+ * the rate 0.1 is kept (Wilson 95% about 0.03-0.20); wave 46's CU rig
+ * ("The capture prompt's keys ... (CU leftover), wave 46", finding 4)
+ * added 1 of 7 at 75%, 4 of 46 in all (0.087). GUESSES: a separate
  * draw made BEFORE the capture roll (a trip leaves no outcome to read),
  * the same at every odds (the trips came at high and low odds alike).
  */

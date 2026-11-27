@@ -1918,7 +1918,10 @@ const BoardingActionSystem = new System({
             && cappedEscortCount(uuid, { world: entities }) < MAX_ESCORTS) {
             // THE CAPTURE SELF-DESTRUCT (reference "Capture, wave 33",
             // finding 5: 2 of 27 clicks answered "Oops! ..." with no
-            // outcome, the hulk destroyed): its own seeded draw, made
+            // outcome, the hulk destroyed; seen again in "The capture
+            // prompt's keys ... (CU leftover), wave 46", finding 4: 1 of
+            // 7 attempts at a shown 75%, within the same 10%
+            // CAPTURE_SELF_DESTRUCT_CHANCE): its own seeded draw, made
             // BEFORE the capture roll (GUESS), with the plunder trip's
             // exemptions (tripPlunderSelfDestruct). A trip spends the
             // attempt, charges the piracy and ends the session as a
