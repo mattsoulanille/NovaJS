@@ -323,14 +323,14 @@ export default {
  * Wave-44 experiments (docs/reference_experiments.md, "... wave 44"): the
  * wave-43 leftovers. RETIRED: wave 12's mïsn 1051 (bit 9099, Kit D shooter
  * beam) and 1053 (bit 9103, Kit D duellist bare); their ships and düdes
- * stay. Used: sÿst 1457-1466, spöb 1035-1091, shïp 738-739 / 761 / 766-768 /
- * 791, düde 539, wëap 312, oütf 497-499, mïsn 1051 / 1053, bits 9286-9287.
- * Map row y = -2940 (x -800 .. -440). The next free ids: sÿst 1467+, spöb
- * 1092-1399 (and 518-999), shïp 888-894 (and 416-419; then look for other
- * stock gaps below 895), düde 540+, përs: override a stock one
- * (kits/w43_pers225.mjs), ränk 205+, mïsn NONE (retire another old kit
- * mission), gövt 283 and below, flët 324+, wëap 313+, oütf 500+, jünk 205+,
- * bits 9288+, rlëD 1113+.
+ * stay. Used: sÿst 1457-1472, spöb 1035-1101, shïp 738-739 / 761 / 766-768 /
+ * 791 / 888, düde 539, wëap 312, oütf 497-499, mïsn 1051 / 1053, bits
+ * 9286-9287. Map row y = -2940 (x -800 .. -200). The next free ids: sÿst
+ * 1473+, spöb 1102-1399 (and 518-999), shïp 889-894 (and 416-419; then look
+ * for other stock gaps below 895), düde 540+, përs: override a stock one
+ * (kits/w43_pers225.mjs, kits/w44_pers225.mjs), ränk 205+, mïsn NONE
+ * (retire another old kit mission), gövt 283 and below, flët 324+, wëap
+ * 313+, oütf 500+, jünk 205+, bits 9288+, rlëD 1113+.
  *
  *  U4  sÿst 1457 Kit Accel Pad: a decoration start (spöb 1035) at the
  *      centre and 14 moon decorations (spöb 1036-1049) on a 200 x 300 px
@@ -376,8 +376,21 @@ export default {
  *      at each ion plateau.
  *  R16 sÿst 1464 / 1465 / 1466 Kit R16 Accept Bit / Abort Bit / Success Bit:
  *      no stellars, Visibility b9281 / b9282 / b9283 (mïsn 1044's OnAccept /
- *      OnAbort / OnSuccess bits): the map shows which bits are set in
- *      flight, with no landing (pilots must have them explored).
+ *      OnAbort / OnSuccess bits): the map shows which bits are set, but
+ *      Visibility is re-read only at a landing (r16_a's in-flight maps drew
+ *      none, not even the Accept one; r16_b's map after a Leave drew Accept
+ *      and Abort). Added:
+ *      sÿst 1468 Kit Pers Big (përs 225 in its Person slot; port spöb 1095,
+ *      the 250 px art, so the player lands after the board;
+ *      kits/w44_pers225.mjs).
+ *  R8  (added) sÿst 1467 Kit R8 Lapse: refusing port spöb 1092 (-200, 0),
+ *      open port 1093 (200, 0), start decoration 1094 at the centre.
+ *  JC  (added, the hub) sÿst 1469-1472 Kit Chain Alpha / Bravo / Charlie /
+ *      Delta, linked in a line; start decoration spöb 1096 in Alpha.
+ *  K8  (added) spöb 1097-1101: more starts at (2400 / 2200 / 2000 / 1700,
+ *      0) and (1700, 1700).
+ *  LN  (added) shïp 888 Kit Blank Short Hull (a BLANK ShortName); the LN
+ *      hulls are for hire (HireRandom 100) at the port's bar.
  */
 function wave44Resources() {
     const out = [];
@@ -422,10 +435,13 @@ function wave44Resources() {
             ...starts.map((x, k) => decoration(1064 + k, `Kit Gravity 10 Moons Start ${x}`, x, 0)),
             ...refs.map(([x, y], k) => decoration(1068 + k, `Kit Gravity 10 Moons Ref ${x},${y}`, x, y)));
     }
-    // --- K8: sÿst 1460, spöb 1075-1080.
+    // --- K8: sÿst 1460, spöb 1075-1080, and (added during the wave: the arrow showed at 2,650 on the axis and at (2300, 2300))
+    // spöb 1097-1101 at (2400, 0), (2200, 0), (2000, 0), (1700, 0) and (1700, 1700).
     const arrow = [[2650, 0], [2750, 0], [2850, 0], [0, 2750], [2300, 2300], [2000, 2000]];
-    out.push(system(1460, "Kit Arrow Grid", nextX(), Y, 363, arrow.map((_, k) => 1075 + k)),
-        ...arrow.map(([x, y], k) => decoration(1075 + k, `Kit Arrow ${x},${y}`, x, y)));
+    const arrow2 = [[2400, 0], [2200, 0], [2000, 0], [1700, 0], [1700, 1700]];
+    out.push(system(1460, "Kit Arrow Grid", nextX(), Y, 363, [...arrow.map((_, k) => 1075 + k), ...arrow2.map((_, k) => 1097 + k)]),
+        ...arrow.map(([x, y], k) => decoration(1075 + k, `Kit Arrow ${x},${y}`, x, y)),
+        ...arrow2.map(([x, y], k) => decoration(1097 + k, `Kit Arrow ${x},${y}`, x, y)));
     // --- R18: sÿst 1461, spöb 1081, düde 539.
     out.push(dude(539, "Kit Guard Control", 3, 362, 593));
     out.push(withTraffic(system(1461, "Kit Guard Control", nextX(), Y, 363, [1081]), [539], 1), port(1081, "Kit Guard Control Port"));
@@ -469,6 +485,24 @@ function wave44Resources() {
     out.push(system(1467, "Kit R8 Lapse", nextX(), Y, 304, [1092, 1093, 1094]),
         spob(1092, "Kit R8 Lapse Bribe", -200, 0, 138, { flags: 0x43, govt: 304, minStatus: 0 }),
         spob(1093, "Kit R8 Lapse Open", 200, 0, 138, { flags: 0x43 }), decoration(1094, "Kit R8 Lapse Start"));
+    // --- R16 again (added during the wave: r16_a boarded the special ship about 200 px from wave 43's 72 px Kit Pers Slot Port
+    // and could not land, so the pilot was never written after the board): sÿst 1468 Kit Pers Big, the stock përs 225 in its
+    // Person slot (kits/w44_pers225.mjs links the overridden person here), port spöb 1095 with the 250 px planet art (spöb 176:
+    // a 425 px landing window, so `l` `l` lands from where the board leaves the ship).
+    const persBig = system(1468, "Kit Pers Big", nextX(), Y, 363, [1095]);
+    persBig.set = { ...persBig.set, persons: [225, ...none8].slice(0, 8), personProbs: [100, ...zero8].slice(0, 8) };
+    out.push(persBig, spob(1095, "Kit Pers Big Port", 0, 0, 176, { flags: 0x43 }));
+    // --- JC (added during the wave, Matthew via the hub: jump chaining on a plotted route): sÿst 1469-1472 Kit Chain Alpha /
+    // Bravo / Charlie / Delta, linked in a line west to east 40 map units apart (each jump arrives heading east, about 1,350
+    // px out, outside the 1,000 px no-jump zone); Alpha holds the start decoration spöb 1096 at (2000, 0), outside its own
+    // no-jump zone. A route Alpha -> Delta is three jumps.
+    const chain = [[1469, "Kit Chain Alpha"], [1470, "Kit Chain Bravo"], [1471, "Kit Chain Charlie"], [1472, "Kit Chain Delta"]];
+    chain.forEach(([sid, name], k) => {
+        const s = system(sid, name, nextX(), Y, 363, k === 0 ? [1096] : []);
+        s.set = { ...s.set, links: [...[chain[k - 1]?.[0], chain[k + 1]?.[0]].filter((v) => v !== undefined), ...none16].slice(0, 16) };
+        out.push(s);
+    });
+    out.push(decoration(1096, "Kit Chain Start", 2000, 0));
     return out;
 }
 

@@ -649,6 +649,25 @@ field; read them as slopes over 0.5 s or more (single-frame steps jump
 / `w43_space_early.json` (inbox `w43.jsonl`), `w43_pers_board.json` (përs
 1151 in sÿst 1455's Person slot) and `w43_pers225_board.json` (with
 `kits/w43_pers225.mjs`; board.mjs by colour, sweeping at 10 px).
+Wave 44 used sÿst 1457-1472, spöb 1035-1101, shïp 738-739 (Kit Probes F / G)
+/ 761 / 766-768 / 791 / 888, düde 539, wëap 312, oütf 497-499 and bits
+9286-9287, and RETIRED wave 12's mïsn 1051 / 1053 (bits 9099 / 9103; düde
+341 / 350 stay), using them for its own. Next free: sÿst 1473, spöb
+1102-1399 (and 518-999), shïp 889-894 (and 416-419; then look for other
+stock gaps below 895), düde 540, ränk 205, mïsn **none** (retire another
+old kit mission), përs: override a stock one (`kits/w43_pers225.mjs`,
+`kits/w44_pers225.mjs`), wëap 313, oütf 500, gövt 283 and below, flët 324,
+jünk 205, bits 9288, rlëD 1113. New rulers: sÿst 1457 **Kit Accel Pad** (a
+decoration start with 14 moons on a 200 x 300 px grid around it: the
+ship's position from rest in ANY direction, evidence `tools/grid2d.py`
+grid "pad"), 1463 Kit Ion Pad (the same around a port), and 1458 / 1459 Kit
+Gravity 5 / 10 Moons (moon starts with reference moons). A **route** in the
+map: Find the end system (it centres on it), then SHIFT-click each hop in
+turn (`{"click":[x,y],"win":true,"mods":"shift"}`); a Find or a plain click
+alone plots nothing. Scenarios `scenarios/w44_space_interactive.json` /
+`w44_space_early.json` (inbox `w44.jsonl`), `w44_pers225_board.json` and
+`w44_pers225big_board.json` (with `kits/w44_pers225.mjs`: the person in sÿst
+1468 Kit Pers Big, whose 250 px port lets the player land after the board).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they

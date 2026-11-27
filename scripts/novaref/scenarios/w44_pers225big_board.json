@@ -1,0 +1,75 @@
+{
+ "name": "w44_pers225big_board",
+ "_comment": "Wave 44 R16 again (r16_b): as w44_pers225_board but with kits/w44_pers225.mjs, which links the overridden stock përs 225 to sÿst 1468 Kit Pers Big (the person in its Person slot; port spöb 1095 has the 250 px planet art, so `l` `l` lands from where the board leaves the ship and the pilot is written at the Leave). Driver: wave 44 evidence tools/r16c.mjs. board.mjs sweeps once (the board answers with no dialog, so the loop cannot tell it succeeded: r16_a swept 92 times).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs",
+  "../kits/w44_pers225.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w44.jsonl",
+    "maxMs": 900000
+   }
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "speedPxS": 360,
+    "turnDegS": 174.2,
+    "near": 260,
+    "stepMs": 60,
+    "maxSteps": 40,
+    "maxLegs": 10,
+    "calMs": 400,
+    "fineBelowPx": 60,
+    "fineStepMs": 25,
+    "dialogClicks": [],
+    "sweep": {
+     "atPx": 10,
+     "startOnSilent": false,
+     "repeat": 1,
+     "turnMs": 40,
+     "presses": 40,
+     "stopAfter": 1
+    }
+   }
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w44.jsonl",
+    "maxMs": 600000
+   }
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}
