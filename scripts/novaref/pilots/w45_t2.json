@@ -1,0 +1,36 @@
+{
+  "name": "novaref-w45-t2",
+  "edits": {
+    "ship": 892,
+    "stellar": 1103,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1474": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w45-t2",
+    "weapons": {
+      "128": 0,
+      "313": 1
+    },
+    "outfits": {
+      "128": 0,
+      "504": 1
+    },
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}

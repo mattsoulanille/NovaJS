@@ -1,0 +1,30 @@
+{
+  "name": "novaref-w45-jz",
+  "edits": {
+    "ship": 703,
+    "stellar": 1105,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1476": 2,
+      "1477": 2,
+      "1478": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w45-jz",
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}

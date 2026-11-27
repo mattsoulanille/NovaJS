@@ -1,0 +1,29 @@
+{
+  "name": "novaref-w45-a13r1500",
+  "edits": {
+    "ship": 703,
+    "stellar": 1002,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1443": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w45-a13r1500",
+    "rating": 1500,
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}

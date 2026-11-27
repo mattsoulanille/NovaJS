@@ -1,0 +1,112 @@
+{
+ "name": "w45_capture_use",
+ "_comment": "Wave 45, capture 'Use As My Ship' (the hub): Enter Ship at Kit Prize Port (sÿst 1473), land, accept mïsn 1054 (it puts Kit Prize Hull ON the port), Leave; Tab; loops/board.mjs as w33_capture (7 turret taps disable it, the board, Capture Ship at (463, 353)); then hand-driven steps (loops/interactive.mjs, inbox w45.jsonl): the prompt's answer and what follows. Pilot pulled at the end.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "keys": "l wait 1200 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "accepted",
+   "window": true
+  },
+  {
+   "keys": "Return wait 7000"
+  },
+  {
+   "shot": "launched",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "speedPxS": 44,
+    "turnDegS": 87.1,
+    "near": 220,
+    "stepMs": 120,
+    "maxSteps": 40,
+    "dialogClicks": [
+     [
+      463,
+      353,
+      "capture"
+     ]
+    ],
+    "fire": {
+     "atPx": 150,
+     "keys": "Space wait 900 Space wait 900 Space wait 900 Space wait 900 Space wait 900 Space wait 900 Space wait 900 wait 2000"
+    },
+    "retarget": 3,
+    "fineBelowPx": 30,
+    "fineStepMs": 50,
+    "sweep": {
+     "atPx": 4,
+     "startOnSilent": true,
+     "repeat": 1,
+     "turnMs": 60,
+     "presses": 70,
+     "stopAfter": 1,
+     "clickTimes": 1
+    }
+   }
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "after",
+   "window": true
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w45.jsonl",
+    "maxMs": 1800000
+   }
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

@@ -316,8 +316,141 @@ export default {
         ...wave42Resources(),
         ...wave43Resources(),
         ...wave44Resources(),
+        ...wave45Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-45 experiments (docs/reference_experiments.md, "... wave 45"): the
+ * hub queue's old-Mac items and the wave-44 leftovers. RETIRED: wave 12's
+ * mïsn 1052 (bit 9100, Kit D duellist) and 1054 (bit 9104, Kit H hunter);
+ * their ships and düdes stay. Used: sÿst 1473-1481, spöb 1102-1143, shïp
+ * 889-894 / 416, düde 540-543, wëap 313-315, oütf 500-505, mïsn 1052 /
+ * 1054, bits 9288-9292. Map row y = -3000 (x -800 .. -480). The next free
+ * ids: sÿst 1482+, spöb 1144-1399 (and 518-999), shïp 417-419 (then look
+ * for other stock gaps below 895), düde 544+, përs: override a stock one
+ * (kits/w44_pers225.mjs), ränk 205+, mïsn NONE (retire another old kit
+ * mission: wave 12's 1059 / 1061-1063 are left; 1060 is wave 41's A13
+ * hunter), gövt 283 and below, flët 324+, wëap 316+, oütf 506+, jünk 205+,
+ * bits 9293+, rlëD 1113+.
+ *
+ *  CU  (the hub: capture "Use As My Ship") sÿst 1473 Kit Prize Range, port
+ *      spöb 1102; mïsn 1054 (bit 9292) puts shïp 889 Kit Prize Hull (the
+ *      magenta pointer, armor 300 / shield 0, Speed 60, crew 1, fuel 400,
+ *      Cargo 30; default weapon wëap 361 Kit Tickler x1 and outfit oütf 502
+ *      Kit Prize Gadget x2; OnCapture b9288, OnRetire b9289; düde 540: AI 4
+ *      of the neutral gövt 363, booty food + money) ON the port. shïp 890 Kit
+ *      Capture Boarder: Kit Ring Crawler Tough (crew 10: ratio 10, 75%) with
+ *      OnRetire b9290. oütf 500 Kit Keepsake (Flags 0x0004 persistent, fuel
+ *      +100), 501 Kit Plain Item (armor +50), 502 Kit Prize Gadget (shield
+ *      +40).
+ *  EC  (the hub: the player's ESCORT carrier) shïp 891 Kit Tough Red (the
+ *      red disc, 3000 / 3000, Kit Tickler); düde 541 AI 3 of the
+ *      always-attacks gövt 362, düde 542 AI 4 of the neutral gövt 363; sÿst
+ *      1474 Kit Blind Range (port spöb 1103, traffic 541) and 1475 Kit Esc
+ *      Neutral (port spöb 1104, traffic 542). The stock Fed Carrier hired.
+ *  T   (the hub: turret blind spots) shïp 892 Kit Blind Ring (the ring
+ *      sprite, inertialess, shïp Flags 0x4000 "turrets blind to the rear")
+ *      and 893 Kit Plain Ring (Flags 0); wëap 313 Kit Quadrant Gun (the Kit
+ *      Escort Gun as Guidance 7, front quadrant; oütf 504), wëap 314 Kit Rear
+ *      Blind Turret (Guidance 4, wëap Flags 0x4000; oütf 505); the hostile
+ *      red disc of sÿst 1474 circles the still player.
+ *  JC  (the hub and the wave-44 leftover: presses around and after an
+ *      arrival, an arrival inside the no-jump zone) sÿst 1476-1478 Kit Zone
+ *      Alpha / Bravo / Charlie, linked west to east 40 map units apart;
+ *      Alpha's start decoration spöb 1105 at (3000, 0); Bravo holds 15 moon
+ *      decorations spöb 1106-1120 every 400 px on y = 80 (x -2800 .. 2800),
+ *      a ruler along the arrival line. oütf 503 Kit Zone Plus 1000 (ModType
+ *      23 hyperspace dist mod, ModVal 1000: a 2,000 px no-jump zone).
+ *  U4  shïp 894 Kit Probe H (Speed 1500, Accel 75): a long ramp for the
+ *      boost multiple on wave 44's Kit Accel Pad.
+ *  U7  sÿst 1479 Kit Gravity 1 Moons (well spöb 1121, Gravity 1; starts
+ *      1122 / 1123 at (300 / 1000, 0); references 1124-1127) and 1480 Kit
+ *      Gravity Minus 5 Moons (well 1128, Gravity -5; starts 1129 / 1130 at
+ *      (300 / 1000, 0); references 1131-1139 at (0 .. 2400, 200)).
+ *  K8  sÿst 1481 Kit Arrow Grid 2: nothing at the centre; starts spöb
+ *      1140-1143 at (2450 / 2500 / 2550 / 2600, 0).
+ *  E6  wëap 315 Kit Ion Tick 5 Still (wave 42's Kit Ion Tick 5 with Impact
+ *      0), shïp 416 Ion Tick5 Still Target, düde 543; mïsn 1052 (bit 9291)
+ *      puts it ON wave 44's Kit Ion Pad Port (spöb 1083).
+ */
+function wave45Resources() {
+    const out = [];
+    const Y = -3000;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const port = (id, name, set = {}) => spob(id, name, 0, 0, 138, { flags: 0x43, ...set });
+    const decoration = (id, name, x = 0, y = 0) => spob(id, name, x, y, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] });
+    const withTraffic = (sys, dudes, avgShips) => {
+        sys.set = { ...sys.set, avgShips, dudes: [...dudes, ...none8].slice(0, 8), dudeProbs: [...dudes.map(() => Math.floor(100 / dudes.length)), ...zero8].slice(0, 8) };
+        return sys;
+    };
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const RLED = { ring: 1955, pointer: 1959, red: 1971 };
+    const armed = (wid, n = 1) => ({ weapons: [wid, -1, -1, -1], weaponCounts: [n, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] });
+    const item = (id, name, set) => { const g = gun(id, name, 365); g.set = { ...g.set, max: 4, ...set }; return g; };
+    // --- CU: oütf 500-502, shïp 889-890, düde 540, sÿst 1473, spöb 1102, mïsn 1054 (wave 12's, retired).
+    out.push(item(500, "Kit Keepsake", { flags: 0x0004, modType: 12, modVal: 100 }), item(501, "Kit Plain Item", { modType: 6, modVal: 50 }),
+        item(502, "Kit Prize Gadget", { modType: 4, modVal: 40 }));
+    out.push(...shareRled(889, "Kit Prize Hull", RLED.pointer, 24, { armor: 300, shield: 0, shieldRecharge: 0, armorRecharge: 0, accel: 300, speed: 60,
+        turn: 30, mass: 50, freeMass: 100, cargo: 30, fuel: 400, ai: 4, strength: 1, crew: 1, flags: 0, flags2: 0, cost: 50000, ...armed(361),
+        outfits: [502, -1, -1, -1], outfitCounts: [2, 0, 0, 0], onCapture: "b9288", onRetire: "b9289" }));
+    out.push(...shareRled(890, "Kit Capture Boarder", RLED.ring, 24, { accel: 2000, speed: 100, turn: 30, armor: 3000, shield: 100, shieldRecharge: 0,
+        mass: 50, freeMass: 1000, cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0x00C8, onRetire: "b9290" }));
+    const prize = dude(540, "Kit Prize", 4, 363, 889);
+    prize.set = { ...prize.set, flags: 0x0041 };
+    out.push(prize, system(1473, "Kit Prize Range", nextX(), Y, 363, [1102]), port(1102, "Kit Prize Port"));
+    out.push(...misn(1054, "Kit CU prize on the port", 9292, { availStel: 1102, shipCount: 1, shipDude: 540, shipGoal: -1, shipBehav: -1,
+        shipStart: -1, onAccept: "!b9292" }));
+    // --- EC / T: shïp 891-893, düde 541-542, sÿst 1474-1475, spöb 1103-1104, wëap 313-314, oütf 504-505.
+    out.push(...shareRled(891, "Kit Tough Red", RLED.red, 24, { accel: 300, speed: 300, turn: 60, armor: 3000, shield: 3000, shieldRecharge: 0,
+        armorRecharge: 0, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 50, crew: 5, flags: 0, flags2: 0, ...armed(361) }));
+    out.push(dude(541, "Kit Tough Red Hostile", 3, 362, 891), dude(542, "Kit Tough Red Neutral", 4, 363, 891));
+    out.push(withTraffic(system(1474, "Kit Blind Range", nextX(), Y, 363, [1103]), [541], 1), port(1103, "Kit Blind Range Port"));
+    out.push(withTraffic(system(1475, "Kit Esc Neutral", nextX(), Y, 363, [1104]), [542], 1), port(1104, "Kit Esc Neutral Port"));
+    const ring = { accel: 2000, speed: 300, turn: 30, armor: 30000, shield: 30000, shieldRecharge: 1000, mass: 50, freeMass: 1000, cargo: 50,
+        maxGuns: 8, maxTurrets: 8, ai: 3, strength: 100, crew: 10, flags2: 0x00C8 };
+    out.push(...shareRled(892, "Kit Blind Ring", RLED.ring, 24, { ...ring, flags: 0x4000 }), ...shareRled(893, "Kit Plain Ring", RLED.ring, 24, { ...ring, flags: 0 }));
+    const escortGun = { reload: 20, duration: 60, armorDamage: 30, shieldDamage: 30, flags: 0 };
+    out.push(weap(313, "Kit Quadrant Gun", 131, { ...escortGun, guidance: 7 }), gun(504, "Kit Quadrant Gun", 313));
+    out.push(weap(314, "Kit Rear Blind Turret", 131, { ...escortGun, guidance: 4, flags: 0x4000 }), gun(505, "Kit Rear Blind Turret", 314));
+    // --- JC: sÿst 1476-1478, spöb 1105-1120, oütf 503.
+    const zone = [[1476, "Kit Zone Alpha"], [1477, "Kit Zone Bravo"], [1478, "Kit Zone Charlie"]];
+    const ruler = Array.from({ length: 15 }, (_, k) => -2800 + 400 * k);
+    zone.forEach(([sid, name], k) => {
+        const s = system(sid, name, nextX(), Y, 363, k === 0 ? [1105] : k === 1 ? ruler.map((_, j) => 1106 + j) : []);
+        s.set = { ...s.set, links: [...[zone[k - 1]?.[0], zone[k + 1]?.[0]].filter((v) => v !== undefined), ...none16].slice(0, 16) };
+        out.push(s);
+    });
+    out.push(decoration(1105, "Kit Zone Start", 3000, 0), ...ruler.map((x, j) => decoration(1106 + j, `Kit Zone Ruler ${x}`, x, 80)));
+    out.push(item(503, "Kit Zone Plus 1000", { modType: 23, modVal: 1000, max: 1 }));
+    // --- U4: shïp 894.
+    out.push(...ship(894, "Kit Probe H", 128, { turn: 30, armor: 30000, shield: 30000, mass: 50, freeMass: 500, cargo: 50, maxGuns: 8, maxTurrets: 8,
+        ai: 1, strength: 10, flags: 0, flags2: 0x0088, accel: 75, speed: 1500 }));
+    // --- U7: sÿst 1479-1480, spöb 1121-1139.
+    const well = (sid, name, wellId, gravity, starts, refs) => {
+        const ids = [wellId, ...starts.map((_, k) => wellId + 1 + k), ...refs.map((_, k) => wellId + 1 + starts.length + k)];
+        out.push(system(sid, name, nextX(), Y, 363, ids), spob(wellId, `${name} Well`, 0, 0, 143, { flags: 0x01, gravity }),
+            ...starts.map((x, k) => decoration(wellId + 1 + k, `${name} Start ${x}`, x, 0)),
+            ...refs.map(([x, y], k) => decoration(wellId + 1 + starts.length + k, `${name} Ref ${x},${y}`, x, y)));
+    };
+    well(1479, "Kit Gravity 1 Moons", 1121, 1, [300, 1000], [[300, 200], [0, 200], [1000, 200], [700, 200]]);
+    well(1480, "Kit Gravity Minus 5 Moons", 1128, -5, [300, 1000], Array.from({ length: 9 }, (_, k) => [300 * k, 200]));
+    // --- K8: sÿst 1481, spöb 1140-1143.
+    const arrow = [2450, 2500, 2550, 2600];
+    out.push(system(1481, "Kit Arrow Grid 2", nextX(), Y, 363, arrow.map((_, k) => 1140 + k)),
+        ...arrow.map((x, k) => decoration(1140 + k, `Kit Arrow ${x},0`, x, 0)));
+    // --- E6: wëap 315, shïp 416, düde 543, mïsn 1052 (wave 12's, retired) on wave 44's Kit Ion Pad Port (spöb 1083).
+    out.push(weap(315, "Kit Ion Tick 5 Still", 131, { reload: 60, duration: 60, armorDamage: 1, shieldDamage: 1, guidance: 4, ionization: 5, impact: 0 }));
+    out.push(...ship(416, "Ion Tick5 Still Target", 136, { armor: 30000, shield: 0, accel: 0, speed: 0, turn: 0, ai: 3, strength: 1, crew: 1, ...armed(315) }));
+    out.push(dude(543, "Ion Tick5 Still Target", 3, 362, 416));
+    out.push(...misn(1052, "Kit E6 still ion 5 on the pad", 9291, { availStel: 1083, shipCount: 1, shipDude: 543, shipGoal: -1, shipBehav: -1,
+        shipStart: -1, onAccept: "!b9291" }));
+    return out;
+}
 
 /**
  * Wave-44 experiments (docs/reference_experiments.md, "... wave 44"): the
@@ -4685,8 +4818,7 @@ function wave12Resources() {
     // mïsn 1049 (bit 9097, the bolt shooter) and 1050 (bit 9098, the blast shooter) were retired in wave 43
     // (wave43Resources: A13 stray fire); düde 339 / 340 stay.
     // mïsn 1051 (bit 9099, the beam shooter) was retired in wave 44 (wave44Resources: E6 ion 20 on the pad); düde 341 stays.
-    out.push(...misn(1052, "Kit D duellist", 9100, { availStel: 2047, availLoc: 0, shipCount: 1, shipDude: 338, shipGoal: 1, shipBehav: 0, shipStart: -2,
-        returnStel: 2047, onAccept: "!b9100", onSuccess: "b9101", onFailure: "b9102", dispWeight: 30000 }));
+    // mïsn 1052 (bit 9100, the duellist BBS job) was retired in wave 45 (wave45Resources: E6 still ion 5 on the pad); düde 338 stays.
     // The one-frame beam kills a HEALTHY duellist outright only if no
     // shield soaks the frame: shïp 865 Kit Duel Victim Bare (shield 0,
     // armor 1500), düde 350, mïsn 1053 (bit 9103), the same BBS job.
@@ -4711,7 +4843,7 @@ function wave12Resources() {
     // (mïsn 1054, bit 9104) and one prey as a Mission BBS job (mïsn 1059,
     // bit 9105), both on the port (ShipStart -1, no goal, own AI).
     out.push(system(2077, "Kit Hunt Arena", -240, -700, 363, [2077]), spob(2077, "Kit Hunt Arena Port", 0, 0, 138, { flags: 0x43 }));
-    out.push(...misn(1054, "Kit H hunter", 9104, { availStel: 2077, shipCount: 1, shipDude: 342, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9104" }));
+    // mïsn 1054 (bit 9104, the hunter) was retired in wave 45 (wave45Resources: CU prize on the port); düde 342 stays.
     out.push(...misn(1059, "Kit H prey", 9105, { availStel: 2077, availLoc: 0, shipCount: 1, shipDude: 343, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9105", dispWeight: 30000 }));
     // Added during the wave: in the arena the pair fought on screen for
     // a few seconds, then flew off. ANCHORED copies in Kit FF Range (sÿst
