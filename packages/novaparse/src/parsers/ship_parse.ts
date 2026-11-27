@@ -143,8 +143,11 @@ export async function ShipParse(ship: ShipResource,
         desc = descResource.text;
     }
     else {
-        desc = "No matching dësc for shïp of id " + base.id;
-        notFoundFunction(desc);
+        // A missing dësc is an empty description: the original leaves
+        // the description pane blank. The warning still goes to
+        // notFoundFunction so the diagnostic isn't lost.
+        desc = "";
+        notFoundFunction("No matching dësc for shïp of id " + base.id);
     }
 
     // The shipyard "More Info" artwork is the ship dësc's Graphic field —

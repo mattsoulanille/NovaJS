@@ -56,6 +56,19 @@ async function parse(fields: Partial<ShipResource>) {
 }
 
 describe("ShipParse", () => {
+    it("gives a ship with no dësc an empty description and warns",
+        async () => {
+            const notFound: string[] = [];
+            const ship = await ShipParse(fakeShip({}),
+                m => notFound.push(m),
+                Promise.resolve({ "nova:128": "nova:5000" }),
+                Promise.resolve({}), Promise.resolve({}),
+                Promise.resolve({ oütf: {} } as unknown as NovaResources));
+            expect(ship.desc).toEqual("");
+            expect(notFound).toContain(
+                "No matching dësc for shïp of id nova:128");
+        });
+
     describe("Deionize", () => {
         it("reads 100 as one point of ion charge a 1/56 s frame (reference "
             + "\"Ion charge against the turn, in 5-point steps (E6), wave "

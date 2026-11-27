@@ -296,6 +296,22 @@ describe("PlanetParse spaceport ambient sound (CustSndID)", () => {
         });
 });
 
+describe("PlanetParse landing description", () => {
+    it("gives a stellar with no dësc an empty landing description and"
+        + " warns", async () => {
+        const notFound: string[] = [];
+        const spob = new SpobResource(
+            buildSpob({ flags2: 0, hyperlinks: [], ambientSound: -1, fee: 0 })
+                .resource("spöb", 200), getEmptyNovaResources());
+        spob.globalID = "nova:200";
+        spob.prefix = "nova";
+        const planet = await PlanetParse(spob, m => notFound.push(m));
+        expect(planet.landingDesc).toEqual("");
+        expect(notFound).toContain(
+            "No matching dësc for spöb of id nova:200");
+    });
+});
+
 describe("PlanetParse landing picture", () => {
     let idSpace: ReturnType<typeof getEmptyNovaResources>;
     const stub = (globalID: string) => ({ globalID }) as never;

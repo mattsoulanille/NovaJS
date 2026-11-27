@@ -27,6 +27,19 @@ function fakeOutf(functions: Array<[string, number | boolean]>): OutfResource {
 }
 
 describe("OutfitParse", () => {
+    it("gives an outfit with no dësc an empty description and warns",
+        async () => {
+            // Plug-in outfits routinely omit the dësc (e.g. "missile
+            // things" oütf 579). The pane stays blank, as in the original;
+            // the parser placeholder used to leak into the outfitter.
+            const notFound: string[] = [];
+            const outfit = await OutfitParse(fakeOutf([]),
+                m => notFound.push(m));
+            expect(outfit.desc).toEqual("");
+            expect(notFound).toContain(
+                "No matching dësc for oütf of id nova:128");
+        });
+
     it("parses the hyperspace dist mod into jumpDistanceMod", async () => {
         const outfit = await OutfitParse(
             fakeOutf([["hyperspace dist mod", -300]]), () => { });

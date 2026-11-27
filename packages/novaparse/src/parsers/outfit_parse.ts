@@ -334,8 +334,11 @@ export async function OutfitParse(outf: OutfResource, notFoundFunction: (m: stri
         desc = descResource.text;
     }
     else {
-        desc = "No matching dësc for oütf of id " + base.id;
-        notFoundFunction(desc);
+        // A missing dësc is an empty description: the original leaves
+        // the description pane blank. The warning still goes to
+        // notFoundFunction so the diagnostic isn't lost.
+        desc = "";
+        notFoundFunction("No matching dësc for oütf of id " + base.id);
     }
 
     // oütf RequireGovt (Bible ~:2052): a gövt LOCAL id in one of four

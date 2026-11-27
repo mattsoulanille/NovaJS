@@ -71,8 +71,12 @@ export async function PlanetParse(spob: SpobResource, notFoundFunction: (m: stri
         desc = descResource.text;
     }
     else {
-        desc = "No matching dësc for spöb of id " + base.id;
-        notFoundFunction(desc);
+        // A missing dësc is an empty landing description: the spaceport
+        // text area stays blank rather than showing a debug placeholder.
+        // The warning still goes to notFoundFunction so the diagnostic
+        // isn't lost.
+        desc = "";
+        notFoundFunction("No matching dësc for spöb of id " + base.id);
     }
 
     // CustPicID < 128 means "no custom landscape" (EVN Bible p. 60; the
