@@ -319,6 +319,7 @@ export default {
         ...wave45Resources(),
         ...wave46Resources(),
         ...wave47Resources(),
+        ...wave48Resources(),
     ].map(wave15Patches).map(wave46Patches).map(withoutRunningLights),
 };
 
@@ -481,6 +482,95 @@ function wave47Resources() {
     out.push(...shareRled(848, "Kit Deal Escort", RLED.yellow, 24, { ...deal, escortUpgradeTo: 844, escortUpgradeCost: 1000, escortSellValue: 5000,
         onPurchase: "b9303", onRetire: "b9301" }));
     out.push(...shareRled(844, "Kit Deal Upgraded", RLED.cyan, 24, { ...deal, onPurchase: "b9302", onRetire: "b9304" }));
+    return out;
+}
+
+/**
+ * Wave-48 experiments (docs/reference_experiments.md, "... wave 48"): the
+ * wave-47 leftovers. RETIRED: wave 12's mïsn 1063 (bit 9113, S2 cargo
+ * plain) and wave 13's 1064 / 1065 (bits 9117 / 9121, X abort escort /
+ * raiders) and 1066 / 1067 (bits 9125 / 9126, N disabler / escort ally);
+ * their ships and düdes stay. Used: sÿst 1486-1489, spöb 1165-1170, wëap
+ * 322-323, oütf 510-511, mïsn 1063-1067, bits 9306-9316. Map row y = -3180
+ * (x -800 .. -680). The next free ids: sÿst 1490+, spöb 1171-1399 (and
+ * 518-999), shïp NONE (retire an old kit hull: wave 10's 843 Kit Sub Target
+ * Big is unused since wave 41), düde 548 / 550+, përs: override a stock one
+ * (kits/w48_pers225.mjs), ränk 205+, mïsn: wave 13's 1073 only (then retire
+ * another old kit mission: wave 13's 1074-1084 are one-off rigs), gövt 283
+ * and below, flët 324+, wëap 324+, oütf 512+, jünk 205+, bits 9317+, rlëD
+ * 1113+.
+ *
+ *  RP  The asteroid push (a rock's push per Impact / its röid Mass). sÿst
+ *      1486 Kit Rock Push Small (16 asteroids, AstTypes 0x0001: stock röid
+ *      128 Metal Small, Mass 150) and 1487 Kit Rock Push Huge (0x0008: röid
+ *      131 Metal Huge, Mass 1200), each with a start decoration at the centre
+ *      (spöb 1165 / 1166: flags 0, Enter Ship puts the player on it, `l`
+ *      never selects it). wëap 322 / 323 Kit Rock Knock 300 / 1200: an
+ *      UNGUIDED 1-damage bolt (Reload 20, Speed 1000, Count 30: about 300
+ *      px) of Impact 300 / 1200 (oütf 510 / 511). The player, Kit Plain Ring
+ *      (893, inertialess) with oütf 509 Kit Slow Turn (about 29 deg/s),
+ *      spins in place with Left and Space held: a rock a bolt hits is
+ *      kicked along the bolt, read from the rock's track (the player sits
+ *      still, so screen = world velocities).
+ *  SD2 An in-flight bit reader that does not depend on traffic building:
+ *      sÿst 1488 Kit Bits Person (port spöb 1167 at the centre, no
+ *      traffic, the stock përs 225 in its Person slot at 100%;
+ *      kits/w48_pers225.mjs makes it an invincible immobile Kit Pers Hulk
+ *      whose hail offers LinkMission 1066). mïsn 1066 Kit SD2 person offer
+ *      (AvailLoc 2, AvailBits "b9307 | b9310", OnAccept b9311): offered by
+ *      the hail only once a bit under test is set. mïsn 1064 (bit 9306) puts
+ *      wave 12's Kit Anchored Trader (düde 356) on the port, ShipGoal 0,
+ *      OnShipDone b9307, ReturnStel 1167, OnSuccess b9308.
+ *  SF2 mïsn 1065 (bit 9309) at the same port: wave 45's prize (düde 540) as
+ *      a ShipBehav-1 / ShipGoal-3 protector; destroying it fails the mission
+ *      in flight: OnFailure b9310.
+ *  CU  Mission cargo across "Use As My Ship": mïsn 1063 Kit CU cargo job, a
+ *      Mission BBS job (AvailLoc 0, DispWeight 30000, bit 9312) at wave 45's
+ *      Kit Prize Port (spöb 1102) carrying 5 t of Medical Supplies (cargo
+ *      type 2, picked up at the accept) to Kit Port (spöb 2100); OnAccept
+ *      b9313, OnFailure b9315, OnAbort b9316, OnSuccess b9317 (not set by
+ *      anything else).
+ *  KS  A ship explosion under 100 t: sÿst 1489 Kit Blast Small 40, port spöb
+ *      1168 at (0, 0) and a marker spöb 1169 at (40, 0); mïsn 1067 (bit
+ *      9314) puts wave 31's Kit Hulk IR (düde 477: shïp 547, 50 t, DeathDelay
+ *      10) on the marker (ShipStart -2), inside the damage square that
+ *      wave 29's law gives a 50 t wreck (2 x (25.5 + 0.037 x 50) = 55 px).
+ */
+function wave48Resources() {
+    const out = [];
+    const Y = -3180;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const decoration = (id, name, x = 0, y = 0) => spob(id, name, x, y, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] });
+    const port = (id, name, set = {}) => spob(id, name, 0, 0, 138, { flags: 0x43, ...set });
+    // --- RP: sÿst 1486-1487, spöb 1165-1166, wëap 322-323, oütf 510-511.
+    [[1486, "Kit Rock Push Small", 1165, 0x0001], [1487, "Kit Rock Push Huge", 1166, 0x0008]].forEach(([sid, name, did, types]) => {
+        const s = system(sid, name, nextX(), Y, 363, [did]);
+        s.set = { ...s.set, asteroids: 16, asteroidTypes: types };
+        out.push(s, decoration(did, `${name} Start`));
+    });
+    const knock = { reload: 20, duration: 30, speed: 1000, armorDamage: 1, shieldDamage: 1, guidance: -1, ionization: 0, flags: 0 };
+    [[322, "Kit Rock Knock 300", 300, 510], [323, "Kit Rock Knock 1200", 1200, 511]].forEach(([wid, name, impact, oid]) =>
+        out.push(weap(wid, name, 131, { ...knock, impact }), gun(oid, name, wid)));
+    // --- SD2 / SF2: sÿst 1488, spöb 1167, mïsn 1064-1066 (wave 13's, retired), bits 9306-9311.
+    const pers = system(1488, "Kit Bits Person", nextX(), Y, 363, [1167]);
+    pers.set = { ...pers.set, persons: [225, ...none8].slice(0, 8), personProbs: [100, ...zero8].slice(0, 8) };
+    out.push(pers, port(1167, "Kit Bits Person Port"));
+    out.push(...misn(1064, "Kit SD2 destroy the trader", 9306, { availStel: 1167, shipCount: 1, shipDude: 356, shipGoal: 0, shipBehav: -1,
+        shipStart: -1, returnStel: 1167, onAccept: "!b9306", onShipDone: "b9307", onSuccess: "b9308" }));
+    out.push(...misn(1065, "Kit SF2 protect the prize", 9309, { availStel: 1167, shipCount: 1, shipDude: 540, shipGoal: 3, shipBehav: 1,
+        shipStart: -1, onAccept: "!b9309", onFailure: "b9310" }));
+    const offer = misn(1066, "Kit SD2 person offer", 9307, { availStel: -1, availLoc: 2, onAccept: "b9311" });
+    offer[0].set = { ...offer[0].set, availBits: "b9307 | b9310" };
+    out.push(...offer);
+    // --- CU: mïsn 1063 (wave 12's, retired), bits 9312-9317.
+    out.push(...misn(1063, "Kit CU cargo job", 9312, { availStel: 1102, availLoc: 0, dispWeight: 30000, travelStel: 2100, cargoType: 2,
+        cargoQty: 5, pickupMode: 0, dropoffMode: 0, onAccept: "!b9312 b9313", onFailure: "b9315", onAbort: "b9316", onSuccess: "b9317" }));
+    // --- KS: sÿst 1489, spöb 1168-1169, mïsn 1067 (wave 13's, retired), bit 9314.
+    out.push(system(1489, "Kit Blast Small 40", nextX(), Y, 363, [1168, 1169]), port(1168, "Kit Blast Small 40 Port"),
+        spob(1169, "Kit Blast Small 40 Mark", 40, 0, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
+    out.push(...misn(1067, "Kit KS blast hulk 50 t", 9314, { availStel: 1168, onAccept: "!b9314", shipCount: 1, shipSyst: -1, shipDude: 477,
+        shipGoal: -1, shipBehav: -1, shipStart: -2 }));
     return out;
 }
 
@@ -4765,22 +4855,19 @@ function wave13Resources() {
     const armed = (wid, n = 1) => ({ weapons: [wid, -1, -1, -1], weaponCounts: [n, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] });
 
     // --- X: aborting in flight.
-    out.push(...misn(1064, "Kit X abort escort", 9117, { shipCount: 1, shipDude: 330, shipGoal: 3, shipBehav: 1, shipStart: -1,
-        compGovt: 360, compReward: 10, onAccept: "!b9117", onAbort: "b9118", onSuccess: "b9119", onFailure: "b9120", returnStel: 2100 }));
+    // mïsn 1064 (bit 9117, X abort escort) and 1065 (bit 9121, X abort raiders) were retired in wave 48 (wave48Resources: SD2 /
+    // SF2); shïp 871 and düde 357 stay.
     out.push(...shareRled(871, "Kit Abort Raider", 1959, 24, { ...mobile, ai: 3, armor: 1000, shield: 1000, shieldRecharge: 0, armorRecharge: 0, ...armed(267) }));
     out.push(dude(357, "Kit Abort Raider", 3, 363, 871));
-    out.push(...misn(1065, "Kit X abort raiders", 9121, { shipCount: 2, shipDude: 357, shipGoal: 0, shipBehav: 0, shipStart: -1,
-        compGovt: 363, compReward: 10, onAccept: "!b9121", onAbort: "b9122", onSuccess: "b9123", onFailure: "b9124", returnStel: 2100 }));
 
     // --- N: an NPC disables a mission ship with one shot.
     out.push(weap(285, "Kit Disabler", 131, { reload: 30000, duration: 90, armorDamage: 1200, shieldDamage: 1200, guidance: 4, speed: 600, proxRadius: 0, blastRadius: 0, flags: 0 }));
     out.push(...shareRled(872, "Kit Disabler", 1971, 24, { ...anchored, armor: 30000, shield: 30000, ...armed(285) }));
     out.push(dude(358, "Kit Disabler", 3, 362, 872));
-    out.push(...misn(1066, "Kit N disabler", 9125, { availStel: 2047, shipCount: 1, shipDude: 358, shipGoal: -1, shipBehav: 0, shipStart: -3, onAccept: "!b9125" }));
+    // mïsn 1066 (bit 9125, N disabler) and 1067 (bit 9126, N escort ally) were retired in wave 48 (wave48Resources: the SD2
+    // person's mission, KS the small blast); düde 358 / 359 stay.
     out.push(...shareRled(873, "Kit Ally Anchored", 1959, 24, { ...anchored, armor: 1500, shield: 0 }));
     out.push(dude(359, "Kit Ally Anchored", 3, 360, 873));
-    out.push(...misn(1067, "Kit N escort ally", 9126, { availStel: 2047, availLoc: 0, shipCount: 1, shipDude: 359, shipGoal: 3, shipBehav: 1, shipStart: -2,
-        returnStel: 2047, onAccept: "!b9126", onSuccess: "b9128", onFailure: "b9127", dispWeight: 30000 }));
 
     // Added during the wave: the ShipBehav-1 ally does not stay on the
     // near mark (it took a formation slot beside the player, off the line
@@ -5043,9 +5130,8 @@ function wave12Resources() {
     // ScanMask 0x0001 to Kit Scan Gate Port, CompGovt 354 / CompReward 10.
     // mïsn 1062 (bit 9112) with Flags 0x0020 ("fails if you're scanned",
     // OnFailure b9114), 1063 (bit 9113) without (OnFailure b9115).
-    const s2 = { availStel: 2069, travelStel: 2068, cargoType: 0, cargoQty: 1, pickupMode: 0, dropoffMode: 0, scanMask: 0x0001, compGovt: 354, compReward: 10 };
-    // mïsn 1062 (bit 9112, S2 cargo 0x20) was retired in wave 46 (wave46Resources: KB beam shooter); 1063 stays.
-    out.push(...misn(1063, "Kit S2 cargo plain", 9113, { ...s2, onAccept: "!b9113", onFailure: "b9115", onSuccess: "b9116" }));
+    // mïsn 1062 (bit 9112, S2 cargo 0x20) was retired in wave 46 (wave46Resources: KB beam shooter) and 1063 (bit 9113, S2
+    // cargo plain: availStel 2069, travelStel 2068, food x1, scanMask 0x0001) in wave 48 (wave48Resources: CU mission cargo).
 
     // --- P1 run 1 (docs/npc_behavior_gaps.md): does a police interceptor
     // react when the player attacks a third party? sÿst/spöb 2079 Kit

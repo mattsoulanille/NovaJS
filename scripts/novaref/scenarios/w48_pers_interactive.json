@@ -1,0 +1,45 @@
+{
+ "name": "w48_pers_interactive",
+ "_comment": "Wave 48: Enter Ship, recording from the start at 30 fps, then hand-driven steps (loops/interactive.mjs, inbox ~/.local/share/novaref/inbox/w48.jsonl) until {\"done\":true}; the pilot is pulled at the end. SD2 / SF2 with kits/w48_pers225.mjs (the stock përs 225 as the in-flight bit reader of sÿst 1488).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs",
+  "../kits/w48_pers225.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w48.jsonl",
+    "maxMs": 1800000
+   }
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

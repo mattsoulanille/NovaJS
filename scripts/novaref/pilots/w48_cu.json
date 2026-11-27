@@ -1,0 +1,57 @@
+{
+  "name": "novaref-w48-cu",
+  "edits": {
+    "ship": 890,
+    "stellar": 1102,
+    "credits": 12345,
+    "fuel": 2500,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1473": 2
+    },
+    "missionBits": {
+      "9292": true,
+      "9312": true
+    },
+    "nickname": "Probe",
+    "shipName": "w48-cu",
+    "weapons": {
+      "128": 0,
+      "365": 1,
+      "370": 1
+    },
+    "outfits": {
+      "128": 0,
+      "500": 1,
+      "501": 1,
+      "607": 1,
+      "609": 1
+    },
+    "cargo": [
+      10,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "escorts": [
+      {
+        "ship": 708,
+        "hired": true
+      }
+    ],
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}
