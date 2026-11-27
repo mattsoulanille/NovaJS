@@ -25407,6 +25407,17 @@ shot and both pilots read back).
 `sg_b/` (window shots `05-grant-sel.png` .. `16-left.png`, the
 `pilot-after/` files), `sg_a.ask.log`, `sg_b.ask.log`.
 
+**Applied 2026-11-27**: no code change (NovaJS matched by reading);
+`N/spaceport/outfitter_self_grant_test.ts` pins all four steps through the
+real outfitter (headless PIXI, the Buy / Sell buttons' handlers on the
+grid's selection) on mock data mirroring the rig (oütf 514-518, Max 3,
+1,000 cr, 1,000,000 cr): `sg_a` step by step (2, 4, greyed with "Can't
+have any more!", a greyed click does nothing, the Sell 4 -> 3 at full
+price and still greyed, Giver -> Gift, Drop 2 -> 0 and Both 2 -> 0 for one
+full refund each, the Leave's pilot Grant 3 / Giver 1 / Gift 1 at 997,000)
+and `sg_b` (pre-owned 2 -> 4 and greyed, Drop and Both 2 -> 0 for one
+half-price refund each, the Leave's Grant 4 at 1,000,000).
+
 ### A tractor beam's pull frame by frame, its Impact scaling and the brake's Mass gate (the hub's item 3, the KB leftover), wave 51: the pull builds STEADILY for the beam's whole ~1 s (about 345 px/s² on a 50 t hull at Impact 20, about 705 at Impact 40: in proportion to Impact), about 30 x |Impact| / Mass px/s a 1/30 s unit, the push law itself; the NPC tractor's Count-30 beam shows for about 1 s (30 units a second) while the player's Count-30 beam in the same system shows for 17 frames (wave 41's Count / 56); the near brake does take a LIGHTER moving hull (29 -> 10 -> 0 px/s at about 350 px) and did not touch a heavier one (wave 50's `trm_b`, 300 t at 357 px) (2026-11-27)
 
 **Question** (the hub's item 3): wave 50's pull (300-325 px/s² on 50 t
