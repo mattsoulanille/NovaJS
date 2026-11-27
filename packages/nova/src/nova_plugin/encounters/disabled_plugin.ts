@@ -87,9 +87,10 @@ registerSimulationBridgeEvent({ event: ShipDisabledEvent });
 /**
  * Emitted (targeted at the ship) when a PLAYER-controlled ship repairs
  * itself out of the disabled state — the repair-system outfit (oütf
- * ModType 49), or NovaJS's inherent player repair standing in for one
- * (Forgejo #383) — so that player's status line can say "Propulsion
- * systems repaired." (stock STR# 2002 0-based 36, verbatim; reference
+ * ModType 49), the only self-repair since NovaJS's inherent player
+ * repair was removed (Forgejo #383) — so that player's status line can
+ * say "Propulsion systems repaired." (stock STR# 2002 0-based 36,
+ * verbatim; reference
  * "Wave-37 leftovers, wave 38", A10: printed at the repair, both runs).
  * Not emitted for an outside repair (a hail assist, a capture, a death's
  * refill), nor for an NPC. Display only: never mutates the simulation.
@@ -147,7 +148,7 @@ export const ShipDisableSystem = new System({
             }
             entity.components.set(DisabledComponent, {
                 repairAt: rollRepairTime(time.time, repair.hasRepairSystem,
-                    controlledBy !== undefined, () => random.next()),
+                    () => random.next()),
             });
             if (controlledBy !== undefined) {
                 // A jump still in its origin system collapses this tick
@@ -185,9 +186,9 @@ export const ShipDisableSystem = new System({
             return;
         }
 
-        // Self-repair (ModType 49 outfit, or the player's inherent
-        // repair droid): at the rolled time, restore armor to slightly
-        // above the threshold and bring all systems back online.
+        // Self-repair (the ModType 49 outfit only; a player without one
+        // stays disabled, #383): at the rolled time, restore armor to
+        // slightly above the threshold and bring all systems back online.
         if (disabled.repairAt !== null && time.time >= disabled.repairAt) {
             armor.current = repairedArmor(armor.max, fraction);
             entity.components.delete(DisabledComponent);

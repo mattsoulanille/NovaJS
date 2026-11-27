@@ -6,6 +6,7 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
@@ -22,8 +23,6 @@ import {
     isBelowDisableThreshold,
     OUTFIT_REPAIR_DELAY_MAX_MS,
     OUTFIT_REPAIR_DELAY_MIN_MS,
-    PLAYER_REPAIR_DELAY_MAX_MS,
-    PLAYER_REPAIR_DELAY_MIN_MS,
     RepairComponent,
     repairedArmor,
     REPAIR_MARGIN_FRACTION,
@@ -153,24 +152,21 @@ describe('disable threshold helpers', () => {
         expect(repaired).toBeLessThan(0.35);
     });
 
-    it('rolls repair times: outfit precedes player, ranges hold', () => {
-        // The outfit schedule wins even for a player-controlled ship.
-        const outfit = rollRepairTime(1000, true, true, () => 0.5)!;
+    it('rolls repair times only for a repair outfit, inside its window '
+        + '(#383: no inherent player repair)', () => {
+        const outfit = rollRepairTime(1000, true, () => 0.5)!;
         expect(outfit).toBeGreaterThanOrEqual(1000 + OUTFIT_REPAIR_DELAY_MIN_MS);
         expect(outfit).toBeLessThan(1000 + OUTFIT_REPAIR_DELAY_MAX_MS);
 
-        const player = rollRepairTime(1000, false, true, () => 0.5)!;
-        expect(player).toBeGreaterThanOrEqual(1000 + PLAYER_REPAIR_DELAY_MIN_MS);
-        expect(player).toBeLessThan(1000 + PLAYER_REPAIR_DELAY_MAX_MS);
-        // The inherent droid is slower than the purchasable outfit.
-        expect(player).toBeGreaterThan(outfit);
-
-        // No outfit, not a player: no self-repair.
-        expect(rollRepairTime(1000, false, false, () => 0.5)).toBeNull();
+        // No outfit: no self-repair, and no draw is spent.
+        let draws = 0;
+        expect(rollRepairTime(1000, false, () => { draws++; return 0.5; }))
+            .toBeNull();
+        expect(draws).toEqual(0);
 
         // Deterministic: the same draw gives the same time.
-        expect(rollRepairTime(1000, true, false, () => 0.25))
-            .toEqual(rollRepairTime(1000, true, false, () => 0.25));
+        expect(rollRepairTime(1000, true, () => 0.25))
+            .toEqual(rollRepairTime(1000, true, () => 0.25));
     });
 });
 
@@ -556,20 +552,53 @@ describe('ship disabling in a live world', () => {
         expect(a).toEqual(b);
     }, 120_000);
 
-    it('gives player-controlled ships the inherent repair droid',
-        async () => {
-            const { world, ship } = await shipWorld(SKIFF,
-                { controlled: true });
-            expect(ship.components.get(RepairComponent))
-                .toEqual({ hasRepairSystem: false });
-            damageToFraction(ship, 0.2);
+    // #383 (Matthew's ruling, "Remove player auto-repair"): the original
+    // never repairs a disabled player on its own (reference "A disabled
+    // player (A10), wave 37": 290 s, nobody around, two hulls).
+    it('leaves a player-controlled ship with no repair outfit disabled '
+        + 'indefinitely (#383)', async () => {
+        const { world, ship } = await shipWorld(SKIFF, { controlled: true });
+        expect(ship.components.get(RepairComponent))
+            .toEqual({ hasRepairSystem: false });
+        damageToFraction(ship, 0.2);
+        world.step();
+        expect(ship.components.get(DisabledComponent)!.repairAt).toBeNull();
+        const armorBefore = armorOf(ship).current;
+        // 300 s of sim, past the old 20-45 s inherent droid.
+        for (let i = 0; i < 300 * 60; i++) {
             world.step();
-            const disabled = ship.components.get(DisabledComponent)!;
-            expect(disabled.repairAt).not.toBeNull();
-            // The inherent droid uses the slower player schedule.
-            expect(disabled.repairAt!).toBeGreaterThanOrEqual(
-                PLAYER_REPAIR_DELAY_MIN_MS);
-        }, 120_000);
+        }
+        expect(ship.components.has(DisabledComponent)).toBeTrue();
+        expect(armorOf(ship).current).toEqual(armorBefore);
+    }, 120_000);
+
+    // STAYS ON REAL DATA: the repair outfit is stock-only (see above).
+    it('repairs a player-controlled ship WITH a repair outfit inside the '
+        + 'outfit window (reference wave 38 A10: 10.9 / 25.7 s)', async () => {
+        const { world, ship } = await shipWorld(SHUTTLE, {
+            stock: true, controlled: true, extraOutfits: { 'nova:437': 1 },
+        });
+        expect(ship.components.get(RepairComponent))
+            .toEqual({ hasRepairSystem: true });
+        damageToFraction(ship, 0.2);
+        world.step();
+        const disabledAt = world.resources.get(TimeResource)!.time;
+        const repairAt = ship.components.get(DisabledComponent)!.repairAt!;
+        expect(repairAt - disabledAt)
+            .toBeGreaterThanOrEqual(OUTFIT_REPAIR_DELAY_MIN_MS);
+        expect(repairAt - disabledAt)
+            .toBeLessThan(OUTFIT_REPAIR_DELAY_MAX_MS);
+        for (let i = 0; i < 31 * 60
+            && ship.components.has(DisabledComponent); i++) {
+            world.step();
+        }
+        expect(ship.components.has(DisabledComponent)).toBeFalse();
+        const repairedAt = world.resources.get(TimeResource)!.time;
+        expect(repairedAt - disabledAt)
+            .toBeGreaterThanOrEqual(OUTFIT_REPAIR_DELAY_MIN_MS);
+        expect(repairedAt - disabledAt)
+            .toBeLessThan(OUTFIT_REPAIR_DELAY_MAX_MS + 100);
+    }, 120_000);
 
     it('tells a player-controlled ship once, at the disable, and an NPC '
         + 'never (reference "A disabled player (A10), wave 37": "Ship '
@@ -600,7 +629,10 @@ describe('ship disabling in a live world', () => {
     it('tells a player-controlled ship "Propulsion systems repaired." once, '
         + 'at its own repair, and not on an outside repair (reference '
         + 'wave 38 A10)', async () => {
-        const { world, ship } = await shipWorld(SKIFF, { controlled: true });
+        // The repair outfit is the only self-repair (#383), so stock data.
+        const { world, ship } = await shipWorld(SHUTTLE, {
+            stock: true, controlled: true, extraOutfits: { 'nova:437': 1 },
+        });
         const told: string[] = [];
         world.addSystem(new System({
             name: 'CountShipRepaired',

@@ -1021,6 +1021,16 @@ export const STATE_HASH_INTERVAL = 60;
 //    fingerprint changes (06013457e08bd2e5 -> 22e64bb746b73e86); every
 //    other kind and field is unchanged, and the join gate keeps older and
 //    newer builds apart.
+//    Also under 8, no further bump: the player's inherent repair is gone
+//    (Forgejo #383, Matthew's ruling "Remove player auto-repair";
+//    reference "A disabled player (A10), wave 37"). A sim-rule change
+//    only: a disabled player without a ModType 49 repair outfit now gets
+//    `repairAt: null` and spends no RandomResource draw at the disable
+//    (was one draw for a 20-45 s repair). No schema, input kind or
+//    message kind changes, so the derived wire schema fingerprint is
+//    unchanged (22e64bb746b73e86) and the join gate does NOT keep older
+//    and newer builds apart; a mixed room would desync at a player's
+//    disable.
 
 export const PROTOCOL_VERSION = 8;
 

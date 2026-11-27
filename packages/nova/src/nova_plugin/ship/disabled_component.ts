@@ -37,7 +37,10 @@ import { SimulationGameDataInterface } from '../../client/gamedata/simulation_ga
  *
  * `repairAt` is the sim time (ms) at which the ship's repair system brings
  * it back online, or null when the ship has no self-repair (no repair
- * outfit and not player-controlled) and must wait for outside help.
+ * outfit) and must wait for outside help. A player is no exception (#383,
+ * Matthew's ruling: "Remove player auto-repair"): the original never
+ * repairs a disabled player on its own (reference "A disabled player
+ * (A10), wave 37": 290 s, nobody around, two hulls).
  */
 export const DisabledState = t.intersection([
     t.type({
@@ -129,16 +132,6 @@ export const REPAIR_MARGIN_FRACTION = 0.01;
 export const OUTFIT_REPAIR_DELAY_MIN_MS = 10_000;
 export const OUTFIT_REPAIR_DELAY_MAX_MS = 30_000;
 
-/**
- * Player-inherent repair delay range, ms. Every player-controlled ship
- * carries an inherent repair-droid equivalent so a disabled player is
- * never soft-locked; it is deliberately slower than the purchasable
- * ModType 49 outfit (which takes precedence when owned) so the outfit
- * stays worth buying. TUNABLE.
- */
-export const PLAYER_REPAIR_DELAY_MIN_MS = 20_000;
-export const PLAYER_REPAIR_DELAY_MAX_MS = 45_000;
-
 /** Whether an armor stat is at or below the ship's disable threshold. */
 export function isBelowDisableThreshold(
     armor: { current: number, max: number },
@@ -157,21 +150,20 @@ export function repairedArmor(max: number, disableArmorFraction: number): number
 /**
  * Rolls the sim time at which a freshly disabled ship self-repairs, or
  * null when it can't. `random()` is a [0, 1) draw from the seeded
- * RandomResource. A repair-system outfit repairs on the outfit schedule;
- * otherwise a player-controlled ship falls back to the slower inherent
- * repair droid; otherwise there is no self-repair.
+ * RandomResource, made only when there is an outfit to roll for. A
+ * repair-system outfit (ModType 49) repairs on the outfit schedule;
+ * without one there is no self-repair, for the player as for an NPC
+ * (#383: the player's inherent 20-45 s repair droid is gone). A stuck
+ * player waits for outside help: a hail's Request Assistance, an
+ * escort's repair, boarding, destruction, self-destruct, or a reload.
  */
 export function rollRepairTime(now: number, hasRepairOutfit: boolean,
-    isPlayerControlled: boolean, random: () => number): number | null {
-    if (hasRepairOutfit) {
-        return now + OUTFIT_REPAIR_DELAY_MIN_MS + random()
-            * (OUTFIT_REPAIR_DELAY_MAX_MS - OUTFIT_REPAIR_DELAY_MIN_MS);
+    random: () => number): number | null {
+    if (!hasRepairOutfit) {
+        return null;
     }
-    if (isPlayerControlled) {
-        return now + PLAYER_REPAIR_DELAY_MIN_MS + random()
-            * (PLAYER_REPAIR_DELAY_MAX_MS - PLAYER_REPAIR_DELAY_MIN_MS);
-    }
-    return null;
+    return now + OUTFIT_REPAIR_DELAY_MIN_MS + random()
+        * (OUTFIT_REPAIR_DELAY_MAX_MS - OUTFIT_REPAIR_DELAY_MIN_MS);
 }
 
 /**

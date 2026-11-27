@@ -464,7 +464,7 @@ export const ShowShipDisabledMessage = new System({
 });
 
 // The LOCAL player's own disabled ship repaired itself (disabled_plugin's
-// ShipRepairedEvent, the repair-system outfit's or the inherent repair's):
+// ShipRepairedEvent, from the repair-system outfit, the only self-repair):
 // "Propulsion systems repaired." (reference "Wave-37 leftovers, wave 38",
 // A10). No sound (none checked in the reference).
 export const ShowShipRepairedMessage = new System({
