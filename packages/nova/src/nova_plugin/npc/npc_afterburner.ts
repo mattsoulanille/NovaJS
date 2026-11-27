@@ -1,15 +1,12 @@
 import { ShipAIFlags } from 'novadatainterface/ship_data';
-import { Entities, UUID } from 'nova_ecs/arg_types';
+import { Entities } from 'nova_ecs/arg_types';
 import { Optional } from 'nova_ecs/optional';
 import {
     MovementPhysicsComponent, MovementSystem,
 } from 'nova_ecs/plugins/movement_plugin';
-import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { EscortCommandComponent } from '../player/index.js';
-import {
-    avalanche, CombatRatingComponent, hashString,
-} from '../reputation/index.js';
+import { CombatRatingComponent } from '../reputation/index.js';
 import {
     DisabledComponent, getShipMovementPhysics, IonizationComponent,
     ionSlowdown,
@@ -86,60 +83,30 @@ import { NpcComponent, NpcState } from './npc_component.js';
  * s, the share growing with the rating (1,600: 2 of 8 ten-second windows,
  * 3,200: 1 of 6, 6,400 / 25,600: all, 12,800: 4 of 7).
  *
+ * Reference "The Flags 0x0020 burn with longer runs (A13 leftover), wave
+ * 44" re-ran it for 4 minutes a rating: a STEP, not spells. Against 800
+ * (and 1,200, 2 minutes) the hull never burned in any 10 s window;
+ * against 1,599, 1,600, 3,200 and 12,800 it burned in every one. Wave
+ * 42's partial spells did not recur (GUESS: its windows were read with a
+ * cut the burning hull's own medians straddle). The edge is between 1,200
+ * and 1,599, not Appendix I's 1,600 tier boundary (1,599 burned).
+ *
  * So the 0x0040 burn (the same factor, the same attack-only rule) gated
  * by the rating of the player it is ATTACKING (GUESS for multiplayer: its
- * own target's pilot, not the room's best), in spells: the fight is cut
- * into ADVANCED_RATING_SPELL_MS spells, each burning with the odds
- * advancedRatingBurnShare (GUESS, the section's proposal: min(1, rating /
- * 6,400), so certain from 6,400 and never at 0; the 12,800 run's half
- * share read as one 80 s sample's spread). The spell length is a GUESS
- * (25 s, the middle of the 20-30 s read), offset per ship so a pack of
- * such hulls does not switch together. A target with no combat rating (an
- * NPC, a player's escort or fighter) counts as 0 (GUESS: only a player
- * was measured).
- *
- * Deterministic with no PRNG and no new state: each spell's draw is a
- * salted hash of the NPC's uuid and the spell's index, and the spell is a
- * pure function of the sim time, so every peer and every replay agree.
+ * own target's pilot, not the room's best) being at least
+ * ADVANCED_RATING_BURN_MIN (GUESS 1,400, inside the 1,201-1,599 bracket).
+ * A target with no combat rating (an NPC, a player's escort or fighter)
+ * counts as 0 (GUESS: only a player was measured). Was rating / 6,400
+ * odds per 25 s spell (wave 42's proposal).
  */
-export const ADVANCED_RATING_FULL_BURN = 6400;
-export const ADVANCED_RATING_SPELL_MS = 25_000;
-
-/** The odds a Flags 0x0020 hull burns through one spell against a player
- * of combat rating `rating` (kill points): none at 0, rising to certain
- * at ADVANCED_RATING_FULL_BURN. */
-export function advancedRatingBurnShare(rating: number): number {
-    if (!(rating > 0)) {
-        return 0;
-    }
-    return Math.min(1, rating / ADVANCED_RATING_FULL_BURN);
-}
-
-/** Which spell (an integer) `npcUuid` is in at sim time `now`: spells of
- * ADVANCED_RATING_SPELL_MS, each ship's offset by a hash of its uuid. */
-export function advancedRatingSpell(npcUuid: string, now: number): number {
-    const phase = avalanche(hashString(`aiBurnPhase:${npcUuid}`))
-        % ADVANCED_RATING_SPELL_MS;
-    return Math.floor((now + phase) / ADVANCED_RATING_SPELL_MS);
-}
+export const ADVANCED_RATING_BURN_MIN = 1400;
 
 /**
- * Whether a Flags 0x0020 hull `npcUuid` burns at sim time `now` against
- * a player of combat rating `rating` (advancedRatingBurnShare's odds,
- * drawn once a spell). Pure: a salted hash, no PRNG.
+ * Whether a Flags 0x0020 hull burns against a player of combat rating
+ * `rating` (kill points): a step at ADVANCED_RATING_BURN_MIN. Pure.
  */
-export function advancedRatingBurns(npcUuid: string, rating: number,
-    now: number): boolean {
-    const share = advancedRatingBurnShare(rating);
-    if (share >= 1) {
-        return true;
-    }
-    if (share <= 0) {
-        return false;
-    }
-    const spell = advancedRatingSpell(npcUuid, now);
-    return avalanche(hashString(`aiBurnSpell:${npcUuid}:${spell}`))
-        / 0x1_0000_0000 < share;
+export function advancedRatingBurns(rating: number): boolean {
+    return rating >= ADVANCED_RATING_BURN_MIN;
 }
 
 /** How much the AI afterburner multiplies top speed and acceleration.
@@ -151,7 +118,7 @@ export const AI_AFTERBURNER_FACTOR = 1.6;
  * attacking (thrusting or coasting), never while a player's escort command
  * drives it or while it holds a gövt 0x0010 stand-off. A Flags 0x0040 hull
  * always; a Flags 0x0020 hull when `advancedRatingBurn` (its target's
- * rating drew a burning spell, advancedRatingBurns). Pure; synced state
+ * rating is advanced, advancedRatingBurns). Pure; synced state
  * only.
  */
 export function npcAfterburning(npc: NpcState | undefined,
@@ -183,11 +150,10 @@ export const NpcAfterburnerSystem = new System({
         MovementPhysicsComponent,
         Optional(EscortCommandComponent), Optional(JumpComponent),
         Optional(DisabledComponent),
-        Optional(IonizationComponent), Optional(TargetComponent), UUID,
-        Entities, TimeResource] as const,
+        Optional(IonizationComponent), Optional(TargetComponent),
+        Entities] as const,
     step(npc, shipData, shipPhysics, movementPhysics,
-        escortCommand, jump, disabled, ionization, target, uuid, entities,
-        time) {
+        escortCommand, jump, disabled, ionization, target, entities) {
         if (jump || disabled) {
             return;
         }
@@ -195,13 +161,12 @@ export const NpcAfterburnerSystem = new System({
         const advanced = shipData.aiFlags.afterburnerAtAdvancedRating
             && !shipData.aiFlags.alwaysHasAfterburner
             && npc.mode === 'attack'
-            && advancedRatingBurns(uuid,
+            && advancedRatingBurns(
                 // The attacked ship's pilot's rating; 0 for no target or
                 // a ship with none (an NPC, an escort).
                 (target?.target === undefined ? undefined
                     : entities.get(target.target)?.components
-                        .get(CombatRatingComponent)?.kills) ?? 0,
-                time.time);
+                        .get(CombatRatingComponent)?.kills) ?? 0);
         if (!npcAfterburning(npc, shipData.aiFlags,
             escortCommand !== undefined, advanced)) {
             return;
@@ -215,7 +180,6 @@ export const NpcAfterburnerSystem = new System({
     },
     // GravitySystem: both follow EffectiveMovementPhysicsSystem; the burn
     // writes the caps, gravity only the velocity (shared: MovementPhysics).
-    // TimeSystem: the 0x0020 spell reads this tick's sim time.
-    after: [TimeSystem, EffectiveMovementPhysicsSystem],
+    after: [EffectiveMovementPhysicsSystem],
     before: [MovementSystem, GravitySystem],
 });

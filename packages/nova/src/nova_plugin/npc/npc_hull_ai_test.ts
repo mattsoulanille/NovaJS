@@ -30,8 +30,8 @@ import {
 } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
 import {
-    ADVANCED_RATING_SPELL_MS, advancedRatingBurns, advancedRatingBurnShare,
-    advancedRatingSpell, AI_AFTERBURNER_FACTOR, npcAfterburning,
+    ADVANCED_RATING_BURN_MIN, advancedRatingBurns, AI_AFTERBURNER_FACTOR,
+    npcAfterburning,
 } from './npc_afterburner.js';
 import { CombatRatingComponent } from '../reputation/index.js';
 import {
@@ -407,7 +407,7 @@ describe('hull AI flags (reference W1 / C1 wave 15)', () => {
         + 'wave 42")', () => {
         const flag = { afterburnerAtAdvancedRating: true };
 
-        it('burns only in an attack whose spell drew a burn', () => {
+        it('burns only in an attack against an advanced rating', () => {
             expect(npcAfterburning({ aiType: 3, mode: 'attack' }, flag,
                 false, true)).toBeTrue();
             expect(npcAfterburning({ aiType: 3, mode: 'attack' }, flag,
@@ -421,61 +421,22 @@ describe('hull AI flags (reference W1 / C1 wave 15)', () => {
                 false, true)).toBeFalse();
         });
 
-        it('never burns against rating 0, always from 6,400, and in '
-            + 'between on a share rising with the rating (GUESS: rating / '
-            + '6,400)', () => {
-                expect(advancedRatingBurnShare(0)).toBe(0);
-                expect(advancedRatingBurnShare(1600)).toBe(0.25);
-                expect(advancedRatingBurnShare(3200)).toBe(0.5);
-                expect(advancedRatingBurnShare(6400)).toBe(1);
-                expect(advancedRatingBurnShare(1_000_000)).toBe(1);
-                const spells = 400;
-                const share = (rating: number) => {
-                    let burning = 0;
-                    for (let i = 0; i < spells; i++) {
-                        burning += advancedRatingBurns('ship', rating,
-                            i * ADVANCED_RATING_SPELL_MS) ? 1 : 0;
-                    }
-                    return burning / spells;
-                };
-                expect(share(0)).toBe(0);
-                expect(share(6400)).toBe(1);
-                expect(share(25_600)).toBe(1);
-                expect(share(1600)).toBeGreaterThan(0.15);
-                expect(share(1600)).toBeLessThan(0.35);
-                expect(share(3200)).toBeGreaterThan(0.4);
-                expect(share(3200)).toBeLessThan(0.6);
-            });
-
-        it('holds its answer through a 25 s spell, offset per ship', () => {
-            for (const uuid of ['a', 'b', 'c', 'd']) {
-                const spell = advancedRatingSpell(uuid, 100_000);
-                const answer = advancedRatingBurns(uuid, 1600, 100_000);
-                let sameSpell = 0;
-                for (let dt = -30_000; dt <= 30_000; dt += 250) {
-                    const t = 100_000 + dt;
-                    if (advancedRatingSpell(uuid, t) === spell) {
-                        sameSpell++;
-                        expect(advancedRatingBurns(uuid, 1600, t))
-                            .toBe(answer);
-                    }
+        it('steps at a rating between 1,200 and 1,599, with no spells '
+            + '(reference "The Flags 0x0020 burn with longer runs (A13 '
+            + 'leftover), wave 44")', () => {
+                expect(ADVANCED_RATING_BURN_MIN).toBeGreaterThan(1200);
+                expect(ADVANCED_RATING_BURN_MIN).toBeLessThanOrEqual(1599);
+                // Never in 4 minutes (800) / 2 minutes (1,200).
+                for (const rating of [0, 800, 1200]) {
+                    expect(advancedRatingBurns(rating))
+                        .withContext(`${rating}`).toBeFalse();
                 }
-                // 25 s of 250 ms samples.
-                expect(sameSpell).toBe(ADVANCED_RATING_SPELL_MS / 250);
-            }
-            const spellsAt = new Set(['a', 'b', 'c', 'd', 'e', 'f'].map(
-                uuid => advancedRatingSpell(uuid, 12_345)));
-            const changesAt = ['a', 'b', 'c', 'd', 'e', 'f'].map(uuid => {
-                let t = 0;
-                while (advancedRatingSpell(uuid, t + 1000)
-                    === advancedRatingSpell(uuid, t)) {
-                    t += 1000;
+                // Every 10 s window of 2-4 minutes.
+                for (const rating of [1599, 1600, 3200, 12_800, 1_000_000]) {
+                    expect(advancedRatingBurns(rating))
+                        .withContext(`${rating}`).toBeTrue();
                 }
-                return t;
             });
-            expect(spellsAt.size + new Set(changesAt).size)
-                .toBeGreaterThan(2);
-        });
 
         async function attackRun(rating: number | undefined) {
             const { world, addShip } = await hullWorld();
@@ -496,10 +457,15 @@ describe('hull AI flags (reference W1 / C1 wave 15)', () => {
             return top;
         }
 
-        it('runs at the 0x0040 burn\'s speed against a 1,000,000 player '
-            + 'and at its own against a rating-0 one or an NPC', async () => {
+        it('runs at the 0x0040 burn\'s speed against a 1,000,000 or a '
+            + '1,600 player and at its own against a rating-800 one, a '
+            + 'rating-0 one or an NPC', async () => {
                 expect(await attackRun(1_000_000))
                     .toBeCloseTo(SPEED * AI_AFTERBURNER_FACTOR, 0);
+                expect(await attackRun(1600))
+                    .toBeCloseTo(SPEED * AI_AFTERBURNER_FACTOR, 0);
+                expect(await attackRun(800))
+                    .toBeLessThanOrEqual(SPEED + 1e-6);
                 expect(await attackRun(0)).toBeLessThanOrEqual(SPEED + 1e-6);
                 expect(await attackRun(undefined))
                     .toBeLessThanOrEqual(SPEED + 1e-6);
