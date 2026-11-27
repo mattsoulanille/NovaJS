@@ -234,9 +234,14 @@ export const EscortCommandInputSystem = new System({
 /**
  * Whether a carrier escort on `command` is in a fight its wings should be
  * out for: an attack or defend order on a victim that is still in the
- * system, not exploding and not DISABLED. A defend order's victim is the
- * intruder EscortCommandBehaviorSystem engaged (it clears `target` when
- * there is none); an attack order's is the player's pick. Pure over synced
+ * system and not exploding. A defend order's victim is the intruder
+ * EscortCommandBehaviorSystem engaged (it clears `target` when there is
+ * none, and drops a DISABLED one: defend is attack-until-disabled); an
+ * attack order's is the player's pick, and the order outlives the
+ * victim's disable, so a disabled attack victim still engages the wings
+ * until it dies (MEASURED, reference "The escort carrier's `f` on an
+ * intruder (the EC leftover), wave 48": the carrier and its fighters
+ * destroyed the disabled disc within 5-13 s, twice). Pure over synced
  * components.
  */
 export function carrierEngaged(command: EscortCommandState,
@@ -247,7 +252,8 @@ export function carrierEngaged(command: EscortCommandState,
     }
     const victim = entities.get(command.target);
     return !!victim && victim.components.has(MovementStateComponent)
-        && !victim.components.has(DisabledComponent)
+        && (command.command === 'attack'
+            || !victim.components.has(DisabledComponent))
         && !victim.components.has(ExplodingComponent);
 }
 
@@ -266,8 +272,12 @@ export function carrierEngaged(command: EscortCommandState,
  * engaged (carrierEngaged: no victim, or the victim disabled, exploding
  * or gone) its bay-launched wings are given 'returnToBay' instead of the
  * mirror, and EscortCommandBehaviorSystem flies them home to dock (each
- * refunding its round to the bay). GUESSES: the same after `f` once the
- * victim is disabled or dead (only the `d` case was watched), and the
+ * refunding its round to the bay). After `f` the fight is over only when
+ * the victim is dead: the attack order outlives the disable, and the
+ * original's fighters fired on at the disabled disc until it was
+ * destroyed (MEASURED, reference "The escort carrier's `f` on an intruder
+ * (the EC leftover), wave 48"). GUESSES: the wings then dock as after `d`
+ * (the docking itself was not caught: new traffic drew them on), and the
  * same for every order that is not a fight (formation, hold position).
  * A recall is final, as for an NPC carrier's wings: a wing already
  * flying home (ReturnComponent) is left alone even if the carrier fights
@@ -838,12 +848,6 @@ export const EscortCommandBehaviorSystem = new System({
             const victimEntity = entities.get(victim);
             const victimMovement = victimEntity?.components
                 .get(MovementStateComponent);
-            // A DISABLED victim (an attack order outlives the disable)
-            // is no fight for the wings: they are recalled
-            // (carrierEngaged), so the hangar stays shut rather than
-            // launching fighters only to dock them again.
-            const victimDisabled =
-                !!victimEntity?.components.has(DisabledComponent);
             const distanceSquared = victimMovement === undefined
                 ? Infinity
                 : victimMovement.position.subtract(movement.position)
@@ -873,13 +877,12 @@ export const EscortCommandBehaviorSystem = new System({
                 // player's own fighters fight only when ordered (R6), and
                 // only a mission protector keeps its bays shut (Q4; such
                 // ships run the NPC AI and never get here). In formation
-                // (below) the hangar stays shut, and so it does at a
-                // disabled victim (victimDisabled).
+                // (below) the hangar stays shut. An attack order's
+                // DISABLED victim keeps it open: the order outlives the
+                // disable, wings included, until the victim dies
+                // (reference EC wave 48; carrierEngaged). A defend order
+                // never gets here with a disabled one.
                 weapon.target = victim;
-                if (victimDisabled && weaponData.type === 'BayWeaponData') {
-                    weapon.firing = false;
-                    continue;
-                }
                 // The flat ESCORT_FIRE_RANGE is fine for a weapon whose
                 // wasted shot costs a round of ammo. A SUICIDE weapon
                 // (wëap AmmoType -999) spends the ship, so it is held

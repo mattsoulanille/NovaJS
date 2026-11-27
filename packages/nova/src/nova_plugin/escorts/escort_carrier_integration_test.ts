@@ -290,8 +290,9 @@ describe('A carrier escort (synthetic data)', () => {
             expect(wings().length).toBe(0);
         });
 
-    it('after `f`, recalls its skiffs once the victim is disabled and does '
-        + 'not launch again at the hulk (GUESS)', async () => {
+    it('after `f`, keeps its skiffs on the victim past its disable and '
+        + 'recalls them only when it dies (reference EC wave 48)',
+        async () => {
             const carrier = await setUp();
             carrier.components.set(EscortCommandComponent,
                 { command: 'attack', target: 'raider' });
@@ -299,20 +300,55 @@ describe('A carrier escort (synthetic data)', () => {
             world.entities.get('raider')!.components.set(DisabledComponent,
                 { repairAt: null, hulk: true });
             step(2);
-            // The attack order outlives the disable (the carrier's guns
-            // stay on the hulk), but the wings are recalled.
+            // The attack order outlives the disable, the wings' included:
+            // the original's carrier and fighters destroyed the disabled
+            // disc within 5-13 s.
             expect(carrier.components.get(EscortCommandComponent))
                 .toEqual({ command: 'attack', target: 'raider' });
+            expect(wings().length).toBe(2);
+            for (const [, wing] of wings()) {
+                expect(wing.components.get(EscortCommandComponent))
+                    .toEqual({ command: 'attack', target: 'raider' });
+                expect(wing.components.has(ReturnComponent)).toBeFalse();
+            }
+            // They keep shooting at the hulk.
+            let wingFired = false;
+            for (let i = 0; i < 60 * 5 && !wingFired; i++) {
+                step(1);
+                wingFired = wings().some(([, wing]) =>
+                    [...wing.components.get(WeaponsStateComponent) ?? []]
+                        .some(([, weapon]) => weapon.firing
+                            && weapon.target === 'raider'));
+            }
+            expect(wingFired).withContext('a skiff fired at the hulk')
+                .toBeTrue();
+
+            // The hulk dies: the fight is over, so the wings fly home.
+            world.entities.delete('raider');
+            step(2);
+            expect(carrier.components.get(EscortCommandComponent))
+                .toEqual({ command: 'formation' });
             for (const [, wing] of wings()) {
                 expect(wing.components.has(ReturnComponent)).toBeTrue();
             }
             expect(stepUntilDocked()).withContext('both skiffs docked')
                 .toBeTrue();
-            step(300);
-            expect(carrier.components.get(WeaponsStateComponent)!
-                .get(SKIFF_BAY)!.firing).toBeFalse();
-            expect(wings().length).toBe(0);
             expect(magazine(carrier)).toBe(2);
+        });
+
+    it('after `f` on an already DISABLED victim, opens its hangar '
+        + '(reference EC wave 48)', async () => {
+            const carrier = await setUp(ship => {
+                ship.components.set(DisabledComponent,
+                    { repairAt: null, hulk: true });
+            });
+            carrier.components.set(EscortCommandComponent,
+                { command: 'attack', target: 'raider' });
+            expect(launchBoth().length).withContext('both skiffs out')
+                .toBe(2);
+            for (const [, wing] of wings()) {
+                expect(wing.components.has(ReturnComponent)).toBeFalse();
+            }
         });
 
     it('docks its skiffs on Alt+C mid-fight, and a recall is final',
