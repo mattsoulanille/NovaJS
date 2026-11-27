@@ -13,7 +13,8 @@ import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
 import { makeShip } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
 import {
-    gravityAcceleration, gravityDeltaV, gravityFalloff,
+    GRAVITY_REFERENCE_DISTANCE, gravityAcceleration, gravityDeltaV,
+    gravityFalloff,
 } from './gravity_plugin.js';
 import { JumpComponent } from './jump_state.js';
 import { makePlanet } from './make_planet.js';
@@ -73,32 +74,47 @@ describe('gravityDeltaV', () => {
         expect(gravityAcceleration(-2)).toBe(-gravityAcceleration(2));
     });
 
-    it('falls off as (300 / d)^1.5 beyond 300 px (reference "A Gravity-5 '
-        + 'ramp from far out ..., wave 42": the shape of 195 / 45 / 15 '
-        + 'px/s² from 300 / 1,000 / 2,000 px, star readings)', () => {
+    it('falls off as 1 / d² beyond about 535 px (reference "Gravity\'s '
+        + 'law with moons (U7 leftovers), wave 44": 4.3e7 / d² at Gravity '
+        + '5; 11 / 19 / 43 px/s² from 2,000 / 1,500 / 1,000 px)', () => {
             const at = (d: number) =>
                 gravityDeltaV([{ dx: 0, dy: d, gravity: 5 }], 1).length;
-            expect(at(300)).toBeCloseTo(140, 9);
-            expect(at(1000)).toBeCloseTo(140 * Math.pow(0.3, 1.5), 9);
-            expect(at(2000)).toBeCloseTo(140 * Math.pow(0.15, 1.5), 9);
+            expect(at(2000)).toBeCloseTo(5 * 8.6e6 / 2000 / 2000, 9);
+            expect(at(1000)).toBeCloseTo(43, 9);
+            expect(at(2000)).toBeCloseTo(10.75, 9);
+            expect(at(1500)).toBeGreaterThan(18);
+            expect(at(1500)).toBeLessThan(22);
+            // The Gravity-10 well's far windows (22.9 at 1,997 px, 82.3
+            // at 987).
+            const at10 = (d: number) =>
+                gravityDeltaV([{ dx: d, dy: 0, gravity: 10 }], 1).length;
+            expect(at10(1997)).toBeCloseTo(21.6, 1);
+            expect(at10(987)).toBeCloseTo(88.3, 1);
         });
 
-    it('pulls a constant 140 px/s² at Gravity 5 inside 300 px (reference '
-        + '"Gravity inside 300 px (U7 leftover), wave 43": 140 / 142 / 131 '
-        + 'from 300 / 150 / 85 px)', () => {
-            for (const d of [300, 150, 85, 10]) {
+    it('pulls a constant 30 px/s² a Gravity unit inside about 535 px '
+        + '(reference U7 wave 44: 150 at Gravity 5, 300 at Gravity 10)',
+        () => {
+            expect(GRAVITY_REFERENCE_DISTANCE).toBeGreaterThan(535);
+            expect(GRAVITY_REFERENCE_DISTANCE).toBeLessThan(536);
+            for (const d of [535, 300, 150, 85, 10]) {
                 expect(gravityDeltaV([{ dx: d, dy: 0, gravity: 5 }], 1)
-                    .length).withContext(`${d} px`).toBeCloseTo(140, 9);
+                    .length).withContext(`${d} px`).toBeCloseTo(150, 9);
+                expect(gravityDeltaV([{ dx: 0, dy: -d, gravity: 10 }], 1)
+                    .length).withContext(`${d} px`).toBeCloseTo(300, 9);
             }
         });
 
-    it('holds the 300 px strength inside 300 px', () => {
-        expect(gravityFalloff(300)).toBe(1);
+    it('meets the constant core continuously', () => {
+        expect(gravityFalloff(535)).toBe(1);
         expect(gravityFalloff(50)).toBe(1);
         expect(gravityFalloff(0)).toBe(1);
-        expect(gravityFalloff(1200)).toBeCloseTo(0.125, 12);
+        expect(gravityFalloff(GRAVITY_REFERENCE_DISTANCE + 1e-6))
+            .toBeCloseTo(1, 6);
+        expect(gravityFalloff(2 * GRAVITY_REFERENCE_DISTANCE))
+            .toBeCloseTo(0.25, 12);
         const near = gravityDeltaV([{ dx: 0, dy: 120, gravity: 10 }], 0.5);
-        const ref = gravityDeltaV([{ dx: 0, dy: 300, gravity: 10 }], 0.5);
+        const ref = gravityDeltaV([{ dx: 0, dy: 500, gravity: 10 }], 0.5);
         expect(near.length).toBeCloseTo(ref.length, 9);
     });
 
@@ -110,14 +126,12 @@ describe('gravityDeltaV', () => {
                 .toBe(0);
         });
 
-    it('scales the wave-41 quadratic (39 / 55 px/s² a unit at Gravity 5 '
-        + '/ 10, star readings) by 0.72 so Gravity 5 is the moon reading, '
-        + '140 (reference "Gravity inside 300 px (U7 leftover), wave 43")',
-        () => {
-            expect(gravityAcceleration(5)).toBeCloseTo(140, 9);
-            expect(gravityAcceleration(10)).toBeCloseTo(395, 9);
-            expect(gravityAcceleration(10) / 550).toBeCloseTo(0.72, 2);
-            expect(gravityAcceleration(1)).toBeCloseTo(18.8, 9);
+    it('is linear in Gravity (reference U7 wave 44: Gravity 10 doubles '
+        + 'both pieces of Gravity 5\'s law)', () => {
+            expect(gravityAcceleration(1)).toBe(30);
+            expect(gravityAcceleration(5)).toBe(150);
+            expect(gravityAcceleration(10)).toBe(300);
+            expect(gravityAcceleration(-5)).toBe(-150);
         });
 });
 

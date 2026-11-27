@@ -40,7 +40,10 @@ import { ControlShipSystem } from './ship_controller_plugin.js';
  *    within a frame at any range and so could not show one. Inside 300 px
  *    it is CONSTANT (reference "Gravity inside 300 px (U7 leftover), wave
  *    43": about 140 px/s² at Gravity 5 from 300, 150 and 85 px, read off
- *    moon decorations, not the star field).
+ *    moon decorations, not the star field). The whole law, read off moons
+ *    (reference "Gravity's law with moons (U7 leftovers), wave 44"):
+ *    Gravity x min(30, 8.6e6 / d²) px/s², an inverse square beyond about
+ *    535 px and constant inside, both in proportion to Gravity.
  * 4. A negative Gravity pushes the ship away the same way.
  * 5. An inertialess hull is not moved at all.
  *
@@ -65,56 +68,59 @@ import { ControlShipSystem } from './ship_controller_plugin.js';
  * MovementState and physics, the tick's delta) — no trig, no PRNG, and
  * the velocity is replaced, never mutated in place.
  */
-export const GRAVITY_LINEAR = 16.5;
-export const GRAVITY_QUADRATIC = 2.3;
+export const GRAVITY_NEAR_PER_UNIT = 30;
+export const GRAVITY_FAR_PER_UNIT = 8.6e6;
 
 /**
  * A well's pull, in px/s², from its spöb Gravity (signed: negative
- * pushes), at GRAVITY_REFERENCE_DISTANCE (300 px) or closer; farther out
- * it is scaled by gravityFalloff.
+ * pushes), at GRAVITY_REFERENCE_DISTANCE or closer; farther out it is
+ * scaled by gravityFalloff.
  *
- * MEASURED off moon decorations (reference "Gravity inside 300 px (U7
- * leftover), wave 43"): a constant 140 px/s² at Gravity 5 from 300, 150
- * and 85 px. The per-unit pull GROWS with the field (star-field readings,
- * reference "Gravity damping and strength (U7, the hub's questions),
- * wave 41": about 39 px/s² a unit at Gravity 5 and 55 at Gravity 10, and
- * about 30 at Gravity 1, wave 40), but the star field reads biased
- * (wave 42), and the moon reading puts Gravity 5 at 140, not 195. GUESS:
- * the quadratic through the wave-41 readings (23 x G + 3.2 x G x |G|)
- * scaled by 0.72 so Gravity 5 gives the moon reading exactly: 16.5 x G +
- * 2.3 x G x |G| (18.8 at Gravity 1, 395 at Gravity 10), until a
- * Gravity-10 moon run. Was 23 / 3.2 (195 at Gravity 5), and linear, 30 a
- * unit, before that. Arithmetic only (no trig, no PRNG).
+ * MEASURED off moon decorations (reference "Gravity's law with moons (U7
+ * leftovers), wave 44"): a constant 150 px/s² at Gravity 5 and 300 at
+ * Gravity 10 (one law fitted to four falls of each well, 2-4 px rms), so
+ * GRAVITY_NEAR_PER_UNIT 30 px/s² a unit, linear in Gravity. GUESS: the
+ * same for a negative Gravity (wave 40 saw it push; its strength was
+ * never measured) and for strong wells (Gravity 100+ then reaches the
+ * top speed in a few frames, as wave 40 saw). Was 16.5 x G + 2.3 x G x
+ * |G| (a quadratic through wave 41's biased star readings, 395 at Gravity
+ * 10), and linear, 30 a unit, before that. Arithmetic only.
  */
 export function gravityAcceleration(gravity: number): number {
-    return GRAVITY_LINEAR * gravity
-        + GRAVITY_QUADRATIC * gravity * Math.abs(gravity);
+    return GRAVITY_NEAR_PER_UNIT * gravity;
 }
 
 /**
- * The distance, px, at which gravityAcceleration is the pull: every
- * weak-well strength reading (waves 40-41, Gravity 1 / 5 / 10) started
- * 300 px from the well.
+ * The square of the distance, px², where the constant core meets the
+ * inverse square (the two pieces of Gravity x min(GRAVITY_NEAR_PER_UNIT,
+ * GRAVITY_FAR_PER_UNIT / d²) are equal there): about 535 px. Kept
+ * squared so the falloff needs no square root or pow.
  */
-export const GRAVITY_REFERENCE_DISTANCE = 300;
+const GRAVITY_REFERENCE_DISTANCE_SQUARED =
+    GRAVITY_FAR_PER_UNIT / GRAVITY_NEAR_PER_UNIT;
+
+/**
+ * The distance, px, at or inside which gravityAcceleration is the whole
+ * pull (about 535 px; MEASURED, wave 44: the same for Gravity 5 and 10).
+ */
+export const GRAVITY_REFERENCE_DISTANCE =
+    Math.sqrt(GRAVITY_REFERENCE_DISTANCE_SQUARED);
 
 /**
  * The fraction of a well's gravityAcceleration felt `distance` px from
- * it: (300 / d)^1.5 beyond 300 px, MEASURED roughly (reference "A
- * Gravity-5 ramp from far out ..., wave 42": 195 / 45 / 15 px/s² from 300
- * / 1,000 / 2,000 px; the exponent a GUESS from three points read in
- * whole-pixel star steps). Inside 300 px it stays 1 (MEASURED, reference
- * "Gravity inside 300 px (U7 leftover), wave 43": the same pull from
- * 300, 150 and 85 px). Written as
- * r x sqrt(r) rather than Math.pow so it is exact IEEE arithmetic on
- * every engine (determinism).
+ * it: 1 inside GRAVITY_REFERENCE_DISTANCE, (that / d)² beyond, so the
+ * pull is Gravity x GRAVITY_FAR_PER_UNIT / d² out there (MEASURED,
+ * reference "Gravity's law with moons (U7 leftovers), wave 44": 4.3e7 /
+ * d² at Gravity 5 from 2,000 px in to about 600: 11 px/s² at 2,000, 19
+ * at 1,500, 43 at 1,000). Was (300 / d)^1.5 beyond 300 px (wave 42's star
+ * readings). d² is exact IEEE arithmetic on every engine (determinism).
  */
 export function gravityFalloff(distance: number): number {
-    if (!(distance > GRAVITY_REFERENCE_DISTANCE)) {
+    const squared = distance * distance;
+    if (!(squared > GRAVITY_REFERENCE_DISTANCE_SQUARED)) {
         return 1;
     }
-    const ratio = GRAVITY_REFERENCE_DISTANCE / distance;
-    return ratio * Math.sqrt(ratio);
+    return GRAVITY_REFERENCE_DISTANCE_SQUARED / squared;
 }
 
 /** Planets with a gravity field: their position and strength. */
