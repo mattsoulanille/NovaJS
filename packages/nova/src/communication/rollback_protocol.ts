@@ -988,6 +988,24 @@ export const STATE_HASH_INTERVAL = 60;
 //    the derived wire schema fingerprint changes (e384c60c7fd52926 ->
 //    096d8b66658e5381); every other kind and field is unchanged, and the
 //    join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the set strings the simulation never ran. A
+//    stellar's spöb OnDominate / OnRelease is owed the pilot the tick the
+//    domination changes — the new delta-registered player component
+//    PendingStellarSetStrings (player/dominated.ts: `next` and a list of
+//    { seq, planetId, kind }) — and paid by the new `stellarSetString`
+//    input kind (encounters/tribute.ts StellarSetStringType: the entry's
+//    `seq` and `planetId` plus the same OPTIONAL set-string delta fields an
+//    abort carries), resolved on the owning client; the sim applies it only
+//    against the SENDER's own matching entry (a duplicate is a no-op). The
+//    capture prompt's "Use As Escort" now rides the `captureShip` record
+//    too, with a new OPTIONAL `escort` flag and the prize class's OnCapture
+//    deltas, replacing the `plunderCaptureEscort` control action, which is
+//    gone from core/controls.ts. New union member, new component, one new
+//    optional field and one control action fewer, so the derived wire
+//    schema fingerprint changes (096d8b66658e5381 -> 06013457e08bd2e5);
+//    every other kind and field is unchanged, and the join gate keeps older
+//    and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

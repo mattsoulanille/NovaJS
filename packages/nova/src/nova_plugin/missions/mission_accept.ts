@@ -366,6 +366,28 @@ function applyMissionListDeltas(missions: Map<string, ActiveMission>,
 }
 
 /**
+ * EVERYTHING an in-flight set string's deltas do to the player's ship at
+ * `uuid`, for a record that is about no mission of its own (a capture's
+ * OnCapture / OnRetire, a stellar's OnDominate / OnRelease): the missions
+ * its `Sxxx` started and its `Axxx` / `Fxxx` ended (applyMissionListDeltas,
+ * which an accept, a refusal and an abort run beside their own mission
+ * handling), then {@link applySetStringEffects}. `source` names the string
+ * in a dropped mission's warning. Returns the entity the player is in
+ * afterwards.
+ *
+ * Synchronous and free of randomness and wall-clock reads (the rollback
+ * driver replays it).
+ */
+export function applyInFlightSetString(world: World, uuid: string,
+    player: Entity, effects: SetStringEffects, source: string): Entity {
+    const missions = player.components.get(MissionsComponent);
+    if (missions) {
+        applyMissionListDeltas(missions, effects, source);
+    }
+    return applySetStringEffects(world, uuid, player, effects);
+}
+
+/**
  * The result of REFUSING a mission in flight (a përs ship's LinkMission,
  * mïsn AvailLoc 2): its OnRefuse set string, resolved on the owning client
  * against a detached copy of the player exactly as an accept's OnAccept is

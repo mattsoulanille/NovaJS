@@ -77,7 +77,7 @@ import { PlayerSoundEvent } from '../core/index.js';
 import { TargetComponent } from '../ship/index.js';
 import { makeNpcShip, PersComponent } from '../spawn/index.js';
 import {
-    applySetStringEffects, rehullShip, SetStringEffectsType,
+    applyInFlightSetString, rehullShip, SetStringEffectsType,
 } from '../missions/index.js';
 import {
     findControlledEntity, PlayerNamesComponent, sanitizeShipName,
@@ -1620,6 +1620,15 @@ export function tradePlacesWithCaptain(world: World, pilotUuid: string,
  */
 export const CapturedShipType = t.intersection([
     t.type({ name: t.string }),
+    t.partial({
+        /**
+         * "Use As Escort" instead: the prize joins the pilot's escorts and
+         * the pilot keeps his hull and name (`name` is ignored); the
+         * deltas are the prize class's OnCapture alone (GUESS, see
+         * spaceport/ship_mission_accept.ts buildCaptureSetStrings).
+         */
+        escort: t.boolean,
+    }),
     SetStringEffectsType,
 ]);
 export type CapturedShip = t.TypeOf<typeof CapturedShipType>;
@@ -1673,6 +1682,26 @@ export function applyCaptureShip(world: World, peerId: string | undefined,
         world.resources.get(GovtsResource), gameData))) {
         return;
     }
+    if (capture.escort) {
+        // "Use As Escort": the prize joins the escorts; ends the session.
+        // No escort-cap check HERE: the cap gates the capture ATTEMPT (the
+        // 'plunderCapture' roll, ruling #250), and the hired-or-captured
+        // count cannot change between that roll and this answer — a
+        // session is one player's, in flight, and the only ways to gain
+        // such an escort are a hire at a bar or this very capture. So a
+        // prize whose attempt was allowed is kept.
+        const owner = entity.components.get(MultiplayerData)?.owner;
+        convertToEscort(target, boarding.target, uuid, owner,
+            entity.components.has(ControlledByComponent), world.entities,
+            gameData);
+        boarding.capture = 'assigned';
+        entity.components.delete(BoardingComponent);
+        applyInFlightSetString(world, uuid, entity, capture,
+            'the OnCapture of an escort');
+        world.emit(CaptureAssignedEvent,
+            { kept: 'escort', oldShipRetained: false }, [uuid]);
+        return;
+    }
     // The pilot's new hull is written at this uuid WITHOUT the
     // BoardingComponent, which is what ends the session; the old entity
     // leaves the world.
@@ -1682,7 +1711,8 @@ export function applyCaptureShip(world: World, peerId: string | undefined,
         return;
     }
     boarding.capture = 'assigned';
-    applySetStringEffects(world, uuid, traded.hull, capture);
+    applyInFlightSetString(world, uuid, traded.hull, capture,
+        'the OnRetire / OnCapture of a captured ship');
     world.emit(CaptureAssignedEvent, {
         kept: 'ship', oldShipRetained: traded.oldShipRetained,
     }, [uuid]);
@@ -1737,35 +1767,9 @@ const BoardingActionSystem = new System({
             return;
         }
 
-        // Take the captured ship as an escort (capture-assignment
-        // dialog). Ends the session. The `capturable` re-check is
-        // belt-and-braces: capture can never REACH 'succeeded' against a
-        // flown ship, but a hull that somehow became controlled between
-        // the roll and the assignment must not be converted either — that
-        // half-owned chimera is the whole bug.
-        if (controls.get('plunderCaptureEscort') === 'start'
-            && boarding.capture === 'succeeded'
-            && capturable(target, boardingGovtLookup(govts, gameData))) {
-            // No escort-cap check HERE: the cap gates the capture ATTEMPT
-            // (the 'plunderCapture' roll below, ruling #250), and the
-            // hired-or-captured count cannot change between that roll and
-            // this press — a session is one player's, in flight, and the
-            // only ways to gain such an escort are a hire at a bar or this
-            // very capture. So a prize whose attempt was allowed is kept.
-            const owner = entity.components.get(MultiplayerData)?.owner;
-            convertToEscort(target, boarding.target, uuid, owner,
-                entity.components.has(ControlledByComponent), entities,
-                gameData);
-            boarding.capture = 'assigned';
-            entity.components.delete(BoardingComponent);
-            emit(CaptureAssignedEvent,
-                { kept: 'escort', oldShipRetained: false }, [uuid]);
-            return;
-        }
-
-        // "Use As My Ship" is not a control: it carries the rename prompt's
-        // answer and the set strings' deltas, so it rides its own input
-        // record (applyCaptureShip).
+        // Neither capture answer is a control: "Use As My Ship" carries the
+        // rename prompt's answer, and both carry the set strings' deltas,
+        // so they ride their own input record (applyCaptureShip).
 
         // The remaining actions need the victim to still be a boardable
         // hulk; a repair or a stray killing blow ends the session.

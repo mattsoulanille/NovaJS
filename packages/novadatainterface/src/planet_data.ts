@@ -107,8 +107,10 @@ export interface PlanetWeaponData {
  * per-player state (admin1's ruling on #306, matching the original's pilot
  * file); none of it is in PlanetData, which only describes the stellar.
  *
- * `tribute` is paid (nova's spaceport/daily_budget.ts); `alwaysDominated`,
- * `onDominate` and `onRelease` are not implemented yet (#353).
+ * `tribute` is paid (nova's spaceport/daily_budget.ts); `alwaysDominated`
+ * seeds a new pilot's dominated stellars and `onDominate` / `onRelease`
+ * run on the owner's client when the domination changes (nova's
+ * player/dominated.ts, #353).
  */
 export interface PlanetDominationData {
     /**

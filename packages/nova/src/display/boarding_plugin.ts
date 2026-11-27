@@ -629,9 +629,10 @@ export type CaptureAnswer = 'ship' | 'escort';
  * the plunder dialog greys Capture Ship (reference "Capture, wave 33",
  * finding 7), so no capture can succeed there.
  *
- * Use As Escort is the plunder dialog's 'plunderCaptureEscort' control; Use
- * As My Ship first asks for the new hull's name (BoardingUi's rename) and
- * then sends a `captureShip` record (CaptureShipEvent).
+ * Both answers send a `captureShip` record (CaptureShipEvent) carrying the
+ * prize class's OnCapture deltas: Use As Escort at once (`escort: true`,
+ * useCapturedShipAsEscort), Use As My Ship after asking for the new hull's
+ * name (BoardingUi's rename) and with the old class's OnRetire too.
  */
 export const CAPTURE_PROMPT_BUTTONS: readonly {
     label: string, answer: CaptureAnswer,
@@ -830,10 +831,11 @@ class BoardingUi {
     /** The target of the session on screen (the capture prompt's answers
      * name no target of their own). */
     private current?: string;
-    /** The target whose "Use As My Ship" rename prompt is up. */
+    /** The target whose "Use As My Ship" rename prompt is up, or whose
+     * "Use As Escort" set strings are being resolved. */
     private renaming?: string;
-    /** Targets "Use As My Ship" has been SENT for: the capture prompt stays
-     * down while the record makes its way to the sim and back. */
+    /** Targets an answer has been SENT for: the capture prompt stays down
+     * while the record makes its way to the sim and back. */
     private tradedFor = new Set<string>();
 
     constructor(displayAssets: DisplayAssetDataInterface,
@@ -853,12 +855,14 @@ class BoardingUi {
         },
         /** "Use As My Ship": asks for the new hull's name and sends the
          * `captureShip` record, resolving whether it was sent; `dismiss`
-         * takes a rename prompt down when the session ends under it. The
-         * plugin wires it to useCapturedShip. Omitted in specs that only
-         * drive the dialogs. */
+         * takes a rename prompt down when the session ends under it;
+         * `escort` is "Use As Escort", which sends the record at once. The
+         * plugin wires them to useCapturedShip / useCapturedShipAsEscort.
+         * Omitted in specs that only drive the dialogs. */
         private useAsShip?: {
             ask: (targetUuid: string) => Promise<boolean>,
             dismiss: () => void,
+            escort: (targetUuid: string) => Promise<boolean>,
         }) {
         this.plunder = new PlunderDialog(displayAssets, controlEvents, send);
         this.assignment = new CaptureAssignmentDialog(displayAssets,
@@ -866,17 +870,14 @@ class BoardingUi {
     }
 
     /**
-     * The capture prompt's answer. Use As Escort is a plain control. Use As
-     * My Ship takes the prompt down (the original shows the rename alert
-     * over the plunder dialog alone, 63-use1.png) and runs the rename; the
-     * prompt stays down while the record is on its way, and comes back only
-     * if the answer was not sent after all.
+     * The capture prompt's answer. Both take the prompt down: Use As My
+     * Ship runs the rename (the original shows the rename alert over the
+     * plunder dialog alone, 63-use1.png), Use As Escort only resolves the
+     * prize class's OnCapture. The prompt stays down while the record is
+     * on its way, and comes back only if the answer was not sent after
+     * all.
      */
     private answerCapture(answer: CaptureAnswer) {
-        if (answer === 'escort') {
-            this.send('plunderCaptureEscort');
-            return;
-        }
         const target = this.current;
         if (!this.useAsShip || target === undefined
             || this.renaming !== undefined || this.tradedFor.has(target)) {
@@ -884,12 +885,15 @@ class BoardingUi {
         }
         this.renaming = target;
         this.assignment.close();
-        void this.useAsShip.ask(target).then(sent => {
+        const sending = answer === 'escort'
+            ? this.useAsShip.escort(target) : this.useAsShip.ask(target);
+        void sending.then(sent => {
             if (sent) {
                 this.tradedFor.add(target);
             }
         }).catch(e => {
-            console.warn('Use As My Ship failed:', e);
+            console.warn(answer === 'escort' ? 'Use As Escort failed:'
+                : 'Use As My Ship failed:', e);
         }).finally(() => {
             if (this.renaming === target) {
                 this.renaming = undefined;
@@ -1113,6 +1117,35 @@ async function useCapturedShip(world: World,
     return true;
 }
 
+/**
+ * "Use As Escort", the owner's half: resolves the prize class's OnCapture
+ * against a detached copy of the pilot (buildCaptureSetStrings with no
+ * retired class: the pilot keeps his hull, GUESS) and emits the
+ * `captureShip` record with `escort: true` (CaptureShipEvent). Resolves
+ * whether it was sent: not when the prize's class cannot be read, or when
+ * the capture no longer stands (the sim would refuse the record anyway,
+ * applyCaptureShip). Read off the display world's mirror, never written.
+ */
+async function useCapturedShipAsEscort(world: World,
+    gameData: SimulationGameDataInterface, targetUuid: string)
+    : Promise<boolean> {
+    const prizeId = world.entities.get(targetUuid)?.components
+        .get(ShipComponent)?.id;
+    const player = localPlayerShip(world);
+    const boarding = player?.components.get(BoardingComponent);
+    if (prizeId === undefined || !player || boarding?.target !== targetUuid
+        || boarding.capture !== 'succeeded') {
+        return false;
+    }
+    const prize = await gameData.data.Ship.get(prizeId);
+    const effects = await buildCaptureSetStrings(player, undefined, prize,
+        gameData, MissionUniverse.shared(gameData),
+        { systemId: world.resources.get(SystemIdResource) });
+    world.emit(CaptureShipEvent,
+        { capture: { name: '', escort: true, ...effects } });
+    return true;
+}
+
 // Runs each frame for the local player's ship (PlayerShipSelector),
 // opening/closing/refreshing the dialogs from its synced
 // BoardingComponent. Optional so it still runs (to close the dialogs)
@@ -1177,6 +1210,8 @@ export const BoardingDisplayPlugin: Plugin = {
                 ask: targetUuid => useCapturedShip(world, gameData,
                     displayAssets, namePrompt, screen, targetUuid),
                 dismiss: () => namePrompt.alert.cancel(),
+                escort: targetUuid => useCapturedShipAsEscort(world,
+                    gameData, targetUuid),
             } : undefined);
         // jünk commodity names for the booty line come from the game data.
         ui.plunder.cargoName = key => cargoKeyDisplayName(key, gameData);

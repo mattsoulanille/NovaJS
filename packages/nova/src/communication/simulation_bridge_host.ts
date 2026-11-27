@@ -21,7 +21,9 @@ import {
     loadSetStringEffectsGameData, SimulationInput,
 } from "./simulation_input.js";
 import { warnThrottled } from "../common/log_throttle.js";
-import { CapturedShip, HailAction } from "../nova_plugin/encounters/index.js";
+import {
+    CapturedShip, HailAction, StellarSetString,
+} from "../nova_plugin/encounters/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import {
     AbortedMission, AcceptedMission, RefusedMission,
@@ -1811,6 +1813,17 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     async captureShip(capture: CapturedShip) {
         await loadSetStringEffectsGameData(this.world, capture);
         this.schedule({ kind: 'captureShip', capture });
+    }
+
+    /**
+     * A stellar's OnDominate / OnRelease (encounters/tribute.ts
+     * StellarSetStringType): the deltas of the string the simulation owed
+     * the pilot. What the string names (a granted outfit, a change of
+     * ship) is staged BEFORE scheduling, as for an abort.
+     */
+    async stellarSetString(record: StellarSetString) {
+        await loadSetStringEffectsGameData(this.world, record);
+        this.schedule({ kind: 'stellarSetString', record });
     }
 
     snapshot(): SimulationFrame {

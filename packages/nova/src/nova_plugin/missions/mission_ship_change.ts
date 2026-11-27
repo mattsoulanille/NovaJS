@@ -23,8 +23,8 @@ import {
     ControlledByComponent, CreditsComponent, CronStatesComponent,
     EscortPayrollComponent, GameDateComponent, MissionsComponent,
     PendingAutoAbortShipsComponent, PendingMissionNoticesComponent,
-    DominatedComponent, PlayerNamesComponent, PlayerShipSelector,
-    ReinforcementCallsComponent,
+    DominatedComponent, PendingStellarSetStringsComponent,
+    PlayerNamesComponent, PlayerShipSelector, ReinforcementCallsComponent,
     StoredShipsComponent, StrictPlayComponent,
 } from '../player/index.js';
 import { CombatRatingComponent, LegalRecordsComponent } from '../reputation/index.js';
@@ -211,6 +211,10 @@ export const PLAYER_STATE_COMPONENTS: readonly Component<any>[] = [
     // (encounters/tribute.ts, spawn/defense_fleet_system.ts), so safe to
     // share.
     DominatedComponent,
+    // ... and the OnDominate / OnRelease the simulation still owes the
+    // pilot for them (player/dominated.ts), paid by a record that names
+    // the pilot, not the hull. Replaced, never mutated, so safe to share.
+    PendingStellarSetStringsComponent,
     // The pilot's STORED SHIPS (player/stored_ships.ts) are the pilot's
     // property, not the hull's: every change of hull carries the list.
     // Safe to share by reference: the hangar (spaceport/ship_storage.ts)

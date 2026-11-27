@@ -25,6 +25,7 @@ import {
     playerDiscovery, PlayerShipSelector, CreditsComponent, GameDateComponent,
     ControlledByComponent, StrictPlayComponent, PlayerNamesComponent,
     PlayerNames, derivedShipName, sanitizePlayerName, sanitizeShipName,
+    alwaysDominatedStellars, DominatedComponent,
 } from '../nova_plugin/player/index.js';
 import { displayName } from '../nova_plugin/core/index.js';
 import { makeShip, OutfitsStateComponent } from '../nova_plugin/ship/index.js';
@@ -287,6 +288,18 @@ export async function preparePlayerStart(runtime: ClientRuntime,
         ship.components.set(GameDateComponent, { ...playerStart.date });
         ship.components.set(CreditsComponent,
             { credits: playerStart.credits });
+        // spöb Flags2 0x0020, "Stellar is always dominated": a new pilot
+        // starts dominating each one (alwaysDominatedStellars, a GUESS). No
+        // stock stellar sets it; the scan only costs a brand-new pilot.
+        try {
+            const always = alwaysDominatedStellars(await Promise.all(
+                [...ids.Planet].sort().map(id => gameData.data.Planet.get(id))));
+            if (always.length > 0) {
+                ship.components.set(DominatedComponent, always);
+            }
+        } catch (e) {
+            console.warn('Failed to load the stellars for domination:', e);
+        }
         const bits = new Set<number>();
         const startRanks = new Set<string>();
         try {

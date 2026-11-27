@@ -121,6 +121,27 @@ function forceCaptureRoll(world: World, succeed: boolean) {
  * 1,000 floor (creditBooty), and its 24 px frame makes the board square's
  * half-side 12 px between two Skiffs (boardingRange).
  */
+/**
+ * The capture prompt's "Use As Escort", as the owner's client sends it: a
+ * `captureShip` record with `escort: true` (and, here, no OnCapture
+ * deltas), through the wire codec and the input apply; then one step. The
+ * record is the pilot's, so the boarder is made a peer's ship if it is not
+ * one yet.
+ */
+function useAsEscort(world: World, uuid: string,
+    capture: CapturedShip = { name: '', escort: true }) {
+    const boarder = world.entities.get(uuid)!;
+    if (!boarder.components.has(ControlledByComponent)) {
+        boarder.components.set(ControlledByComponent,
+            { peerId: 'escort peer' });
+    }
+    const input: SimulationInput = { kind: 'captureShip', capture };
+    expect(SimulationInputType.is(input)).toBeTrue();
+    applySimulationInputs(world, [input],
+        boarder.components.get(ControlledByComponent)!.peerId);
+    world.step();
+}
+
 describe('boarding in a live world', () => {
     /** The victim's government: BoardPenalty 10. */
     const MERIDIAN = SYNTHETIC.govts.meridian;
@@ -663,7 +684,7 @@ describe('boarding in a live world', () => {
         press(world, BOARDER, 'plunderCapture');
         expect(boarder.components.get(BoardingComponent)?.capture)
             .toEqual('succeeded');
-        press(world, BOARDER, 'plunderCaptureEscort');
+        useAsEscort(world, BOARDER);
     }
 
     /**
@@ -878,7 +899,7 @@ describe('boarding in a live world', () => {
         expect(boarder.components.get(BoardingComponent)?.capture)
             .toEqual('succeeded');
 
-        press(world, BOARDER, 'plunderCaptureEscort');
+        useAsEscort(world, BOARDER);
         // Now an escort of the boarder: formation flock, escort command,
         // shared firing group, no govt, no longer disabled.
         expect(target.components.get(FormationComponent)?.leader)
@@ -951,7 +972,7 @@ describe('boarding in a live world', () => {
                 expect(target.components.has(GovtComponent)).toBeTrue();
                 expect(target.components.has(DisabledComponent)).toBeTrue();
                 // The keep press has nothing to keep either.
-                press(world, BOARDER, 'plunderCaptureEscort');
+                useAsEscort(world, BOARDER);
                 expect(boarder.components.get(BoardingComponent)?.capture)
                     .toEqual('none');
                 expect(target.components.has(PlayerEscortComponent)).toBeFalse();
@@ -1712,7 +1733,7 @@ describe('boarding in a live world', () => {
                 boarder.components.get(BoardingComponent)!.capture =
                     'succeeded';
 
-                press(world, BOARDER, 'plunderCaptureEscort');
+                useAsEscort(world, BOARDER);
 
                 expect(target.components.has(FormationComponent)).toBeFalse();
                 expect(target.components.has(EscortCommandComponent))
@@ -2827,6 +2848,51 @@ describe('boarding in a live world', () => {
                     [{ kept: 'escort', oldShipRetained: false }]);
             });
 
+        it('Use As Escort runs the prize class\'s OnCapture on the pilot, '
+            + 'who keeps his hull (GUESS)', async () => {
+                const { world, boarder, target, gameData } = await swapWorld();
+                const corsair = (await gameData.data.Ship.get(
+                    SYNTHETIC.ships.corsair))!;
+                capture(world, boarder);
+                // The pilot's own class's OnRetire must NOT run: he keeps
+                // the hull.
+                const effects = await buildCaptureSetStrings(boarder,
+                    undefined,
+                    { ...corsair, onCapture: 'b9288', onRetire: 'b9289' },
+                    gameData, MissionUniverse.shared(gameData));
+                expect(effects).toEqual({ bitsSet: [9288] });
+                useAsEscort(world, BOARDER,
+                    { name: 'Ignored', escort: true, ...effects });
+                expect(world.entities.get(BOARDER)).toBe(boarder);
+                expect([...boarder.components.get(ControlBitsComponent)!]
+                    .sort()).toEqual([9288, 9292]);
+                expect(boarder.components.get(PlayerNamesComponent)?.ship)
+                    .not.toEqual('Ignored');
+                expect(target.components.has(PlayerEscortComponent))
+                    .toBeTrue();
+                // A duplicate finds the session gone.
+                useAsEscort(world, BOARDER,
+                    { name: '', escort: true, bitsSet: [2] });
+                expect(boarder.components.get(ControlBitsComponent)!.has(2))
+                    .toBeFalse();
+            });
+
+        it('Use As Escort takes no record from another peer', async () => {
+            const { world, boarder, target } = await swapWorld();
+            capture(world, boarder);
+            const input: SimulationInput = {
+                kind: 'captureShip',
+                capture: { name: '', escort: true, bitsSet: [1] },
+            };
+            applySimulationInputs(world, [input], 'other peer');
+            world.step();
+            expect(boarder.components.get(BoardingComponent)?.capture)
+                .toEqual('succeeded');
+            expect(target.components.has(PlayerEscortComponent)).toBeFalse();
+            expect(boarder.components.get(ControlBitsComponent)!.has(1))
+                .toBeFalse();
+        });
+
         it('replays the swap identically after a rollback', async () => {
             const { world, boarder } = await swapWorld();
             forceCaptureRoll(world, true);
@@ -3414,7 +3480,7 @@ describe('bay-capture shortcut', () => {
             press(world, BOARDER, 'plunderCapture');
             expect(boarder.components.get(BoardingComponent)?.capture)
                 .toEqual('succeeded');
-            press(world, BOARDER, 'plunderCaptureEscort');
+            useAsEscort(world, BOARDER);
         }
     });
 });

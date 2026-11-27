@@ -1,11 +1,16 @@
+import * as t from 'io-ts';
 import { PlanetData } from 'novadatainterface/planet_data';
 import { Entity } from 'nova_ecs/entity';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import {
-    DominatedComponent, hasDominated, withDominated, withoutDominated,
+    dominateStellar, findControlledEntity, hasDominated, releaseStellar,
+    takeStellarSetString,
 } from '../player/index.js';
+import {
+    applyInFlightSetString, SetStringEffectsType,
+} from '../missions/index.js';
 import {
     applyCrime, CombatRatingComponent, Crime, crimeGeography, GovtsResource,
     LegalGeographyResource, LegalRecordsComponent,
@@ -76,11 +81,18 @@ import {
  *  - THE TRIBUTE is income "using the same system as ranks", shown on the
  *    player-info screen (spaceport/daily_budget.ts).
  *
- * NOT IMPLEMENTED (follow-ups): the spöb OnDominate / OnRelease set
- * strings (no ECS system runs an NCB set string; every set-string site is
- * player-local, ncb/ncb.ts), Flags2 0x0020 "always dominated" (no stock
- * stellar sets it), planetary weapons and their "provoked" mode (#353
- * section 2).
+ * THE SET STRINGS: spöb OnDominate (stock: 272 stellars, b6100-b6106) and
+ * OnRelease (none in stock) are owed the tick the domination changes —
+ * dominateStellar / releaseStellar queue them on the pilot
+ * (player/dominated.ts PendingStellarSetStringsComponent) — and paid by the
+ * owner's client with a `stellarSetString` record (applyStellarSetString
+ * below), resolved there as an in-flight abort's OnAbort is. Flags2 0x0020
+ * "always dominated": a NEW pilot starts dominating every such stellar
+ * (player/dominated.ts alwaysDominatedStellars, a GUESS; no stock stellar
+ * sets it).
+ *
+ * NOT IMPLEMENTED (follow-ups): planetary weapons and their "provoked"
+ * mode (#353 section 2).
  *
  * WHERE THE PIECES ARE: the rules and the hail actions here; the fleet
  * itself (its genesis staging, launches, stand-down and the domination at
@@ -243,10 +255,13 @@ function chargeDemand(world: World, player: Entity, systemId: string,
         govts), systemId, govt, new Array<Crime>(kills).fill('kill'));
 }
 
-/** Records the domination of `planetId` on `player` (a new array). */
-export function dominate(player: Entity, planetId: string) {
-    player.components.set(DominatedComponent, withDominated(
-        player.components.get(DominatedComponent), planetId));
+/**
+ * Records the domination of `planetId` on `player` (a new array) and owes
+ * its OnDominate (player/dominated.ts dominateStellar).
+ */
+export function dominate(player: Entity, planetId: string,
+    planetData?: Pick<PlanetData, 'domination'>) {
+    dominateStellar(player, planetId, planetData?.domination);
 }
 
 /**
@@ -284,7 +299,7 @@ export function applyTributeDemand(world: World, player: Entity,
     }
     chargeDemand(world, player, systemId, planetData, TRIBUTE_DEMAND_KILLS);
     if (outcome === 'dominate') {
-        dominate(player, planetId);
+        dominate(player, planetId, planetData);
         return;
     }
     const fleet = planet.components.get(DefenseFleetComponent);
@@ -309,13 +324,58 @@ export function applyTributeDemand(world: World, player: Entity,
 
 /**
  * RELEASE, from `player` at the stellar `planet`: it is no longer
- * dominated (and pays no more tribute). Nothing else changes.
+ * dominated (and pays no more tribute), and its OnRelease is owed
+ * (player/dominated.ts releaseStellar). Nothing else changes.
  */
 export function applyTributeRelease(player: Entity, planet: Entity): void {
     const planetId = planet.components.get(PlanetComponent)?.id;
-    if (planetId === undefined || !hasDominated(player, planetId)) {
+    if (planetId === undefined) {
         return;
     }
-    player.components.set(DominatedComponent, withoutDominated(
-        player.components.get(DominatedComponent), planetId));
+    releaseStellar(player, planetId,
+        planet.components.get(PlanetDataComponent)?.domination);
+}
+
+// --- OnDominate / OnRelease (the `stellarSetString` input record) ---
+
+/**
+ * A stellar's OnDominate or OnRelease, as it crosses the wire: which owed
+ * entry it pays (player/dominated.ts PendingStellarSetStringType: the
+ * pilot's `seq` and the stellar) and the string's DELTAS, resolved on the
+ * owning client against a detached copy of the pilot under the spöb's
+ * writer prefix (spaceport/ship_mission_accept.ts buildStellarSetString),
+ * exactly as an in-flight abort's OnAbort is. The kind is the entry's, not
+ * the record's. JSON-safe like every record.
+ */
+export const StellarSetStringType = t.intersection([
+    t.type({ seq: t.number, planetId: t.string }),
+    SetStringEffectsType,
+]);
+export type StellarSetString = t.TypeOf<typeof StellarSetStringType>;
+
+/**
+ * Applies a `stellarSetString` record on every peer at the same tick: the
+ * actor from `peerId` (never the record), then — only when that pilot owes
+ * exactly this entry (takeStellarSetString), so a duplicate, a replay or a
+ * record for a debt this pilot never had is a no-op — the entry comes off
+ * the list and the deltas land on the pilot's ship
+ * (missions/mission_accept.ts applyInFlightSetString).
+ *
+ * Synchronous and free of randomness and wall-clock reads (the rollback
+ * driver replays it).
+ */
+export function applyStellarSetString(world: World,
+    peerId: string | undefined, record: StellarSetString): void {
+    const controlled = findControlledEntity(world, peerId);
+    if (!controlled) {
+        return;
+    }
+    const entry = takeStellarSetString(controlled.entity, record.seq,
+        record.planetId);
+    if (!entry) {
+        return;
+    }
+    applyInFlightSetString(world, controlled.uuid, controlled.entity, record,
+        `the ${entry.kind === 'dominate' ? 'OnDominate' : 'OnRelease'} of `
+        + record.planetId);
 }

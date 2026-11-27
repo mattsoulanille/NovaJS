@@ -21,6 +21,7 @@ import { PlanetCornersPlugin } from "./planet_corners_plugin.js";
 import { ProjectileFadePlugin } from "./projectile_fade_plugin.js";
 import { ProjectileSpinPlugin } from "./projectile_spin_plugin.js";
 import { MissionInfoPlugin } from "./mission_info_plugin.js";
+import { StellarSetStringPlugin } from "./stellar_set_string_plugin.js";
 import { MovementExtrapolationPlugin } from "./movement_extrapolation_plugin.js";
 import { HailDialogPlugin } from "./hail_dialog_plugin.js";
 import { PlayerInfoPlugin } from "./player_info_plugin.js";
@@ -185,6 +186,8 @@ export const Display: Plugin = {
         await world.addPlugin(StarmapPlugin);
         await world.addPlugin(PlayerInfoPlugin);
         await world.addPlugin(MissionInfoPlugin);
+        // Pays the OnDominate / OnRelease the simulation owes the pilot.
+        await world.addPlugin(StellarSetStringPlugin);
         // Before both of its triggers (the hail key and the boarding
         // dialogs): each of them calls presentShipOffer, which needs the
         // shared offer popup this plugin owns.
@@ -225,6 +228,7 @@ export const Display: Plugin = {
         await world.removePlugin(HailDialogPlugin);
         await world.removePlugin(MissionShipDonePlugin);
         await world.removePlugin(ShipMissionOfferPlugin);
+        await world.removePlugin(StellarSetStringPlugin);
         await world.removePlugin(MissionInfoPlugin);
         await world.removePlugin(PlayerInfoPlugin);
         await world.removePlugin(StarmapPlugin);

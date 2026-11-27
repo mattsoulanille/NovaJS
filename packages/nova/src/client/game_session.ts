@@ -26,6 +26,7 @@ import { Autopilot, ControlSinks } from '../autopilot.js';
 import type { AsyncSimulationBridgeClient } from '../communication/async_simulation_bridge_client.js';
 import { warnedUnsyncableEntities } from '../communication/apply_simulation_frame.js';
 import { CaptureShipEvent, PlunderActionEvent } from '../display/boarding_plugin.js';
+import { StellarSetStringEvent } from '../display/stellar_set_string_plugin.js';
 import { LeaveGateMapEvent } from '../display/gate_map_plugin.js';
 import {
     EscortActionEvent, HailRequestEvent,
@@ -220,6 +221,14 @@ function wireWorld(runtime: ClientRuntime, pump: FramePump): WorldWiring {
         world.events.get(CaptureShipEvent).subscribe(({ data }) => {
             void bridge.captureShip(data.capture).catch(e => {
                 console.warn('Failed to use the captured ship:', e);
+            });
+        });
+        // A stellar's OnDominate / OnRelease the simulation owed the pilot,
+        // resolved by display/stellar_set_string_plugin.ts, on its own
+        // input kind (encounters/tribute.ts StellarSetStringType).
+        world.events.get(StellarSetStringEvent).subscribe(({ data }) => {
+            void bridge.stellarSetString(data.record).catch(e => {
+                console.warn('Failed to send a stellar set string:', e);
             });
         });
         world.events.get(LandEvent).subscribe(({ data, entities }) => {

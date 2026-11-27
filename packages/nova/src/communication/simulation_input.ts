@@ -21,7 +21,8 @@ import {
 } from '../nova_plugin/player/index.js';
 import { applySetTarget } from "../nova_plugin/combat/index.js";
 import {
-    applyCaptureShip, applyHail, CapturedShip, CapturedShipType, HailAction,
+    applyCaptureShip, applyHail, applyStellarSetString, CapturedShip,
+    CapturedShipType, HailAction, StellarSetString, StellarSetStringType,
     HailActionType,
 } from "../nova_plugin/encounters/index.js";
 import {
@@ -92,6 +93,14 @@ export type SimulationInput =
      * applyCaptureShip).
      */
     | { kind: 'captureShip', capture: CapturedShip }
+    /**
+     * A stellar's OnDominate / OnRelease, owed the pilot by the simulation
+     * the tick the domination changed (player/dominated.ts
+     * PendingStellarSetStringsComponent) and resolved on the owning client
+     * as an abort's OnAbort is. Applied only against the SENDER's own
+     * matching debt (encounters/tribute.ts applyStellarSetString).
+     */
+    | { kind: 'stellarSetString', record: StellarSetString }
     /**
      * A hail-dialog ESCORT MANAGEMENT action against one of the player's
      * own escorts: release it, or queue/cancel an upgrade or a sale
@@ -191,6 +200,7 @@ export const SimulationInputType: t.Type<SimulationInput, unknown> = t.union([
     t.strict({ kind: t.literal('refuseMission'), refused: RefusedMissionType }),
     t.strict({ kind: t.literal('abortMission'), aborted: AbortedMissionType }),
     t.strict({ kind: t.literal('captureShip'), capture: CapturedShipType }),
+    t.strict({ kind: t.literal('stellarSetString'), record: StellarSetStringType }),
     t.strict({ kind: t.literal('escortAction'), action: EscortActionType }),
     t.strict({ kind: t.literal('refundFighter'), refund: FighterRefundType }),
     t.strict({ kind: t.literal('addEntity'), uuid: t.string, entity: EncodedEntity }),
@@ -276,7 +286,8 @@ export async function loadSetStringEffectsGameData(world: World,
 export function inputNeedsStaging(input: SimulationInput): boolean {
     return input.kind === 'addEntity' || input.kind === 'acceptMission'
         || input.kind === 'refuseMission' || input.kind === 'abortMission'
-        || input.kind === 'captureShip';
+        || input.kind === 'captureShip'
+        || input.kind === 'stellarSetString';
 }
 
 /**
@@ -361,6 +372,9 @@ export async function loadInputRecordsGameData(
                 : undefined,
             input.kind === 'captureShip'
                 ? loadSetStringEffectsGameData(world, input.capture)
+                : undefined,
+            input.kind === 'stellarSetString'
+                ? loadSetStringEffectsGameData(world, input.record)
                 : undefined,
             input.kind === 'refundFighter'
                 ? loadWeaponsGameData(world, [input.refund.bayWeaponId])
@@ -706,6 +720,10 @@ function applySimulationInput(world: World, input: SimulationInput,
         }
         case 'captureShip': {
             applyCaptureShip(world, peerId, input.capture);
+            break;
+        }
+        case 'stellarSetString': {
+            applyStellarSetString(world, peerId, input.record);
             break;
         }
         case 'escortAction': {

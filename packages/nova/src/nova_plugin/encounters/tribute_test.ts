@@ -21,9 +21,20 @@ import {
 } from '../pilot/index.js';
 import { NpcComponent, SystemHoldComponent } from '../npc/index.js';
 import {
-    ControlledByComponent, CreditsComponent, DominatedComponent,
+    alwaysDominatedStellars, ControlledByComponent, CreditsComponent,
+    DominatedComponent, PendingStellarSetStringsComponent,
     PlayerEscortComponent,
 } from '../player/index.js';
+import {
+    restoreWorld, snapshotWorld, SnapshotPoliciesResource,
+} from 'nova_ecs/plugins/snapshot_plugin';
+import { hashWorld } from 'nova_ecs/plugins/world_hash';
+import {
+    applySimulationInputs, SimulationInput, SimulationInputType,
+} from '../../communication/simulation_input.js';
+import { deriveEntityComponents } from '../core/index.js';
+import { ControlBitsComponent } from '../ncb/index.js';
+import { StellarSetString } from './tribute.js';
 import {
     CombatRatingComponent, LegalRecordsComponent,
 } from '../reputation/index.js';
@@ -95,7 +106,9 @@ function planet(id: string, more: Partial<PlanetData> = {}): PlanetData {
     };
 }
 
-async function build(count = 8) {
+async function build(count = 8,
+    strings: { onDominate: string, onRelease: string }
+        = { onDominate: '', onRelease: '' }) {
     const gameData = new MockGameData();
     // The wave-39/40 rig's gövt 290 Kit Tribute Govt (Kill 100, Disab 50),
     // and a govt with no relation to it for the neutral systems.
@@ -122,16 +135,14 @@ async function build(count = 8) {
     gameData.data.Planet.map.set(FORT, planet(FORT, {
         position: [500, 0], defense: { dude: DUDE, count, waveSize: null },
         domination: {
-            tribute: 1234, alwaysDominated: false, onDominate: '',
-            onRelease: '',
+            tribute: 1234, alwaysDominated: false, ...strings,
         },
     }));
     // No fleet: gives in at once. Tribute 0 decoded to 1,000 x TL 3.
     gameData.data.Planet.map.set(OPEN, planet(OPEN, {
         position: [-500, 0],
         domination: {
-            tribute: 3000, alwaysDominated: false, onDominate: '',
-            onRelease: '',
+            tribute: 3000, alwaysDominated: false, ...strings,
         },
     }));
     gameData.data.Planet.map.set(STATION, planet(STATION, {
@@ -164,6 +175,7 @@ async function build(count = 8) {
         ship.components.set(CreditsComponent, { credits: 100_000 });
         ship.components.set(CombatRatingComponent, { kills: rating });
         ship.components.set(LegalRecordsComponent, new Map());
+        ship.components.set(ControlBitsComponent, new Set<number>());
         await completeEntity(world, ship);
         ship.components.set(MovementStateComponent, {
             accelerating: 0, position: new Position(x, y),
@@ -543,6 +555,163 @@ describe('Demand Tribute in the sim', () => {
         expect(dominatedBy(world, 'a')).toEqual([STATION]);
         // The release changes nothing else.
         expect(record(world, 'a')).toBe(-1200);
+    });
+});
+
+/**
+ * spöb OnDominate / OnRelease: owed the pilot the tick the domination
+ * changes (player/dominated.ts PendingStellarSetStringsComponent) and paid
+ * by the owner's `stellarSetString` record (tribute.ts
+ * applyStellarSetString). Stock Earth's OnDominate is `b6100`. The client's
+ * half (buildStellarSetString) is driven end to end in
+ * communication/stellar_set_string_rollback_test.ts.
+ */
+describe('a stellar\'s OnDominate / OnRelease', () => {
+    const STRINGS = { onDominate: 'b6100', onRelease: '!b6100 b6101' };
+
+    function owed(world: World, uuid: string) {
+        return world.entities.get(uuid)!.components
+            .get(PendingStellarSetStringsComponent)?.pending ?? [];
+    }
+
+    function bits(world: World, uuid: string) {
+        return [...world.entities.get(uuid)!.components
+            .get(ControlBitsComponent) ?? []].sort();
+    }
+
+    /** The record, through the wire codec and the input apply. */
+    function pay(world: World, peerId: string, record: StellarSetString) {
+        const input: SimulationInput = { kind: 'stellarSetString', record };
+        expect(SimulationInputType.is(input)).toBeTrue();
+        applySimulationInputs(world, [input], peerId);
+        world.step();
+    }
+
+    it('owes OnDominate when a demand is given in to, and the owner\'s '
+        + 'record pays it on HIS ship only, once', async () => {
+            const { world, addPlayer } = await build(8, STRINGS);
+            await addPlayer('a', PEER_A, 12_800);
+            await addPlayer('b', PEER_B, 12_800, 0, 300);
+            applyHail(world, PEER_A,
+                { kind: 'demandTribute', target: OPEN_UUID });
+            expect(owed(world, 'a')).toEqual(
+                [{ seq: 0, planetId: OPEN, kind: 'dominate' }]);
+            expect(owed(world, 'b')).toEqual([]);
+            // Another peer cannot pay A's debt, nor set bits through it.
+            pay(world, PEER_B, { seq: 0, planetId: OPEN, bitsSet: [6100] });
+            expect(bits(world, 'b')).toEqual([]);
+            expect(owed(world, 'a').length).toBe(1);
+            // A wrong stellar or seq pays nothing.
+            pay(world, PEER_A, { seq: 0, planetId: FORT, bitsSet: [1] });
+            pay(world, PEER_A, { seq: 1, planetId: OPEN, bitsSet: [2] });
+            expect(bits(world, 'a')).toEqual([]);
+            pay(world, PEER_A, { seq: 0, planetId: OPEN, bitsSet: [6100] });
+            expect(bits(world, 'a')).toEqual([6100]);
+            expect(bits(world, 'b')).toEqual([]);
+            expect(owed(world, 'a')).toEqual([]);
+            // A duplicate finds the debt paid.
+            pay(world, PEER_A, { seq: 0, planetId: OPEN, bitsSet: [3] });
+            expect(bits(world, 'a')).toEqual([6100]);
+        });
+
+    it('owes nothing for a blank string', async () => {
+        const { world, addPlayer } = await build();
+        await addPlayer('a', PEER_A, 12_800);
+        applyHail(world, PEER_A,
+            { kind: 'demandTribute', target: OPEN_UUID });
+        applyHail(world, PEER_A,
+            { kind: 'releaseTribute', target: OPEN_UUID });
+        expect(world.entities.get('a')!.components
+            .has(PendingStellarSetStringsComponent)).toBeFalse();
+    });
+
+    it('owes every demander OnDominate at the defence fleet\'s defeat',
+        async () => {
+            const { world, addPlayer } = await build(2, STRINGS);
+            await addPlayer('a', PEER_A, 12_800);
+            await addPlayer('b', PEER_B, 12_800, 0, 300);
+            applyHail(world, PEER_A,
+                { kind: 'demandTribute', target: FORT_UUID });
+            applyHail(world, PEER_B,
+                { kind: 'demandTribute', target: FORT_UUID });
+            advance(world, DEFENSE_FIRST_LAUNCH_MS + 3_000);
+            sink(world, 2);
+            expect(dominatedBy(world, 'a')).toEqual([FORT]);
+            expect(owed(world, 'a')).toEqual(
+                [{ seq: 0, planetId: FORT, kind: 'dominate' }]);
+            expect(owed(world, 'b')).toEqual(
+                [{ seq: 0, planetId: FORT, kind: 'dominate' }]);
+            pay(world, PEER_B, { seq: 0, planetId: FORT, bitsSet: [6100] });
+            expect(bits(world, 'b')).toEqual([6100]);
+            expect(bits(world, 'a')).toEqual([]);
+            expect(owed(world, 'a').length).toBe(1);
+        });
+
+    it('owes OnRelease at a Release, after OnDominate, in order',
+        async () => {
+            const { world, addPlayer } = await build(8, STRINGS);
+            await addPlayer('a', PEER_A, 12_800);
+            applyHail(world, PEER_A,
+                { kind: 'demandTribute', target: OPEN_UUID });
+            applyHail(world, PEER_A,
+                { kind: 'releaseTribute', target: OPEN_UUID });
+            applyHail(world, PEER_A,
+                { kind: 'demandTribute', target: OPEN_UUID });
+            expect(owed(world, 'a')).toEqual([
+                { seq: 0, planetId: OPEN, kind: 'dominate' },
+                { seq: 1, planetId: OPEN, kind: 'release' },
+                { seq: 2, planetId: OPEN, kind: 'dominate' },
+            ]);
+            pay(world, PEER_A, { seq: 0, planetId: OPEN, bitsSet: [6100] });
+            pay(world, PEER_A, { seq: 1, planetId: OPEN, bitsSet: [6101],
+                bitsCleared: [6100] });
+            expect(bits(world, 'a')).toEqual([6101]);
+            expect(owed(world, 'a')).toEqual(
+                [{ seq: 2, planetId: OPEN, kind: 'dominate' }]);
+        });
+
+    it('replays the debt and its payment identically after a rollback',
+        async () => {
+            const { world, addPlayer } = await build(8, STRINGS);
+            await addPlayer('a', PEER_A, 12_800);
+            await addPlayer('b', PEER_B, 12_800, 0, 300);
+            const before = snapshotWorld(world);
+            const run = () => {
+                const input: SimulationInput = {
+                    kind: 'hail',
+                    action: { kind: 'demandTribute', target: OPEN_UUID },
+                };
+                applySimulationInputs(world, [input], PEER_A);
+                world.step();
+                pay(world, PEER_A, { seq: 0, planetId: OPEN,
+                    bitsSet: [6100] });
+                const hashes = [hashWorld(world).hash];
+                for (let i = 0; i < 20; i++) {
+                    world.step();
+                    hashes.push(hashWorld(world).hash);
+                }
+                return hashes;
+            };
+            const first = run();
+            expect(bits(world, 'a')).toEqual([6100]);
+            restoreWorld(world, before, deriveEntityComponents);
+            expect(bits(world, 'a')).toEqual([]);
+            expect(owed(world, 'a')).toEqual([]);
+            expect(run()).toEqual(first);
+            const policies = world.resources.get(SnapshotPoliciesResource)!;
+            expect([...policies.unhandled]).toEqual([]);
+        });
+});
+
+describe('an always-dominated stellar (spöb Flags2 0x0020)', () => {
+    it('is dominated by a new pilot from the start (GUESS)', () => {
+        const stellar = (id: string, alwaysDominated: boolean) => ({
+            id, domination: { alwaysDominated },
+        });
+        expect(alwaysDominatedStellars([stellar('p:3', true),
+            stellar('p:1', false), stellar('p:2', true)]))
+            .toEqual(['p:2', 'p:3']);
+        expect(alwaysDominatedStellars([])).toEqual([]);
     });
 });
 

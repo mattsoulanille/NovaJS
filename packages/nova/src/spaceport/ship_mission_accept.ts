@@ -1,5 +1,6 @@
 import { Entity } from 'nova_ecs/entity';
 import { PersData } from 'novadatainterface/pers_data';
+import { PlanetData } from 'novadatainterface/planet_data';
 import { ShipData } from 'novadatainterface/ship_data';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { CargoComponent, OutfitsStateComponent, ShipComponent } from '../nova_plugin/ship/index.js';
@@ -13,7 +14,7 @@ import {
 } from '../nova_plugin/missions/index.js';
 import {
     ShipObjective, ActiveMission, ActiveMissionType, CreditsComponent, GameDateComponent, MissionsComponent,
-    dayNumber,
+    dayNumber, StellarSetStringKind,
 } from '../nova_plugin/player/index.js';
 import {
     ActiveRanksComponent, AggressionSuppressGovtsComponent,
@@ -675,23 +676,67 @@ export async function buildDeferredAutoAbort(player: Entity,
  * either string means what it means in any other set string, as for an
  * abort's OnAbort. `player` is the display world's mirror of the player's
  * ship, read and never written.
+ *
+ * "Use As Escort" passes no `retired` class: the pilot keeps his hull, so
+ * only the prize class's OnCapture runs. GUESS (the Bible's "evaluated when
+ * you capture a ship of this type" names no answer; wave 45 measured
+ * OnCapture only for Use As My Ship).
  */
 export async function buildCaptureSetStrings(player: Entity,
-    retired: ShipData, captured: ShipData,
+    retired: ShipData | undefined, captured: ShipData,
     gameData: SimulationGameDataInterface, universe: MissionUniverse,
     options: { systemId?: string } = {}): Promise<SetStringEffects> {
-    if (!retired.onRetire && !captured.onCapture) {
+    if (!retired?.onRetire && !captured.onCapture) {
         return {};
     }
     await universe.load();
     const { session, before, outcome } = await detachedSession(player,
         gameData, universe, options.systemId);
-    runMissionSetString(session.machinery, retired.onRetire,
-        setStringPrefix(retired), session.outfits);
+    if (retired) {
+        runMissionSetString(session.machinery, retired.onRetire,
+            setStringPrefix(retired), session.outfits);
+    }
     runMissionSetString(session.machinery, captured.onCapture,
         setStringPrefix(captured), session.outfits);
     // The notices a string's mission starts or ends would give are dropped:
     // the original shows the status line and nothing else here.
+    session.commit();
+    return diffSetStringEffects(before, session.target, '', outcome,
+        universe.legalGeography());
+}
+
+/**
+ * A stellar's spöb OnDominate ("evaluated when the stellar is successfully
+ * dominated by the player", EVN Bible ~:2893) or OnRelease ("... released
+ * from domination by the player", ~:2896), run IN FLIGHT against a
+ * detached copy of the player's state under the spöb's writer prefix
+ * (setStringPrefix), the in-flight abort's machinery, so every operator
+ * means what it means in any other set string. Stock: 272 stellars' OnDominate
+ * set one of b6100-b6106; no stock OnRelease.
+ *
+ * Returned as the deltas a `stellarSetString` record carries
+ * (encounters/tribute.ts StellarSetStringType), for the entry the
+ * simulation queued on the pilot (player/dominated.ts) — the record is sent
+ * even when the string changed nothing, because it is also what clears the
+ * debt. The notices a string's mission starts or ends would give are
+ * dropped: the original's domination shows its hail line and nothing else.
+ * `player` is the display world's mirror, read and never written.
+ */
+export async function buildStellarSetString(player: Entity,
+    planet: Pick<PlanetData, 'id' | 'writerPrefix' | 'domination'>,
+    kind: StellarSetStringKind, gameData: SimulationGameDataInterface,
+    universe: MissionUniverse,
+    options: { systemId?: string } = {}): Promise<SetStringEffects> {
+    const expression = kind === 'dominate'
+        ? planet.domination.onDominate : planet.domination.onRelease;
+    if (!expression.trim()) {
+        return {};
+    }
+    await universe.load();
+    const { session, before, outcome } = await detachedSession(player,
+        gameData, universe, options.systemId);
+    runMissionSetString(session.machinery, expression,
+        setStringPrefix(planet), session.outfits);
     session.commit();
     return diffSetStringEffects(before, session.target, '', outcome,
         universe.legalGeography());

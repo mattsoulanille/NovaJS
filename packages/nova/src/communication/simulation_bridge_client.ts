@@ -3,7 +3,9 @@ import { Entity } from "nova_ecs/entity";
 import { EncodedEntity, Serializer } from "nova_ecs/plugins/serializer_plugin";
 import { ControlEvent } from "../nova_plugin/core/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
-import { CapturedShip, HailAction } from "../nova_plugin/encounters/index.js";
+import {
+    CapturedShip, HailAction, StellarSetString,
+} from "../nova_plugin/encounters/index.js";
 import {
     AbortedMission, AcceptedMission, RefusedMission,
 } from "../nova_plugin/missions/index.js";
@@ -86,6 +88,10 @@ export class SimulationBridgeClient {
 
     captureShip(capture: CapturedShip) {
         return this.host.captureShip(structuredClone(capture));
+    }
+
+    stellarSetString(record: StellarSetString) {
+        return this.host.stellarSetString(structuredClone(record));
     }
 
     addEntity(uuid: string, entity: Entity) {

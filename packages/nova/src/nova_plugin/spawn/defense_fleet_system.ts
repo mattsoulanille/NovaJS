@@ -19,7 +19,8 @@ import { registerSimulationBridgeEvent } from '../../communication/simulation_br
 import { IdFactoryResource, SimulationGameDataResource } from '../core/index.js';
 import { NpcComponent, SystemHoldComponent } from '../npc/index.js';
 import {
-    ControlledByComponent, DominatedComponent, DominatedType, withDominated,
+    ControlledByComponent, DominatedComponent, DominatedType, dominateStellar,
+    PendingStellarSetStringsComponent, PendingStellarSetStringsType,
 } from '../player/index.js';
 import {
     ExplodingComponent, StellarDefenderComponent, StellarDefenderType,
@@ -258,9 +259,9 @@ export const DefenseFleetSystem = new System({
                 for (const demander of fleet.demanders) {
                     const player = entities.get(demander);
                     if (player) {
-                        player.components.set(DominatedComponent,
-                            withDominated(player.components
-                                .get(DominatedComponent), planet.id));
+                        // ... and owes its OnDominate (player/dominated.ts).
+                        dominateStellar(player, planet.id,
+                            planetData.domination);
                         emit(StellarDominatedEvent, {
                             planet: planet.id,
                             station: planetData.flags.isStation,
@@ -361,6 +362,11 @@ export const DefenseFleetPlugin: Plugin = {
         });
         deltaMaker.addComponent(DominatedComponent, {
             componentType: DominatedType,
+        });
+        // The OnDominate / OnRelease owed the pilot (player/dominated.ts),
+        // which the owner's display pays (stellar_set_string_plugin.ts).
+        deltaMaker.addComponent(PendingStellarSetStringsComponent, {
+            componentType: PendingStellarSetStringsType,
         });
         world.resources.get(SerializerResource)?.addEvent(
             StellarDominatedEvent, StellarDominatedEventType);
