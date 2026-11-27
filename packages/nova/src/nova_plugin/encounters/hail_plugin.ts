@@ -55,8 +55,8 @@ import {
 } from '../reputation/index.js';
 import {
     PlanetComponent, PlanetDataComponent, stellarClearanceFor,
-    StellarBribesComponent, STELLAR_BRIBE_NO_EXPIRY, StellarHaggleComponent,
-    SystemVisitComponent,
+    planetBribeExpiry, PlanetTargetComponent, StellarBribesComponent,
+    StellarHaggleComponent, SystemVisitComponent,
 } from '../travel/index.js';
 import { ActiveRanksComponent } from '../ncb/index.js';
 import { ranksAllowAssistance, ranksGiveFreeFuel } from '../ncb/index.js';
@@ -415,9 +415,11 @@ function setStellarHaggle(player: Entity, planetId: string,
  * price cannot pay.
  *
  * The effect is one map entry on the player: this stellar's NOVA id -> the
- * simulation time the clearance lapses. Time comes from TimeResource, never
- * Date.now, so the expiry is identical on every peer. The haggle with the
- * planet is over (its entry is dropped).
+ * simulation time the clearance lapses (one ordinary clearance's life,
+ * planetBribeExpiry), and, when the stellar is the ship's selection, the
+ * PlanetTarget clearance on the same clock. Time comes from TimeResource,
+ * never Date.now, so the expiry is identical on every peer. The haggle
+ * with the planet is over (its entry is dropped).
  */
 function applyPlanetBribe(world: World, player: Entity, playerUuid: string,
     target: Entity, targetUuid: string) {
@@ -443,9 +445,22 @@ function applyPlanetBribe(world: World, player: Entity, playerUuid: string,
         player.components.set(StellarHaggleComponent, rest);
     }
     const bribes = new Map(player.components.get(StellarBribesComponent));
-    // Until the next landing or system exit (R8 wave 41).
-    bribes.set(planetId, STELLAR_BRIBE_NO_EXPIRY);
+    // One landing clearance's life (R8 wave 42), or until the next
+    // landing or system exit (wave 41), whichever comes first.
+    const expiry = planetBribeExpiry(now);
+    bribes.set(planetId, expiry);
     player.components.set(StellarBribesComponent, bribes);
+    // The payment IS the clearance ("you're cleared to land. Commence
+    // final approach."): at the selected stellar the ship holds it at
+    // once, on the same clock (travel/planet_plugin.ts's
+    // planetBribeExpiry). Edited in place like AttemptLandingSystem's
+    // grantClearance, the clearance's only other writer.
+    const planetTarget = player.components.get(PlanetTargetComponent);
+    if (planetTarget && planetTarget.target === targetUuid) {
+        planetTarget.cleared = targetUuid;
+        planetTarget.clearedUntil = expiry;
+        delete planetTarget.requested;
+    }
 }
 
 /**

@@ -545,19 +545,27 @@ export const SystemVisitType = t.number;
 export const SystemVisitComponent = new Component<number>('SystemVisit');
 
 /**
- * The expiry a paid planet bribe is written with: a sim time that never
- * arrives (a large finite number, not Infinity, so it survives JSON
- * codecs). A bribe has no clock: it lasts until the pilot next LANDS
- * anywhere or leaves the system (endPlanetBribes, called from the
- * landing reset and the system crossing). MEASURED (reference "How long
- * an accepted planet bribe lasts (R8), wave 41"): the bribe cleared the
- * player at once, and after a landing at the system's other port about
- * 45 s later the bribed port denied him again, Hostile on the comm and
- * offering a new bribe (twice). GUESS: time alone does not end it (a
- * 3-minute wait in flight would tell). Was a 2-minute clock. The legal
- * record is unchanged by a bribe, exactly as a ship bribe leaves it alone.
+ * A paid planet bribe is ONE landing clearance (applyPlanetBribe in
+ * encounters/hail_plugin.ts): the stellar's StellarBribes entry lapses
+ * STELLAR_CLEARANCE_MS after the payment, and, when the bribed stellar
+ * is the ship's selection, the payment is also the PlanetTarget
+ * clearance itself, on the same clock (so the next `l` inside the landing
+ * window lands, a press farther out says "too far", and neither renews
+ * it). MEASURED (reference "How long a paid planet bribe lasts with no
+ * landing (R8 leftover), wave 42"): with no landing and no jump the
+ * bribed port still cleared the player 12 and 17.7 s after the payment
+ * ("too far away", cleared) and denied him from 28.3 s on, three runs:
+ * the end falls inside an ordinary clearance's lapse (about 24.4 s,
+ * "Landing clearance lapse, wave 36"). GUESS: exactly that clock. A
+ * landing anywhere and a crossing into another system still end it at
+ * once (endPlanetBribes; wave 41: gone after a landing at the system's
+ * other port). Was a standing permission with no clock until either
+ * (1c9d7f62), and a 2-minute clock before that. The legal record is
+ * unchanged by a bribe, exactly as a ship bribe leaves it alone.
  */
-export const STELLAR_BRIBE_NO_EXPIRY = 1e15;
+export function planetBribeExpiry(now: number): number {
+    return now + STELLAR_CLEARANCE_MS;
+}
 
 /**
  * Ends every paid planet bribe the pilot holds: at his landing (any

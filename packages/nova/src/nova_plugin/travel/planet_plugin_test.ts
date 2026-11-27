@@ -28,7 +28,7 @@ import {
     landingDistance, landingRange,
     LandingRequest, LandingRequestEvent, landingRequestForm,
     PlanetComponent, selectPlanetTarget,
-    PlanetDataComponent, PlanetTargetComponent, StellarBribesComponent, STELLAR_BRIBE_NO_EXPIRY, stellarClearanceFor,
+    PlanetDataComponent, PlanetTargetComponent, StellarBribesComponent, planetBribeExpiry, stellarClearanceFor,
     stellarLandingRange, StellarHaggleComponent, SystemVisitComponent,
 } from './planet_plugin.js';
 import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data';
@@ -800,9 +800,9 @@ describe('planet bribes', () => {
         return { world, ship, stellar };
     }
 
-    it('grants temporary clearance, charges for it, and then the landing '
-        + 'succeeds', async () => {
-            const { world, ship } = await shutOutHarness();
+    it('grants a clearance, charges for it, and the next `l` lands',
+        async () => {
+            const { world, ship, stellar } = await shutOutHarness();
 
             // Refused before paying.
             expect(pressLand(world).blocked[0].reason).toEqual('denied');
@@ -818,9 +818,11 @@ describe('planet bribes', () => {
             const bribes = ship.components.get(StellarBribesComponent)!;
             // Keyed by the stellar's NOVA id, not its entity uuid.
             expect(bribes.get(PORT_ID)).toBeDefined();
-
-            // Traffic control now clears the ship, and the next `l` lands.
-            expect(pressLand(world)).toEqual({ lands: [], blocked: [] });
+            // The payment is the clearance ("you're cleared to land.
+            // Commence final approach."), so the next `l` lands.
+            const target = ship.components.get(PlanetTargetComponent)!;
+            expect(target.cleared).toBe(stellar.uuid);
+            expect(target.clearedUntil).toBe(bribes.get(PORT_ID));
             const { lands, blocked } = pressLand(world);
             expect(blocked).toEqual([]);
             expect(lands.length).toBe(1);
@@ -829,21 +831,55 @@ describe('planet bribes', () => {
             expect(ship.components.has(StellarBribesComponent)).toBeFalse();
         }, 30_000);
 
-    it('expires: the same stellar refuses again once the reprieve lapses',
-        async () => {
-            const { world, ship } = await shutOutHarness();
+    it('lapses like one clearance (reference "How long a paid planet '
+        + 'bribe lasts with no landing (R8 leftover), wave 42": still '
+        + 'cleared 17.7 s after the payment, "too far away"; denied from '
+        + '28.3 s on)', async () => {
+            const { world, ship, stellar } = await shutOutHarness();
             applyHail(world, undefined, { kind: 'bribe', target: PORT });
-            // Wind the clearance back into the past rather than the clock
-            // forward: expiry is a pure comparison against TimeResource.
-            ship.components.set(StellarBribesComponent,
-                new Map([[PORT_ID, -1]]));
-
-            expect(pressLand(world).blocked[0].reason).toEqual('denied');
-            // ...but a paid bribe has no clock: it lasts until the next
-            // landing or system exit (R8 wave 41; time alone a GUESS).
-            applyHail(world, undefined, { kind: 'bribe', target: PORT });
+            const paidAt = simNow(world);
             expect(ship.components.get(StellarBribesComponent)!.get(PORT_ID))
-                .toBe(STELLAR_BRIBE_NO_EXPIRY);
+                .toBe(paidAt + STELLAR_CLEARANCE_MS);
+            expect(planetBribeExpiry(paidAt))
+                .toBe(paidAt + STELLAR_CLEARANCE_MS);
+            // Out beside the system's other port, far outside the window.
+            place(ship, new Position(stellar.position.x + 600,
+                stellar.position.y));
+            const pressAt = (afterPayment: number) => {
+                world.resources.get(TimeResource)!.time =
+                    paidAt + afterPayment - SIMULATION_STEP_MS;
+                return pressLand(world);
+            };
+            expect(pressAt(12_000).blocked.map(b => b.reason))
+                .toEqual(['tooFar']);
+            // A press while cleared does not renew it.
+            expect(pressAt(17_700).blocked.map(b => b.reason))
+                .toEqual(['tooFar']);
+            expect(pressAt(28_300).blocked.map(b => b.reason))
+                .toEqual(['denied']);
+            expect(pressAt(72_000).blocked.map(b => b.reason))
+                .toEqual(['denied']);
+            // Even back on the port: the bribe is spent.
+            place(ship, stellar.position);
+            expect(pressLand(world).blocked.map(b => b.reason))
+                .toEqual(['denied']);
+        }, 30_000);
+
+    it('a bribe at a stellar the ship has not selected buys the same '
+        + 'clock, and a press inside the zone clears the ship', async () => {
+            const { world, ship, stellar } = await shutOutHarness();
+            selectPlanetTarget(ship.components.get(PlanetTargetComponent)!,
+                undefined);
+            applyHail(world, undefined, { kind: 'bribe', target: PORT });
+            const target = ship.components.get(PlanetTargetComponent)!;
+            expect(target.cleared).toBeUndefined();
+            expect(ship.components.get(StellarBribesComponent)!.get(PORT_ID))
+                .toBe(simNow(world) + STELLAR_CLEARANCE_MS);
+            // Selecting it inside the clearance zone clears, the next
+            // press lands.
+            target.target = stellar.uuid;
+            expect(pressLand(world)).toEqual({ lands: [], blocked: [] });
+            expect(pressLand(world).lands.length).toBe(1);
         }, 30_000);
 
     it('ends at a landing anywhere, and with the system visit (reference '
@@ -852,11 +888,11 @@ describe('planet bribes', () => {
             const { world, ship } = await shutOutHarness();
             applyHail(world, undefined, { kind: 'bribe', target: PORT });
             expect(ship.components.has(StellarBribesComponent)).toBeTrue();
-            // Time in flight changes nothing (no clock; GUESS).
+            // A short wait in flight inside its clock changes nothing.
             for (let i = 0; i < 60; i++) {
                 world.step();
             }
-            expect(pressLand(world)).toEqual({ lands: [], blocked: [] });
+            expect(ship.components.has(StellarBribesComponent)).toBeTrue();
             // The crossing into another system ends it too.
             prepareCarriedEntitiesForFreshWorld(ship, SHIP_UUID, []);
             expect(ship.components.has(StellarBribesComponent)).toBeFalse();
@@ -1197,11 +1233,20 @@ describe('planet bribes', () => {
                     const hull = await changeHull(path, world, ship);
                     expect(hull.components.get(StellarBribesComponent)!
                         .get(PORT_ID)).toBe(until);
-                    // Cleared by the first `l`, landed by the next.
-                    expect(pressLand(world).blocked).toEqual([]);
-                    const { lands, blocked } = pressLand(world);
-                    expect(blocked).toEqual([]);
-                    expect(lands.length).toBe(1);
+                    // An in-flight change keeps the hull's PlanetTarget,
+                    // and with it the payment's clearance (R8 wave 42):
+                    // the first `l` lands. A hull built docked selects
+                    // afresh: cleared by the first `l` (the bribe still
+                    // buys it), landed by the next.
+                    const first = pressLand(world);
+                    expect(first.blocked).toEqual([]);
+                    const keepsTarget = path === 'set string in flight';
+                    expect(first.lands.length).toBe(keepsTarget ? 1 : 0);
+                    if (!keepsTarget) {
+                        const { lands, blocked } = pressLand(world);
+                        expect(blocked).toEqual([]);
+                        expect(lands.length).toBe(1);
+                    }
                 }, 30_000);
 
                 it('a counter stays on the table, and paying it on the new '

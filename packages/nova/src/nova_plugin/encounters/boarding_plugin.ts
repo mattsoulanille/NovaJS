@@ -1715,7 +1715,8 @@ const BoardingLandingResetSystem = new System({
         endContrabandHostility(entity);
         // A paid planet bribe ends at the pilot's next landing, anywhere
         // (reference "How long an accepted planet bribe lasts (R8), wave
-        // 41"; travel/planet_plugin.ts's STELLAR_BRIBE_NO_EXPIRY).
+        // 41"; time ends it too, travel/planet_plugin.ts's
+        // planetBribeExpiry).
         endPlanetBribes(entity);
     },
     // #237 pin (shared: *): among the LandEvent handlers, after travel's
