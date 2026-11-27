@@ -596,15 +596,17 @@ function wave48Resources() {
  * 13's mïsn 1074 / 1075 (bits 9139 / 9140, N ally hater / escort ally
  * classed) and 1076 / 1077 (bits 9143 / 9144, G self hater shooter /
  * victim), wave 14's 1079 (bit 9145, A comp reward 338), their ships and
- * düdes staying; wave 4's shïp 771 / 772 (Kit Crawler Slowbrake / 200).
- * Used: sÿst 1490, spöb 1170-1184, shïp 771 / 772, düde 550-551, wëap 325,
- * mïsn 1074-1077 / 1079, bits 9319-9327. Map row y = -3240 (x -800). The
- * next free ids: sÿst 1491+, spöb 1185-1399 (and 518-999), shïp NONE
- * (retire an old kit hull: wave 4's 773-775 Jam Target T2-T4 are old
- * one-off rigs), düde 328 / 552+, përs: override a stock one
+ * düdes staying; wave 4's shïp 771 / 772 (Kit Crawler Slowbrake / 200) and
+ * wave 4's T4 jam target set (shïp 775, düde 610, mïsn 970, bit 9011).
+ * Used: sÿst 1490, spöb 1170-1184, shïp 771 / 772 / 775, düde 550-551 /
+ * 610, wëap 325-326, mïsn 970 / 1074-1077 / 1079, bits 9319-9328. Map row
+ * y = -3240 (x -800). The next free ids: sÿst 1491+, spöb 1185-1399 (and
+ * 518-999), shïp NONE (retire an old kit hull: wave 4's 773 / 774 Jam
+ * Target T2 / T3 are old one-off rigs), düde 328 / 552+, përs: override a
+ * stock one
  * (kits/w48_pers225.mjs), ränk 205+, mïsn NONE (retire another old kit
  * mission: wave 14's 1078 / 1080-1084 are one-off rigs), gövt 283 and
- * below, flët 324+, wëap 326+, oütf 512+, jünk 205+, bits 9328+, rlëD
+ * below, flët 324+, wëap 327+, oütf 512+, jünk 205+, bits 9329+, rlëD
  * 1113+.
  *
  *  EC  A lone intruder, so that nothing draws the escort carrier's
@@ -614,8 +616,10 @@ function wave48Resources() {
  *      1489, no traffic; ShipStart -2), offered on landing at its port
  *      (spöb 1168).
  *  CU  Mission cargo bigger than the new hull's hold: mïsn 1075 Kit CU big
- *      cargo job, wave 48's 1063 with 90 t of Medical Supplies (the Kit
- *      Capture Boarder holds 100 t, the Kit Prize Hull showed 80 free):
+ *      cargo job, wave 48's 1063 with 40 t of Medical Supplies (the Kit
+ *      Capture Boarder's own Cargo is 50, the Kit Prize Hull's 30; a 90 t
+ *      job was refused at the BBS although the HUD, counting a hired Kit
+ *      Trader's hold, read Free 100):
  *      a Mission BBS job at Kit Prize Port (spöb 1102) to Kit Port (spöb
  *      2100), availability bit 9320, OnAccept b9321, OnFailure b9322,
  *      OnAbort b9323, OnSuccess b9324.

@@ -1,0 +1,38 @@
+{
+  "name": "novaref-w49-tlead",
+  "edits": {
+    "ship": 892,
+    "stellar": 1170,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1490": 2
+    },
+    "missionBits": {
+      "9328": true
+    },
+    "nickname": "Probe",
+    "shipName": "w49-tlead",
+    "weapons": {
+      "128": 0,
+      "314": 1
+    },
+    "outfits": {
+      "128": 0,
+      "505": 1
+    },
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}

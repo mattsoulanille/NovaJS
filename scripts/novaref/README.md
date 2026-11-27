@@ -735,6 +735,26 @@ Kit Rock Knock (`tools/rockpts.mjs`, `tools/kinks.py` in the wave-48
 evidence). `w48_capture_cargo.json` is wave 46's capture rig with a Mission
 BBS job taken first and a hand-driven break for the Leave. Scenarios
 `w48_space_interactive.json` (inbox `w48.jsonl`).
+Wave 49 used sÿst 1490, spöb 1170-1184, shïp 771 / 772 / 775, düde 550 /
+551 / 610, wëap 325-326, mïsn 970 / 1074-1077 / 1079 and bits 9319-9328,
+and RETIRED wave 13's mïsn 1074-1077 (bits 9139 / 9140 / 9143 / 9144),
+wave 14's 1079 (bit 9145), wave 4's shïp 771 / 772 (Kit Crawler Slowbrake
+/ 200; the stale `pilots/w4_brake*.json` name them) and wave 4's T4 jam
+target set (shïp 775, düde 610, mïsn 970, bit 9011), using them for its
+own. Next free: sÿst 1491, spöb 1185-1399 (and 518-999), shïp **none**
+(retire an old kit hull: wave 4's 773 / 774 jam targets), düde 328 / 552,
+ränk 205, mïsn **none** (retire another old kit mission: wave 14's 1078 /
+1080-1084), përs: override a stock one, wëap 327, oütf 512, gövt 283 and
+below, flët 324, jünk 205, bits 9329, rlëD 1113. A **2-D knock grid**: sÿst
+1490 Kit Knock Grid, a port at the centre and Kit Accel Pad's moon grid
+(`tools/padsum.sh <run> pad`), with a MOVING AI 3 shooter of slow turret
+bolts placed by a mission (`tools/redbolt.mjs`, `tools/kbdir.py` in the
+wave-49 evidence). A **lone intruder**: mïsn 1074 puts one always-hostile
+red disc on Kit Blast Small 40's marker, a system with no traffic, so an
+escort fight's end is not muddied by new arrivals. `w49_capture_cargo.json`
+is wave 48's with the 40 t job (mïsn 1075). A job must fit the player's
+OWN hold: the HUD's Free also counts a hired AI 1 / 2 escort's. Scenarios
+`w49_space_interactive.json` (inbox `w49.jsonl`).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they
