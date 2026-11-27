@@ -32,7 +32,7 @@ import {
     nonLethalArmor, nonLethalArmorFloor, secondaryExplosionsDue,
     secondaryExplosionTotal, SHIP_EXPLOSION_DAMAGE_BASE,
     SHIP_EXPLOSION_DAMAGE_MIN_MASS, SHIP_EXPLOSION_DAMAGE_PER_TON,
-    SHIP_EXPLOSION_KNOCKBACK, SHIP_EXPLOSION_KNOCKBACK_PER_TON,
+    SHIP_EXPLOSION_KNOCKBACK,
     shipExplosionDamage, shipExplosionKnockback, shipExplosionReach,
 } from './ship_explosion.js';
 import { KNOCKBACK_PER_IMPACT } from './death_plugin.js';
@@ -163,12 +163,10 @@ describe('ship explosion scaling', () => {
                     .withContext(`${mass} t`)
                     .toEqual(SHIP_EXPLOSION_KNOCKBACK);
             }
-            // GUESS (unmeasured): a damageless blast keeps main's
-            // per-ton push.
-            expect(shipExplosionKnockback(50))
-                .toBeCloseTo(50 * SHIP_EXPLOSION_KNOCKBACK_PER_TON, 9);
-            expect(shipExplosionKnockback(99))
-                .toBeLessThan(SHIP_EXPLOSION_KNOCKBACK);
+            // A damageless blast does not push (reference "A ship
+            // explosion under 100 t", wave 48).
+            expect(shipExplosionKnockback(50)).toEqual(0);
+            expect(shipExplosionKnockback(99)).toEqual(0);
             expect(shipExplosionKnockback(NaN)).toEqual(0);
             expect(shipExplosionKnockback(-5000)).toEqual(0);
         });
@@ -593,6 +591,17 @@ describe('final explosion area damage (simulation)', () => {
                 expect(SHIP_EXPLOSION_KNOCKBACK * KNOCKBACK_PER_IMPACT
                     / push.mass).toBeGreaterThan(push.top);
                 expect(push.velocity.length).toBeCloseTo(push.top, 6);
+            }, 120_000);
+
+        it('pushes nothing from a wreck under 100 t (reference "A ship '
+            + 'explosion under 100 t", wave 48: a 50 t wreck 40 px from a '
+            + '50 t Probe)', async () => {
+                // The 30 t Wren Skiff blows 40 px from another: inside its
+                // 51+ px square, and the lightest victim on hand.
+                const push = await pushOf(VICTIM_HULL, 40, VICTIM_HULL);
+                expect(push.velocity.length).toEqual(0);
+                const light = await pushOf(LIGHT, 40, VICTIM_HULL);
+                expect(light.velocity.length).toEqual(0);
             }, 120_000);
 
         it('pushes nothing just outside the damage square (none at 210 / '

@@ -158,9 +158,9 @@ export const SHIP_EXPLOSION_REACH_PER_DAMAGE = 2;
  * 58 px at 100 t, 127 px at 1,000 t, 791 px at 10,000 t.
  *
  * Below the damage cut-off the square keeps the same formula (51-58 px
- * for 0-99 t): such a blast hurts nothing, but its knockback still
- * shoves what is inside (GUESS: unmeasured, kept; see
- * SHIP_EXPLOSION_KNOCKBACK_PER_TON). A damaging blast's push reaches
+ * for 0-99 t), but such a blast neither hurts nor pushes anything
+ * (MEASURED, reference wave 48 KS; shipExplosionKnockback). A damaging
+ * blast's push reaches
  * exactly this square (MEASURED, reference "The ship-explosion push",
  * wave 47). A
  * degenerate mass reaches 51 px rather than NaN.
@@ -218,31 +218,26 @@ export const FINAL_FIREBALL_MAX_RADIUS = 200;
  * (nothing just outside the square at 210 / 470 / 820 px): it rides the
  * blast's own square gate (insideShipExplosion, BlastCollisionSystem).
  *
- * Was 0.05 x the wreck's tons (SHIP_EXPLOSION_KNOCKBACK_PER_TON, GUESS):
- * 10 / 25 / 50 px/s on the 300 t hull where the original gave 73-74.
+ * Was 0.05 x the wreck's tons (GUESS): 10 / 25 / 50 px/s on the 300 t
+ * hull where the original gave 73-74.
  */
 export const SHIP_EXPLOSION_KNOCKBACK = 737;
 
 /**
- * The knockback per ton of a DAMAGELESS ship explosion (under
- * SHIP_EXPLOSION_DAMAGE_MIN_MASS tons): main's old per-ton law, kept for
- * that band only. GUESS: whether a blast that hurts nothing pushes at all
- * was not run (the wave-47 section's proposal guesses no push); it keeps
- * the push it had (at most 4.95 impact units, a 99 t wreck's) until it is
- * measured. TUNABLE.
- */
-export const SHIP_EXPLOSION_KNOCKBACK_PER_TON = 0.05;
-
-/**
  * The final explosion's knockback, from the wreck's mass: the measured
  * fixed SHIP_EXPLOSION_KNOCKBACK from SHIP_EXPLOSION_DAMAGE_MIN_MASS tons
- * up, SHIP_EXPLOSION_KNOCKBACK_PER_TON x tons below (GUESS). Pure.
+ * up, and NONE below: a damageless blast does not push.
+ *
+ * MEASURED (reference "A ship explosion under 100 t (the KX leftover),
+ * wave 48"): a 50 t wreck's death 40 px from Kit Probe A (50 t,
+ * inertial, the most sensitive victim) left it standing to the tenth of
+ * a pixel for 4 s. (Was 0.05 x the wreck's tons, GUESS: 1.5 px/s on that
+ * Probe.) A 90-99 t wreck was not tried. Pure.
  */
 export function shipExplosionKnockback(mass: number): number {
     const tons = mass > 0 ? mass : 0;
     return tons >= SHIP_EXPLOSION_DAMAGE_MIN_MASS
-        ? SHIP_EXPLOSION_KNOCKBACK
-        : tons * SHIP_EXPLOSION_KNOCKBACK_PER_TON;
+        ? SHIP_EXPLOSION_KNOCKBACK : 0;
 }
 
 /**
