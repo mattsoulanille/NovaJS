@@ -395,11 +395,23 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
             controlsSubject: runtime.controlsSubject,
             bridge: live?.bridge,
             send: call => sendToBridge(call, 'Control events'),
-            // The held-j route jump: a jump key held across a transition
-            // reaches the new system only once its arrival is visible.
-            arrivalHidden: jumpFadeCovering(app),
         });
     }
+    // The held-j route jump: a jump key held across a transition reaches
+    // the new system only once its arrival has been seen (ControlRouter).
+    // Read once per ticker frame; the router waits a further frame (and
+    // ARRIVAL_DECISION_DELAY_MS) after the one that first showed it.
+    const arrivalTick = () => controlRouter.frame({
+        bridge: liveSystem(state.state)?.bridge,
+        arrivalHidden: jumpFadeCovering(app),
+        send: call => sendToBridge(call, 'Control events'),
+        now: performance.now(),
+    });
+    app.ticker.add(arrivalTick);
+    sessionDisposers.push(() => app.ticker.remove(arrivalTick));
+    const releaseKeys = () => controlRouter.releaseKeys();
+    window.addEventListener('blur', releaseKeys);
+    sessionDisposers.push(() => window.removeEventListener('blur', releaseKeys));
 
     const controlSinks: ControlSinks = {
         controlEvents: emitControlEvents,

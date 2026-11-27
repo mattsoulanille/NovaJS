@@ -5624,6 +5624,23 @@ the reported "released before the arrival but jumped again" is not in
 this system; if it reproduces, look at the input layer (a `hyperjump`
 control left true across the arrival / world swap) rather than here.
 
+**NovaJS (2026-11-26, the input layer).** Both halves of the 2026-11-26
+report were the client's hidden arrival, not this rule: the destination's
+simulation is live (its ship coasting in) for as long as the first frame
+of the new system takes to build and draw (0.5-1 s measured headless
+under load), so (1) key events made while the screen was white were
+dispatched after that frame, the flash having cleared inside it, and a
+queued repeat re-asserted a released key; (2) a held key reached the
+simulation only after that frame plus the 150 ms flash plus the next
+auto-repeat, by which time the ship was often inside the no-jump zone and
+the held key did nothing. Now the client router follows the key itself
+and decides 50 ms after the first frame that shows the arrival
+(`client/control_routing.ts`), and the no-jump zone does not refuse a
+jump for 3 s after an arrival (`ARRIVAL_JUMP_GRACE_MS`, GUESS). Still
+open on the original: does a press during the arrival frame's white
+count; is there any window after the arrival in which a press inside
+the zone is accepted.
+
 Confidence: high (three runs, the status lines and dates are
 unambiguous).
 

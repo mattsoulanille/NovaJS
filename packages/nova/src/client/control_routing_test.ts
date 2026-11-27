@@ -3,7 +3,7 @@ import { World } from 'nova_ecs/world';
 import { Subject } from 'rxjs';
 import { ControlEvent, EcsControlEvent } from '../nova_plugin/core/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
-import { ControlRouter, ControlRouteTargets } from './control_routing.js';
+import { ARRIVAL_GATE_MAX_MS, ControlRouter, ControlRouteTargets } from './control_routing.js';
 
 class FakeBridge {
     readonly records: ControlEvent[][] = [];
@@ -129,42 +129,142 @@ describe('ControlRouter', () => {
     });
 
     describe('the held-j route jump', () => {
-        const hidden = (bridge: FakeBridge) =>
-            ({ ...targets(bridge), arrivalHidden: true });
-
-        it('does not re-assert a held jump key to a new system while its arrival is hidden', () => {
+        /** A router whose ORIGIN arrival is long decided, with j pressed
+         * there (the jump that brings the ship to `destination`). */
+        function afterJump(origin: FakeBridge) {
             const router = new ControlRouter();
+            let now = 0;
+            const at = (bridge: FakeBridge) => ({ ...targets(bridge), now });
+            const frame = (bridge: FakeBridge, hidden: boolean) => {
+                now += 17;
+                router.frame({
+                    bridge, arrivalHidden: hidden, send: call => void call, now,
+                });
+            };
+            frame(origin, false);
+            frame(origin, false);
+            for (let i = 0; i < 4; i++) {
+                frame(origin, false);
+            }
+            router.route([start('hyperjump')], at(origin));
+            return {
+                router, frame, at,
+                /** Frames until the arrival is decided. */
+                show(bridge: FakeBridge) {
+                    for (let i = 0; i < 6; i++) {
+                        frame(bridge, false);
+                    }
+                },
+            };
+        }
+        const pressed = (bridge: FakeBridge) => bridge.records.flat()
+            .filter(event => event.action === 'hyperjump'
+                && event.state !== false);
+
+        it('a press in a long-visible system goes straight through', () => {
             const origin = new FakeBridge();
-            const destination = new FakeBridge();
-            router.route([start('hyperjump')], targets(origin));
-            // Arrived, still behind the flash: repeats go nowhere...
-            router.route([repeat('hyperjump')], hidden(destination));
-            router.route([repeat('hyperjump')], hidden(destination));
-            // ...and the key is let go before the player sees the system.
-            router.route([release('hyperjump')], hidden(destination));
-            router.route([release('hyperjump')], targets(destination));
-            expect(destination.records.flat()
-                .filter(event => event.state !== false)).toEqual([]);
+            afterJump(origin);
+            expect(origin.records).toEqual([[start('hyperjump')]]);
         });
 
-        it('re-asserts it with the first repeat once the arrival is visible: holding through keeps chaining', () => {
-            const router = new ControlRouter();
+        it('does not re-assert a held jump key to a new system while its arrival is hidden, nor once it shows if the key was let go', () => {
             const origin = new FakeBridge();
             const destination = new FakeBridge();
-            router.route([start('hyperjump')], targets(origin));
-            router.route([repeat('hyperjump')], hidden(destination));
-            router.route([repeat('hyperjump')], targets(destination));
-            router.route([repeat('hyperjump')], targets(destination));
+            const { router, frame, at, show } = afterJump(origin);
+            // Arrived, still behind the flash: repeats go nowhere...
+            frame(destination, true);
+            router.route([repeat('hyperjump')], at(destination));
+            frame(destination, true);
+            router.route([repeat('hyperjump')], at(destination));
+            // ...and the key is let go before the player sees the system.
+            router.route([release('hyperjump')], at(destination));
+            show(destination);
+            expect(pressed(destination)).toEqual([]);
+        });
+
+        it('re-asserts a key still down once the arrival has shown: holding through keeps chaining', () => {
+            const origin = new FakeBridge();
+            const destination = new FakeBridge();
+            const { router, frame, at, show } = afterJump(origin);
+            frame(destination, true);
+            router.route([repeat('hyperjump')], at(destination));
+            show(destination);
+            router.route([repeat('hyperjump')], at(destination));
             expect(destination.records).toEqual([[repeat('hyperjump')]]);
         });
 
-        it('leaves fresh presses and every other held key alone', () => {
-            const router = new ControlRouter();
-            const bridge = new FakeBridge();
-            router.route([repeat('accelerate')], hidden(bridge));
-            router.route([start('hyperjump')], hidden(bridge));
-            expect(bridge.records).toEqual([
-                [repeat('accelerate')], [start('hyperjump')]]);
+        it('needs no auto-repeat to re-assert it', () => {
+            const origin = new FakeBridge();
+            const destination = new FakeBridge();
+            const { frame, show } = afterJump(origin);
+            frame(destination, true);
+            frame(destination, true);
+            show(destination);
+            expect(destination.records).toEqual([[repeat('hyperjump')]]);
+        });
+
+        it('decides only after the first frame that shows the arrival: a release queued behind that frame wins', () => {
+            const origin = new FakeBridge();
+            const destination = new FakeBridge();
+            const { router, frame, at, show } = afterJump(origin);
+            frame(destination, true);
+            // The long first frame: the flash clears inside it...
+            frame(destination, false);
+            // ...and the key events the player made during it come after.
+            router.route([repeat('hyperjump')], at(destination));
+            router.route([repeat('hyperjump')], at(destination));
+            router.route([release('hyperjump')], at(destination));
+            show(destination);
+            expect(pressed(destination)).toEqual([]);
+        });
+
+        it('drops a tap on the white screen, and takes a press there that is still held', () => {
+            const origin = new FakeBridge();
+            const tapped = new FakeBridge();
+            const { router, frame, at, show } = afterJump(origin);
+            router.route([release('hyperjump')], { ...targets(undefined) });
+            frame(tapped, true);
+            router.route([start('hyperjump')], at(tapped));
+            router.route([release('hyperjump')], at(tapped));
+            show(tapped);
+            expect(pressed(tapped)).toEqual([]);
+
+            const held = new FakeBridge();
+            frame(held, true);
+            router.route([start('hyperjump')], at(held));
+            show(held);
+            expect(pressed(held)).toEqual([repeat('hyperjump')]);
+        });
+
+        it('forgets the key when the window loses focus (no key-up will come)', () => {
+            const origin = new FakeBridge();
+            const destination = new FakeBridge();
+            const { router, frame, show } = afterJump(origin);
+            router.releaseKeys();
+            frame(destination, true);
+            show(destination);
+            expect(pressed(destination)).toEqual([]);
+        });
+
+        it('leaves every other key alone, hidden or not', () => {
+            const origin = new FakeBridge();
+            const destination = new FakeBridge();
+            const { router, frame, at } = afterJump(origin);
+            frame(destination, true);
+            router.route([repeat('accelerate')], at(destination));
+            router.route([start('firePrimary')], at(destination));
+            expect(destination.records).toEqual([
+                [repeat('accelerate')], [start('firePrimary')]]);
+        });
+
+        it('decides anyway if the flash never reports clear', () => {
+            const origin = new FakeBridge();
+            const destination = new FakeBridge();
+            const { frame } = afterJump(origin);
+            for (let i = 0; i < Math.ceil(ARRIVAL_GATE_MAX_MS / 17) + 6; i++) {
+                frame(destination, true);
+            }
+            expect(destination.records).toEqual([[repeat('hyperjump')]]);
         });
     });
 

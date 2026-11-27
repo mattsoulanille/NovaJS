@@ -18,29 +18,38 @@ export interface ControlRouteTargets {
     bridge: { controlEvents(events: ControlEvent[]): Promise<void> } | undefined;
     /** Fire-and-forget wrapper for the bridge call (runtime.sendToBridge). */
     send(call: Promise<void>): void;
+    /** When the events reach the router (performance.now); specs pass it.
+     * Omitted means now. */
+    now?: number;
+}
+
+/** What {@link ControlRouter.frame} reads once per drawn frame. */
+export interface ArrivalFrameTargets {
+    /** The live system's simulation bridge, if any. */
+    bridge: ControlRouteTargets['bridge'];
     /**
      * True while the player cannot see the system they are arriving in
      * yet: the hyperspace flash still covers the screen
-     * (display/jump_fade_plugin.ts jumpFadeCovering). While it is, a
-     * HELD jump key is not re-asserted to the simulation (see
-     * {@link ControlRouter}). Omitted means visible.
+     * (display/jump_fade_plugin.ts jumpFadeCovering).
      */
-    arrivalHidden?: boolean;
+    arrivalHidden: boolean;
+    /** Fire-and-forget wrapper for the bridge call (runtime.sendToBridge). */
+    send(call: Promise<void>): void;
+    /** This frame's time (performance.now). */
+    now: number;
 }
 
 /**
- * The actions a held key does not re-assert to a new simulation while
- * the arrival is hidden: the held-j route jump. Holding the jump key
- * chain-jumps along a route, and a key held across a system transition
- * reaches the destination's simulation only as its next auto-repeat
- * (below). The destination world goes live, and its arriving ship has
- * already left hyperspace in the simulation, while the screen is still
- * white: the repeat used to reach it there, so a player who let go of
- * `j` before they could see the new system still jumped again
- * (Matthew's report, 2026-11-23).
+ * How long after the first frame that shows an arrival the held-jump
+ * decision waits (see {@link ControlRouter}): long enough for the key
+ * events held up behind that frame to be dispatched first.
  */
-const REASSERTED_ONLY_WHEN_VISIBLE: ReadonlySet<ControlAction> =
-    new Set<ControlAction>(['hyperjump']);
+export const ARRIVAL_DECISION_DELAY_MS = 50;
+/**
+ * A backstop: the held jump is decided this long after a new system's
+ * bridge was first seen even if the flash never reports clear.
+ */
+export const ARRIVAL_GATE_MAX_MS = 5000;
 
 /**
  * Routes the client's in-space control events: client-local actions are
@@ -62,17 +71,47 @@ const REASSERTED_ONLY_WHEN_VISIBLE: ReadonlySet<ControlAction> =
  * held when the menu closes becomes held in the sim at its next repeat.
  * So the router remembers which actions the CURRENT bridge has been told
  * are down, and forwards a repeat only for an action it has not — once.
- * The same re-assert carries a key held through a hyperjump into the
- * destination system's simulation, which is how a held `j` keeps
- * chain-jumping along a route. For the jump key it waits until the
- * arrival is visible (`arrivalHidden`): a repeat while the flash covers
- * the screen is not forwarded and not remembered, so the next repeat
- * after the flash clears re-asserts the key if it is still down, and a
- * key let go before that never jumps again.
+ *
+ * THE HELD-J ROUTE JUMP is decided here, not by the next auto-repeat.
+ * Holding `j` chains a route: on the original each hop starts only while
+ * `j` is down at the moment the ship can jump, so a tap, or a release
+ * during the transit, flies one hop and a held key flies them all
+ * (reference "Multi-jump routes and the `j` key, wave 11"). Here the
+ * destination's simulation goes live, its arriving ship already out of
+ * hyperspace, while the white flash still covers the screen, and the
+ * first frame that shows the new system can be a long one (it builds the
+ * system's whole picture). So:
+ *
+ *  - From the moment a new bridge is seen until its arrival is decided,
+ *    no jump PRESS reaches it: not an auto-repeat (Matthew, 2026-11-23:
+ *    a key let go before the system was visible still jumped again) and
+ *    not a fresh press either (a tap on the white screen does not carry
+ *    into the next system). Releases go through as always.
+ *  - The router follows the jump key itself, from every press and
+ *    release whether a bridge is live or not, so the decision does not
+ *    wait for an auto-repeat (one more delay) or need one at all (a Mac
+ *    stops repeating a held key once another key is pressed after it).
+ *  - The decision comes ARRIVAL_DECISION_DELAY_MS after the first frame
+ *    that shows the arrival ({@link frame}), never on that frame. Key
+ *    events the first frame held up are dispatched behind it, and a
+ *    release made while the screen was still white is among them. The
+ *    flash used to clear INSIDE that frame, so the repeats queued behind
+ *    it found the arrival visible and re-asserted a key the player had
+ *    already let go of (Matthew, 2026-11-26: "I'll immediately jump out
+ *    to the next system in the path even when not pressing anything").
+ *  - If the key is down then, the bridge is told once (a 'repeat', like
+ *    any re-assert). By then the ship has coasted on for that first
+ *    frame's length; the simulation's arrival grace
+ *    (nova_plugin/travel/jump_plugin.ts, ARRIVAL_JUMP_GRACE_MS) still
+ *    lets it start the next hop.
  */
 export class ControlRouter {
     private readonly held = new Set<ControlAction>();
     private heldFor: ControlRouteTargets['bridge'];
+    /** The jump key as the keyboard has it, whatever bridge is live. */
+    private jumpDown = false;
+    /** The current bridge's undecided arrival (see the class comment). */
+    private arrival: { since: number, visibleAt?: number } | undefined;
 
     route(events: readonly ControlEvent[], targets: ControlRouteTargets) {
         const passed: ControlEvent[] = [];
@@ -84,6 +123,11 @@ export class ControlRouter {
         if (passed.length === 0) {
             return;
         }
+        for (const event of passed) {
+            if (event.action === 'hyperjump') {
+                this.jumpDown = event.state !== false;
+            }
+        }
         targets.displayWorld?.emit(EcsControlEvent, passed);
         for (const event of passed) {
             targets.controlsSubject.next(event);
@@ -92,33 +136,76 @@ export class ControlRouter {
         if (!bridge) {
             return;
         }
-        const simEvents = this.simulationEvents(bridge, passed,
-            targets.arrivalHidden ?? false);
+        this.noteBridge(bridge, targets.now ?? performance.now());
+        const simEvents = this.simulationEvents(passed);
         if (simEvents.length > 0) {
             targets.send(bridge.controlEvents(simEvents));
         }
     }
 
-    /** The events the simulation needs: all but redundant repeats. */
-    private simulationEvents(bridge: NonNullable<ControlRouteTargets['bridge']>,
-        events: readonly ControlEvent[], arrivalHidden: boolean): ControlEvent[] {
+    /**
+     * Once per drawn frame (game_session's ticker): notes when the
+     * current bridge's arrival first shows and, ARRIVAL_DECISION_DELAY_MS
+     * later, tells the bridge the jump key is down if it still is.
+     */
+    frame(targets: ArrivalFrameTargets) {
+        const { bridge, now } = targets;
+        if (!bridge) {
+            return;
+        }
+        this.noteBridge(bridge, now);
+        const arrival = this.arrival;
+        if (!arrival) {
+            return;
+        }
+        if (arrival.visibleAt === undefined) {
+            if (!targets.arrivalHidden
+                || now - arrival.since >= ARRIVAL_GATE_MAX_MS) {
+                arrival.visibleAt = now;
+            }
+            return;
+        }
+        if (now - arrival.visibleAt < ARRIVAL_DECISION_DELAY_MS) {
+            return;
+        }
+        this.arrival = undefined;
+        if (this.jumpDown && !this.held.has('hyperjump')) {
+            this.held.add('hyperjump');
+            targets.send(bridge.controlEvents(
+                [{ action: 'hyperjump', state: 'repeat' }]));
+        }
+    }
+
+    /** The window lost focus: the key-ups of keys held now will not
+     * come, so the jump key no longer counts as down. */
+    releaseKeys() {
+        this.jumpDown = false;
+    }
+
+    private noteBridge(bridge: NonNullable<ControlRouteTargets['bridge']>,
+        now: number) {
         if (bridge !== this.heldFor) {
             // A new system's simulation: it has been told nothing yet.
             this.heldFor = bridge;
             this.held.clear();
+            this.arrival = { since: now };
         }
+    }
+
+    /** The events the simulation needs: all but redundant repeats, and no
+     * jump press while the arrival is undecided. */
+    private simulationEvents(events: readonly ControlEvent[]): ControlEvent[] {
         const simEvents: ControlEvent[] = [];
         for (const event of events) {
             if (event.state === false) {
                 this.held.delete(event.action);
+            } else if (this.arrival && event.action === 'hyperjump') {
+                // Undecided arrival: frame() tells the bridge.
+                continue;
             } else if (this.held.has(event.action)) {
                 if (event.state === 'repeat') {
                     continue;
                 }
-            } else if (event.state === 'repeat' && arrivalHidden
-                && REASSERTED_ONLY_WHEN_VISIBLE.has(event.action)) {
-                // A key held across the transition: not yet (see above).
-                continue;
             } else {
                 this.held.add(event.action);
             }

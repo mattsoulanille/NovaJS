@@ -13,15 +13,15 @@ import { RollbackSimulation } from 'nova_ecs/plugins/rollback_plugin';
 import { World } from 'nova_ecs/world';
 import { isLeft } from 'fp-ts/lib/Either.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
-import { ControlRouter } from '../client/control_routing.js';
+import { ControlRouter, ControlRouteTargets } from '../client/control_routing.js';
 import { ControlAction, ControlEvent } from '../nova_plugin/core/index.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
 import { ControlledByComponent, PEER_LOCAL_COMPONENTS } from '../nova_plugin/player/index.js';
 import { makeShip } from '../nova_plugin/ship/index.js';
 import { completeEntity } from '../nova_plugin/spawn/index.js';
 import {
-    FinishJump, FinishJumpEvent, JUMP_DISTANCE, JumpComponent,
-    JumpRouteComponent,
+    ARRIVAL_JUMP_GRACE_MS, FinishJump, FinishJumpEvent, JUMP_DISTANCE,
+    JumpComponent, JumpRouteComponent,
 } from '../nova_plugin/travel/index.js';
 import { RollbackRelay } from './rollback_relay.js';
 import { RoomArchive } from './room_archive.js';
@@ -119,20 +119,56 @@ describe('the held-j route jump', () => {
     const press = (state: ControlEvent['state']): ControlEvent[] =>
         [{ action: 'hyperjump' as ControlAction, state }];
 
+    /** The room's bridge as the client's router sees it, one object per
+     * room (the router tells systems apart by the bridge's identity). */
+    const bridges = new Map<Room, NonNullable<ControlRouteTargets['bridge']>>();
+    function bridgeOf(room: Room) {
+        let bridge = bridges.get(room);
+        if (!bridge) {
+            bridge = {
+                controlEvents: async (sim: ControlEvent[]) =>
+                    room.host.controlEvents(sim),
+            };
+            bridges.set(room, bridge);
+        }
+        return bridge;
+    }
+
+    /** A fake page clock for the router (performance.now), in ms. */
+    let now = 0;
+
     /** The client's router, aimed at a room's bridge (or at none). */
     function routeTo(router: ControlRouter, events: ControlEvent[],
-        room: Room | undefined, arrivalHidden = false) {
+        room: Room | undefined) {
         router.route(events, {
             consumeLocal: () => false,
             displayWorld: undefined,
             controlsSubject: new Subject<ControlEvent>(),
-            bridge: room && {
-                controlEvents: async (sim: ControlEvent[]) =>
-                    room.host.controlEvents(sim),
-            },
+            bridge: room && bridgeOf(room),
             send: call => void call,
-            arrivalHidden,
+            now,
         });
+    }
+
+    /** One drawn client frame (the session's ticker): `hidden` while the
+     * flash still covers the arrival. Advances the page clock a frame. */
+    function frame(router: ControlRouter, room: Room, hidden: boolean) {
+        now += 17;
+        router.frame({
+            bridge: bridgeOf(room),
+            arrivalHidden: hidden,
+            send: call => void call,
+            now,
+        });
+    }
+
+    /** Client frames, a simulation tick each, until the router has decided
+     * the arrival (the first visible frame plus the decision delay). */
+    async function showArrival(router: ControlRouter, room: Room) {
+        for (let i = 0; i < 6; i++) {
+            frame(router, room, false);
+            await room.step();
+        }
     }
 
     /**
@@ -141,7 +177,8 @@ describe('the held-j route jump', () => {
      * departing entity crosses the bridge serialized, so only synced
      * components ride along.
      */
-    async function departAndArrive(router: ControlRouter) {
+    async function departAndArrive(router: ControlRouter,
+        { autoRepeat = true } = {}) {
         const origin = await makeRoom(SYNTHETIC.systems.thessaly);
         const gameData = await getSyntheticGameData();
         const ship = makeShip(await gameData.data.Ship.get(SYNTHETIC.ships.skiff));
@@ -156,11 +193,17 @@ describe('the held-j route jump', () => {
         await origin.step(5);
         origin.host.setPlayerJumpRoute([...route]);
         await origin.step(5);
+        // The origin's own arrival is long decided by the time the player
+        // presses j.
+        await showArrival(router, origin);
         routeTo(router, press('start'), origin);
         for (let i = 0; i < 1500 && origin.finishJumps.length === 0; i++) {
             // The key stays down: auto-repeat, which the router keeps
-            // out of the input log.
-            routeTo(router, press('repeat'), origin);
+            // out of the input log (or none: a Mac stops repeating a key
+            // once another one is pressed after it).
+            if (autoRepeat) {
+                routeTo(router, press('repeat'), origin);
+            }
             await origin.step();
         }
         expect(origin.finishJumps.length)
@@ -218,12 +261,46 @@ describe('the held-j route jump', () => {
             .toBeFalse();
     }
 
+    /** The destination ship's next jump, on the peer and the archive. */
+    async function expectSecondJump(destination: Room) {
+        await destination.step(3);
+        expect(shipOf(destination.world)?.components.get(JumpComponent)?.to)
+            .withContext('the peer jumps on').toBe(SYNTHETIC.systems.vael);
+        await destination.step(30);
+        expect(shipOf(destination.archive.archiveWorld!)
+            ?.components.get(JumpComponent)?.to)
+            .withContext('the archive jumps on').toBe(SYNTHETIC.systems.vael);
+        expect(hashWorld(destination.archive.archiveWorld!,
+            PEER_LOCAL_COMPONENTS).hash)
+            .toBe(hashWorld(destination.world, PEER_LOCAL_COMPONENTS).hash);
+    }
+
+    /** The arrival, hidden behind the flash for `frames` client frames
+     * (a simulation tick each), with the key auto-repeating if `held`. */
+    async function hiddenArrival(router: ControlRouter, destination: Room,
+        frames: number, held: boolean) {
+        for (let i = 0; i < frames; i++) {
+            if (held) {
+                routeTo(router, press('repeat'), destination);
+            }
+            frame(router, destination, true);
+            await destination.step();
+        }
+    }
+
+    function distanceOf(room: Room) {
+        return shipOf(room.world)!.components.get(MovementStateComponent)!
+            .position.length;
+    }
+
     it('released mid-transit (no system live): exactly one jump, on every world, through a rollback replay', async () => {
         const router = new ControlRouter();
         const { destination } = await departAndArrive(router);
         // (The release happened while no system was live; routeTo with no
         // room is what the client does with it.)
         routeTo(router, press(false), undefined);
+        await hiddenArrival(router, destination, 10, false);
+        await showArrival(router, destination);
         await expectNoSecondJump(destination);
     }, 120_000);
 
@@ -232,46 +309,91 @@ describe('the held-j route jump', () => {
         const { destination } = await departAndArrive(router);
         // The destination is live behind the flash; the key is still
         // down, so it auto-repeats, and is let go before the flash clears.
-        for (let i = 0; i < 10; i++) {
-            routeTo(router, press('repeat'), destination, true);
-            await destination.step();
-        }
-        routeTo(router, press(false), destination, true);
+        await hiddenArrival(router, destination, 10, true);
+        routeTo(router, press(false), destination);
         await destination.step();
+        await showArrival(router, destination);
+        await expectNoSecondJump(destination);
+    }, 120_000);
+
+    it('(the 2026-11-26 report) released during the arrival\'s long first frame: the repeats queued behind it do not jump', async () => {
+        const router = new ControlRouter();
+        const { destination } = await departAndArrive(router);
+        await hiddenArrival(router, destination, 3, true);
+        // The first frame that shows the system is a long one, and the
+        // flash clears inside it. The key events the player made during
+        // it (repeats, then the release, all while the screen was still
+        // white) are dispatched behind it, onto a visible arrival.
+        frame(router, destination, false);
+        await destination.step();
+        for (let i = 0; i < 5; i++) {
+            routeTo(router, press('repeat'), destination);
+        }
+        routeTo(router, press(false), destination);
+        await showArrival(router, destination);
+        await expectNoSecondJump(destination);
+    }, 120_000);
+
+    it('a tap on the white screen does not carry into the next system', async () => {
+        const router = new ControlRouter();
+        const { destination } = await departAndArrive(router);
+        routeTo(router, press(false), undefined);
+        await hiddenArrival(router, destination, 2, false);
+        routeTo(router, press('start'), destination);
+        await hiddenArrival(router, destination, 2, false);
+        routeTo(router, press(false), destination);
+        await showArrival(router, destination);
         await expectNoSecondJump(destination);
     }, 120_000);
 
     it('held through the arrival: keeps chaining, as before', async () => {
         const router = new ControlRouter();
         const { destination } = await departAndArrive(router);
-        routeTo(router, press('repeat'), destination, true);
-        await destination.step(5);
-        // The flash clears with the key still down: the next repeat
-        // re-asserts it, and the route's next hop starts.
-        routeTo(router, press('repeat'), destination, false);
-        await destination.step(3);
-        for (const world of [destination.world]) {
-            expect(shipOf(world)?.components.get(JumpComponent)?.to)
-                .toBe(SYNTHETIC.systems.vael);
-        }
-        await destination.step(30);
-        expect(shipOf(destination.archive.archiveWorld!)
-            ?.components.get(JumpComponent)?.to)
-            .toBe(SYNTHETIC.systems.vael);
+        await hiddenArrival(router, destination, 5, true);
+        // The flash clears with the key still down: the router re-asserts
+        // it, and the route's next hop starts.
+        await showArrival(router, destination);
+        await expectSecondJump(destination);
     }, 120_000);
 
-    it('(the report) without the visibility gate, the hidden repeat jumped again', async () => {
-        // The router as it was: no arrivalHidden. The same timeline as the
-        // second spec now leaves the destination on the next hop.
+    it('held through the arrival WITHOUT auto-repeat: still chains (the router follows the key itself)', async () => {
+        const router = new ControlRouter();
+        const { destination } = await departAndArrive(router,
+            { autoRepeat: false });
+        await hiddenArrival(router, destination, 5, false);
+        await showArrival(router, destination);
+        await expectSecondJump(destination);
+    }, 120_000);
+
+    it('pressed on the white screen and held: jumps once the arrival shows', async () => {
         const router = new ControlRouter();
         const { destination } = await departAndArrive(router);
-        for (let i = 0; i < 10; i++) {
-            routeTo(router, press('repeat'), destination);
-            await destination.step();
-        }
-        routeTo(router, press(false), destination);
-        await destination.step(300);
-        expect(destination.finishJumps.length + (shipOf(destination.world)
-            ?.components.has(JumpComponent) ? 1 : 0)).toBeGreaterThan(0);
+        routeTo(router, press(false), undefined);
+        await hiddenArrival(router, destination, 3, false);
+        routeTo(router, press('start'), destination);
+        await hiddenArrival(router, destination, 3, true);
+        await showArrival(router, destination);
+        await expectSecondJump(destination);
+    }, 120_000);
+
+    it('held through an arrival so slow to show that the ship has coasted into the no-jump zone: the arrival grace still chains', async () => {
+        const router = new ControlRouter();
+        const { destination } = await departAndArrive(router);
+        // 1.5 s behind the flash: one second of flight takes the ship
+        // inside the zone.
+        await hiddenArrival(router, destination, 90, true);
+        expect(distanceOf(destination)).toBeLessThan(JUMP_DISTANCE);
+        await showArrival(router, destination);
+        await expectSecondJump(destination);
+    }, 120_000);
+
+    it('past the arrival grace, the no-jump zone refuses a held key again', async () => {
+        const router = new ControlRouter();
+        const { destination } = await departAndArrive(router);
+        await hiddenArrival(router, destination,
+            Math.ceil(ARRIVAL_JUMP_GRACE_MS / 1000 * 60) + 10, true);
+        expect(distanceOf(destination)).toBeLessThan(JUMP_DISTANCE);
+        await showArrival(router, destination);
+        await expectNoSecondJump(destination);
     }, 120_000);
 });
