@@ -419,6 +419,26 @@ describe('FormationSystem flying INERTIALESS escorts', () => {
                 }
             });
 
+        it(`${h.name}: follows a leader coasting slowly with its nose off `
+            + 'its course without twitching', async () => {
+                // An inertial leader coasting at 27 px/s, its nose 0.3 rad
+                // off its course (the playtest's Shuttle after a burn).
+                const world = await inertialessWorld(h);
+                stepSeconds(world, 20);
+                setLeader(world, new Angle(0.3).getUnitVector().scale(27),
+                    new Angle(0));
+                stepSeconds(world, 20);
+                const coasting = watch(world, 10);
+                for (const [uuid, s] of coasting) {
+                    const context = `${h.name} ${uuid}`;
+                    expect(s.reversals).withContext(context).toBe(0);
+                    expect(s.maxHeading - s.minHeading).withContext(context)
+                        .toBeLessThan(HEADING_STEADY);
+                    expect(s.maxError).withContext(context)
+                        .toBeLessThanOrEqual(FORMATION_SLOT_DEADBAND);
+                }
+            });
+
         it(`${h.name}: holds station round a leader turning at cruise `
             + 'without chattering its nose', async () => {
                 // The Dart sat on the old dead band's edge here, its nose

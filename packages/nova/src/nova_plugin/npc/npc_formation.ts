@@ -577,11 +577,16 @@ export const INERTIALESS_NOSE_PULL_SLACK = FORMATION_POSITION_GAIN
  * pure position-to-heading rule cannot both bring a slot BEHIND the
  * follower in and end facing forward, so the nose switches at the band's
  * edge: one turn onto the leader's heading as the follower comes in (it
- * is moving inward and the throttle never backs it out). At cruise the
- * switch moves the nose by under this over the leader's speed, and not at
- * all while the leader flies along its heading.
+ * is moving inward and the throttle never backs it out). The lean fades
+ * out as the leader picks up speed (INERTIALESS_HEADING_BIAS_FADE_SPEED),
+ * so at cruise the switch moves nothing: a leader coasting with its nose
+ * off its course otherwise twitched the nose of an escort sitting on the
+ * band's edge (the playtest's Shuttle, coasting at 27 px/s).
  */
 export const INERTIALESS_HEADING_BIAS = 2;
+/** The leader speed (px/s) at which INERTIALESS_HEADING_BIAS has faded
+ * out entirely (linearly from full at rest). GUESS. */
+export const INERTIALESS_HEADING_BIAS_FADE_SPEED = 10;
 
 /**
  * The formation controller for an INERTIALESS follower (shïp Flags2
@@ -608,9 +613,9 @@ export const INERTIALESS_HEADING_BIAS = 2;
  * - Heading: along the leader's velocity plus the pull less
  *   INERTIALESS_NOSE_PULL_SLACK (continuous at the dead band's edge, so
  *   station-keeping at cruise never kicks the nose); inside the band
- *   along the leader's velocity leaning onto its heading
- *   (INERTIALESS_HEADING_BIAS), so a parked escort faces the leader's
- *   way.
+ *   along the leader's velocity, leaning onto the leader's heading when
+ *   it is slow or at rest (INERTIALESS_HEADING_BIAS), so a parked escort
+ *   faces the leader's way.
  * - Speed: the desired velocity's component along the CURRENT heading
  *   (none while facing away from it), so the hull slows to turn and
  *   speeds up as it comes round, rather than flying a wide arc at speed
@@ -639,7 +644,8 @@ function steerInertialessFormation(movement: MovementState,
     const pointing = nosePull > 0
         ? leaderVelocity.add(error.normalize(nosePull))
         : leaderVelocity.add(leaderHeading.getUnitVector()
-            .scale(INERTIALESS_HEADING_BIAS));
+            .scale(INERTIALESS_HEADING_BIAS * Math.max(0, 1
+                - leaderVelocity.length / INERTIALESS_HEADING_BIAS_FADE_SPEED)));
     movement.turnBack = false;
     movement.turnTo = pointing.lengthSquared > 0
         ? pointing.angle : leaderHeading;
