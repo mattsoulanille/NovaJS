@@ -21559,7 +21559,642 @@ seven kit items, raw ShortNames checked).
   ruler now makes that possible).
 - R16's board half: see the R16 section.
 
+### The afterburner's thrust and the coast-down (U4 leftovers), wave 44: the boost accelerates at about 5.4 x the hull's own acceleration (about Accel px/s², whatever the top speed: Accel 150 hulls 125-148 at Speed 600 and 1,000, Accel 300 265-300 at Speed 300 and 1,000, Accel 600 about 600); the coast back down runs at about 0.8 x the hull's acceleration, a constant deceleration; the hull's own acceleration is 0.17 px/s² per Accel unit (2026-11-26)
+
+**Questions** (the Wave 43 leftovers row): the boost thrust law (a third
+hull's ramp: Probe A about 250 px/s², Probe E about 230), and the coast-down
+rate on a fourth Accel (Probe B ran off the ruler in wave 43).
+
+**Rig** (`wave44Resources` "U4"). Two readings without the star field.
+(1) **The pad**: sÿst 1457 Kit Accel Pad, a decoration start (spöb 1035) at
+the centre and 14 moon decorations (spöb 1036-1049) on a 200 x 300 px grid
+around it, so the ship's world position is known in ANY direction (its
+heading at Enter Ship is not chosen): each moon on screen gives it as G -
+(screen offset), the frame's place the median (`tools/grid2d.py`). Kit
+Probes A / B / C / E and the new F (shïp 738: Speed 1000, Accel 150) and G
+(739: Speed 600, Accel 600), each with the stock Afterburner, at rest on the
+start (pilots `w44_pada` .. `w44_padg`, regular play): Up 1.5 s from rest
+(the hull's own acceleration), then z + Up 1.5 s (the boost's), both
+released. The track is projected on its own direction; the hull phase is a
+least-squares constant acceleration, the boost a piecewise fit (the hull
+phase continued to an onset lag, then a constant acceleration until 1.8 x
+the top speed; `tools/padramp.py`). (2) **Wave 43's ruler** (sÿst 1450 ->
+1451, moons every 500 px on the arrival line): Probe B with a short boost
+(Up 1 s, z 2.5 s, Up held 10 s: the whole coast stays on the ruler), G (Up
+2 s, z 2.5 s, Up held 5 s) and F (Up 1 s, z 3 s, Up held 4 s); the ramp and
+the coast fitted as a piecewise constant-acceleration change between the
+known cruise and boosted speeds (`tools/rampfit.py`). Wave 43's A-E ruler
+tracks were refitted the same way.
+
+| hull (Speed / Accel) | hull from rest, px/s² | boost, px/s² (fit band) | boost / hull | coast-down with Up held, px/s² | coast / hull |
+|---|---|---|---|---|---|
+| A (300 / 300) `pada_a`, w43 `u4a_a` | 49.8 | 290 (235-610) | about 5.8 | 42 (40-46), w43 | 0.84 |
+| B (600 / 150) `padb_a`, `u4b_a` | 28.1 | 145 (140-155) pad; 148 (126-182) ruler; 140 (120-174) w43 | 5.2 | **20** (the whole 473 -> 262 px/s coast on the ruler, linear: 472, 449, 429, 410, 391, 369, 349, 331, 309, 290, 271, 260 px/s a second apart) | 0.71 |
+| C (200 / 600) `padc_a` | about 100 (top speed in 0.8 s) | too quick to read (71 px/s in a few frames) | - | too quick (w43) | - |
+| D (100 / 300) w43 `u4d_a` | - | - | - | 38 (28-84) | about 0.76 |
+| E (1000 / 300) `pade_a`, w43 `u4e_b` / `u4e_c` | 49.5 | 265 (255-285) pad; 302 / 282 ruler | 5.4-6.1 | 42 / 42 (36-50) | 0.85 |
+| F (1000 / 150) `padf_a`, `u4f_a` | 25.4 | 125 (125-140) pad; 140 (130-154) ruler | 4.9-5.5 | 22 (18-26) | 0.87 |
+| G (600 / 600) `padg_a`, `u4g_a` | 103 | 595 (460-935) pad; 638 (308-1408) ruler | about 5.8 | **84** (76-94) | 0.82 |
+
+**Findings.**
+1. **The boost's thrust follows Accel, not Speed**: the two Accel-150 hulls
+   at Speed 600 (B) and 1,000 (F) both boost at 125-148 px/s², the two
+   Accel-300 hulls at Speed 300 (A) and 1,000 (E) at 265-300, the Accel-600
+   G at about 600: about 5.4 x the hull's own acceleration (4.9-5.8 over
+   five hulls), i.e. roughly Accel px/s² on this machine. Wave 43's "about
+   250 whatever the hull" was two Accel-300 hulls.
+2. **The coast back down is a constant deceleration of about 0.8 x the
+   hull's own acceleration** (0.71-0.87 over six hulls; B's 10.5 s coast is
+   a straight line), with Up held; with both keys released (`pada_a`) it
+   ran at 39 px/s², the same as with Up held (42).
+3. **The hull's own acceleration from rest is 0.17 px/s² per Accel unit**
+   (49.5-49.8 for Accel 300, 25.4-28.1 for 150, 103 for 600): Accel / 5000
+   px per frame² at the machine's 29.2 frames a second, as NovaJS's
+   ShipAccelerationConversionFactor assumes at 30 (the known 3% clock).
+
+**NovaJS (main 53f9c897, after the wave-43 fix):** the top speed boosts by
+`AFTERBURNER_FACTOR` 1.8 (`N/nova_plugin/travel/afterburner_plugin.ts:28`:
+**matches**); the boosted acceleration is a FLAT `AFTERBURNER_THRUST` 250
+px/s² (max(hull, 250), `:43`, `:161-163`) and the overspeed sheds at
+`OVERSPEED_DECAY_FACTOR` 0.7 x the hull's acceleration (`:75`, `:158`).
+**Mismatch**: the thrust follows the hull's Accel (125-148 px/s² for Accel
+150, about 600 for Accel 600), so the flat 250 is right only near Accel 300;
+the coast is 0.8, not 0.7. **Proposed:** boosted acceleration =
+`base.acceleration * AFTERBURNER_THRUST_FACTOR` with the factor 5.4 (GUESS
+between 5 and 6; five fits scatter 4.9-5.8), replacing the flat 250;
+`OVERSPEED_DECAY_FACTOR` 0.8. Confidence: high that the thrust scales with
+Accel and not Speed (two Accel pairs at different Speeds, pad and ruler
+agree), medium for the multiple (5.4 +- 0.4); high for 0.8 +- 0.1 and the
+linear shape of the coast (six hulls, B's whole coast on the ruler).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w44/pada_a/` ..
+`padg_a/`, `u4b_a/`, `u4f_a/`, `u4g_a/` (`recording.mp4`); `*.pos.txt`
+(pad tracks), `u4*_a.track.txt` (ruler tracks), `tools/grid2d.py`,
+`tools/padramp.py`, `tools/rampfit.py`, `tools/fitphase.py`.
+
+### Gravity's law with moons (U7 leftovers), wave 44: pull = Gravity x min(30 px/s², 8.6e6 / d²): an INVERSE-SQUARE pull beyond about 535 px and a constant one inside, both in proportion to Gravity (Gravity 5: 150 px/s² and 4.3e7 / d²; Gravity 10: 300 and 8.5e7 / d²) (2026-11-26)
+
+**Questions** (the Wave 43 leftovers row): the far falloff read off moons
+(wave 42's 45 / 15 px/s² at 1,000 / 2,000 px were star readings), and a
+second strength (Gravity 10) on the moon reading.
+
+**Rig** (`wave44Resources` "U7"). sÿst 1458 Kit Gravity 5 Moons (the well,
+spöb 1050, Gravity 5, the dark 40 px art, at the centre; moon starts at 600 /
+1,000 / 1,500 / 2,000 px on the x axis, each with reference moons at (x,
+200) and (x - 300, 200)) and 1459 Kit Gravity 10 Moons (Gravity 10; starts at
+150 / 300 / 1,000 / 2,000 px). Kit Probe E (Speed 1000) at rest on each
+start (pilots `w44_g5_600` .. `w44_g10_2000`), no input, 20 s, recorded from
+before Enter Ship (`w44_space_early.json`). Tracks by `tools/grid2d.py` on
+the moons (`tools/u7sum.sh`); the pull per 1 s window (`tools/u7pull.py`),
+and ONE law fitted to all four falls of a well from rest to 60 px out, the
+ship's speed capped at its top speed (`tools/u7model.py`: x'' = -min(C, K /
+x²), each fall's onset fitted).
+
+| run | start | pull, 1 s windows (|x| px: px/s²) |
+|---|---|---|
+| g5_2000_a | 2,000 | 2,000: 11.0; 1,975: 11.2; 1,944: 12.0; 1,876: 12.3; 1,780: 10-15 |
+| g5_1500_a | 1,500 | 1,502: 21.3; 1,480: 19.8; 1,439: 21.7; 1,377: 19.9 |
+| g5_1000_a | 1,000 | 998: 45.2; 949: 45.2; 907: 54.1; 851: 62.3; 781: 72.7; 720 (the return's turn): 81.5-84.5; 600: 126-132 |
+| g5_600_a | 600 | 582: 130.6; 527: 132.7; the return's turn at 614: 111-123 |
+| g10_2000_a | 2,000 | 1,997: 22.9; 1,968: 22.7; 1,917: 21.8; 1,842: 26.2 |
+| g10_1000_a | 1,000 | 987: 82.3; 949: 97.5; 887: 112.9; 796: 136.7 |
+| g10_300_a / g10_150_a | 300 / 150 | 260-320 everywhere inside 300 px |
+
+| well | best fit over its four falls | fit band (1.2 x rms) | rms |
+|---|---|---|---|
+| Gravity 5 | K = 4.3e7 px³/s², C = 150 px/s² | K 4.3e7, C 135-155 | 3.2 px (2.7-3.8 per fall, 83-460 frames each) |
+| Gravity 10 | K = 8.5e7, C = 300 | K 8.5-8.8e7, C 265-305 | 2.4 px |
+
+**Findings.**
+1. **Beyond about 535 px the pull falls as 1 / d²**: K / d² with K = 4.3e7
+   px³/s² at Gravity 5 fits every window from 2,000 px in to about 600
+   (2,000: 11; 1,500: 19; 1,000: 43; 781: 71), and one such law fits each
+   whole fall to about 3 px.
+2. **Inside it the pull is constant**, 150 px/s² at Gravity 5 (wave 43's
+   140 from 300 / 150 / 85 px, read off fewer moons, agrees), where K / d²
+   would reach 150 at 535 px; the two pieces meet there.
+3. **Both pieces are in proportion to Gravity**: Gravity 10 doubles both
+   (K 8.5e7, C 300), so the meeting distance (sqrt(K / C), about 535 px) is
+   the same. Per Gravity unit: C = 30 px/s², K = 8.6e6 px³/s².
+4. Wave 42's star readings at 1,000 and 2,000 px (45 / 15) were close; wave
+   41's Gravity-10 "about 550 px/s²" and wave 40-41's quadratic growth with
+   the field were not (the star-field bias, wave 42).
+
+**NovaJS (main 53f9c897, after the wave-43 fix):** `gravityAcceleration`
+= 16.5 G + 2.3 G |G| (140 px/s² at Gravity 5, 395 at 10;
+`N/nova_plugin/travel/gravity_plugin.ts:68-69`, `:89-92`) inside 300 px and
+that times (300 / d)^1.5 beyond (`gravityFalloff`, `:112-118`): Gravity 5
+inside about 300 px **matches** (140 against 150); **mismatch** at Gravity
+10 (395 against 300: the strength is linear in G, not quadratic), in the
+inner radius (300 vs 535 px) and in the exponent (1.5 vs 2: at 600 px
+NovaJS gives 49 where the original pulls 120-130, at 1,000 px 23 vs 43, at
+2,000 px 8.1 vs 10.8). **Proposed:** pull = |G| x min(GRAVITY_NEAR_PER_UNIT
+30, GRAVITY_FAR_PER_UNIT 8.6e6 / d²) px/s² toward the well (away for a
+negative G, wave 40), i.e. `gravityAcceleration(G)` = 30 |G| and
+`gravityFalloff(d)` = min(1, (535 / d)²) with GRAVITY_REFERENCE_DISTANCE 535
+(d² is exact arithmetic, no pow); the top-speed cap stays (the fall levels
+off at the hull's top speed, wave 42: Probe E's swings came back only to
+about 720 of the 1,000 px start because the fall reached 437 px/s). GUESS:
+the linear-in-G strength holds for strong wells (Gravity 100+ would then
+reach the top speed in a few frames, as wave 40 saw). Confidence: high for
+the inverse square and the constant core (eight falls, one law to 2-4 px
+rms each), high for the proportion to G (two strengths), medium for the
+constants' last digit.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w44/g5_600_a/` ..
+`g10_2000_a/` (`recording.mp4`), `g5*.pos.txt`, `g10*.pos.txt`,
+`g5.grid` / `g10.grid`, `tools/u7sum.sh`, `tools/u7pull.py`,
+`tools/u7model.py`.
+
+### The deferred (përs) auto-abort's bits (R16 leftover), wave 44: the board runs the mission's OnAbort (b9282 set), NOT its OnSuccess (b9283 clear), with OnAccept's b9281 kept; the pilot written at the next Leave held exactly that, and the date had gone on a week (2026-11-26)
+
+**Question** (the Wave 43 leftovers row): when a përs-offered rescue
+auto-abort ends at the board of its special ship (wave 43), is its OnAbort
+bit set (an abort) or its OnSuccess (a rescue done)?
+
+**Rig.** Wave 43's përs 225 override, now linked to the new sÿst 1468 Kit
+Pers Big (`kits/w44_pers225.mjs`; the person in the Person slot at 100%;
+port spöb 1095 with the 250 px planet art, so the player can land from where
+the board leaves him). mïsn 1044 as before: auto-abort (Flags 0x0001),
+ShipGoal 5 rescue, DatePostInc 7, OnAccept b9281, OnAbort b9282, OnSuccess
+b9283. Pilot `w44_r16b` (the Kit Lancer at Kit Pers Big Port, bit 9280).
+`tools/r16c.mjs`: Tab until the person is on screen (land and take off to
+re-roll), hail, accept, the map; `loops/board.mjs` (magenta, sweeping at 10
+px); the mission list, the map, `l` `l` (land), Leave, the map; the pilot
+pulled at the end (written at the Leave). sÿst 1464 / 1465 / 1466 are shown
+on the map only while b9281 / b9282 / b9283 is set (Visibility).
+
+| run | what happened |
+|---|---|
+| r16_a (wave 43's sÿst 1455) | the person on screen at the 11th roll; accepted; boarded ("You can't board this ship." from then on, "You have no active missions."); the map's date July 3rd after the accept, **July 10th** right after the board (+7, as wave 43); the 72 px port was about 200 px off and `l` `l` did not land, so no pilot; **no bit system on the in-flight map**, not even the Accept one (Visibility is not re-read in flight) |
+| **r16_b** (Kit Pers Big) | the person on screen at the 6th roll; accepted, boarded, "You have no active missions."; **landed** (the 250 px port), Leave; the map after the Leave drew **Kit R16 Accept Bit and Kit R16 Abort Bit, not Kit R16 Success Bit** (`r16b_map4_zoom.png`); the pulled pilot: **mission bits 9280, 9281, 9282; 9283 clear**; no active missions; date July 6th (the board's +7 and the landing's day) |
+
+**Findings.**
+1. **The deferred auto-abort is an abort**: at the board the mission runs
+   its OnAbort (b9282 set) and not its OnSuccess (b9283 clear), even though
+   the rescue target was boarded; OnAccept's bit stays.
+2. With wave 43: it all happens at the board, in flight (the mission gone
+   at once, DatePostInc with it).
+3. (Side) a sÿst's Visibility is re-read at a landing, not on the
+   in-flight map (r16_a / r16_b: the Accept Bit system, set at the accept in
+   flight, appeared only after the landing).
+
+**NovaJS (main 53f9c897): matches.** `runDeferredAutoAbort`
+(`N/nova_plugin/missions/mission_landing.ts:130-153`, now run from the
+in-flight board record with `runPendingAutoAborts`, `:162-174`, as the
+fallback at a date advance) adds DatePostInc and ends the mission through
+`autoAbortMission` (`N/nova_plugin/missions/mission_transitions.ts:58-61`),
+which runs OnAbort and not OnSuccess (finding 1). No change. Confidence:
+high (one clean run, the pilot's bits and the map agree).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w44/r16_a/`,
+`r16_b/` (`pilot-after/`, the `map*`, `info*`, `l*` shots, `recording.mp4`),
+`r16b_map4_zoom.png`.
+
+### A plain kill of the tribute guard's hull (R18 leftover), wave 44: it DOES add Strength / 5 to the combat rating, at 12,800 as at 0 (+200 a kill: 12,800 -> 13,400 for three, 0 -> 400 for two), so wave 43's unchanged 12,800 after two defender kills means a defence-fleet kill adds nothing (2026-11-26)
+
+**Question** (the Wave 43 leftovers row): does a defence-fleet kill ever
+add to the combat rating? Wave 43's two defender kills left 12,800
+unchanged, which could be the defence fleet or a rating that stops growing
+at 12,800.
+
+**Rig** (`wave44Resources` "R18"). sÿst 1461 Kit Guard Control (owner 363,
+port spöb 1081): traffic avgShips 1 of düde 539, the very hull of the
+tribute fleet (shïp 593 Kit Tribute Guard S1000: Strength 1000, armor 25)
+as an ordinary AI 3 ship of the always-hostile gövt 362. Pilots
+`w44_gc12800` / `w44_gc0`: wave 43's Kit Tribute Slow with the Kit Escort
+Gun and Beam turrets on the port, rating 12,800 / 0; three rounds of Tab,
+Space 4 s; land, Leave; the pilot pulled.
+
+| run | kills (Tab shots: target, then "No Target" after the burst) | combat rating | sÿst 1461 record |
+|---|---|---|---|
+| gc12800_a | 3 (each guard replaced by new traffic) | **12,800 -> 13,400** | +225 |
+| gc0_a | 2 (the second round found no target in range) | **0 -> 400** | +150 |
+
+**Findings.**
+1. **The same hull killed outside a defence fleet adds Strength / 5 a
+   kill** (+200 for Strength 1000) at rating 0 and at 12,800 alike, so the
+   rating does not stop growing at 12,800, and wave 43's zero is the defence
+   fleet's: **a tribute defender's kill adds nothing to the combat rating**
+   (wave 39's "killed for nothing" holds for the rating as for the record).
+2. (Side) killing an always-hostile govt's ship raised that system's
+   record by 75 a kill.
+
+**NovaJS (main 53f9c897): matches.** `KillCreditSystem` returns before the
+rating for a defence-fleet victim (`defenceFleetVictim`,
+`N/nova_plugin/reputation/reputation_plugin.ts:307-312`) and adds
+`combatRatingKillPoints` = floor(Strength / 5) otherwise (`:313-316`,
+`N/nova_plugin/reputation/reputation.ts:192-194`). Wave 43's "GUESS: so
+NovaJS raises it" was wrong: no change. tk_e's third launch without a kill
+was not chased. Confidence: high (two runs, five kills, both ratings).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w44/gc12800_a/`,
+`gc0_a/` (`pilot-after/`, the `t*` / `k*` shots), `gc12800.png`, `gc0.png`.
+
+### The centre arrow's onset (K8 leftover), wave 44: a CIRCLE of about 2,400-2,650 px, not the radar's per-axis span: on the axis the arrow shows at 2,650 px and not at 2,400; on the diagonal it shows at (2000, 2000) (2,828 px out, 2,000 on each axis) and not at (1700, 1700) (2,404 px out) (2026-11-26)
+
+**Questions** (the Wave 43 leftovers row): the arrow's exact onset (wave 43
+read about 2,750 px from one flight) and whether it uses the radar's span
+per axis.
+
+**Rig** (`wave44Resources` "K8"). sÿst 1460 Kit Arrow Grid: nothing at the
+centre, decoration starts at (2850 / 2750 / 2650 / 2400 / 2200 / 2000 /
+1700, 0) and on the diagonal (2300, 2300), (2000, 2000), (1700,
+1700). The Kit Lancer at rest on each (pilots `w44_k8x2650` ..), 8 s; the
+radar every 0.2 s for 2 s (`tools/k8sheet.sh`, window x 646-822, y 9-185;
+the arrow blinks about 0.6 s on, 0.4 s off, so ten frames always catch it).
+The radar's scale from the grid's own dots on the axis (k8x2000_a: +200 /
++400 / +650 / +750 / +850 px at +5.5 / +11.5 / +19.5 / +22.5 / +25.5 radar
+px): about 33 world px a radar px (its half-span of 88 px about 2,900 px).
+
+| start | distance from the centre | on each axis | arrow |
+|---|---|---|---|
+| (2850, 0) `k8x2850_a`, (2750, 0) `k8x2750_a` | 2,850 / 2,750 | 2,850 / 2,750 | yes |
+| (2650, 0) `k8x2650_a` | 2,650 (about 80 radar px) | 2,650 | **yes** (pointing west) |
+| (2400, 0) `k8x2400_a` | 2,400 (about 73 radar px) | 2,400 | **no** |
+| (2200, 0) `k8x2200_a`, (2000, 0) `k8x2000_a`, (1700, 0) `k8x1700_a` | 2,200 / 2,000 / 1,700 | the same | no |
+| (2300, 2300) `k8d2300_a` | 3,253 | 2,300 | **yes** (pointing north-west) |
+| (2000, 2000) `k8d2000_a` | **2,828** | **2,000** | **yes** |
+| (1700, 1700) `k8d1700_a` | 2,404 | 1,700 | **no** |
+
+**Findings.**
+1. **The gate is the centre's DISTANCE, a circle**: (2000, 2000) shows the
+   arrow with both offsets (2,000) smaller than the 2,400 that shows none
+   on the axis, so no per-axis rule fits; its distance (2,828) is past the
+   axis onset. (1700, 1700) at 2,404 shows none, like 2,400 on the axis, so
+   neither the sum of the offsets (3,400) nor the larger one fits either.
+2. **The onset radius lies between 2,404 and 2,650 px** (73-80 of the
+   radar's 88 px half-span at about 33 px a radar px): well inside the
+   radar's edge, not "the centre off the radar". Wave 43's 2,750 (84 radar
+   px) came from a flight read with a 32.7 px scale and the ring's last
+   radar pixel; the static starts are the better reading.
+
+**NovaJS (main 53f9c897, after a5bb1c25):** `centerArrowShown`
+(`N/display/status_bar_radar.ts:198-204`) draws the arrow when either axis
+offset exceeds 84 / 88 of the radar's half-span (`CENTER_ARROW_ONSET`,
+`:188`; range 3,000, so 2,864 px): **mismatch** (no arrow at (2650, 0), nor
+at (2000, 2000) or (2300, 2300), where the original draws one).
+**Proposed:** `Math.hypot(toCenter.x, toCenter.y) > CENTER_ARROW_RADIUS`
+with CENTER_ARROW_RADIUS 2,500 px (GUESS, the middle of 2,404-2,650; about
+0.83 of NovaJS's 3,000 half-span), or as a fraction of the half-span,
+0.83 (the original's 2,500 / about 2,900 is 0.86). Confidence: high for the
+circle (the (2000, 2000) and (1700, 1700) pair against the axis pair), medium
+for the radius (bracketed to 250 px).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w44/k8*_a/`
+(`recording.mp4`), `k8*_a.radar.png` (ten radar frames each, 2x).
+
+### Acceleration under ionization (E6 leftover), wave 44: a hull charged past the no-turn line thrusts at about 0.4 of its acceleration (20-22 against 50-52 px/s² for the same 0.57 s Up pulse from rest); the ion bolts also PUSH the ship (a steady drift building to 35-50 px/s), so the lower plateaus were not read (2026-11-26)
+
+**Question** (the Wave 43 leftovers row): the acceleration under each ion
+plateau (wave 42: two thirds of the turn untinted, a third tinted, none
+past about 38 of IonizeMax 100).
+
+**Rig** (`wave44Resources` "E6"). sÿst 1463 Kit Ion Pad: port spöb 1083 at
+the centre and 8 moon decorations around it (the ship's position in any
+direction, `tools/grid2d.py` grid "ion"); mïsn 1051 (bit 9286; wave 12's,
+retired) puts wave 41's Ion Tick Target (Ionization 20 a hit, a hit about
+every 3.6 s) ON the port, mïsn 1053 (bit 9287) wave 42's Ion Tick5 Target
+(Ionization 5). shïp 791 Kit Probe Ion: Kit Probe A (Speed 300, Accel 300,
+inertial) with IonizeMax 100, Deionize 1. Pilots `w44_e6i20`, `w44_e6i5`
+(the mission's bit) and `w44_e6c` (none): land, accept, Leave, then 0.57 s
+Up pulses (the hull cannot turn, so every pulse pushes the same way); the
+velocity before and after each pulse from linear fits of the track
+(`tools/pulses.py`).
+
+| run | pulses (s after the take-off) | acceleration over the pulse |
+|---|---|---|
+| e6c_a (no ion source) | +9.7, +13.8 | **52.0, 49.8 px/s²** (the hull's own, as on the accel pad) |
+| e6i20_a (ion 20, hit since the take-off) | +9.9 (about three hits), +14.0 | **19.6, 22.3 px/s²** (0.39-0.45 of the control) |
+| e6i5_a (ion 5) | +16.5, +22.6, +29.8 | not read: the ship had drifted off the pad's moons before the first pulse |
+
+**Findings.**
+1. **Past the no-turn line the thrust is about 0.4 of the hull's** (two
+   pulses, 20-22 against 50-52 px/s²), close to wave 39's "about a third"
+   (a star reading).
+2. **The ion bolts push the ship**: in both ion runs the still hull began
+   to drift at the take-off and the drift grew (about 12 px/s after 1 s,
+   35 px/s by +9 s, 48 px/s by +16 s) in the bolts' direction, the same
+   with Ionization 5 and 20; the control did not move. (The Kit Ion Tick
+   weapons are clones of stock wëap 131, whose impact this presumably is:
+   GUESS.) That drift is why the low-charge readings failed: a pad rig
+   needs a stronger hull push budget or a non-pushing ion weapon (Impact
+   0) to read the untinted and tinted plateaus.
+
+**NovaJS (main 53f9c897):** the ionized thrust is `base.acceleration *
+ion.acceleration * boost` (`N/nova_plugin/travel/afterburner_plugin.ts:163`).
+Proposed: check the saturated `ion.acceleration` against 0.4 (GUESS: the
+plateau table the turn uses, 2/3 / 1/3 / 0 for the turn, does not carry
+over to thrust, which keeps 0.4 where the turn is 0). Confidence: medium
+for 0.4 at saturation (two pulses, one run), none for the lower plateaus.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w44/e6i20_a/`,
+`e6i5_a/`, `e6c_a/` (`recording.mp4`), `e6*_a.pos.txt`, `tools/pulses.py`.
+
+### A fast fighter with a weak engine (E8 leftover), wave 44: the Kit Bay Disc Lazy (Speed 1000, Accel 100) from the Speed-400 bay stopped about 35 px out 0.8 s after the launch, like the Accel-300 disc, not coasting like wave 42's Speed / Accel 1000 one; so the kick's coast-then-brake belongs to the strong ENGINE, and a weak one sheds the kick at once (2026-11-26)
+
+**Question** (the wave-42 leftover): does the brake after a launch kick
+depend on the fighter's Accel (a third fighter)?
+
+**Rig** (`wave44Resources` "E8"). shïp 768 Kit Bay Disc Lazy (the green
+disc at Speed 1000, Accel 100), wëap 312 Kit Lazy Disc Bay (Speed 400, the
+stock Viper Bay's, carrying 768) + oütf 499. Pilot `w44_e8l` (the Kit
+Lancer at Kit Port with four): `w`, one launch, 15 s; the disc's centroid
+per frame (`tools/greendisc.mjs`, `e8l_a.disc.txt`).
+
+| fighter (Speed / Accel) | from the Speed-400 bay |
+|---|---|
+| Kit Bay Disc (300 / 300; waves 40-41) | stopped about 35 px out, 0.7 s after the launch |
+| Kit Bay Disc Fast (1000 / 1000; wave 42) | coasted about 4.5 px a frame for 0.8 s, out to about 140 px, then stopped in about 8 frames |
+| **Kit Bay Disc Lazy (1000 / 100)** `e8l_a` | **out to 35.5 px at 0.8 s after the press (the first frame it showed, 18 px, at 0.2 s), then still**; it crept back over the next 10 s (35 -> 13 px, then out to 29) on its own weak engine |
+
+**Finding.** The fighter's top speed is not what makes a kick coast (the
+lazy disc has the fast disc's Speed 1000): a fighter with a weak engine
+sheds a 4 px a frame kick at once, exactly like the Accel-300 disc; only
+the strong-engined fighter carried it. Three fighters fit a step in Accel
+between 300 and 1000 (NovaJS's guess), and do not fit a brake that grows
+with Accel (the lazy disc would then have drifted far further).
+
+**NovaJS (main 53f9c897): matches.** A kick within the fighter's top speed
+is braked at once at `BAY_LAUNCH_BRAKE` 200 px/s² unless its acceleration
+exceeds `BAY_LAUNCH_COAST_MIN_ACCEL` (Accel 300), when it coasts
+`BAY_LAUNCH_COAST_S` first (`N/nova_plugin/escorts/bay_plugin.ts:270-290`,
+`:416-427`): Accel 100 brakes at once, 36 px out (measured 35.5). The step's
+place between 300 and 1000 stays a GUESS. Confidence: high (a clean
+single launch).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w44/e8l_a/`
+(`recording.mp4`), `e8l_a.disc.txt`.
+
+### Grid captions: a second "\n", the shipyard and the hire list (the hub's questions), wave 44: only the FIRST "\n" breaks the caption; a later "\n" is dropped and its two sides run together ("Kit Three\nLine\nCaption" shows "Kit Three" / "LineCaption"; "Kit Gap\n\nLine" shows "Kit Gap" / "Line"), so a caption has at most two lines; the shipyard and the bar's hire-escort list caption ships the same way, and a BLANK ShortName shows no caption in both (2026-11-26)
+
+**Questions** (the Wave 43 leftovers row and the brief's item 2; the hub,
+after the grid-caption fix landed): a three-line ShortName; does the
+shipyard treat a shïp ShortName the same way (split at "\n", no wrap); and
+does a shïp with a BLANK ShortName show no caption, or its name, in the
+shipyard and in the bar's hire-escort list?
+
+**Rig** (`wave44Resources` "LN"). sÿst 1462 Kit Long Names 2, port spöb 1082
+(outfitter, shipyard and bar; SpecialTech 9409): oütf 497 ShortName "Kit
+Three\nLine\nCaption", 498 "Kit Gap\n\nLine" (each "\n" the two
+characters, as the Bible writes it and the stock data stores it); shïp 761
+"Kit Two\nLine Hull", 766 "Kit Three\nLine\nHull Name", 767 "Kit Very Long
+Single Line Hull Short Name", 888 "" (blank), all four HireRandom 100. Pilot
+`w44_ln` (the Kit Lancer on the port): land, `o`, shots, Done, `s`, shots,
+Done, Bar, Hire Escort, shots (full-screen lossless and window crops).
+
+| item | ShortName | the cell (outfitter / shipyard / hire list) |
+|---|---|---|
+| oütf 497 | "Kit Three\nLine\nCaption" | **"Kit Three" over "LineCaption"**: two lines, the second "\n" gone and "Line" and "Caption" joined with no space |
+| oütf 498 | "Kit Gap\n\nLine" | **"Kit Gap" over "Line"**: two lines, no empty middle line |
+| shïp 761 | "Kit Two\nLine Hull" | "Kit Two" over "Line Hull", shipyard and hire list alike |
+| shïp 766 | "Kit Three\nLine\nHull Name" | "Kit Three" over "LineHull Name" (both lists) |
+| shïp 767 | 41 characters, no "\n" | one line, centred on its cell, spilling over both neighbours (both lists) |
+| shïp 888 | "" (blank) | **no caption** in the shipyard and in the hire list: the icon alone (the text in its cell is 767's overflow) |
+
+(Wave 43's `ln_b` shipyard showed the same for shïp 729, blank: no caption,
+where 728 with its ShortName had one; `ln_b_shipyard.png`.)
+
+**Findings.**
+1. **At most two lines**: the first "\n" in a ShortName breaks the
+   caption; every later "\n" is removed and the text on its two sides is
+   drawn together (no space, no third line, no empty line). The stock data
+   never has a second "\n" (wave 43), so this only shows in plug-ins.
+2. **Ships caption exactly like outfits** in the shipyard (split at the
+   first "\n", never wrapped, long lines spill over the neighbours).
+3. **A blank ShortName shows no caption** for a ship in the shipyard (729
+   in wave 43, 888 here) and in the bar's hire-escort list (888); the
+   ship's name is NOT used as a fallback. The hire list uses the same grid
+   and captions as the shipyard.
+
+**NovaJS (main 53f9c897):** `captionSegments`
+(`N/spaceport/item_grid.ts:129-136`) now captions outfits and ships from
+ShortName with no wrap, and an empty ShortName gives no caption (finding 3:
+**matches**, shipyard and hire grid both, per the hub). It splits at EVERY
+"\n" and drops empty lines (`:132-134`): "Kit Three\nLine\nCaption" becomes
+three lines. **Mismatch** (finding 1). **Proposed:** split at the first
+"\n" only and delete the later ones with no space: `const [first, ...rest]
+= source.split(/\\n|\n/); lines = [first, rest.join('')]` (then trim and
+drop an empty one as now). Confidence: high (two outfits and two ships, the
+same in three grids).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w44/ln_a/`
+(`04-outfitter-full.png`, `06-shipyard-full.png`, `09-hire-full.png` are
+lossless 1920x1080 shots; `05` / `07` / `10` the window crops),
+`ln_out_zoom.png`, `ln_hire_zoom.png`.
+
+### A paid bribe's clearance against an ordinary one, one session (R8 leftover), wave 44: the same clock, counted from the PAYMENT: an ordinary clearance lapsed between 24.44 and 24.88 s (twice), a paid planet bribe between 24.59 and 25.04 s after the price popup's Return (twice) (2026-11-26)
+
+**Question** (the wave-42 leftover): does a paid planet bribe's clearance
+lapse exactly like an ordinary one (the lapse drifts between sessions,
+wave 36, so both in one session)?
+
+**Rig** (`wave44Resources` "R8", added during the wave). sÿst 1467 Kit R8
+Lapse (gövt 304, wave 29's Kit Bribe Stay set-up): the refusing port spöb
+1092 (gövt 304, MinStatus 0) at (-200, 0), an open port 1093 at (200, 0),
+both the 72 px art, and the start decoration 1094 at the centre, so the
+ship sits inside both 249 px clearance squares and outside both 1.7 W
+landing windows: while a clearance stands `l` answers "You're too far away
+to land on this planet."; once it lapses, the open port gives a FRESH
+clearance line and the bribed one "Landing request denied.". Pilot `w44_r8`
+(the Kit Lancer, record -50 there, 2M). One run, twice each, interleaved:
+click the open port, `l` (cleared), then `l` presses 0.44-0.45 s apart from
+23.55 s; click the refusing port, `l` (denied), hail, Offer Bribe, Return
+(the payment, "w44-r8, you're cleared to land. Commence final approach."),
+Return (closes the channel, 1.64 s later), then the same presses from 23.7 s
+after the payment. Press times from `recording.events.json`, the status line
+off the recording (`tools/regionchg.mjs`, `r8_lines.png`).
+
+| clearance | given at | last "too far" press | first lapse answer |
+|---|---|---|---|
+| ordinary 1 | `l` 13.53 s | +24.44 s | +24.88 s (fresh "You are cleared to land. Welcome to Kit R8 Lapse Open.") |
+| bribe 1 | payment 67.50 s | +24.59 s | +25.04 s ("Landing request denied.") |
+| ordinary 2 | `l` 101.75 s | +24.44 s | +24.89 s (fresh "Cleared to land, w44-r8. ...") |
+| bribe 2 | payment 155.83 s | +24.60 s | +25.04 s (denied) |
+
+**Findings.**
+1. **A paid bribe lapses on the ordinary clearance's clock, counted from
+   the payment**: tonight 24.44-24.88 s for both ordinary clearances and
+   24.59-25.04 s for both paid ones; the two windows overlap (24.59-24.88),
+   and counting the bribe from the channel's close (1.64 s later) would put
+   it at 22.95-23.40 s, outside the ordinary window.
+2. A `l` press while a clearance stands ("too far") does not renew it
+   (seven presses inside the life, the lapse came on time).
+3. Tonight's clock (24.44-24.88) is a little longer than wave 36's 24.4
+   fit, within the session drift wave 36 saw.
+
+**NovaJS (main 53f9c897): matches.** The payment sets the bribe's expiry to
+`planetBribeExpiry(now)` = now + `STELLAR_CLEARANCE_MS` (24,400 ms;
+`N/nova_plugin/travel/planet_plugin.ts:409`, `:566-568`) at the hail's
+payment (`N/nova_plugin/encounters/hail_plugin.ts:447-451`), the same clock
+an ordinary clearance uses. No change. Confidence: high (two pairs, one
+session).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w44/r8_a/`
+(`recording.mp4`, the `o*` / `b*` shots), `r8_lines.png`, `r8_lines/`.
+
+### The Flags 0x0020 burn with longer runs (A13 leftover), wave 44: a STEP, not spells: against a rating-800 player the hull never burned in 4 minutes, against 1,600, 3,200 and 12,800 it burned the whole 4 minutes (every 10 s window); the edge lies between 1,200 (never in 2 minutes) and 1,599 (the whole 2 minutes) (2026-11-26)
+
+**Question** (the wave-42 leftover): the law of the 0x0020 hull's burn with
+the player's combat rating (wave 42's 80 s runs burned in 20-30 s spells
+at 1,600-12,800 and the whole time from 6,400).
+
+**Rig.** Wave 42's: sÿst 1443 Kit Burn Twenty, one hostile AI 3 shïp 688
+Kit Hull Magenta 20 (Speed / Accel 300, Flags 0x0020), the Kit Lancer
+passive on the port; pilots `w44_a13r800` .. `w44_a13r12800` (and the
+edge runs `w44_a13r1200` / `w44_a13r1599`), 210 s (edge: 120 s) after
+Enter Ship. The magenta disc's speed per recorded frame
+(`tools/magspeed.mjs`), the median per 10 s window; the hull's own top
+speed is 4.4 px a recorded frame, its burn about 4.8 (wave 42).
+
+| player rating | whole-run median / p90, px a frame | 10 s windows with a median over 4.2 | median distance |
+|---|---|---|---|
+| 800 (Competent) `a13r800_a` | **2.6 / 3.7** | **0 of 25** (window medians 1.6-2.8) | 157 px |
+| 1,200 `a13r1200_a` (120 s) | 2.8 / 4.0 | **0 of 15** (2.1-3.2) | 193 px |
+| 1,599 `a13r1599_a` (120 s) | 4.7 / 6.1 | **15 of 15** (4.2-5.2) | 222 px |
+| 1,600 (Very Competent) `a13r1600_a` | **4.7 / 5.9** | **25 of 25** (4.3-4.9) | 229 px |
+| 3,200 (Worthy of Note) `a13r3200_a` | 4.7 / 5.7 | 25 of 25 (4.2-5.0) | 223 px |
+| 12,800 (Deadly) `a13r12800_a` | 4.7 / 5.7 | 25 of 25 (4.2-4.9) | 223 px |
+
+**Findings.**
+1. **A step in the player's rating, not a growing share**: below it the
+   hull flies like a plain one the whole time; from it the hull burns the
+   whole fight, like a 0x0040 hull (the same medians and the wider range,
+   wave 42). The edge is between 1,200 and 1,599: not the Appendix I tier boundary at 1,600 (Very Competent), since 1,599 (still Competent) burned.
+2. **No spells in four minutes**: wave 42's partial burns at 1,600 /
+   3,200 / 12,800 (80 s each) did not recur in 4-minute runs of the same
+   rig; GUESS: wave 42's windows were read with a 4.4 cut that the burning
+   hull's own medians straddle (4.2-4.4 here in a few windows of every
+   burning run), or that session differed; this wave's four runs are the
+   cleaner reading.
+
+**NovaJS (main 53f9c897):** a Flags 0x0020 hull burns in 25 s spells with
+odds rating / 6,400 (`advancedRatingBurnShare`, `ADVANCED_RATING_FULL_BURN`
+6,400, `ADVANCED_RATING_SPELL_MS`,
+`N/nova_plugin/npc/npc_afterburner.ts:105-145`): at 1,600 it burns a
+quarter of the time (measured: all of it), at 800 an eighth (measured:
+never). **Mismatch.** **Proposed:** `advancedRatingBurns` = rating >=
+ADVANCED_RATING_BURN_MIN (GUESS 1,400, the middle of 1,201-1,599), no spells, no hash; keep the target's
+rating and the attack-only rule. Confidence: high for 800 vs 1,600+
+(four 4-minute runs, 7,200 frame pairs each), medium for the edge (bracketed to 1,201-1,599 by two 2-minute runs).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w44/a13r800_a/` ..
+`a13r12800_a/` (`recording.mp4`), `a13r*.speed.txt`.
+
+### Jump chaining on a route, wave 44: with `j` held the ship jumps again AT ONCE on each arrival (arrivals 4.90 s apart, the same 4.8-4.9 s as a press from rest), through the whole route; a tap jumps once and keeps the rest of the route; a second tap during the departure sequence or the transit, up to 0.2 s before the arrival flash, is IGNORED (not remembered), while one 0.2 s after the arrival starts the next hop (2026-11-26)
+
+**Questions** (Matthew, via the hub): with a 3-jump route plotted, (a)
+does one press of `j` jump once or chain through the route; (b) with `j`
+held, does the ship jump out again as soon as it arrives, as soon as it
+clears the no-jump zone, or never until re-pressed (and the arrival-to-
+next-jump timing); (c) is a `j` pressed during the hyperspace transit /
+flash ignored or remembered on arrival? (Wave 11 answered (a) and the
+chaining half of (b) at a 2 s shot rate: "Multi-jump routes and the `j`
+key, wave 11".)
+
+**Rig** (`wave44Resources` "JC", added during the wave). sÿst 1469-1472
+Kit Chain Alpha / Bravo / Charlie / Delta, linked in a line, empty but for
+Alpha's start decoration (spöb 1096) 2,000 px out (outside the no-jump
+zone); pilot `w44_jc` (the Kit Lancer, all four explored, fuel 3,000). The
+route: the map, Find "Kit Chain Delta" (centres on it), shift-clicks on
+Bravo, Charlie and Delta (wave 11's way: a Find alone, `jc_a`, or a plain
+click on Delta, `jc_a2`, plotted NO route and `j` did nothing), Done; the
+nav panel then reads "Hyperspace / Kit Chain Bravo". Then one keys step:
+`jc_b3` `down:j` held about 48 s; `jc_c1_a` `j`, a second `j` 3.15 s later;
+`jc_c4_a` / `jc_c3_a` / `jc_c2_a` the same at 4.20 / 4.61 / 5.04 s; window shots every ~4 s, the map at
+the end. Times off the recording: the nav panel's text changing at each
+arrival (`tools/regionchg.mjs`, window x 646-822, y 252-292) and the
+one-frame white arrival flash (`tools/flash.mjs`).
+
+| run | `j` | arrivals (s after the first press) | where it ended |
+|---|---|---|---|
+| jc_b3 | held from 49.46 s | **4.81 (Bravo), 9.71 (Charlie), 14.61 (Delta)**: arrival to arrival 4.90 s twice; status "Arriving in the Kit Chain Bravo system on June 24th, 1177 NC." ... "Delta ... June 26th"; the nav panel "Hyperspace / Kit Chain Charlie" from the first arrival | Delta, "Nav System Off" (route used up) |
+| jc_c1_a | tap, tap again at +3.15 s (in the departure sequence) | **4.82 (Bravo) only**; nothing in the next 45 s | Bravo, the rest of the route kept (nav: Kit Chain Charlie) |
+| jc_c4_a | tap, tap again at +4.20 s (0.61 s before the arrival) | **4.81 (Bravo) only**; the white arrival flash at +4.78 | Bravo |
+| jc_c3_a | tap, tap again at +4.61 s (0.21 s before the arrival, in the transit) | **4.82 (Bravo) only** | Bravo |
+| jc_c2_a | tap, tap again at +5.04 s (0.21 s AFTER the arrival at +4.83) | 4.83 (Bravo); **the second hop began at once** (the nav panel dimmed 0.52 s after the second press) and arrived 5.69 s after it (Charlie) | Charlie |
+
+**Findings.**
+1. **(a) One press, one jump**: the rest of the route is kept for the next
+   press (jc_c1_a, as wave 11's tap).
+2. **(b) A held `j` jumps again the moment the ship arrives**: arrival to
+   arrival took 4.90 s, the same as a press from rest to the first arrival
+   (4.81-4.83 s), so the next departure sequence starts with no gap; the
+   ship arrives outside the 1,000 px no-jump zone (about 1,350 px out, wave
+   38), so "on arrival" and "on clearing the zone" are the same moment
+   here. Whether a held key would wait out an arrival INSIDE the zone was
+   not tested (no rig puts an arrival inside it).
+3. **(c) A press before the arrival is ignored, not remembered**: second
+   taps 3.15, 4.20 and 4.61 s after the first (the last 0.21 s before the
+   arrival, in the transit) gave no second jump;
+   one 0.21 s AFTER the arrival started the next hop at once (jc_c2_a). The
+   key is read only while the ship can jump.
+
+**NovaJS (main 53f9c897): matches.** `PlayerJumpControl`
+(`N/nova_plugin/travel/jump_plugin.ts:598-650`) polls the held `hyperjump`
+control every tick and refuses while a jump is under way (the `jumping`
+blocker, `:631`), so a held key starts the next hop on the tick after the
+arrival (the player arrives one second of flight outside the no-jump
+radius, `PLAYER_JUMP_ARRIVAL_MARGIN_S`, `:165`), a tap starts one hop and
+keeps the route, and a tap during the sequence is dropped (no latch). The
+new `ARRIVAL_JUMP_GRACE_MS` (3 s, `:198`) only lets a press in the first 3 s
+after an arrival start the next hop from INSIDE the zone (a NovaJS
+allowance for the client's late first frame); it does not delay a held
+key's chain, so the 4.90 s rhythm is kept; the original's behaviour inside
+the zone is untested (it never arrives there). No change. Confidence: high
+for (a) and (b) (wave 11 and jc_b3, three arrivals 4.90 s apart), high for
+(c) (three ignored presses at 3.15-4.61 s, one taken 0.21 s after the
+arrival).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261126-w44/jc_a/`,
+`jc_a2/`, `jc_b/`, `jc_b2/` (no route: the plotting attempts), `jc_b3/`,
+`jc_c1_a/` .. `jc_c4_a/` (`recording.mp4`, `03-plotted.png`, `w*`,
+`mapend`), `tools/flash.mjs`, `tools/regionchg.mjs`.
+
+### Not reached in wave 44: E9's re-roll vs drift, E6's lower plateaus, tk_e's third launch (2026-11-26)
+
+- **E9** (re-roll vs drift of the asteroid field): not run. The leftover
+  asked for "a field of slow röid types", but a röid has no speed field
+  (Strength, SpinRate, Yield, Particles, Fragments, Explosion, Mass only),
+  so a slow field cannot be built; a reading needs another idea (for
+  instance a rock pinned by a mission ship's tractor, or the radar if it
+  ever shows rocks).
+- **E6**: only the saturated plateau was read (see the E6 section): the
+  Kit Ion Tick bolts push the ship off the pad before the lower plateaus'
+  pulses.
+- **R18**: tk_e's third launch without a kill was not chased.
+
 ### Reliability notes (for anyone running the reference)
+
+- **A map route needs shift-clicks (wave 44 `jc_a`, `jc_a2`, `jc_b`,
+  `jc_b2`):** the map's Find ("f", a name, Return) centres on and selects
+  the system but plots NO route, and a plain click on a system three hops
+  away does not either ("Clear Route" stays grey, the nav panel "Nav System
+  Off", `j` does nothing). Find the end, then shift-click each hop in turn
+  (wave 11's way; `{"click":[x,y],"win":true,"mods":"shift"}`) and check
+  the nav panel reads "Hyperspace / <first hop>" before timing anything.
+- **A sÿst's Visibility is re-read only at a landing (wave 44 `r16_a`,
+  `r16_b`):** a system gated on a bit set in flight did not appear on the
+  in-flight map; it did after a landing and Leave. A map is no in-flight
+  bit reader.
+- **The Kit Ion Tick bolts push the ship (wave 44 `e6i20_a`, `e6i5_a`):** a
+  hull sitting under the wëap 131 clones drifts off at a growing speed (12
+  px/s after a second, about 50 by 16 s), so a still-hull rig under them
+  needs a non-pushing ion weapon.
+- **board.mjs never stops after a no-dialog board (wave 44 `r16_a`):** a
+  special ship's board answers "Target ship has been boarded." with no
+  dialog, so the loop kept sweeping (92 sweeps, 13 minutes) with the
+  mission already over; give such scenarios `sweep.repeat` 1.
+- **Reordering a running queue (wave 44 q2 -> q4):** kill only the queue's
+  own bash pid while a run is going (the run and its steps.sh finish), then
+  start the new queue gated on that run's `runsh.log` "exit" line; never
+  edit the running script.
+- **An early recording starts on the title screen (wave 44 U7):** the
+  title's 40-odd bright blobs fill the first seconds of a
+  `w44_space_early.json` recording; start a decoration track at the first
+  in-space frame (`tools/u7sum.sh` finds it) or the tracker locks onto the
+  title. A moon decoration's bright-pixel centroid sits about 5 px off its
+  centre (its lit side), a constant offset that cancels in speeds.
 
 - **Single-frame steps are no speed reading, even of stellars (wave 43
   `u4a_a`):** at a steady 131 px/s (4.4 px a recording frame) the moon
@@ -22639,7 +23274,8 @@ seven kit items, raw ShortNames checked).
 | Wave 40 leftovers | U7: weak wells from farther out (the falloff at Gravity 1-10), several wells, thrust against a well, the constant. R11: a three-commodity purchase (proportional vs largest-first) and mission cargo. R14: 0x0004 vs 0x0400 alone on a text-less offer. R15: other ShipStarts and a ship-offer accept in flight. R17: the touchdown itself (both mission runs stopped short). E2: what makes a negative Inaccuracy fire to the side (an ExitType, a turret, an NPC). E3: whether the reload carries over a landing. E8: launches at cruise; the Speed-to-kick scale (more Speeds). E10: the beam Count unit (a third Count; the drawing rate). E11: the exact edges (Accel 701-750 / 551-600, Turn 51-55 and the rest on a finer grid). E6: the turn's scaling with the charge (uncapped charge: a rig that is hit a known number of times). U4: a third hull (boost by speed or by accel). U8: a turn longer than the 4.8 s clock. R18: leaving mid-fight (the return jump was refused twice: jump out from farther out); whether the replacements stop at the DefCount total; whether the demand's 6 / laugh's 1 are KillPenalty multiples (another govt). A11: the respawn interval (fuel-less traders parked at the port; use traffic with fuel and a Tab census). Kit: next free sÿst 1428, spöb 1987, shïp 628, düde 523, wëap 305, oütf 487, gövt 284 and below, bits 9266; mïsn 1031 (then retire another old kit mission). **Wave 41 answered** R17 (the touchdown), R18 (leaving mid-fight), A11 (the respawn interval), E11 (the finer edges), E6 in part (Deionize 0 drains; the tint at about 40 of 100) and, for the hub, U4 (a third hull), U7 (damping), E8 (rest and speed), E10 (a second and third Count): see the "... wave 41" sections and the Wave 41 leftovers row. | open |
 | Wave 41 leftovers | E6: the turn cut's shape below the tint (a slower ion gun, finer charge steps with Deionize 1), the exact tint point (20-40 of 100), Deionize 0's drain rate. E11: the odd Accel values at the five edges (129 / 249 / 381 / 551 / 731). U4: a Speed-100 hull (the 1.5 floor) and Probe C's slow coast-down with Up released. U7: a Gravity-5 ramp from far out (the constant 30 vs 39-55). E8: a Speed-200 bay and a fast fighter (does the AI brake a kick under its top speed?). A6: 1.01 (`w41_a6w101`, the edge's rounding), the interceptor branch in NovaJS. A12: the other goals (destroy / disable / board targets of AI 1/2) and an observe target of AI 3/4. A13: whether a Flags2 0x0004 ship can be hit by stray fire; the Flags 0x0020 afterburner half. R8: whether time alone ends a paid planet bribe (3 minutes in flight). R16: the deferred (përs) auto-abort. R18: the kept defence count after a kill and a leave (land so the pilot is written). E9: not run. **Wave 41 answered** R5, R8 (duration), R16 (immediate), R17, R18 (leaving), A6, A11 (interval), A12 (observe), A13 (targeting), E4, E10 (the hub), E11 (edges), K4, M2, M3, U4 / U7 / E8 (the hub's questions) and E6 in part: see the "... wave 41" sections. Kit: next free sÿst 1441, spöb none below 2000 but the spare 1499 (open a new range), shïp 686, düde 532, wëap 309, oütf 490, gövt 283 and below, bits 9276; mïsn none (retire another old kit mission). **Wave 42 answered** E9 (both halves), A13 (the afterburner half), E6 (the curve: three plateaus), E11 (the odd values), U4 (Probe D; the reading is biased), U7 (the far ramp: a falloff; the cap), E8 (both), R8 (time ends it), A6 (1.01) and, for the hub, the stock-item free mass; R18 (launched defenders stay gone); R16's deferred case was tried and not reached: see the "... wave 42" sections and the Wave 42 leftovers row. | open |
 | Wave 42 leftovers | R16: the deferred (përs) auto-abort: the kit's përs 1151 never appeared in six rolls, and a two-roll try with the stock përs 225 overridden met only a stock any-system person: retry the override with a Tab-by-name driver (`w42_pers_board.json` and `tools/r16.mjs` are ready). R18: whether a KILLED defender counts like a launched one (wave 42's beam burst killed none: arm the hull so one kill is certain, and read the count and the rating), and the count after a domination. A13: the Flags 0x0020 burn's law with the rating (longer runs at 1,600-12,800), and stray fire on a Flags2 0x0004 ship. E6: the acceleration under each plateau, and a direct drain reading (one hit, then the tint's end) to pin the lines. U4 / U7: speed RATIOS need a reading that does not use the stars (decoration rulers); the gravity falloff's exponent (more distances, a stronger well). E8: the brake's dependence on the fighter's Accel (a third fighter). R8: whether a paid bribe's clearance lapses exactly with an ordinary one (the same session, a control). E9: re-roll vs drift of the asteroid field (a landing of a few seconds). K8: the radar centre-arrow range (not reached). Kit: next free sÿst 1450, spöb 1011-1399 (and 518-999), shïp 699, düde 537, wëap 312, oütf 492, gövt 283 and below, bits 9284; mïsn none (retire another old kit mission); përs: none the base pilot marks alive (override a stock one). **Wave 43 answered** U4 (a ruler: a flat x 1.8 on five hulls), R16 (the përs case: the deferred abort ends at the BOARD, in flight, with its DatePostInc), A13 (stray fire hits a 0x0004 ship), K8 (the arrow follows the system centre, not "no stellar on the radar"), R18 (a killed defender is replaced and the replacement counts as a launch; no rating for the kills), U7 (inside 300 px a constant pull, about 140 px/s² at Gravity 5), E9 (not frozen while landed; empty screen at every take-off) and, for the hub, the outfitter's long item names (ShortName only, split at "\n", never wrapped): see the "... wave 43" sections and the Wave 43 leftovers row. | open |
-| Wave 43 leftovers | U4: the boost thrust law (a third hull's ramp; 250 px/s² on Probe A vs about 230 on Probe E) and the coast-down rate on a fourth Accel (B ran off the ruler: a longer ruler or a shorter boost). U7: the far falloff with moons (the 45 / 15 px/s² at 1,000 / 2,000 px were star readings) and a second strength (Gravity 10) on the moon reading. R16: whether the deferred abort's OnAbort bit is set (board, then land and pull: `tools/r16b.mjs`; the person was on screen in about one roll in eight, so allow 20 rolls). R18: whether a defence-fleet kill ever adds to the combat rating (a rating below 12,800 with a control kill of the same hull), and tk_e's third launch without a kill. K8: the arrow's exact onset (a slower, straight-out run with the centre's ring tracked) and whether it uses the radar's span per axis. E9: re-roll vs drift (needs a nearly still rock: a field of slow röid types). E6: the acceleration under each plateau (the ruler rig with an ion source), a direct drain reading. From wave 42: E8 the brake's dependence on the fighter's Accel; R8 the paid bribe's lapse against an ordinary one in one session; A13 the Flags 0x0020 burn's law with longer runs. Outfitter captions: a three-line \n\n ShortName (not tried). Kit: next free sÿst 1457, spöb 1035-1399 (and 518-999), shïp 738-739 / 761 / 766-768 / 791 / 888-894 (and 416-419), düde 539, wëap 312, oütf 497, gövt 283 and below, bits 9286, rlëD 1113; mïsn none (retire another old kit mission); përs: override a stock one in a run-only plug-in and list it in a sÿst Person slot (the kit's 1151 never appears). | open |
+| Wave 43 leftovers | U4: the boost thrust law (a third hull's ramp; 250 px/s² on Probe A vs about 230 on Probe E) and the coast-down rate on a fourth Accel (B ran off the ruler: a longer ruler or a shorter boost). U7: the far falloff with moons (the 45 / 15 px/s² at 1,000 / 2,000 px were star readings) and a second strength (Gravity 10) on the moon reading. R16: whether the deferred abort's OnAbort bit is set (board, then land and pull: `tools/r16b.mjs`; the person was on screen in about one roll in eight, so allow 20 rolls). R18: whether a defence-fleet kill ever adds to the combat rating (a rating below 12,800 with a control kill of the same hull), and tk_e's third launch without a kill. K8: the arrow's exact onset (a slower, straight-out run with the centre's ring tracked) and whether it uses the radar's span per axis. E9: re-roll vs drift (needs a nearly still rock: a field of slow röid types). E6: the acceleration under each plateau (the ruler rig with an ion source), a direct drain reading. From wave 42: E8 the brake's dependence on the fighter's Accel; R8 the paid bribe's lapse against an ordinary one in one session; A13 the Flags 0x0020 burn's law with longer runs. Outfitter captions: a three-line \n\n ShortName (not tried). Kit: next free sÿst 1457, spöb 1035-1399 (and 518-999), shïp 738-739 / 761 / 766-768 / 791 / 888-894 (and 416-419), düde 539, wëap 312, oütf 497, gövt 283 and below, bits 9286, rlëD 1113; mïsn none (retire another old kit mission); përs: override a stock one in a run-only plug-in and list it in a sÿst Person slot (the kit's 1151 never appears). **Wave 44 answered** U4 (the boost thrust is about 5.4 x the hull acceleration, i.e. follows Accel not Speed; the coast-down 0.8 x, a constant deceleration; hull acceleration 0.17 px/s² per Accel), U7 (pull = Gravity x min(30, 8.6e6 / d²): inverse square beyond about 535 px, both pieces in proportion to Gravity), R16 (the deferred abort sets OnAbort, not OnSuccess), R18 (a plain kill of the guard hull adds Strength / 5 at 0 and 12,800: defence kills add nothing), K8 (a circle of 2,404-2,650 px, not per axis), E6 in part (0.4 of the thrust at saturation; the ion bolts push the ship), E8 (a weak-engined fast fighter brakes at once), R8 (the paid clearance lapses on the ordinary clock from the payment), A13 (a step between 800 and 1,600, no spells), the outfitter three-line caption (only the first "\n" breaks) and, for the hub, the shipyard / hire-list captions (blank ShortName: no caption) and jump chaining on a route: see the "... wave 44" sections and the Wave 44 leftovers row. E9 not run (a röid has no speed). | open |
+| Wave 44 leftovers | U4: the boost multiple (5.4 +- 0.4: a 5 or a 6 in the engine?) on a hull whose ramp is long enough to read (Accel 75-150 at Speed 1000+), and the coast with Up released on more hulls. U7: the Gravity-1 and a negative well on the moon reading (the law's proportion to G from two strengths), the crossover (535 px) read directly. K8: the onset radius inside 2,404-2,650 (starts at 2,450 / 2,500 / 2,550 / 2,600). A13: the rating edge between 800 and 1,600 (`a13r1200_a` / `a13r1599_a` run at the end: see the A13 section), and why wave 42's 80 s runs burned in spells. E6: the untinted and tinted plateaus' thrust (an ion weapon with no impact, or a hull anchored by a heavier mass). JC: a held `j` with an arrival inside the no-jump zone (a hull with a large hyperspace distance mod). E9: re-roll vs drift (a röid has no speed field: needs another reading). R18: tk_e's third launch without a kill. Kit: next free sÿst 1473, spöb 1102-1399 (and 518-999), shïp 889-894 (and 416-419), düde 540, wëap 313, oütf 500, gövt 283 and below, bits 9288, rlëD 1113; mïsn none (retire another old kit mission); përs: override a stock one (`kits/w44_pers225.mjs`). | open |
 
 ## Catalogue
 
@@ -22658,10 +23294,10 @@ cosmetic or rare.
 | U1 | shïp Speed/Accel/Turn units | `P/parsers/constants.ts:9-21` | **answered above, and the fix has landed** (Matthew ruled for nominal 30 Hz: 0.45·Speed px/s, 0.18·Accel px/s²) | H |
 | U2 | wëap GuidedTurn scale | `P/parsers/weapon_parse.ts:313` | **answered above (#316b)**: GuidedTurn/10 °/frame, the same as shïp Turn. NovaJS already matches; no change needed. | H |
 | U3 | Outfit speed/accel/turn mods use the same scale? | `P/parsers/outfit_parse.ts:159,172,177` | **answered (wave 2)**: yes, and NovaJS matches | M |
-| U4 | Afterburner boost (×2?) and the coast back down | `N/nova_plugin/travel/afterburner_plugin.ts:14-40` | **measured (wave 39, "The player's afterburner (U4), wave 39")**: about 1.5 x the top speed (one hull), thrusts with no Up held, coasts back down in about 2.5 s at about half the hull's acceleration (NovaJS 2 x and 1 x). **Applied 2026-11-26 (d4f247f3)**: AFTERBURNER_FACTOR 1.5 (a factor, GUESS), OVERSPEED_DECAY_FACTOR 0.5 **Wave 40** ("The afterburner on a second hull (U4 leftover), wave 40"): Kit Probe B x 1.75 (7.2 -> 12.6 px a frame), coast-down about 10 s (half its acceleration again) **Applied 2026-11-26 (41dcc263)**: the boost is a factor growing with the hull's Speed field, `afterburnerFactor` = 1.25 + Speed / 1200 (300 -> 1.5, 600 -> 1.75; GUESS: the two hulls fit Accel as well), on top speed and acceleration; the coast-down at half the acceleration kept **Wave 41** ("The afterburner on a third hull (U4, the hub's question), wave 41"): Kit Probe C (Speed 200, Accel 600) x 1.53, not the fix's 1.42; the three hulls fit max(1.5, 1.25 + Speed / 1200) (GUESS) **Applied 2026-11-26 (90baf229)**: `afterburnerFactor` = max(1.5, 1.25 + Speed / 1200) (the section's GUESS) **Wave 42** ("The afterburner on a Speed-100 hull ... (U4 leftover), wave 42"): not settled: the star field moves in two speed clusters, so every star-shift factor (waves 39-42) is biased toward 1; Probe D (Speed 100) read 1.73-1.77, not the 1.5 floor; the coast-down after release takes 1-6 s, faster with more Accel. No change proposed until a ruler-based reading **Wave 43** ("The afterburner with a ruler (U4), wave 43"): timed against moon decorations, a FLAT x 1.8 on five hulls (1.79-1.82, Speed 100-1,000, Accel 150-600); the boost comes up in about 0.5 s (far faster than accel x 1.8); the coast back down at about 0.7 of the hull's acceleration (NovaJS max(1.5, 1.25 + Speed / 1200) and 0.5: mismatch; proposed a flat 1.8 and 0.7) **Applied 2026-11-26 (f58c4d75)**: `AFTERBURNER_FACTOR` = 1.8 for every hull (the `afterburnerFactor` Speed term and floor dropped), applied to top speed only; the burner's own thrust `AFTERBURNER_THRUST` = 250 px/s² (GUESS: one thrust for every hull, both measured hulls are Accel 300; the hull's own acceleration if that is more; ion-cut like it), so Probe A comes up in 0.43 s and Probe E in 1.44 s; `OVERSPEED_DECAY_FACTOR` 0.7 (GUESS); the jump burn and the NPC AI burn (`AI_AFTERBURNER_FACTOR` 1.6) untouched; the section's 0.4375 px/s per Speed unit agrees with `ShipSpeedConversionFactor` (0.45 at the nominal 30 fps, the known 3% clock difference), no change | M |
+| U4 | Afterburner boost (×2?) and the coast back down | `N/nova_plugin/travel/afterburner_plugin.ts:14-40` | **measured (wave 39, "The player's afterburner (U4), wave 39")**: about 1.5 x the top speed (one hull), thrusts with no Up held, coasts back down in about 2.5 s at about half the hull's acceleration (NovaJS 2 x and 1 x). **Applied 2026-11-26 (d4f247f3)**: AFTERBURNER_FACTOR 1.5 (a factor, GUESS), OVERSPEED_DECAY_FACTOR 0.5 **Wave 40** ("The afterburner on a second hull (U4 leftover), wave 40"): Kit Probe B x 1.75 (7.2 -> 12.6 px a frame), coast-down about 10 s (half its acceleration again) **Applied 2026-11-26 (41dcc263)**: the boost is a factor growing with the hull's Speed field, `afterburnerFactor` = 1.25 + Speed / 1200 (300 -> 1.5, 600 -> 1.75; GUESS: the two hulls fit Accel as well), on top speed and acceleration; the coast-down at half the acceleration kept **Wave 41** ("The afterburner on a third hull (U4, the hub's question), wave 41"): Kit Probe C (Speed 200, Accel 600) x 1.53, not the fix's 1.42; the three hulls fit max(1.5, 1.25 + Speed / 1200) (GUESS) **Applied 2026-11-26 (90baf229)**: `afterburnerFactor` = max(1.5, 1.25 + Speed / 1200) (the section's GUESS) **Wave 42** ("The afterburner on a Speed-100 hull ... (U4 leftover), wave 42"): not settled: the star field moves in two speed clusters, so every star-shift factor (waves 39-42) is biased toward 1; Probe D (Speed 100) read 1.73-1.77, not the 1.5 floor; the coast-down after release takes 1-6 s, faster with more Accel. No change proposed until a ruler-based reading **Wave 43** ("The afterburner with a ruler (U4), wave 43"): timed against moon decorations, a FLAT x 1.8 on five hulls (1.79-1.82, Speed 100-1,000, Accel 150-600); the boost comes up in about 0.5 s (far faster than accel x 1.8); the coast back down at about 0.7 of the hull's acceleration (NovaJS max(1.5, 1.25 + Speed / 1200) and 0.5: mismatch; proposed a flat 1.8 and 0.7) **Applied 2026-11-26 (f58c4d75)**: `AFTERBURNER_FACTOR` = 1.8 for every hull (the `afterburnerFactor` Speed term and floor dropped), applied to top speed only; the burner's own thrust `AFTERBURNER_THRUST` = 250 px/s² (GUESS: one thrust for every hull, both measured hulls are Accel 300; the hull's own acceleration if that is more; ion-cut like it), so Probe A comes up in 0.43 s and Probe E in 1.44 s; `OVERSPEED_DECAY_FACTOR` 0.7 (GUESS); the jump burn and the NPC AI burn (`AI_AFTERBURNER_FACTOR` 1.6) untouched; the section's 0.4375 px/s per Speed unit agrees with `ShipSpeedConversionFactor` (0.45 at the nominal 30 fps, the known 3% clock difference), no change **Wave 44** ("The afterburner's thrust and the coast-down (U4 leftovers), wave 44"): the boosted acceleration is about 5.4 x the hull's own (it follows Accel, not Speed: two Accel pairs at different Speeds), the coast-down a constant 0.8 x (NovaJS main 53f9c897: a flat 250 px/s² and 0.7: mismatch; proposed 5.4 x the hull's acceleration and 0.8) | M |
 | U5 | Inertialess stop behaviour: does it stop instantly, decelerate at Accel, or turn the velocity? | inertialess physics in `ship_parse.ts:329` consumers | **answered (wave 3)**: it does NOT stop; it keeps its speed until braked (Down). Wave 2's "static from the first frame" was wrong. NovaJS matches (see "U9 and the inertialess hulls") | M |
 | U6 | How fast does a disabled ship drift to a stop? | `N/nova_plugin/ship/disabled_component.ts:63-68` | VID | L |
-| U7 | spöb Gravity unit and falloff | not implemented | **measured (wave 40, "spöb Gravity (U7), wave 40")**: an acceleration toward (or away from) the stellar growing with the field (Gravity 1 about 1 px a frame per second, 10 about 15), capped at the ship's top speed, holding it on the well from Gravity 100 up; no falloff at 300-2,000 px; inertialess hulls exempt (NovaJS: parsed only, #306) **Applied 2026-11-26 (007b23eb)**: `GravitySystem` (`N/nova_plugin/travel/gravity_plugin.ts`): each tick an inertial ship's velocity gains 30 x Gravity px/s² toward each well (away for negative; GUESS constant, linear, no falloff, wells add), MovementSystem's top-speed clamp the cap; inertialess hulls, shïp Flags3 0x0010 and oütf ModType 41 (`ShipPhysics.ignoresGravity`) and ships mid-jump (GUESS) exempt; NPCs pulled too (GUESS); no wire change **Wave 41** ("Gravity damping and strength (U7, ...), wave 41"): NO damping in 75 s (the swing turns from x into y and back); from rest about 39 / 55 px/s² per unit at Gravity 5 / 10 (NovaJS 30) **Applied 2026-11-26 (70fdda51)**: the pull is 23 x G + 3.2 x G x |G| px/s² (GUESS: a quadratic through the Gravity-5 / -10 readings exactly, 26 a unit at Gravity 1); "damped" dropped from the comment; a spec pins that the peak speed holds 40 s (NovaJS's top-speed clamp still trims the swing's reach, which the original's 5-6 px a frame peaks above Probe A's top speed may not) **Wave 42** ("A Gravity-5 ramp from far out, and the swing's cap ..., wave 42"): the pull falls with distance (about 15 px/s² 2,000-1,450 px out, 45 from 1,000 px, 195 from 300 px; GUESS (300 / d)^1.5; NovaJS: none); the swing IS capped at the hull's top speed (NovaJS's clamp matches; the 5-6 px a frame "peaks" were star-step jitter) **Applied 2026-11-26 (4653e94d)**: `gravityFalloff` = (300 / d)^1.5 beyond 300 px (written r x sqrt(r)), 1 inside 300 px (GUESS, the section's proposal); `gravityAcceleration` (23 G + 3.2 G|G|) is now the pull at 300 px, where every weak-well reading started, so the G1 / G5 / G10 ramps hold unchanged (G5: 195 / 32 / 11 px/s² at 300 / 1,000 / 2,000 px against the measured 195 / 45 / 15); the top-speed clamp stays the cap; module comment point 3 rewritten **Wave 43** ("Gravity inside 300 px (U7 leftover), wave 43"): read off the start moons, a CONSTANT pull of about 140 px/s² at Gravity 5 from 300, 150 and 85 px (NovaJS: flat inside 300 px, matches; but 195 there: proposed x 0.72) **Applied 2026-11-26 (f5f62f14)**: `GRAVITY_LINEAR` 23 -> 16.5, `GRAVITY_QUADRATIC` 3.2 -> 2.3 (x 0.72, the section's proposal: Gravity 5 pulls 140 px/s², Gravity 10 395, Gravity 1 18.8; GUESS until a Gravity-10 moon run); the flat pull inside 300 px is now a measured rule and the (300 / d)^1.5 falloff outside is kept | L |
+| U7 | spöb Gravity unit and falloff | not implemented | **measured (wave 40, "spöb Gravity (U7), wave 40")**: an acceleration toward (or away from) the stellar growing with the field (Gravity 1 about 1 px a frame per second, 10 about 15), capped at the ship's top speed, holding it on the well from Gravity 100 up; no falloff at 300-2,000 px; inertialess hulls exempt (NovaJS: parsed only, #306) **Applied 2026-11-26 (007b23eb)**: `GravitySystem` (`N/nova_plugin/travel/gravity_plugin.ts`): each tick an inertial ship's velocity gains 30 x Gravity px/s² toward each well (away for negative; GUESS constant, linear, no falloff, wells add), MovementSystem's top-speed clamp the cap; inertialess hulls, shïp Flags3 0x0010 and oütf ModType 41 (`ShipPhysics.ignoresGravity`) and ships mid-jump (GUESS) exempt; NPCs pulled too (GUESS); no wire change **Wave 41** ("Gravity damping and strength (U7, ...), wave 41"): NO damping in 75 s (the swing turns from x into y and back); from rest about 39 / 55 px/s² per unit at Gravity 5 / 10 (NovaJS 30) **Applied 2026-11-26 (70fdda51)**: the pull is 23 x G + 3.2 x G x |G| px/s² (GUESS: a quadratic through the Gravity-5 / -10 readings exactly, 26 a unit at Gravity 1); "damped" dropped from the comment; a spec pins that the peak speed holds 40 s (NovaJS's top-speed clamp still trims the swing's reach, which the original's 5-6 px a frame peaks above Probe A's top speed may not) **Wave 42** ("A Gravity-5 ramp from far out, and the swing's cap ..., wave 42"): the pull falls with distance (about 15 px/s² 2,000-1,450 px out, 45 from 1,000 px, 195 from 300 px; GUESS (300 / d)^1.5; NovaJS: none); the swing IS capped at the hull's top speed (NovaJS's clamp matches; the 5-6 px a frame "peaks" were star-step jitter) **Applied 2026-11-26 (4653e94d)**: `gravityFalloff` = (300 / d)^1.5 beyond 300 px (written r x sqrt(r)), 1 inside 300 px (GUESS, the section's proposal); `gravityAcceleration` (23 G + 3.2 G|G|) is now the pull at 300 px, where every weak-well reading started, so the G1 / G5 / G10 ramps hold unchanged (G5: 195 / 32 / 11 px/s² at 300 / 1,000 / 2,000 px against the measured 195 / 45 / 15); the top-speed clamp stays the cap; module comment point 3 rewritten **Wave 43** ("Gravity inside 300 px (U7 leftover), wave 43"): read off the start moons, a CONSTANT pull of about 140 px/s² at Gravity 5 from 300, 150 and 85 px (NovaJS: flat inside 300 px, matches; but 195 there: proposed x 0.72) **Applied 2026-11-26 (f5f62f14)**: `GRAVITY_LINEAR` 23 -> 16.5, `GRAVITY_QUADRATIC` 3.2 -> 2.3 (x 0.72, the section's proposal: Gravity 5 pulls 140 px/s², Gravity 10 395, Gravity 1 18.8; GUESS until a Gravity-10 moon run); the flat pull inside 300 px is now a measured rule and the (300 / d)^1.5 falloff outside is kept **Wave 44** ("Gravity's law with moons (U7 leftovers), wave 44"): pull = Gravity x min(30 px/s², 8.6e6 / d²), one law fitting eight falls from 150-2,000 px at Gravity 5 and 10 to 2-4 px (NovaJS main 53f9c897: 16.5 G + 2.3 G², (300 / d)^1.5: mismatch beyond 300 px and at Gravity 10) | L |
 | U8 | Hyperspace timings: spin-up, departure, arrival, when fuel is deducted | `N/nova_plugin/travel/jump_plugin.ts:36-60` | **measured (wave 38, "Jump phases and fuel (U8), wave 38")**: `j` -> arrival 4.8 s from rest (turn, about 0.4 s hold, about 3.5 s acceleration), 5.7 s from cruise; departure = arrival on one frame (white flash), the 100 fuel deducted on it, none for a jump a disable collapses; arrives at top speed about 1,350 px out heading for the centre; weapons locked, no input aborts; the two refusal lines. **Applied (wave-38 fixes, 5bf2f895)**: 0.4 s hold, 3.4 s burn (NPC departures keep 1 s + 2 s), arrival radius + 1 s of top speed, weapons locked and `l` ignored mid-jump, the collapse and refusal lines. **Wave 39** ("Jump phases on a slow hull (U8), wave 39"): a Turn-10 / Accel-100 hull takes the same 4.73 s from rest and 5.5-5.8 s from cruise, turning at its own rate almost to the flash: a fixed clock, not fixed phases. **Applied 2026-11-26 (0318ad43, 65be718a)**: a fixed clock for the player's and a follower's jump: a forced brake from top speed in 0.9 s, then the departure 4.8 s after rest whatever the turn rate; the burn from 3.4 s before it (at least 0.4 s still), or from 0.5 s before it for a hull still turning (GUESS); NPC departures unchanged (protocol 8, fingerprint c2400d1f6cb2ce64 -> cf33a842962aab5c) **Wave 40** ("Jump start angle on a slow hull (U8 leftover), wave 40"): 4.80 s whatever the turn (0 / 100 / 110 deg); the burn starts 20-45 deg before alignment, no hold **Applied 2026-11-26 (ee12bef2)**: a ship still turning burns with no hold once the burn's slot (3.4 s before the departure) is open and it is within `JUMP_BURN_ANGLE` 45 deg (GUESS) of the heading, finishing the turn under thrust; the 0.4 s hold only for a ship fully turned early; the clock and the 0.5 s latest start unchanged | M |
 | U9 | Landing gate: distance and speed | `N/nova_plugin/travel/planet_plugin.ts:187-190,308-316` | **answered (waves 4, 6)**: a square zone, max(\|dx\|, \|dy\|) <= about 1.7 x frame width (cap about 212), speed gate about 20 px/s. Applied in bd344b9f (was a circle of 2 x max(w, h)). **Wave 31:** the cap is gone (it was the 249 px clearance zone and its lapse); 1.7 W for a CLEARED ship only, applied cd9c4829. **Wave 32**: a clearance lapses 24.5-24.6 s after it is given, a hypergate's too; applied 2026-11-25 (eef62b07: 24.55 s). **Wave 33**: a station lapses on the same clock (matches); the 250 px planet's cleared window reaches 432.4 px, not 439.4; applied 2026-11-25 (d4393b70: 1.74 W, GUESS). **Wave 34** ("Cleared landing window, wave 34"): max(\|dx\|, \|dy\|) < trunc(1.75 W), strictly, to the pixel on four arts; applied 2026-11-25 (a2025369). **Wave 35** ("Landing clearance lapse, wave 35"; "Wormholes, wave 35"): two clearance clocks, a planet's 24.62-24.65 s and a station's 24.40-24.44 s; the wormhole's window is trunc(1.75 W) strict and its `l` circle 498-500 px; applied 2026-11-25 (e1cf32fb: 24.63 / 24.42 s by the station flag; de7524ea: comments) | L |
 | U10 | Ship explosion damage/radius scaling | `N/nova_plugin/ship/ship_explosion.ts:85-124` | CPg heavy düde next to a known-shield ship. **Measured (waves 26-28), applied 2026-11-25**: 25.5 + 0.037 x mass from 100 t (wave 27); the reach a SQUARE of half-side about twice that, by the centres, no cap (wave 28, e4f3f6c2). **Wave 29**: no cap measured to 10,000 t (brackets at 2,000 / 5,000 / 10,000 t hold 2 x damage), DeathDelay 60 changes only the timing, centre to centre on both sides: matches | L |
@@ -22682,7 +23318,7 @@ cosmetic or rare.
 | A10 | Does a disabled player ever recover unaided? | `N/nova_plugin/ship/disabled_component.ts:130-166` | **measured (wave 37, "A disabled player (A10), wave 37")**: NO (290 s, nobody around), and armor recharge is suspended while disabled; "Ship disabled.". **Wave 38**: Repair Droids (ModType 49) repair the disabled player 11-26 s later, to just over a third, "Propulsion systems repaired.". **Applied 2026-11-26 (1d93379f)**: the repair margin 1% (was 10%) and the line | M |
 | A11 | When do NPCs leave a system, and how often do they respawn? (AvgShips ±50%?) | `N/nova_plugin/spawn/npc_spawn_plugin.ts:138,833` | **partly (waves 4-5, 39)**: AI 1 mission ships jump out 30-40 s after appearing (9 of 9); AI 1 traffic lands, lingers about 20 s at a stellar and jumps (wave 5); wave 39: a 6.5-minute radar watch of an avgShips-4 system never showed more than 4 ships, the respawn interval not read (radar range hides departures) **Wave 40** ("Traffic respawn (A11 leftover), wave 40"): not reached (fuel-less traders parked at the port; no arrivals in six minutes at the AvgShips population) **Wave 41** ("Traffic respawn (A11), wave 41"): in a LINKED AvgShips-2 system the population held at 2 and each departure was replaced 4.5-11 s later (median about 7 s; NovaJS 15 s) **Applied 2026-11-26 (cfd6a597)**: a shortfall first seen draws a replacement delay uniform in 4-10 s (GUESS distribution; `NPC_RESPAWN_MIN_MS` / `MAX_MS`, one PRNG draw), the ship spawning when it runs out; the AvgShips target kept; a population a room spawn-bit latch has just admitted keeps its first ship due at once | M |
 | A12 | Do mission goal ships (other than chase-off) linger after the goal completes? | `N/nova_plugin/missions/mission_ship_spawn.ts:95-105` | CPg, VID **Measured (wave 41, "A mission ship with an outstanding goal (A12), wave 41")**: an AI 1 observe-goal ship did NOT wait to be observed: it left about 40 s after the take-off, the mission still active (NovaJS holds every goal ship but chase-off: mismatch for observe) **Applied 2026-11-26 (84263782)**: an observe-goal ship gets no suppressed departure and no missionGoal hold (leaves like ordinary traffic, the mission stays active and respawns it on the next entry); the other goals stay held (GUESS) | L |
-| A13 | Does a hostile Flags 0x0020 AI use its afterburner? Is a Flags2 0x0004 ship skipped by NPC targeting? | `P/parsers/ship_parse.ts` | CPg, VID **Measured, targeting half (wave 41, "shïp Flags2 0x0004 ... (A13), wave 41")**: an enemy AI 3 never fired at a Flags2 0x0004 ship (2 minutes; its plain twin was shot at once) and the player's Tab skips it (NovaJS: not parsed). The afterburner half untested **Applied 2026-11-26 (9e49c385)**: `ShipData.untargetable` (Flags2 0x0004); left out of NPC target choice (and scans, prizes, stellar defenders), the Tab cycle, and (GUESS) `r`, a click and point-defense candidates; the escort-target cycle keeps it; stray fire still hits it (untested) **Wave 42** ("The Flags 0x0020 afterburner (A13's other half), wave 42"): a hostile 0x0020 hull never burns against a rating-0 player, burns the whole fight from 6,400 up (the 0x0040 speed) and in 20-30 s spells at 1,600-12,800; NovaJS ignores 0x0020 (`afterburnerAtAdvancedRating` parsed, unread): mismatch. Stray fire on a 0x0004 ship still untested **Applied 2026-11-26 (59ca707a)**: `npcAfterburning` burns a 0x0020 hull (the 0x0040 factor and attack-only rule) when its spell draws a burn: odds min(1, rating / 6,400) of the ATTACKED ship's CombatRating (0 for an NPC or escort target, GUESS), redrawn every 25 s spell (GUESS) from a salted hash of the NPC uuid and the spell index, the spells phased per ship (no PRNG, no state). NOTE: 197 of the 288 stock hulls set 0x0020 (Shuttle, Viper, Fed Destroyer ...), so from rating 1,600 most stock attackers now burn at times and from 6,400 throughout (headless check in Sol with a criminal Raven: no attacker over its top speed at rating 0; a Viper, a Scout Ship and a Fed Destroyer at 1.36-1.6x at 1,000,000) **Wave 43** ("Stray fire on a Flags2 0x0004 ship (A13 leftover), wave 43"): stray fire HITS it (the player's untargeted first bolt destroyed the 0x0004 disc exactly as its plain twin): NovaJS matches (collision ignores `untargetable`) | L |
+| A13 | Does a hostile Flags 0x0020 AI use its afterburner? Is a Flags2 0x0004 ship skipped by NPC targeting? | `P/parsers/ship_parse.ts` | CPg, VID **Measured, targeting half (wave 41, "shïp Flags2 0x0004 ... (A13), wave 41")**: an enemy AI 3 never fired at a Flags2 0x0004 ship (2 minutes; its plain twin was shot at once) and the player's Tab skips it (NovaJS: not parsed). The afterburner half untested **Applied 2026-11-26 (9e49c385)**: `ShipData.untargetable` (Flags2 0x0004); left out of NPC target choice (and scans, prizes, stellar defenders), the Tab cycle, and (GUESS) `r`, a click and point-defense candidates; the escort-target cycle keeps it; stray fire still hits it (untested) **Wave 42** ("The Flags 0x0020 afterburner (A13's other half), wave 42"): a hostile 0x0020 hull never burns against a rating-0 player, burns the whole fight from 6,400 up (the 0x0040 speed) and in 20-30 s spells at 1,600-12,800; NovaJS ignores 0x0020 (`afterburnerAtAdvancedRating` parsed, unread): mismatch. Stray fire on a 0x0004 ship still untested **Applied 2026-11-26 (59ca707a)**: `npcAfterburning` burns a 0x0020 hull (the 0x0040 factor and attack-only rule) when its spell draws a burn: odds min(1, rating / 6,400) of the ATTACKED ship's CombatRating (0 for an NPC or escort target, GUESS), redrawn every 25 s spell (GUESS) from a salted hash of the NPC uuid and the spell index, the spells phased per ship (no PRNG, no state). NOTE: 197 of the 288 stock hulls set 0x0020 (Shuttle, Viper, Fed Destroyer ...), so from rating 1,600 most stock attackers now burn at times and from 6,400 throughout (headless check in Sol with a criminal Raven: no attacker over its top speed at rating 0; a Viper, a Scout Ship and a Fed Destroyer at 1.36-1.6x at 1,000,000) **Wave 43** ("Stray fire on a Flags2 0x0004 ship (A13 leftover), wave 43"): stray fire HITS it (the player's untargeted first bolt destroyed the 0x0004 disc exactly as its plain twin): NovaJS matches (collision ignores `untargetable`) **Wave 44** ("The Flags 0x0020 burn with longer runs (A13 leftover), wave 44"): a step in the player's rating, never at 800, the whole 4 minutes at 1,600 / 3,200 / 12,800 (NovaJS odds rating / 6,400 in spells: mismatch) | L |
 | A14 | Which legal record decides a ship's hostility: the player's record in the CURRENT system, or in the ship's govt's systems? | `N/nova_plugin/reputation/reputation.ts`, `hostility.ts` | **answered (A14, wave 2)**: the current system's record, enforced by the owner, its allies and nosy govts, against the ship's own CrimeTol. **Mismatch**; applied in 13567336 (ruling #376); per-system records (c2 too) in f9c86cd2 (ruling #380). | H |
 
 ### Reputation, missions and economy
@@ -22696,7 +23332,7 @@ cosmetic or rare.
 | R5 | Combat-rating multiplier (NovaJS raw Strength sum) | `reputation.ts:46-50`, `reputation_plugin.ts:185-220` | Kill one known-Strength ship, PD rating **Measured (wave 41, "Combat-rating tiers (R5), wave 41")**: the eleven words start exactly at Appendix I's 0 / 1 / 100 / 200 / 400 / 800 / 1,600 / 3,200 / 6,400 / 12,800 / 25,600 (NovaJS matches); the title's legal line reads the record ("No Record"), NovaJS hard-codes "Citizen" **Applied 2026-11-26 (61bf4b68)**: the title's legal line reads the save's record in its system through legalStatusInSystem, as the map and the `p` dialog do (`N/title/title_legal_status.ts`; no save: "—") | M |
 | R6 | Who gets kill credit for an escort or fighter kill (NovaJS: group root) | `N/nova_plugin/reputation/reputation_plugin.ts:44-52, 265-306` | **measured (wave 37, "Kill credit ... (R6), wave 37")**: the player, in full (record and rating as his own kill); the rating adds Strength / 5 per kill. **Wave 38**: a CAPTURED escort's kill too (and it draws no wage) | M |
 | R7 | Bribe price (NovaJS 10%/30% of cash, minimum 500) | **measured (R "R7 bribe price, wave 22"), applied 2026-11-24**: thousands, the ship's fuel-sale ask (0x8000: a flat 20,000), a planet 3,000 / 4,000, growth above 1M (GUESS shape), a third-of-cash cap with a 1,000 floor; 0x8000 alone takes no bribe (`N/nova_plugin/reputation/hail.ts` `shipBribePrice` / `planetBribePrice` / `shipTakesBribes`). Open: the growth's shape, the plain planet's 100M refusal, a bribe's Lower Price. **Wave 27 (R "R7 bribe price above 1M, wave 27"), applied 2026-11-25 (9e0d68ee)**: a ship's ask capped at 20,000; a plain planet refuses outright one time in eight (GUESS rate). **Wave 28 (R "R7 planet bribe, wave 28"), applied 2026-11-25 (6ef78f21)**: a planet's Lower Price counters (3/4) or withdraws; a withdrawal refuses every later offer that game day (GUESS scope); refusals answer from STR# 3002 45-49. **Wave 29** (R "R7 planet bribe withdrawal, wave 29"): the withdrawal outlasts the day (a landing in the system and a take-off still refused) and ends with a jump out and back: key it to the system visit (mismatch); a second Lower Price on a counter withdraws (matches); **applied 2026-11-25 (095fa3e1)**: the haggle lasts the system visit, the crossing into another system clears it. **Wave 30** ("R7 planet bribe withdrawal, wave 30"): the withdrawal holds through eight days of landings in the system (matches); a FRESH refusal holds through re-hails and a landing a day later (main re-draws it by day: mismatch); fresh refusals 6 in 25; **applied 2026-11-25 (286798ed)**: the fresh refusal is drawn once per system visit (a SystemVisit ordinal the crossing advances), one in four (GUESS, pooled 6 in 26). **Wave 32**: a fresh refusal ends with a jump out and back (matches; 7 in 27); a provoked freighter's Lower Price on Beg For Mercy counters once in five fresh asks (3/4) and each repeated plea on one channel asks 1,000 more, past 20,000 (main always withdrew and repeated the price: mismatch); **applied 2026-11-25 (c7622547)**: the mercy haggle per channel (one opening of the comm dialog), one counter in four (GUESS), +1,000 a plea, the withdrawal line per hail. **Wave 33** ("R7 a ship's Beg For Mercy haggle, wave 33"): the +1,000 never stops, warships haggle as freighters (matches); counters 19 in 59; every new hail draws its own mood and first ask (main fixed per ship and pilot: mismatch); **applied 2026-11-25 (b814e5bd)**: the channel seeds the plea's mood and growth, one counter in three (GUESS) | CPl with exact cash at 2-3 levels, SS | H |
-| R8 | Planet bribe price, duration and persistence | `N/nova_plugin/travel/planet_plugin.ts:149-156` | CPl, SS **Measured, duration (wave 41, "How long an accepted planet bribe lasts (R8), wave 41")**: a paid bribe clears at once and ends at the player's next landing (denied again about 45 s later after a landing at the system's other port; twice); NovaJS keeps it 2 minutes **Applied 2026-11-26 (1c9d7f62)**: a paid planet bribe has no clock (`STELLAR_BRIBE_NO_EXPIRY`) and ends at the pilot's next landing anywhere (the LandEvent reset) or crossing into another system (GUESS: time alone does not end it) **Wave 42** ("How long a paid planet bribe lasts with no landing (R8 leftover), wave 42"): time alone ends it: cleared 18 s after the payment, denied from 28 s on (three runs): the bribe is one landing clearance with the ordinary ~24 s life; NovaJS keeps it with no clock until a landing (1c9d7f62): mismatch **Applied 2026-11-26 (d5fb480b)**: a paid planet bribe expires STELLAR_CLEARANCE_MS (24.4 s) after the payment (`planetBribeExpiry`, replaces STELLAR_BRIBE_NO_EXPIRY; GUESS: exactly the clearance clock), and at the ship's selected stellar the payment also sets the PlanetTarget clearance on the same clock (the next `l` in the window lands; a press while cleared does not renew it); a landing or system crossing still ends it at once | L |
+| R8 | Planet bribe price, duration and persistence | `N/nova_plugin/travel/planet_plugin.ts:149-156` | CPl, SS **Measured, duration (wave 41, "How long an accepted planet bribe lasts (R8), wave 41")**: a paid bribe clears at once and ends at the player's next landing (denied again about 45 s later after a landing at the system's other port; twice); NovaJS keeps it 2 minutes **Applied 2026-11-26 (1c9d7f62)**: a paid planet bribe has no clock (`STELLAR_BRIBE_NO_EXPIRY`) and ends at the pilot's next landing anywhere (the LandEvent reset) or crossing into another system (GUESS: time alone does not end it) **Wave 42** ("How long a paid planet bribe lasts with no landing (R8 leftover), wave 42"): time alone ends it: cleared 18 s after the payment, denied from 28 s on (three runs): the bribe is one landing clearance with the ordinary ~24 s life; NovaJS keeps it with no clock until a landing (1c9d7f62): mismatch **Applied 2026-11-26 (d5fb480b)**: a paid planet bribe expires STELLAR_CLEARANCE_MS (24.4 s) after the payment (`planetBribeExpiry`, replaces STELLAR_BRIBE_NO_EXPIRY; GUESS: exactly the clearance clock), and at the ship's selected stellar the payment also sets the PlanetTarget clearance on the same clock (the next `l` in the window lands; a press while cleared does not renew it); a landing or system crossing still ends it at once **Wave 44** ("A paid bribe's clearance against an ordinary one, one session (R8 leftover), wave 44"): the same clock, counted from the payment (NovaJS matches) | L |
 | R9 | Outfit resale (NovaJS 50%), and same-visit buy+sell refund | `N/spaceport/outfitter_rules.ts:408-416`, `outfitter.ts:206` | CPl at Kit Port, PD credits | H |
 | R10 | Ship trade-in (25%: are stock outfits double-counted? ammo? clamp?) | `N/spaceport/shipyard_rules.ts:88-121` | CPl buy a kit hull, PD | H |
 | R11 | Cargo when the new hull's hold is smaller | `shipyard_rules.ts:327-340` | **measured (wave 40, "Cargo into a smaller hold (R11), wave 40")**: no refusal; every commodity scaled by capacity / load and floored (100 + 50 t into 20 t -> 13 + 6) (NovaJS jettisons whole commodities by key). **Applied 2026-11-26 (19274270, 4a5612da)**: `cargoForNewShip` scales every commodity and junk by the room / load and floors each; mission cargo is never dropped and comes off the capacity first (GUESS); the ship-storage swap (NovaJS only, nothing destroyed) keeps its fill-to-the-brim rule | L |
@@ -22704,9 +23340,9 @@ cosmetic or rare.
 | R13 | TravelStel -2 destination selection | `N/nova_plugin/missions/mission_offer.ts:119` | **measured (wave 38, "Random mission destinations (R13), wave 38")**: -2 draws from the whole galaxy (unreachable, unexplored systems too; duplicates possible); a govt-ranged draw never named the offering system, its neighbour or an uninhabited stellar, but did name a system two jumps away. **Applied (wave-38 fixes, 3fb7a0a1)**: the offering system and its neighbours excluded for every random and ranged code, ranged codes need an inhabited port | M |
 | R14 | Is a mission with no offer dësc auto-accepted? | `mission_offer.ts:35-62` | **measured (wave 40, "A mission with no offer text (R14), wave 40")**: Flags 0: an EMPTY No / Yes offer (refusable); Flags 0x0004 | 0x0400: accepted silently (NovaJS auto-accepts every blank offer). **Applied 2026-11-26 (cb33d629, 3bac9036)**: `offerAutoAccepts` needs can't-refuse (0x0004, GUESS: 0x0400 alone not run) as well as a blank text; a refusable blank offer is asked in an empty dialog (spaceport, ship offers) or listed with an empty description (BBS); an offer with blank button labels shows No / Yes (stock Sigma1 too), not Refuse / Accept **Wave 42** ("A text-less offer with Flags 0x0400 alone (R14, ...), wave 42"): 0x0400 alone is OFFERED in the empty No / Yes dialog: only 0x0004 makes it silent (NovaJS's `offerAutoAccepts` matches) | L |
 | R15 | In-flight `S` starts: ShipSyst -6 spawn timing | `N/display/ship_mission_offer_plugin.ts:295-330` | **measured (wave 40, "In-flight `S` starts (R15), wave 40")**: an OnShipDone `S` starts the mission at once, but its ShipSyst -6 ships appear only at the next system entry (a landing's take-off, a jump). **Checked 2026-11-26 (1ce362b0): matches** by construction (OnShipDone runs at the next date advance, before the jump's arrival spawns or the lift-off's; -6 batches are built only at an entry; an in-flight ship-offer accept builds the accepted mission's ships only); a spec pins it. One difference the ships do not show: NovaJS makes the `S`'d mission active at that date advance, the original at the kill | L |
-| R16 | Auto-abort ships, DatePostInc on deferred auto-abort | `N/nova_plugin/missions/mission_ship_spawn.ts:479-492` | CPg, PD date **Measured, immediate case (wave 41, "DatePostInc on an immediate auto-abort (R16), wave 41")**: DatePostInc 7 moved the date a week further, at the in-flight abort, not at the accept (NovaJS adds it at the accept); the deferred (përs) case still open **Applied 2026-11-26 (f598f1ee)**: a docked accept that queues its ships adds DatePostInc with the queued OnAbort at the lift-off (`runQueuedAutoAbortOnAborts`); an abort at the accept (in flight, or no ships) adds it there **Wave 42** ("Not reached in wave 42: R16's deferred (përs) auto-abort"): the kit's first përs (1151) never appeared in six rolls; a short try overriding stock përs 225 met only a stock any-system person; still open **Wave 43** ("The deferred (përs) auto-abort (R16), wave 43"): with a stock përs overridden (the kit's 1151 never appears) the hail's accept keeps the mission ACTIVE with the special ship in the person's place ("Waiting"); one board ("Target ship has been boarded.", no dialog) ends it at once in flight and moves the date by its DatePostInc there (June 28th -> July 5th); NovaJS ends it only at the next date advance and never adds the DatePostInc (mismatch) **Applied 2026-11-26 (a03da1e5)**: the owner's display (`DeferredAutoAbortSystem`, display/mission_info_plugin.ts) sends the player-local half the moment the sim marks the mission `autoAbortPending` at the board: `buildDeferredAutoAbort` runs `runDeferredAutoAbort` (the cleanRecord Pay, DatePostInc, `autoAbortMission`: OnAbort, no CompReward reversal) on a detached copy and sends it as the existing in-flight `abortMission` record (DatePostInc as its `dateDelta`); the abort's notices are dropped (no dialog on the original); `applyAbortMission` untethers every special ship of a pending deferred abort, so the boarded ship stays as an ordinary ship instead of vanishing with its mission (GUESS for non-rescue ShipBehavs); the date-advance pass (`runPendingAutoAborts`) stays as the fallback and now adds DatePostInc too; no schema change | L |
+| R16 | Auto-abort ships, DatePostInc on deferred auto-abort | `N/nova_plugin/missions/mission_ship_spawn.ts:479-492` | CPg, PD date **Measured, immediate case (wave 41, "DatePostInc on an immediate auto-abort (R16), wave 41")**: DatePostInc 7 moved the date a week further, at the in-flight abort, not at the accept (NovaJS adds it at the accept); the deferred (përs) case still open **Applied 2026-11-26 (f598f1ee)**: a docked accept that queues its ships adds DatePostInc with the queued OnAbort at the lift-off (`runQueuedAutoAbortOnAborts`); an abort at the accept (in flight, or no ships) adds it there **Wave 42** ("Not reached in wave 42: R16's deferred (përs) auto-abort"): the kit's first përs (1151) never appeared in six rolls; a short try overriding stock përs 225 met only a stock any-system person; still open **Wave 43** ("The deferred (përs) auto-abort (R16), wave 43"): with a stock përs overridden (the kit's 1151 never appears) the hail's accept keeps the mission ACTIVE with the special ship in the person's place ("Waiting"); one board ("Target ship has been boarded.", no dialog) ends it at once in flight and moves the date by its DatePostInc there (June 28th -> July 5th); NovaJS ends it only at the next date advance and never adds the DatePostInc (mismatch) **Applied 2026-11-26 (a03da1e5)**: the owner's display (`DeferredAutoAbortSystem`, display/mission_info_plugin.ts) sends the player-local half the moment the sim marks the mission `autoAbortPending` at the board: `buildDeferredAutoAbort` runs `runDeferredAutoAbort` (the cleanRecord Pay, DatePostInc, `autoAbortMission`: OnAbort, no CompReward reversal) on a detached copy and sends it as the existing in-flight `abortMission` record (DatePostInc as its `dateDelta`); the abort's notices are dropped (no dialog on the original); `applyAbortMission` untethers every special ship of a pending deferred abort, so the boarded ship stays as an ordinary ship instead of vanishing with its mission (GUESS for non-rescue ShipBehavs); the date-advance pass (`runPendingAutoAborts`) stays as the fallback and now adds DatePostInc too; no schema change **Wave 44** ("The deferred (përs) auto-abort's bits (R16 leftover), wave 44"): the board runs OnAbort, not OnSuccess (NovaJS main 53f9c897 matches) | L |
 | R17 | Mission destination always lands (bad record, MinStatus 32767)? | `N/nova_plugin/reputation/stellar_clearance.ts:53-75` | **measured (wave 40, "A mission destination with MinStatus 32767 (R17), wave 40")**: the destination accepts the landing request ("Landing request received") where the same pilot without the mission is denied; touchdown not reached (NovaJS's override matches) **Wave 41** ("The touchdown at a MinStatus-32767 mission stellar (R17 leftover), wave 41"): the touchdown too: cleared, landed, mission completed (+1,000); without the mission denied | L |
-| R18 | Tribute: rating threshold, defence-fleet waves, reset on jump-out (#353) | not implemented | **measured (waves 38-39, "Tribute (R18), wave 39")**: below rating 12,800 a laugh (hostile, no launch); from 12,800 with defence ships LEFT (the pilot's per-stellar count) the fleet answer and the first wave; destroyed -> the count is 0 and the next demand dominates; -600 record per answered demand, nothing for the kills; Tribute (or 1,000 x TechLevel) from every dominated stellar at every day's advance; survives leaving; wave 38's instant dominations were a zero count in the pilot **Wave 40** ("Tribute leftovers (R18), wave 40"): 12,799 laughs with a fleet left; a laugh costs 1 x KillPenalty, an answered demand 6 x (four- and six-ship fleets alike), spread by the kill rule with each owner's view (neutral systems gain); a killed defender is replaced at once (two up for DefCount 1062); a station's surrender line #27. **Applied 2026-11-26 (cc824ff8)**: a laugh charges 1 and an answered demand 6 kills of the stellar's govt through `applyCrime` (the kill's per-system owner's view; record only, no rank revoked: GUESS; a govt-less stellar charges nothing: GUESS), and the hail dialog sends the demand record for a laugh too; the station's lines already matched (STR# 3002 13 / 26, 0-based); replacements stay Matthew's six-up ruling **Wave 41** ("Leaving a tribute fight (R18 leftover), wave 41"): a jump out and back ends the fight (no defender on return, still Hostile); the next demand gets the fleet line and a fresh wave of two (NovaJS's ruling matches) **Wave 42** ("The defence count kept after a leave (R18 leftover), wave 42"): the pilot's count drops by the defenders LAUNCHED: a wave of two left alive at the jump-out left the planet 4 of 6 (NovaJS resets per visit by the #353 ruling: a known, ruled difference); a killed defender's effect not reached **Wave 43** ("A killed tribute defender (R18 leftover), wave 43"): a killed defender is replaced at once and the replacement comes off the kept count like a launch (two kills: 6 -> 2); the kills raised no combat rating (one run; NovaJS per-visit by the ruling) | M |
+| R18 | Tribute: rating threshold, defence-fleet waves, reset on jump-out (#353) | not implemented | **measured (waves 38-39, "Tribute (R18), wave 39")**: below rating 12,800 a laugh (hostile, no launch); from 12,800 with defence ships LEFT (the pilot's per-stellar count) the fleet answer and the first wave; destroyed -> the count is 0 and the next demand dominates; -600 record per answered demand, nothing for the kills; Tribute (or 1,000 x TechLevel) from every dominated stellar at every day's advance; survives leaving; wave 38's instant dominations were a zero count in the pilot **Wave 40** ("Tribute leftovers (R18), wave 40"): 12,799 laughs with a fleet left; a laugh costs 1 x KillPenalty, an answered demand 6 x (four- and six-ship fleets alike), spread by the kill rule with each owner's view (neutral systems gain); a killed defender is replaced at once (two up for DefCount 1062); a station's surrender line #27. **Applied 2026-11-26 (cc824ff8)**: a laugh charges 1 and an answered demand 6 kills of the stellar's govt through `applyCrime` (the kill's per-system owner's view; record only, no rank revoked: GUESS; a govt-less stellar charges nothing: GUESS), and the hail dialog sends the demand record for a laugh too; the station's lines already matched (STR# 3002 13 / 26, 0-based); replacements stay Matthew's six-up ruling **Wave 41** ("Leaving a tribute fight (R18 leftover), wave 41"): a jump out and back ends the fight (no defender on return, still Hostile); the next demand gets the fleet line and a fresh wave of two (NovaJS's ruling matches) **Wave 42** ("The defence count kept after a leave (R18 leftover), wave 42"): the pilot's count drops by the defenders LAUNCHED: a wave of two left alive at the jump-out left the planet 4 of 6 (NovaJS resets per visit by the #353 ruling: a known, ruled difference); a killed defender's effect not reached **Wave 43** ("A killed tribute defender (R18 leftover), wave 43"): a killed defender is replaced at once and the replacement comes off the kept count like a launch (two kills: 6 -> 2); the kills raised no combat rating (one run; NovaJS per-visit by the ruling) **Wave 44** ("A plain kill of the tribute guard's hull (R18 leftover), wave 44"): the same hull outside a defence fleet adds Strength / 5 at 0 and at 12,800, so a defender's kill adds nothing (NovaJS matches) | M |
 | R19 | Reinforcements (MaxOdds trigger, delay, cooldown) | **measured, first pass (R "R19 reinforcement fleets, wave 19")**: called at the player's first hit when the odds favour him, the line at the arrival ReinfTime later, once a day. **Implemented 2026-11-24** (N/nova_plugin/spawn/reinforcements.ts; guesses in docs/npc_behavior_gaps.md "Reinforcement fleets: guesses to measure"). **Second pass (R "R19 reinforcement fleets, wave 20"), applied 2026-11-24**: the delay ReinfTime / 39 s (no cap), the odds, ReinfIntrval 2, allies, the inhibitor and the hostile disposition measured; the fleet comes in around the victim (GUESS over the system's centre), an anchored victim never calls, a victim that leaves cancels the call (destroyed: GUESS). Open: the neutral 1507 fleet, the odd S150 call. **Third pass (R "R19 reinforcement fleets, wave 21"), applied 2026-11-24**: an AI 1 victim's call comes with its distress line (applied: a trader caller sends its STR# 5003 line on the call); slow AI 1 hulls never called (a KNOWN MISMATCH, NovaJS still calls for them); the cancel rule has no supporting run (kept as a GUESS); the arrival centre still open. **Fourth pass (R "R19 reinforcement fleets, wave 22"), applied 2026-11-24**: an AI 1 / AI 2 victim calls only when hit from near (600 px, a GUESS between 475 and 700), whatever its speed (the slow-hull mismatch was the distance); the distress line is a separate chance, so the call no longer sends one (not modelled); a Flags2-0x0008 victim still calls | CPg govt + syst ReinfFleet, VID, PD | L |
 | R20 | Plunder money (NovaJS 10% of price) and capture odds | `N/nova_plugin/ship/boarding_component.ts:227,243,247` | **mostly (waves 6-8)**: max(1,000, price / 40) up to 100,000 (exactly, 24 boards at 50,000), then a random amount between price / 40 and price / 20 (200,000 to 2,000,000, wave 8); cargo and energy a random share; capture never for a derelict (gövt 0x0800), odds capped at 75% and falling with the defenders' crew for a hulk the player disabled; one board per hulk (matches). **Mismatch** (10%, 150 px circle, 54.8 px/s gate, 15° alignment, crew-share odds, derelicts capturable). **Wave 31**: the odds are drawn per board (7-17% against one crew-50 hulk), the means re-fitted; applied 2026-11-25 (2831b75e, "Capture odds, wave 31"). **Wave 32**: 18-22% at ratio 1, 29-34% at 2, 55-64% at 5, 75% at 10, the ratio is what counts; applied 2026-11-25 (0db1ba27: [2, 0.32], [5, 0.60]). **Wave 33** ("Capture, wave 33"): the roll follows the shown odds (matches); 75% by ratio 7, 38-45% at 3; marines count; a capture click trips the self-destruct 2 in 27; at the escort cap "Capture Odds: 0%" with a grey button and no line; applied 2026-11-25 (a3f6b1a2: [7, 0.75], ModType 25 as crew / points, a 0.1 self-destruct draw before the roll); the escort-cap readout left as main has it (no odds row, the #123 note: rulings #161 / #250). **Wave 34** ("Capture, wave 34"): ratio 6 reads a mean of 70; marines at a second ratio and the cap over the bonus match; self-destruct 3 in 39; applied 2026-11-25 (b093c0e6: [6, 0.70]). **Wave 35** ("Capture, wave 35"): ratio 6.5 reads 70-75, mean 73.0; applied 2026-11-25 (cd44482e: an uncapped centre drawn +-5, then the cap) | M |
 | R21 | Scanning: what happens with illegal cargo (#308)? | not implemented | CPg illegal jünk + interceptor govt, VID, PD | M |
@@ -22740,7 +23376,7 @@ cosmetic or rare.
 | K5 | Hail dialog (`y`) keys and buttons per govt flags (#297, Flags2 0x0001) | `N/nova_plugin/reputation/hail.ts:118-151,242` | **measured (wave 39, "Hail dialog keys and Flags2 0x0001 (K5), wave 39")**: g Greetings, r offer slot, o Offer Bribe, t and d Demand Tribute, Return closes (accepts a price popup), a/b/c/y/Space nothing; 0x0001: no assistance / mercy row, "No response." (NovaJS: d and y close, Return and t do nothing). **Applied 2026-11-26 (3d4bf690)**: t and d press Demand Tribute (greyed until #353), Return closes or accepts the price popup, d and y no longer close; Escape still closes (MenuControls.cancelButton) | M |
 | K6 | Venue buttons when a stellar lacks a venue: hidden or greyed? (#373) | `N/spaceport/spaceport.ts:1037-1050` | CPg Kit Market (no outfitter/shipyard): SS its spaceport | H |
 | K7 | Escort command keys (escortCmd 0-3 = f/d/v/c, escort menu e), from the prefs | escort commands | **answered (wave 2, E-view)** | M |
-| K8 | Radar centre arrow range and hypergate ring vs dot (#358) | `N/display/status_bar_radar.ts:209-225,646-668` | VID flying out from a kit stellar. **Answered (wave 22)**: every station (spöb Flags 0x0010, the working hypergates too) is a 2 x 2 dot; a planet rings from 89-96 px. **Applied in 4c6a58ab** (threshold 96; wormholes rings, unmeasured). **Wave 23**: a wormhole is a 2 x 2 dot; applied 2026-11-24 by the wormhole flag (not 0x0020: Jupiter is a ring; see "K8 wormhole on the radar, wave 23"). Centre arrow range not asked **Wave 43** ("The radar's centre arrow (K8), wave 43"): drawn whenever the system CENTRE is off the radar (onset at about 84 of 88 radar px, about 2,750 px), whatever stellars are on the radar (a port 4,000 px from an empty centre: the arrow from the start); NovaJS gates on "no stellar on the radar": mismatch, proposed gate on the centre's offset | L |
+| K8 | Radar centre arrow range and hypergate ring vs dot (#358) | `N/display/status_bar_radar.ts:209-225,646-668` | VID flying out from a kit stellar. **Answered (wave 22)**: every station (spöb Flags 0x0010, the working hypergates too) is a 2 x 2 dot; a planet rings from 89-96 px. **Applied in 4c6a58ab** (threshold 96; wormholes rings, unmeasured). **Wave 23**: a wormhole is a 2 x 2 dot; applied 2026-11-24 by the wormhole flag (not 0x0020: Jupiter is a ring; see "K8 wormhole on the radar, wave 23"). Centre arrow range not asked **Wave 43** ("The radar's centre arrow (K8), wave 43"): drawn whenever the system CENTRE is off the radar (onset at about 84 of 88 radar px, about 2,750 px), whatever stellars are on the radar (a port 4,000 px from an empty centre: the arrow from the start); NovaJS gates on "no stellar on the radar": mismatch, proposed gate on the centre's offset **Wave 44** ("The centre arrow's onset (K8 leftover), wave 44"): the gate is the centre's DISTANCE, a circle of 2,404-2,650 px, not per axis (NovaJS after a5bb1c25: per axis at 2,864 px: mismatch) | L |
 | K10 | Target bracket corners: distance from the centre, shape, what sets them | `N/display/target_corners_plugin.ts:98-117,180`, `N/display/planet_corners_plugin.ts:36` | **answered (wave 9)**: base frame + 15 px per side, square from max(w, h), fixed glyphs, additive fly-in. **Mismatch** (NovaJS: +-0.354 x the largest layer, inside the sprite); fix applied in c43cddcc | L |
 
 ### Edge cases
@@ -22752,10 +23388,10 @@ cosmetic or rare.
 | E3 | Weapon readiness right after a spawn or jump (#135) | `fire_weapon_plugin.ts:85,510` | **measured (wave 40, "Weapon readiness after a spawn and a jump (E3), wave 40")**: ready at spawn (matches); a jump does not re-arm (the reload runs on through it) | L |
 | E4 | planetType weapons vs normal ships (#136/#150) | wëap planetType | CPg, VID **Measured (wave 41, "Planet-type weapons against ships (E4), wave 41")**: a damaging planet-type turret does nothing to a plain ship and shields-down a shïp Flags 0x0400 ship; a plain turret does nothing to the latter (NovaJS: not implemented) **Applied 2026-11-26 (806a1b30)**: a `planetType` collision tag: planet-type projectiles (and their blasts) and beams (GUESS) carry it instead of normal / point defense, and a shïp Flags 0x0400 hull is vulnerable to it (and debris) alone (so ship explosions and PD pass it too, GUESS); destroyable stellars still take no weapon fire (not implemented) | L |
 | E5 | Jamming odds and retargeting | `N/nova_plugin/combat/jamming_plugin.ts:96-166` | **answered (J-series wave 3)**: one roll per missile at launch, P = clamp((J-(100-V))/V, 0, 1), no re-acquire, jammer outfits don't add up (wave 7: copies of one outfit don't, DIFFERENT outfits do, and gövt InhJam counts through the hull's own govt; applied in f20ecec2). Applied in c9fc116c | L |
-| E6 | Ionization thresholds and slow factor (NovaJS 0.6) | `N/nova_plugin/ship/ionization_plugin.ts:25-59` | **mostly (waves 6, 7)**: an ionized hull is drawn in the ion colour, turns a fraction of its normal rate and cannot fire Seeker 0x0020 weapons; ionization starts at about half of IonizeMax (40-60 of 100, wave 7). All match; the slow factor is not measured. **Wave 39** ("Ionization (E6), wave 39"): a saturated ionized player does not turn at all (0 deg/s; control 87.8), accelerates about a third as fast and keeps its top speed (NovaJS 0.6 on all three). **Applied 2026-11-26 (33c79b9f)**: at a full charge the turn is 0 and the acceleration a third, top speed kept; linear from the half line (GUESS); the charge stays clamped to IonizeMax **Wave 40** ("Ionization's cap and the afterburner (E6 leftovers), wave 40"): the charge is NOT capped (a Deionize-50 hull still saturated 150 s after the gun); the afterburner works ionized **Applied 2026-11-26 (d7098791, 19ff7a70)**: the ion charge piles up past IonizeMax (floored at 0; IonizeMax-0 hulls still clamped to [0, 0]) and drains at Deionize; the slowdown saturates at IonizeMax; a spec that the afterburner burns on a saturated hull **Wave 41** ("Ionization below a full charge (E6 leftover), wave 41"): Deionize 0 drains (about 1 a frame), not "no drain"; the tint (and no turn at all) from about 40 of 100; a 20-of-100 charge already cuts the turn to about two thirds (GUESS shape) **Applied 2026-11-26 (fe4424cf)**: ionized (tint, Flags 0x0020 silenced, the full cut) above 0.3 x IonizeMax (GUESS: the middle of the measured 20-39 bracket; 0.4 would miss the second hit's about 39 after Deionize 1's drain); below it the turn and acceleration cut ramps linearly from nothing at zero charge to the full cut at the line (GUESS shape, fits the 58 / 68 deg/s dips); shïp Deionize 0 parses as 100 (GUESS from the drain time) **Wave 42** ("Ion charge against the turn, in 5-point steps (E6), wave 42"): three plateaus, not a ramp: turn x 2/3 while untinted, x 1/3 once tinted, 0 above a second line; two identical runs; with the 20-point runs the lines fit about 0.16 (tint) and 0.38 (no turn) of IonizeMax IF Deionize 1 drains 0.01 a 1/56 s frame (NovaJS: 0.3 line, linear ramp, 0.01 a 1/30 s frame): mismatch **Applied 2026-11-26 (a1d0b76a)**: `ionSlowdown` in three steps: severity 1/3 for any charge up to the ionized (tint) line ION_IONIZED_FRACTION 0.16, 2/3 up to ION_NO_TURN_FRACTION 0.38, the full cut above (turn 2/3, 1/3, 0; acceleration 7/9, 5/9, 1/3: the acceleration steps a GUESS, the same share of its measured full cut); shïp Deionize and oütf ModType 39 counted in 1/56 s frames (DEIONIZE_FRAME_RATE 56, Deionize 1 = 0.56 a second); Deionize 0 now falls back to 70 (GUESS, about 39 a second, refitted so the steps reproduce wave 41's 58 / 68 deg/s windows); charge still uncapped. Note: with the 2.0 drain the 20-point hull's second hit sits at 38, exactly the no-turn line, so NovaJS turns it at a third there (the section's two runs meet at 38) | M |
+| E6 | Ionization thresholds and slow factor (NovaJS 0.6) | `N/nova_plugin/ship/ionization_plugin.ts:25-59` | **mostly (waves 6, 7)**: an ionized hull is drawn in the ion colour, turns a fraction of its normal rate and cannot fire Seeker 0x0020 weapons; ionization starts at about half of IonizeMax (40-60 of 100, wave 7). All match; the slow factor is not measured. **Wave 39** ("Ionization (E6), wave 39"): a saturated ionized player does not turn at all (0 deg/s; control 87.8), accelerates about a third as fast and keeps its top speed (NovaJS 0.6 on all three). **Applied 2026-11-26 (33c79b9f)**: at a full charge the turn is 0 and the acceleration a third, top speed kept; linear from the half line (GUESS); the charge stays clamped to IonizeMax **Wave 40** ("Ionization's cap and the afterburner (E6 leftovers), wave 40"): the charge is NOT capped (a Deionize-50 hull still saturated 150 s after the gun); the afterburner works ionized **Applied 2026-11-26 (d7098791, 19ff7a70)**: the ion charge piles up past IonizeMax (floored at 0; IonizeMax-0 hulls still clamped to [0, 0]) and drains at Deionize; the slowdown saturates at IonizeMax; a spec that the afterburner burns on a saturated hull **Wave 41** ("Ionization below a full charge (E6 leftover), wave 41"): Deionize 0 drains (about 1 a frame), not "no drain"; the tint (and no turn at all) from about 40 of 100; a 20-of-100 charge already cuts the turn to about two thirds (GUESS shape) **Applied 2026-11-26 (fe4424cf)**: ionized (tint, Flags 0x0020 silenced, the full cut) above 0.3 x IonizeMax (GUESS: the middle of the measured 20-39 bracket; 0.4 would miss the second hit's about 39 after Deionize 1's drain); below it the turn and acceleration cut ramps linearly from nothing at zero charge to the full cut at the line (GUESS shape, fits the 58 / 68 deg/s dips); shïp Deionize 0 parses as 100 (GUESS from the drain time) **Wave 42** ("Ion charge against the turn, in 5-point steps (E6), wave 42"): three plateaus, not a ramp: turn x 2/3 while untinted, x 1/3 once tinted, 0 above a second line; two identical runs; with the 20-point runs the lines fit about 0.16 (tint) and 0.38 (no turn) of IonizeMax IF Deionize 1 drains 0.01 a 1/56 s frame (NovaJS: 0.3 line, linear ramp, 0.01 a 1/30 s frame): mismatch **Applied 2026-11-26 (a1d0b76a)**: `ionSlowdown` in three steps: severity 1/3 for any charge up to the ionized (tint) line ION_IONIZED_FRACTION 0.16, 2/3 up to ION_NO_TURN_FRACTION 0.38, the full cut above (turn 2/3, 1/3, 0; acceleration 7/9, 5/9, 1/3: the acceleration steps a GUESS, the same share of its measured full cut); shïp Deionize and oütf ModType 39 counted in 1/56 s frames (DEIONIZE_FRAME_RATE 56, Deionize 1 = 0.56 a second); Deionize 0 now falls back to 70 (GUESS, about 39 a second, refitted so the steps reproduce wave 41's 58 / 68 deg/s windows); charge still uncapped. Note: with the 2.0 drain the 20-point hull's second hit sits at 38, exactly the no-turn line, so NovaJS turns it at a third there (the section's two runs meet at 38) **Wave 44** ("Acceleration under ionization (E6 leftover), wave 44"): about 0.4 of the thrust past the no-turn line; the Kit Ion Tick bolts push the ship; lower plateaus not read | M |
 | E7 | Auto-refuel rate (ModType 19) | `N/nova_plugin/ship/health_plugin.ts:40-48` | **measured (wave 39, "The Auto-recharger (E7), wave 39")**: no fuel in flight (95 s); a full refuel ON LANDING at the port's price (NovaJS: 2.5 units/s in flight). **Applied 2026-11-26 (d585a42c)**: no in-flight regeneration; a full tank bought at touch-down when affordable (no partial fill: GUESS), so the Refuel button is gone **Wave 40** ("The Auto-recharger short of credits (E7 leftover), wave 40"): a partial fill (100 credits -> 100 units, 0 left). **Applied 2026-11-26 (6f94a97f)**: short of the fill the auto-refueller buys as many whole units as the credits pay for (`autoRefuelPurchase`); the Refuel button is unchanged (GUESS) | L |
-| E8 | Bay fighter launch speed (#200) | `N/nova_plugin/escorts/bay_plugin.ts:245,313` | **measured (wave 40, "Bay fighter launch speed (E8), wave 40")**: the launch kick grows with the bay's wëap Speed (400: about 1.5-2 px a frame, 1000: up to about 10), then the fighter brakes to station (NovaJS: a constant EXIT_KICK 10) **Applied 2026-11-26 (c9f28922)**: the launch kick is the bay's own wëap Speed read as a shot speed (Speed / 100 px a frame: 400 -> 4, 1000 -> 10; the section's GUESS), was a constant 10 px/s; every stock bay is a secondary (Flags 0x0002), as `w` showed **Wave 41** ("Bay launch kick (E8, the hub's question), wave 41"): a Speed-1000 bay's fighter keeps about 10 px a frame straight off screen (3 launches); a Speed-400 bay's slows to 1-1.5 and stops about 35 px out **Applied 2026-11-26 (5266477a)**: WHY NovaJS coasted: only the formation controller slowed the fighter, and it flies turn-and-burn, so the Kit Bay Disc (90 deg/s, 54 px/s²) spent about 1.5 s turning about at 4 px a frame and drifted about 190 px. Now a kick no faster than the fighter's own top speed is shed relative to its carrier at 200 px/s² (`BAY_LAUNCH_BRAKE`, GUESS: stops about 33-36 px out in 0.6 s) by `BayLaunchBrakeSystem`, flagged by an optional BayFighter `launchBrake` (schema, Also under 8); a faster kick coasts as before **Wave 42** ("Bay launch kicks under the fighter's top speed (E8 leftover), wave 42"): a Speed-200 bay's Kit Bay Disc stops about 18 px out (NovaJS's 200 px/s² brake fits it and the 35 px Speed-400 case); a Speed-1000 fighter from the Speed-400 bay coasted the kick about 0.8 s to about 145 px before stopping (NovaJS brakes it at once: mismatch) **Applied 2026-11-26 (fbbe1467)**: a fighter above shïp Accel 300 (BAY_LAUNCH_COAST_MIN_ACCEL) whose kick is under its top speed coasts BAY_LAUNCH_COAST_S 0.8 s, then sheds the kick at BAY_LAUNCH_FAST_BRAKE 500 px/s² (GUESS from about 8 frames; the section's proposal, a step rather than a law in Accel); weaker fighters keep the immediate 200 px/s² brake; new optional BayFighter `launchCoast` (schema, Also under 8: 4ed054bb232c84e8 -> 91d46a29ee183365) | L |
-| E9 | shïp AppearOn residuals (#140): which entities it gates, asteroid re-roll | `N/nova_plugin/spawn/spawn_bits.ts` | CPg, CPl bit on/off **Measured (wave 42, "shïp AppearOn on a mixed düde (E9), wave 42" and "The asteroid field after a landing ..."):** AppearOn gates mission düde draws and system traffic alike (8 of 8 admitted, twice; with wave 11, an all-excluded düde still spawns): NovaJS matches. The asteroid field is not the same after each landing (re-roll or drift); NovaJS rebuilds the same initial field from the system seed: mismatch (minor) **Wave 43** ("The asteroid field after a landing (E9 leftover), wave 43"): not frozen while landed (pre-landing rocks gone at the take-off, 11 s and 55 s landings); re-roll vs drift not separable; at four of four take-offs no rock was on screen for about 2 s | L |
+| E8 | Bay fighter launch speed (#200) | `N/nova_plugin/escorts/bay_plugin.ts:245,313` | **measured (wave 40, "Bay fighter launch speed (E8), wave 40")**: the launch kick grows with the bay's wëap Speed (400: about 1.5-2 px a frame, 1000: up to about 10), then the fighter brakes to station (NovaJS: a constant EXIT_KICK 10) **Applied 2026-11-26 (c9f28922)**: the launch kick is the bay's own wëap Speed read as a shot speed (Speed / 100 px a frame: 400 -> 4, 1000 -> 10; the section's GUESS), was a constant 10 px/s; every stock bay is a secondary (Flags 0x0002), as `w` showed **Wave 41** ("Bay launch kick (E8, the hub's question), wave 41"): a Speed-1000 bay's fighter keeps about 10 px a frame straight off screen (3 launches); a Speed-400 bay's slows to 1-1.5 and stops about 35 px out **Applied 2026-11-26 (5266477a)**: WHY NovaJS coasted: only the formation controller slowed the fighter, and it flies turn-and-burn, so the Kit Bay Disc (90 deg/s, 54 px/s²) spent about 1.5 s turning about at 4 px a frame and drifted about 190 px. Now a kick no faster than the fighter's own top speed is shed relative to its carrier at 200 px/s² (`BAY_LAUNCH_BRAKE`, GUESS: stops about 33-36 px out in 0.6 s) by `BayLaunchBrakeSystem`, flagged by an optional BayFighter `launchBrake` (schema, Also under 8); a faster kick coasts as before **Wave 42** ("Bay launch kicks under the fighter's top speed (E8 leftover), wave 42"): a Speed-200 bay's Kit Bay Disc stops about 18 px out (NovaJS's 200 px/s² brake fits it and the 35 px Speed-400 case); a Speed-1000 fighter from the Speed-400 bay coasted the kick about 0.8 s to about 145 px before stopping (NovaJS brakes it at once: mismatch) **Applied 2026-11-26 (fbbe1467)**: a fighter above shïp Accel 300 (BAY_LAUNCH_COAST_MIN_ACCEL) whose kick is under its top speed coasts BAY_LAUNCH_COAST_S 0.8 s, then sheds the kick at BAY_LAUNCH_FAST_BRAKE 500 px/s² (GUESS from about 8 frames; the section's proposal, a step rather than a law in Accel); weaker fighters keep the immediate 200 px/s² brake; new optional BayFighter `launchCoast` (schema, Also under 8: 4ed054bb232c84e8 -> 91d46a29ee183365) **Wave 44** ("A fast fighter with a weak engine (E8 leftover), wave 44"): an Accel-100, Speed-1000 fighter brakes its kick at once (35 px out), so the coast belongs to a strong engine (NovaJS's Accel-300 step matches) | L |
+| E9 | shïp AppearOn residuals (#140): which entities it gates, asteroid re-roll | `N/nova_plugin/spawn/spawn_bits.ts` | CPg, CPl bit on/off **Measured (wave 42, "shïp AppearOn on a mixed düde (E9), wave 42" and "The asteroid field after a landing ..."):** AppearOn gates mission düde draws and system traffic alike (8 of 8 admitted, twice; with wave 11, an all-excluded düde still spawns): NovaJS matches. The asteroid field is not the same after each landing (re-roll or drift); NovaJS rebuilds the same initial field from the system seed: mismatch (minor) **Wave 43** ("The asteroid field after a landing (E9 leftover), wave 43"): not frozen while landed (pre-landing rocks gone at the take-off, 11 s and 55 s landings); re-roll vs drift not separable; at four of four take-offs no rock was on screen for about 2 s **Wave 44**: not run (a röid has no speed field, so no slow-rock field can be built; "Not reached in wave 44") | L |
 | E10 | Beam decay and projectile fade curves | `N/display/beam_display_plugin.ts:32-50` | **measured (wave 40, "Beam decay and projectile fade (E10), wave 40")**: a Count-30 beam showed 0.53 s, a Decay beam 7 frames more at full LENGTH (corona thinning); sprite fade starts 32 frames before the end and runs Falloff times faster (NovaJS shrinks the beam, fades sprites over the last 32 / Falloff) **Applied 2026-11-26 (241b23ca)**: a Decay beam keeps its full length and core and thins its corona linearly over the tail (`beamCoronaFraction`); a Falloff sprite fades from 32 frames before its Count over 32 / Falloff frames. The beam Count unit (1/30 s in NovaJS) not changed, per the section **Wave 41** ("Beam Count's unit (E10, the hub's question), wave 41"): Count 10 / 30 / 60 last 5 / 16 / 32 recorded frames: Count / 56 s (NovaJS Count / 30: mismatch) **Applied 2026-11-26 (513fc9d2)**: a beam's Count and Decay tail parse at `BEAM_COUNT_RATE` 56 a second (GUESS 56 over 60); projectile Counts unchanged; a shot's Count units of damage are shared evenly over the whole ticks of its window, so its total damage is unchanged (GUESS) | L |
 | E11 | Ship-info Accel/Maneuver rating-word bands | `N/spaceport/ship_info.ts:63-92` | **measured (wave 40, "Ship-info rating words (E11), wave 40")**: Terrible / Poor / Average / Good / Very Good / Excellent; Accel edges ~150 / 250 / 400 / 600 / 750, Turn ~15 / 25 / 35 / 45 / 55 (NovaJS: "Feeble", Accel VG 550 / Exc 700, Turn Exc 70). **Applied 2026-11-26 (737ee840)**: "Terrible"; Accel >= 750 / 600 / 400 / 250 / 150, Turn >= 55 / 45 / 35 / 25 / 15, each edge GUESSED at the lowest measured value of its band **Wave 41** ("Ship-info rating edges (E11 leftover), wave 41"): Turn Poor from 11, Average 21, Good 31, Very Good 41, Excellent 51 (exact); Accel 129-130 / 249-250 / 381-382 / 551-552 / 731-732; Speed plays no part (NovaJS e047c530: 150 / 250 / 400 / 600 / 750 and 15 / 25 / 35 / 45 / 55) **Applied 2026-11-26 (fa71f584)**: Turn >= 51 / 41 / 31 / 21 / 11, Accel >= 731 / 551 / 381 / 249 / 129 (each Accel edge at the unbuilt odd value, GUESS) **Wave 42** ("Ship-info Accel at the odd values (E11 leftover), wave 42"): 129 Terrible, 249 Poor, 381 Good, 551 Very Good, 731 Excellent: Poor >= 130, Average >= 250 (NovaJS 129 / 249: off by one), Good >= 381, Very Good >= 551, Excellent >= 731 (match) **Applied 2026-11-26 (3fa75644)**: Accel >= 731 / 551 / 381 / 250 / 130 | L |
 
