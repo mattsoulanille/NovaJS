@@ -246,6 +246,8 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     private checkpointSnapshots = new Map<number, WorldSnapshot>();
     /** Recent rollback-machinery events, for desync dumps. */
     private rollbackLog: RollbackLogEntry[] = [];
+    /** Every rollback event logged, tallied by name (status()). */
+    private rollbackEventCounts = new Map<string, number>();
     /** Cumulative rollback depth counters (diagnostics / E2E measurements). */
     private rollbackCount = 0;
     private rollbackDepthSum = 0;
@@ -1296,6 +1298,8 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     /** Appends to the rollback black-box ring. */
     private logRollbackEvent(event: string,
         detail?: Record<string, number | string>) {
+        this.rollbackEventCounts.set(event,
+            (this.rollbackEventCounts.get(event) ?? 0) + 1);
         this.rollbackLog.push({
             event,
             atTick: this.rollback.tick,
@@ -1832,6 +1836,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             tick: this.rollback.tick,
             desyncCount: this.desyncCount,
             joined: this.lastJoinSucceeded,
+            rollbackEvents: Object.fromEntries(this.rollbackEventCounts),
             ...(this.resyncFailed ? { resyncFailed: true } : {}),
             ...(this.identityRecoveryFailed
                 ? { identityRecoveryFailed: true } : {}),

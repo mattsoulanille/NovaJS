@@ -79,6 +79,10 @@ export interface SimulationStatus {
      * which give-up it was.
      */
     identityRecoveryFailed?: boolean;
+    /** How often each rollback event (rollback, retimed, holdForRelay,
+     * lateRecord, resync, ...) has been logged since the host started:
+     * the desync dumps' rollback log, tallied, for live diagnostics. */
+    rollbackEvents?: Record<string, number>;
 }
 
 export interface AsyncSimulationBridgeHostApi {
