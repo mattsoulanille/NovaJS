@@ -20,8 +20,8 @@ import { makeSystem } from '../make_system.js';
  * (E6), wave 42"). The slowdown comes in that section's three steps: two
  * thirds of the turn below the line, a third above it, none above
  * ION_NO_TURN_FRACTION (0.38), where the measured full cut (reference
- * "Ionization (E6), wave 39": no turn, a third of the acceleration, the
- * top speed kept) holds. What
+ * "Ionization (E6), wave 39": no turn, the top speed kept; 0.4 of the
+ * acceleration, wave 44) holds. What
  * #124 fixed alongside stays pinned here: a hull with no ion capacity is
  * never ionized and never shows a NaN percent.
  */
@@ -166,8 +166,10 @@ describe('ionization in a live world', () => {
             expect(charge().percent).toBe(0);
         });
 
-    it('at a full charge: no turn, a third of the acceleration, the top '
-        + 'speed kept (reference "Ionization (E6), wave 39")', async () => {
+    it('at a full charge: no turn, 0.4 of the acceleration, the top '
+        + 'speed kept (reference "Ionization (E6), wave 39"; the thrust '
+        + '"Acceleration under ionization (E6 leftover), wave 44")',
+        async () => {
             const { world, ship, hit, charge } = await ionWorld();
             hit(BASE.ionization * 3);
             steps(world, 2);
@@ -219,6 +221,8 @@ describe('ionSlowdown', () => {
 
     it('is the measured full cut above the second line (0.38)', () => {
         expect(ION_NO_TURN_FRACTION).toBe(0.38);
+        // Wave 44: 19.6 / 22.3 px/s² against the control's 52.0 / 49.8.
+        expect(ION_FULL_ACCELERATION_FACTOR).toBe(0.4);
         for (const current of [38.01, 41, 100, 250]) {
             expect(ionSlowdown(charge(current))).toEqual({
                 maxVelocity: 1,
@@ -235,7 +239,7 @@ describe('ionSlowdown', () => {
             const at = (current: number) => ionSlowdown(charge(current));
             for (const current of [0.5, 5, 10, 14, 16]) {
                 expect(at(current).turnRate).toBeCloseTo(2 / 3, 9);
-                // GUESS: the same share of the full acceleration cut.
+                // GUESS: main's pre-wave-44 values, kept (unmeasured).
                 expect(at(current).acceleration).toBeCloseTo(7 / 9, 9);
                 expect(at(current).maxVelocity).toBe(1);
             }

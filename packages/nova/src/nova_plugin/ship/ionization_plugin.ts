@@ -66,9 +66,15 @@ import { IonizationComponent, IonizationRechargeSystem } from "./health_plugin.j
  * 1.1 s) and keeps its top speed. This replaces ruling #153's 0.6 on all
  * three (the pre-#124 value, never measured). The full cut holds above
  * the second line (ION_NO_TURN_FRACTION), wave 42.
+ *
+ * The acceleration's full cut was re-read on a pad of moons (reference
+ * "Acceleration under ionization (E6 leftover), wave 44"): a hull charged
+ * past the no-turn line thrust at 19.6 and 22.3 px/s² against the
+ * uncharged control's 52.0 and 49.8 for the same 0.57 s Up pulse, about
+ * 0.4 (0.39-0.45). Was 1/3 (wave 39's star-field reading).
  */
 export const ION_FULL_TURN_FACTOR = 0;
-export const ION_FULL_ACCELERATION_FACTOR = 1 / 3;
+export const ION_FULL_ACCELERATION_FACTOR = 0.4;
 
 /**
  * The share of IonizeMax above which a ship is IONIZED (tinted, its
@@ -99,12 +105,23 @@ export const ION_NO_TURN_FRACTION = 0.38;
  * MEASURED on the turn (wave 42: about two thirds of the turn, 60 of 87.8
  * deg/s, for any untinted charge; about a third, 30 deg/s, once tinted;
  * none above the second line), two identical runs and wave 41's
- * Deionize-0 dips (58 deg/s just after a 20-point hit). The acceleration
- * was not measured below a full charge: GUESS it takes the same share of
- * its full cut, so 7/9, 5/9 and then the measured third.
+ * Deionize-0 dips (58 deg/s just after a 20-point hit). These shares are
+ * the TURN's.
  */
 export const ION_UNTINTED_SEVERITY = 1 / 3;
 export const ION_TINTED_SEVERITY = 2 / 3;
+
+/**
+ * The acceleration's multiplier on the two lower steps (untinted, then
+ * tinted). NOT measured: the wave-44 pad rig could not read them (the
+ * ion bolts push the ship off the pad, reference "Acceleration under
+ * ionization (E6 leftover), wave 44"). GUESS: the values main derived
+ * before that wave, the turn's shares of the old 1/3 full cut (7/9 and
+ * 5/9), kept as they were rather than re-derived from the measured 0.4;
+ * they still fall step by step to ION_FULL_ACCELERATION_FACTOR.
+ */
+export const ION_UNTINTED_ACCELERATION_FACTOR = 7 / 9;
+export const ION_TINTED_ACCELERATION_FACTOR = 5 / 9;
 
 /** Multipliers ionization puts on a ship's movement physics. */
 export interface IonSlowdown {
@@ -121,10 +138,11 @@ export const NO_ION_SLOWDOWN: Readonly<IonSlowdown> =
  * steps (MEASURED, reference "Ion charge against the turn, in 5-point
  * steps (E6), wave 42"; see ION_*_SEVERITY): none at no charge; a third
  * of the full cut for any charge up to the ionized line; two thirds of it
- * from there to ION_NO_TURN_FRACTION; the measured full cut (no turn, a
- * third of the acceleration) above. Was a linear ramp to the ionized
- * line (GUESS, wave 41). The top speed is never cut. A pure function of
- * the synced charge.
+ * from there to ION_NO_TURN_FRACTION; the measured full cut (no turn, 0.4
+ * of the acceleration, wave 44) above. The acceleration's lower steps are
+ * ION_UNTINTED/TINTED_ACCELERATION_FACTOR (GUESS). Was a linear ramp to
+ * the ionized line (GUESS, wave 41). The top speed is never cut. A pure
+ * function of the synced charge.
  */
 export function ionSlowdown(
     ionization: { current: number, max: number } | undefined,
@@ -133,14 +151,20 @@ export function ionSlowdown(
         return NO_ION_SLOWDOWN;
     }
     const { current, max } = ionization;
-    const severity = current > max * ION_NO_TURN_FRACTION ? 1
-        : current > max * ION_IONIZED_FRACTION ? ION_TINTED_SEVERITY
-            : ION_UNTINTED_SEVERITY;
-    // Written as a blend so the full cut gives the constants exactly.
+    if (current > max * ION_NO_TURN_FRACTION) {
+        return {
+            maxVelocity: 1,
+            acceleration: ION_FULL_ACCELERATION_FACTOR,
+            turnRate: ION_FULL_TURN_FACTOR,
+        };
+    }
+    const tinted = current > max * ION_IONIZED_FRACTION;
+    const severity = tinted ? ION_TINTED_SEVERITY : ION_UNTINTED_SEVERITY;
     return {
         maxVelocity: 1,
-        acceleration: (1 - severity)
-            + severity * ION_FULL_ACCELERATION_FACTOR,
+        acceleration: tinted ? ION_TINTED_ACCELERATION_FACTOR
+            : ION_UNTINTED_ACCELERATION_FACTOR,
+        // A blend of the turn's full cut, so its steps are exact thirds.
         turnRate: (1 - severity) + severity * ION_FULL_TURN_FACTOR,
     };
 }
