@@ -31,8 +31,8 @@ import {
 import { SimulationTimeResource } from './simulation_time.js';
 import { StatusBar } from './status_bar.js';
 import {
-    blipPixels, centerArrowPixels, CENTER_ARROW_HEAD, CENTER_ARROW_TAIL,
-    CENTER_ARROW_TIP, DrawRadar, linePixels, RadarPane, radarBlinkOn,
+    blipPixels, centerArrowPixels, centerArrowShown, CENTER_ARROW_HEAD,
+    CENTER_ARROW_ONSET, CENTER_ARROW_TAIL, CENTER_ARROW_TIP, DrawRadar, linePixels, RadarPane, radarBlinkOn,
     radarCenterPixel, radarRefreshIndex, RADAR_REFRESH_MS, shipBlipSize,
     planetRadarShape, stellarRadarShape, stellarRadarSize,
     STELLAR_RING_MIN_SIZE, STELLAR_RING_PIXELS,
@@ -166,6 +166,35 @@ describe('centerArrowPixels (the original\'s thin grey line arrow)', () => {
 
     it('draws nothing for a zero direction', () => {
         expect(centerArrowPixels(0, 0, STOCK)).toEqual([]);
+    });
+});
+
+describe('centerArrowShown (reference K8, wave 43)', () => {
+    const range = { x: 3000, y: 3000 };
+
+    it('waits until the system centre reaches the radar\'s edge', () => {
+        // The original's onset: the centre's ring about 84 of 88 radar px
+        // out, on the axis it left by.
+        expect(centerArrowShown({ x: 0, y: 0 }, range)).toBeFalse();
+        expect(centerArrowShown({ x: 0, y: -2000 }, range)).toBeFalse();
+        expect(centerArrowShown({ x: 0, y: -3000 * CENTER_ARROW_ONSET },
+            range)).toBeFalse();
+        expect(centerArrowShown({ x: 0, y: -3000 * CENTER_ARROW_ONSET - 1 },
+            range)).toBeTrue();
+        expect(centerArrowShown({ x: 2900, y: 0 }, range)).toBeTrue();
+    });
+
+    it('goes by each axis on its own, not the distance', () => {
+        // 2,500 px out on both axes is 3,536 px away, still on the radar.
+        expect(centerArrowShown({ x: 2500, y: -2500 }, range)).toBeFalse();
+        expect(centerArrowShown({ x: 100, y: 2900 }, range)).toBeTrue();
+    });
+
+    it('scales with the radar\'s own span', () => {
+        expect(centerArrowShown({ x: 4000, y: 0 }, { x: 6000, y: 6000 }))
+            .toBeFalse();
+        expect(centerArrowShown({ x: 4000, y: 0 }, { x: 2000, y: 2000 }))
+            .toBeTrue();
     });
 });
 
@@ -408,7 +437,7 @@ describe('DrawRadar cadence', () => {
         world.addSystem(DrawRadar);
         const player = new Entity('player');
         player.components.set(PlayerShipSelector, undefined);
-        // Far out: nothing stellar anywhere, so the arrow's gate holds.
+        // Far out: the centre is off the radar, so the arrow's gate holds.
         player.components.set(MovementStateComponent,
             { position: new Position(-9000, 2000) } as MovementState);
         player.components.set(TargetComponent, { target: 'npc' });
@@ -452,6 +481,34 @@ describe('DrawRadar cadence', () => {
             expect(flashes).toEqual(['npc', null, 'npc', null]);
             // Pointing from the player back to (0, 0).
             expect(arrows[0]).toEqual({ x: 9000, y: -2000 });
+        });
+
+    it('draws the arrow over a stellar ON the radar once the centre is off '
+        + 'it (K8, wave 43)', () => {
+        // The wave-43 rig: the player sits on a port 4,000 px from an empty
+        // centre. The original showed the arrow from the first frame.
+        const { drawRadar, stepAt, world } = radarWorld();
+        world.entities.get('player')!.components.set(MovementStateComponent,
+            { position: new Position(4000, 0) } as MovementState);
+        const port = new Entity('port');
+        port.components.set(MovementStateComponent,
+            { position: new Position(4000, 0) } as MovementState);
+        port.components.set(PlanetDataComponent, getDefaultPlanetData());
+        port.components.set(PlanetComponent, { id: 'nova:128' });
+        world.entities.set('port', port);
+        stepAt(0);
+        expect(drawRadar.calls.mostRecent().args[4])
+            .toEqual({ x: -4000, y: 0 });
+    });
+
+    it('draws no arrow while the centre is on the radar, stellars or not',
+        () => {
+            const { drawRadar, stepAt, world } = radarWorld();
+            world.entities.get('player')!.components.set(
+                MovementStateComponent,
+                { position: new Position(1500, -2500) } as MovementState);
+            stepAt(0);
+            expect(drawRadar.calls.mostRecent().args[4]).toBeNull();
         });
 
     it('leaves an inhabited, landable stellar uncoloured (dimRadar grey) '
