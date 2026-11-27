@@ -24,6 +24,7 @@ import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
 import { ShipComponent } from '../nova_plugin/ship/index.js';
 import {
     AbortMissionEvent, MissionInfoPlugin, MissionInfoResource,
+    OpenMissionInfoResource,
 } from './mission_info_plugin.js';
 import { ScreenSize } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
@@ -213,6 +214,51 @@ describe('in-flight mission info key (wave 11)', () => {
             await settle();
             expect(aborts.length).toBe(1);
         });
+
+    describe('docked (the spaceport\'s i)', () => {
+        function docked(missions: [string, ActiveMission][]) {
+            // The hull the spaceport holds: out of the world.
+            return new Entity()
+                .addComponent(ShipComponent, { id: SYNTHETIC.ships.skiff })
+                .addComponent(MissionsComponent, new Map(missions))
+                .addComponent(GameDateComponent,
+                    { day: 1, month: 1, year: 1177 })
+                .addComponent(ControlBitsComponent,
+                    new Set([BITS.courierAccepted]));
+        }
+
+        it('does nothing at all with no missions (wave 11)', async () => {
+            const { world, lines, dialog } = await flight([]);
+            await world.resources.get(OpenMissionInfoResource)!(docked([]));
+            await settle();
+            expect(dialog.container.visible).toBeFalse();
+            expect(lines).toEqual([]);
+        });
+
+        it('opens for the docked hull, and Abort takes the docked path '
+            + '(reference "#324 mission BBS after an accept, wave 21")',
+            async () => {
+                const courier = SYNTHETIC.missions.courier;
+                const { world, lines, dialog, aborts } = await flight([]);
+                const asked: string[] = [];
+                const closed = world.resources.get(OpenMissionInfoResource)!(
+                    docked([[courier, active(courier)]]),
+                    async id => { asked.push(id); return true; });
+                for (let i = 0; i < 2000 && !dialog.container.visible; i++) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+                expect(dialog.container.visible).toBeTrue();
+                expect(lines).toEqual([]);
+                const { abort } = parts(dialog);
+                expect(abort.state).toBe('normal');
+                abort.click.next({});
+                await closed;
+                expect(asked).toEqual([courier]);
+                // Not the in-flight record: the landing owns this one.
+                expect(aborts).toEqual([]);
+                expect(dialog.container.visible).toBeFalse();
+            });
+    });
 
     it('greys Abort for a CanAbort 0 mission', async () => {
         const courier = SYNTHETIC.missions.courier;

@@ -23,7 +23,9 @@ import {
 import {
     LOCATION_MAIN_SPACEPORT, LOCATION_MISSION_COMPUTER, LOCATION_OUTFIT, LOCATION_SHIPYARD,
     LOCATION_TRADING, MissionEvent, MissionMapMark, missionMapMarks, expandMissionText,
+    abortMission,
 } from '../nova_plugin/missions/index.js';
+import type { MissionInfoAbort } from './mission_info.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent, PlayerNamesComponent,
 } from '../nova_plugin/player/index.js';
@@ -224,7 +226,13 @@ export class Spaceport extends Menu<Entity> {
          * key) — it works both in flight and docked. The docked ship
          * entity is passed explicitly: while docked it is out of the
          * world, held by this menu. */
-        private openPlayerInfo?: (entity: Entity) => Promise<unknown>) {
+        private openPlayerInfo?: (entity: Entity) => Promise<unknown>,
+        /** Opens the mission-info dialog over the spaceport (the 'i'
+         * key; display/mission_info_plugin.ts OpenMissionInfoResource),
+         * for the hull docked here and with the Abort that edits the
+         * landing's working copy. */
+        private openMissionInfo?: (entity: Entity,
+            abort?: MissionInfoAbort) => Promise<unknown>) {
         super(displayAssets, simulationData, SPACEPORT_PICT, controlEvents);
         this.container.name = 'Spaceport';
 
@@ -423,12 +431,12 @@ export class Spaceport extends Menu<Entity> {
             // overlay.
             map: () => this.openDockedMap(),
             properties: () => void this.openPlayerInfo?.(this.input),
-            // No 'missions' ('i'): the original ignores it in the
-            // spaceport — no dialog, no message (the wave-11 UI key
-            // matrix) — and so does this. The in-flight handler stands
-            // down while a menu holds the keyboard, so the key does not
-            // fall through to it either. The missions dialog, and its
-            // Abort, are in-flight only (mission_info_plugin.ts).
+            // 'i': the mission dialog, with a working Abort, as on the
+            // original's spaceport (reference "#324 mission BBS after an
+            // accept, wave 21", finding 6); nothing with no missions
+            // (wave 11). The venues ignore it (wave 11). The in-flight
+            // handler stands down while a menu holds the keyboard.
+            missions: () => void this.openDockedMissionInfo(),
             depart: () => void this.leave(),
         });
         // Return presses Leave, the original's default button here (K1,
@@ -679,6 +687,37 @@ export class Spaceport extends Menu<Entity> {
         if (this.container.visible) {
             this.controls.bind();
         }
+    }
+
+    /**
+     * The 'i' key on the main screen. The dialog reads the player's state
+     * off an entity, so the landing's working copy is flushed onto the
+     * docked hull first (accepts and purchases this visit included), and
+     * its Abort runs on that working copy under a savepoint released at
+     * once — OnAbort, the mission cargo, the removal — so the venues and
+     * the lift-off see it like any other edit of this landing. Without a
+     * transaction (the landing's data never loaded) Abort stays greyed.
+     */
+    private async openDockedMissionInfo() {
+        const transaction = this.transaction && !this.transaction.isClosed
+            ? this.transaction : undefined;
+        transaction?.flush();
+        const abort: MissionInfoAbort | undefined = transaction
+            ? async (missionId: string) => {
+                if (transaction.isClosed) {
+                    return false;
+                }
+                const visit = transaction.savepoint('abort');
+                try {
+                    abortMission(transaction.session.machinery, missionId,
+                        transaction.outfits);
+                } finally {
+                    transaction.release(visit);
+                }
+                return true;
+            }
+            : undefined;
+        await this.openMissionInfo?.(transaction?.ship ?? this.input, abort);
     }
 
     /**

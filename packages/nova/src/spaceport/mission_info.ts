@@ -93,11 +93,13 @@ export function listedMissions(entity: Entity, universe: MissionUniverse):
 /**
  * The Mission Info dialog ('i'): lists the player's active missions and
  * shows the selected one's briefing text and the current date, on the
- * 8517 frame. Opens in flight only — the original ignores 'i' in the
- * spaceport (the wave-11 UI key matrix) — as a modal overlay on the same
- * focus stack as the starmap / player-info dialogs. Its Abort button
- * aborts the selected mission through an input record the simulation
- * applies on every peer ({@link MissionInfoAbort}), and is greyed for a
+ * 8517 frame. Opens in flight and on the spaceport's main screen (with
+ * at least one mission listed: reference "#324 mission BBS after an
+ * accept, wave 21", finding 6), as a modal overlay on the same focus
+ * stack as the starmap / player-info dialogs. Its Abort button aborts the
+ * selected mission through the {@link MissionInfoAbort} it is shown with
+ * (in flight an input record the simulation applies on every peer;
+ * docked an edit of the landing's working copy), and is greyed for a
  * mïsn with CanAbort 0. Like the original's, it acts at once: no "are
  * you sure?" (the stock STR# resources hold a confirmation for
  * jettisoning cargo and none for aborting a mission), and the dialog

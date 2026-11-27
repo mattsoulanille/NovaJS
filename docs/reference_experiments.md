@@ -5779,7 +5779,14 @@ Escape, Escape closing every venue and the landed map, `m` over the BBS,
 the bar.
 **Proposed fix (all applied):** let KeyM open the star map over any venue
 (as over the BBS; **applied in 5830c073**), drop KeyI in the spaceport
-(**applied in 2acf0126**), print "You have no active missions." instead
+(**applied in 2acf0126; superseded 2026-11-26**: this wave's pilots had
+no missions, and wave 21 ("#324 mission BBS after an accept", finding 6)
+saw `i` open the mission dialog in the spaceport, its Abort working, with
+a mission active. NovaJS now opens it on the spaceport's main screen when
+a mission is listed and does nothing without one; the venues still ignore
+it. That the wave-11 "ignored" was only the no-mission case is an
+inference from the two runs, not a measurement of `i` with and without a
+mission in one run), print "You have no active missions." instead
 of an empty mission list (**applied in 621a94cf**), and map Return to the
 default button (Leave / Done / Close) per screen rather than fullscreen
 (a fullscreen key could move to a modifier combination; applied in the

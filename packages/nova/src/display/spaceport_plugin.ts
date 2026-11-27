@@ -18,6 +18,7 @@ import {
 } from '../spaceport/deployed_outfits.js';
 import { Spaceport } from '../spaceport/spaceport.js';
 import { DockedShip, DockedShipResource } from './docked_ship.js';
+import { OpenMissionInfoResource } from './mission_info_plugin.js';
 import { OpenPlayerInfoResource } from './player_info_plugin.js';
 import {
     ResizeEvent, ScreenSize, screenCentre,
@@ -89,11 +90,11 @@ const OpenSpaceportSystem = new System({
     args: [OpenSpaceportEvent, RunQuery, ScreenSize, Emit,
         DockedShipResource, Entities, SimulationGameDataResource,
         DisplayAssetDataResource, ControlsSubject, Stage, OpenStarmapResource,
-        OpenPlayerInfoResource,
+        OpenPlayerInfoResource, Optional(OpenMissionInfoResource),
         Optional(WorldLayer), SingletonComponent] as const,
     step({ planetId, ship, uuid, landedEscorts, onShipSwap }, runQuery,
         { x, y }, emit, dockedHolder, entities, gameData, displayAssets,
-        controls, stage, openStarmap, openPlayerInfo,
+        controls, stage, openStarmap, openPlayerInfo, openMissionInfo,
         worldLayer) {
         const landedAt = runQuery(PlanetSpaceportQuery)
             .find(([, { id }]) => id === planetId);
@@ -117,7 +118,7 @@ const OpenSpaceportSystem = new System({
             // the stellar's data, its landing PICT and the venues' stock —
             // is what Spaceport.show waits for before its keys go live.
             spaceport = new Spaceport(displayAssets, gameData, planetId,
-                controls, openStarmap, openPlayerInfo);
+                controls, openStarmap, openPlayerInfo, openMissionInfo);
             stage.addChild(spaceport.container);
             planet.components.set(SpaceportComponent, spaceport);
         }

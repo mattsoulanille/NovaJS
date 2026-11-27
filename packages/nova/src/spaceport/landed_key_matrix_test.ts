@@ -8,6 +8,8 @@ import { getSyntheticGameData } from '../communication/simulation_test_fixture.j
 import { ControlAction, ControlEvent } from '../nova_plugin/core/index.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { Menu } from './menu.js';
+import { ActiveMission, MissionsComponent } from '../nova_plugin/player/index.js';
+import type { MissionInfoAbort } from './mission_info.js';
 import { MenuControls } from './menu_controls.js';
 import { OpenStarmapOptions } from './starmap.js';
 import { Spaceport } from './spaceport.js';
@@ -17,7 +19,9 @@ import { Spaceport } from './spaceport.js';
  * (docs/reference_experiments.md, "The UI screen x key matrix, wave 11"):
  * `m` opens the star map over the spaceport AND over the outfitter,
  * shipyard, trade center and bar (closing it lands back in the venue);
- * `i` is ignored in the spaceport (no dialog, no message).
+ * `i` is ignored in the venues. On the spaceport's main screen `i` opens
+ * the mission dialog, with a working Abort (reference "#324 mission BBS
+ * after an accept, wave 21", finding 6).
  */
 describe('landed key matrix (wave 11)', () => {
     beforeAll(() => installHeadlessPixi());
@@ -51,14 +55,18 @@ describe('landed key matrix (wave 11)', () => {
         }
     }
 
-    async function dock() {
+    async function dock(missions?: Map<string, ActiveMission>) {
         const gameData = await getSyntheticGameData();
         const controlEvents = new Subject<ControlEvent>();
         const mapOpens: (OpenStarmapOptions | undefined)[] = [];
+        const missionOpens: { entity: Entity, abort?: MissionInfoAbort }[] =
+            [];
         const spaceport = new Spaceport(
             stubAssets(), gameData,
             SYNTHETIC.planets.port, controlEvents,
-            async options => { mapOpens.push(options); });
+            async options => { mapOpens.push(options); },
+            undefined,
+            async (entity, abort) => { missionOpens.push({ entity, abort }); });
         await spaceport.buildPromise;
         const venues = spaceport as unknown as
             Record<VenueName, Menu<Entity> | undefined>;
@@ -67,6 +75,9 @@ describe('landed key matrix (wave 11)', () => {
         const { makeShip } = await import('../nova_plugin/ship/index.js');
         const entity: Entity = makeShip(
             await gameData.data.Ship.get(SYNTHETIC.ships.warden));
+        if (missions) {
+            entity.components.set(MissionsComponent, missions);
+        }
         const departed = spaceport.show(entity);
         for (let i = 0; i < 2000 && !spaceport.onMainScreen; i++) {
             await new Promise(resolve => setTimeout(resolve, 0));
@@ -76,6 +87,7 @@ describe('landed key matrix (wave 11)', () => {
             controlEvents.next({ action, state: 'start' });
         return {
             spaceport, venues, press, departed, mapOpens, controlEvents,
+            missionOpens, entity,
         };
     }
 
@@ -92,23 +104,43 @@ describe('landed key matrix (wave 11)', () => {
         await departed;
     });
 
-    it('ignores i in the spaceport, and keeps it from flight', async () => {
-        const { spaceport, press, departed } = await dock();
-        press('missions');
-        await settle();
-        // Nothing opened over it, and it is still the spaceport's
-        // keyboard: the in-flight 'i' handler (mission_info_plugin)
-        // stands down while a menu is focused (mission_info_key_test).
-        expect(spaceport.onMainScreen).toBeTrue();
-        expect(focusedIs(spaceport)).toBeTrue();
-        press('depart');
-        await departed;
-    });
+    it('opens the mission dialog on i in the spaceport, for the docked '
+        + 'hull, with an Abort that edits the landing', async () => {
+            const courier = SYNTHETIC.missions.courier;
+            const { spaceport, press, departed, missionOpens, entity } =
+                await dock(new Map([[courier, {
+                    id: courier, acceptedDay: 1,
+                    acceptedAt: SYNTHETIC.planets.port, travelPlanet: null,
+                    // Due elsewhere, so this landing completes nothing.
+                    returnPlanet: SYNTHETIC.planets.refuge, cargoType: -1,
+                    cargoQty: 0, cargoLoaded: false, travelDone: false,
+                    deadlineDay: null,
+                }]]));
+            press('missions');
+            for (let i = 0; i < 2000 && missionOpens.length === 0; i++) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+            expect(missionOpens.length).toBe(1);
+            const [{ entity: shown, abort }] = missionOpens;
+            expect(shown).toBe(entity);
+            expect(abort).withContext('Abort is live docked').toBeDefined();
+            expect(await abort!(courier)).toBeTrue();
+            // Off the working copy, and (the savepoint released at once)
+            // off the docked hull too.
+            expect(entity.components.get(MissionsComponent)!.has(courier))
+                .toBeFalse();
+            expect(spaceport.onMainScreen).toBeTrue();
+            press('depart');
+            await departed;
+            expect(entity.components.get(MissionsComponent)!.has(courier))
+                .toBeFalse();
+        });
 
     for (const name of Object.keys(VENUE_KEYS) as VenueName[]) {
         it(`opens the star map over the ${name}`, async () => {
             const {
                 spaceport, venues, press, departed, mapOpens, controlEvents,
+                missionOpens,
             } = await dock();
             const venue = venues[name]!;
             expect(venue).withContext(name).toBeDefined();
@@ -144,6 +176,8 @@ describe('landed key matrix (wave 11)', () => {
             await settle();
             expect(focusedIs(venue)).withContext(`i in the ${name}`)
                 .toBeTrue();
+            expect(missionOpens.length).withContext(`i in the ${name}`)
+                .toBe(0);
             press('depart');
             await settle();
             expect(spaceport.onMainScreen).withContext('back').toBeTrue();

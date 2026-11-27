@@ -1,4 +1,5 @@
 import { GetEntity, GetWorld } from 'nova_ecs/arg_types';
+import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
 import { Resource } from 'nova_ecs/resource';
@@ -15,8 +16,8 @@ import {
 } from '../nova_plugin/player/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import {
-    listedMissions, MissionInfoDialog, NO_MISSIONS, NO_MISSIONS_STRING_INDEX,
-    NO_MISSIONS_STRING_TABLE,
+    listedMissions, MissionInfoAbort, MissionInfoDialog, NO_MISSIONS,
+    NO_MISSIONS_STRING_INDEX, NO_MISSIONS_STRING_TABLE,
 } from '../spaceport/mission_info.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import {
@@ -41,6 +42,20 @@ export const AbortMissionEvent = new EcsEvent<{
 }>('AbortMissionEvent');
 const MissionInfoControlsSubscription =
     new Resource<Subscription>('MissionInfoControlsSubscription');
+/**
+ * Opens the mission-info dialog over the SPACEPORT (its 'i' key) and
+ * resolves when it closes. MEASURED (reference "#324 mission BBS after an
+ * accept, wave 21", finding 6): on the original, `i` on the spaceport's
+ * main screen opens the mission dialog, and its Abort works there. With
+ * nothing to list it does nothing at all — no dialog, no message ("The UI
+ * screen x key matrix, wave 11", whose pilots had no missions; the venues
+ * ignore `i` either way). While docked the player's entity is out of the
+ * world, so the spaceport passes the hull it holds, and the Abort action
+ * that edits the landing's working copy (spaceport.ts).
+ */
+export const OpenMissionInfoResource =
+    new Resource<(entity: Entity, abort?: MissionInfoAbort) => Promise<void>>(
+        'OpenMissionInfo');
 function getPlayerShip(world: World) {
     for (const entity of world.entities.values()) {
         if (entity.components.has(PlayerShipSelector)) {
@@ -154,16 +169,12 @@ export const MissionInfoPlugin: Plugin = {
             world.emit(AbortMissionEvent, { record: abort.record });
             return true;
         };
-        // Opens the dialog for the world's player ship and resolves when
-        // it closes; no-ops while already open. In flight only: the
-        // original ignores 'i' in the spaceport and its venues (the
-        // wave-11 UI key matrix), and so does every landed screen here.
-        const openMissionInfo = async (): Promise<void> => {
+        // Opens the dialog for a ship (in flight the world's player ship;
+        // docked the hull the spaceport holds) and resolves when it
+        // closes; no-ops while already open.
+        const openMissionInfo = async (ship: Entity,
+            abort: MissionInfoAbort | undefined): Promise<void> => {
             if (dialog.container.visible || opening) {
-                return;
-            }
-            const ship = getPlayerShip(world);
-            if (!ship) {
                 return;
             }
             opening = true;
@@ -172,7 +183,7 @@ export const MissionInfoPlugin: Plugin = {
                 // anything added after this plugin.
                 stage.addChild(dialog.container);
                 playUiSound(world, { id: BEEP_MISSION_OPEN });
-                await dialog.show(ship, abortMission);
+                await dialog.show(ship, abort);
             } finally {
                 opening = false;
                 // dialog.show resolves when the dialog closes.
@@ -211,16 +222,33 @@ export const MissionInfoPlugin: Plugin = {
                 showStatusMessage(world, noMissions);
                 return;
             }
-            await openMissionInfo();
+            await openMissionInfo(ship, abortMission);
         };
+        world.resources.set(OpenMissionInfoResource,
+            async (entity: Entity, abort?: MissionInfoAbort) => {
+                if (dialog.container.visible || opening) {
+                    return;
+                }
+                try {
+                    await universe.load();
+                } catch (e) {
+                    console.warn('Mission info failed to load universe:', e);
+                }
+                // Nothing to list: the original's spaceport ignores 'i'.
+                if (listedMissions(entity, universe).length === 0) {
+                    return;
+                }
+                await openMissionInfo(entity, abort);
+            });
         world.resources.set(MissionInfoControlsSubscription,
             controls.subscribe(({ action, state }) => {
                 if (action !== 'missions' || state !== 'start') {
                     return;
                 }
                 // While a landed menu owns the keyboard, 'i' belongs to
-                // that menu (every landed screen ignores it, as the
-                // original does: the wave-11 UI key matrix).
+                // that menu: the spaceport opens the dialog itself
+                // (OpenMissionInfoResource), the venues ignore it, as the
+                // original's do (the wave-11 UI key matrix).
                 if (MenuControls.focused) {
                     return;
                 }
@@ -250,5 +278,6 @@ export const MissionInfoPlugin: Plugin = {
         dialog?.container.destroy({ children: true });
         world.resources.delete(MissionInfoControlsSubscription);
         world.resources.delete(MissionInfoResource);
+        world.resources.delete(OpenMissionInfoResource);
     }
 }
