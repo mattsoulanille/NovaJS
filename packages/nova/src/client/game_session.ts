@@ -72,6 +72,8 @@ import {
 } from './fleet_ledger.js';
 import { FpsMeterToggle } from './fps_meter.js';
 import { FramePump } from './frame_pump.js';
+import { PerfTelemetry } from './perf_telemetry.js';
+import { BUILD_VERSION } from '../common/generated_build_version.js';
 import { PrefetchBudget } from './background_prefetch.js';
 import { LandedUiPrefetch } from './landed_ui_prefetch.js';
 import { fetchSystemResources, NextHopPrefetch } from './next_hop_prefetch.js';
@@ -729,6 +731,21 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
     publishSpeedVote();
 
     sessionDisposers.push(pump.install(app));
+
+    // Performance stats (client/perf_telemetry.ts, docs/perf_stats.md):
+    // display-side timing and counts, sent every ~12 s unless the player
+    // switched "Send performance stats" off. Its disposer sends what the
+    // last window holds.
+    const perfTelemetry = new PerfTelemetry({
+        app, state: () => state.state, buildVersion: BUILD_VERSION,
+    });
+    pump.perf = perfTelemetry;
+    window.novaPerfTelemetry = perfTelemetry;
+    const stopPerfTelemetry = perfTelemetry.install();
+    sessionDisposers.push(() => {
+        pump.perf = undefined;
+        stopPerfTelemetry();
+    });
 
     // The teardown returned to the title orchestrator: reverse everything
     // this session set up, so the player can be dropped back on the title

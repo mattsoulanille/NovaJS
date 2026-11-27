@@ -5,6 +5,7 @@ import {
     saveControlsOverride, saveGameSettings, savePilotProfile, clearPilotProfile,
     CONTROLS_OVERRIDE_KEY, PILOT_PROFILE_KEY, SETTINGS_OVERRIDE_KEY,
     DISPLAY_SETTINGS_KEY, loadDisplaySettings, saveDisplaySettings,
+    loadPerfStatsEnabled, PERF_STATS_KEY, savePerfStatsEnabled,
 } from './client_prefs.js';
 
 /** An in-memory PrefsStorage for testing without a browser. */
@@ -158,6 +159,25 @@ describe('client_prefs', () => {
             store.setItem(DISPLAY_SETTINGS_KEY, 'not json');
             expect(loadDisplaySettings(store))
                 .toEqual({ uiScale: 1, globalScale: 1 });
+        });
+    });
+
+    describe('"Send performance stats"', () => {
+        it('is on until switched off, and on for anything unreadable', () => {
+            expect(loadPerfStatsEnabled(new MemoryStorage())).toBeTrue();
+            const store = new MemoryStorage();
+            store.setItem(PERF_STATS_KEY, '{not json');
+            expect(loadPerfStatsEnabled(store)).toBeTrue();
+            store.setItem(PERF_STATS_KEY, JSON.stringify({ enabled: 'no' }));
+            expect(loadPerfStatsEnabled(store)).toBeTrue();
+        });
+
+        it('round-trips off and on', () => {
+            const store = new MemoryStorage();
+            savePerfStatsEnabled(false, store);
+            expect(loadPerfStatsEnabled(store)).toBeFalse();
+            savePerfStatsEnabled(true, store);
+            expect(loadPerfStatsEnabled(store)).toBeTrue();
         });
     });
 });

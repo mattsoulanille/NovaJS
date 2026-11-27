@@ -27,6 +27,12 @@ export const PILOT_PROFILE_KEY = 'novajs:pilot';
  * same pilot exported to another machine picks up that machine's scale.
  */
 export const DISPLAY_SETTINGS_KEY = 'novajs:display';
+/**
+ * localStorage key: whether this browser sends performance stats
+ * (client/perf_telemetry.ts, docs/perf_stats.md). Machine-local like the
+ * display scales: frame rates describe the machine, not the pilot.
+ */
+export const PERF_STATS_KEY = 'novajs:perfStats';
 
 /** A minimal storage surface so this is testable without a browser. */
 export interface PrefsStorage {
@@ -151,6 +157,21 @@ export function saveDisplaySettings(settings: DisplaySettings,
         uiScale: clampScale(settings.uiScale),
         globalScale: clampScale(settings.globalScale),
     }, storage);
+}
+
+/**
+ * Whether "Send performance stats" is on (Preferences > Display). ON
+ * unless this browser switched it off; anything unreadable is ON too.
+ */
+export function loadPerfStatsEnabled(storage?: PrefsStorage): boolean {
+    const raw = readJson<{ enabled?: unknown }>(PERF_STATS_KEY, storage);
+    return raw?.enabled !== false;
+}
+
+/** Persists "Send performance stats". Takes effect at the next sample. */
+export function savePerfStatsEnabled(enabled: boolean,
+    storage?: PrefsStorage): void {
+    writeJson(PERF_STATS_KEY, { enabled }, storage);
 }
 
 /**

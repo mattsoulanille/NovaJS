@@ -48,6 +48,7 @@ import { runDockingFrame } from './docking.js';
 import {
     flushCarriedJumpEscorts, flushLandedEscorts, localPlayerShipUuid,
 } from './fleet_ledger.js';
+import type { PerfProbe } from './perf_telemetry.js';
 import { onResyncFailed } from './resync_failure.js';
 import type { ClientRuntime } from './runtime.js';
 
@@ -366,6 +367,13 @@ export class FramePump {
      * handle in the same task, so no frame can start between the two.
      */
     frameInFlight: Promise<void> | undefined;
+    /**
+     * The performance telemetry (client/perf_telemetry.ts), told what the
+     * display step, each state apply and each simulation round trip cost.
+     * Timing only, read on the side: nothing measured here changes what
+     * the pump does.
+     */
+    perf: PerfProbe | undefined;
 
     constructor(private readonly runtime: ClientRuntime,
         private readonly world: World,
@@ -423,7 +431,14 @@ export class FramePump {
             }
             if (document.hidden
                 || performance.now() - lastAnimationFrame > 100) {
-                updateWithoutDrawing(app, performance.now());
+                // (The telemetry counts these apart from real frames.)
+                const perf = this.perf;
+                perf?.beginHeartbeat();
+                try {
+                    updateWithoutDrawing(app, performance.now());
+                } finally {
+                    perf?.endHeartbeat();
+                }
             }
         };
         return () => {
@@ -497,7 +512,10 @@ export class FramePump {
                         this.advanceDisplayClock(frameTime, movementLimit.enabled,
                             displaySpeed);
                 }
+                const perf = this.perf;
+                const stepStarted = perf ? performance.now() : 0;
                 live.world.step();
+                perf?.noteDisplayStep(performance.now() - stepStarted);
             } catch (e) {
                 // A throwing display system must not kill the ticker (and
                 // with it the render + sim pump).
@@ -636,6 +654,8 @@ export class FramePump {
                 this.noteStepCost(hostMs ?? performance.now() - stepStart,
                     steps);
                 const frame = await bridge.snapshot();
+                this.perf?.notePump(performance.now() - stepStart, steps,
+                    frame.pacing?.behindTicks, hostMs ?? undefined);
                 if (liveSystem(runtime.state.state) !== live) {
                     return;
                 }
@@ -755,6 +775,17 @@ export class FramePump {
      * display world, with everything the client keeps alongside it.
      */
     private applyFrame(live: LiveSystem, frame: SimulationFrame,
+        clock: { pumpFrameMs: number, debtMs: number, rate: number }): void {
+        const perf = this.perf;
+        const applyStarted = perf ? performance.now() : 0;
+        try {
+            this.applyFrameUntimed(live, frame, clock);
+        } finally {
+            perf?.noteApply(performance.now() - applyStarted, live);
+        }
+    }
+
+    private applyFrameUntimed(live: LiveSystem, frame: SimulationFrame,
         clock: { pumpFrameMs: number, debtMs: number, rate: number }): void {
         const { runtime } = this;
         const { world: displayWorld, serializer } = live;

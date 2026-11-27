@@ -17,6 +17,7 @@ import type { Autopilot } from './autopilot.js';
 import type { ClientState } from './client/client_state.js';
 import type { FleetLedger } from './client/fleet_ledger.js';
 import type { LandedUiPrefetch } from './client/landed_ui_prefetch.js';
+import type { PerfTelemetry } from './client/perf_telemetry.js';
 import type { NextHopPrefetch } from './client/next_hop_prefetch.js';
 import type { SimulationControl } from './client/frame_pump.js';
 import type { DisplayAssetData } from './client/gamedata/display_asset_data.js';
@@ -106,6 +107,9 @@ declare global {
         /** The background landed-UI warm-up (client/landed_ui_prefetch.ts):
          * `await novaLandedUiPrefetch.idle` waits for the current run. */
         novaLandedUiPrefetch?: LandedUiPrefetch;
+        /** The performance telemetry (client/perf_telemetry.ts):
+         * `novaPerfTelemetry.lastSample`, `await novaPerfTelemetry.flush()`. */
+        novaPerfTelemetry?: PerfTelemetry;
         /** The one-jump-ahead warm-up (client/next_hop_prefetch.ts):
          * `await novaNextHopPrefetch.idle` waits for the current run;
          * `.disabled = true` turns it (and the worker seed) off. */
