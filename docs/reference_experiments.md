@@ -25686,6 +25686,71 @@ still unread).
 `~/.local/share/novaref/evidence/20261127-w50/` (the still hulls at 250 /
 350 / 425 px).
 
+### A mission's destroy / disable goal met by an NPC (the hub's added item, NK, from a playtester's two ARPIA Pirate Hunts), wave 52: it COUNTS: an NPC hunter destroyed the destroy-goal ship while the unarmed player sat on the port, and landing at the return stellar completed the mission (CompText dialog, OnShipDone and OnSuccess set); a disable-goal ship the NPC disabled and then destroyed earned its OnShipDone and then "Mission failed." (OnFailure) (2026-11-27)
+
+**Question** (the hub, from a player report that two ARPIA "destroy the
+pirates" missions, arpia:919 / 920, completed without the player
+fighting): does a ShipGoal 0 (destroy), and a ShipGoal 1 (disable), count
+when an NPC, not the player or his escorts, kills / disables the mission
+ships? Does landing at the return stellar then complete the mission?
+
+**Rig** (`wave52Resources` "NK"). Kit FF Range (sÿst 2047): wave 12's
+anchored hunter (mïsn 1060, bit 9110, the spaceport offer: shïp 866 Kit
+Hunter Anchored, gövt 356, AI 3, the Kit Raider Gun turret, 20 a bolt) on
+the far mark, and a Mission BBS job putting an unarmed anchored cyan prey
+of its enemy gövt 357 (shield 0) on the near mark 150 px below it, 110 px
+above the port: mïsn 967 (bit 9336) Kit NK Prey 20 (armor 20: one bolt
+destroys it outright), ShipGoal 0, ReturnStel 2047, CompText dësc 11320,
+OnShipDone b9338, OnSuccess b9337, OnFailure b9339; mïsn 1082 (bit 9340)
+Kit NK Prey 100 (armor 100: disabled by the fourth or fifth bolt),
+ShipGoal 1, CompText dësc 11321, OnShipDone b9342, OnSuccess b9341,
+OnFailure b9343. Pilots `w52_nkd` / `w52_nks`: the Kit Lancer with NO
+weapons at Kit FF Port. Land, accept the hunter offer and the BBS job,
+Leave, sit on the port 60 s (40 s for nks), land at Kit FF Port (the
+ReturnStel), Leave; the pilot pulled.
+
+| run | the prey in flight | status line | the landing at the ReturnStel | the pilot after the Leave |
+|---|---|---|---|---|
+| nkd_a (destroy) | shot by the hunter at the Leave, exploding within 0.8 s (no player shot: the player has no weapon) | nothing ("Leaving Kit FF Port ...") | **"Kit NK destroy: COMPLETE (mission 967 CompText)."** dialog | **b9337 (OnSuccess), b9338 (OnShipDone)**; 967 no longer active |
+| nks_b (disable) | hit for about 3.5 s, then exploded (4 s after the Leave) | **"Mission failed."** at the explosion | no dialog | **b9342 (OnShipDone), b9343 (OnFailure)**; 1082 gone |
+
+(`nks_a` was spoiled: a stock "Delivery to Earth" job sat above ours on
+the BBS and was accepted instead; `nks_b` hand-driven.)
+
+**Findings.**
+1. **A destroy goal counts whoever destroys the ship**: an NPC's kill,
+   with the player unarmed and never firing, completed mïsn 967 at the
+   ReturnStel with its CompText, OnShipDone and OnSuccess. So the ARPIA
+   report is the original's behaviour: Federation patrols killing the
+   pirates satisfy "Destroy all the ships".
+2. **A disable goal counts an NPC's disable too, and an NPC's kill fails
+   it**: the ShipDone of 1082 was earned (bit 9342: the disable by the
+   hunter's bolts counted) and the hunter's next bolts destroyed the
+   ship, which failed the mission in flight ("Mission failed.", bit
+   9343), as wave 12 saw for a player-disabled ship destroyed by an NPC.
+3. OnShipDone ran at once (both bits in the pilot written at the next
+   Leave; wave 48: set in flight).
+
+**NovaJS (main 14052c16):** `MissionShipDeathSystem` credits ANY
+`DeathEvent` on a tracked ship to a destroy goal, whoever did the damage
+(`N/nova_plugin/missions/mission_ship_plugin.ts:380-391`, `shipDied`
+`N/nova_plugin/player/mission_ship_state.ts:220-250`, `case GOAL_DESTROY`
+`:227`); `MissionShipTrackSystem` credits any disable
+(`mission_ship_plugin.ts:311`, `shipDisabled` `mission_ship_state.ts:282`),
+and any destruction fails a disable goal keeping its ShipDone
+(`mission_ship_state.ts:233-243`); the landing completes only when the
+goal holds (`objectiveAllowsCompletion`,
+`N/nova_plugin/missions/mission_landing.ts:425`; 99e600ed's
+`arpia_pirate_hunt_goal_test.ts`): **matches** all three findings.
+**Proposed:** no change; the ARPIA report is not a bug. A spec of an
+NPC-only kill (no player damage at all) completing a ShipGoal-0 mission
+would pin it. Confidence: high (one clean run each, every bit read back).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w52/nkd_a/`,
+`nks_b/` (`recording.mp4`, `15-back.png` the CompText dialog,
+`pilot-after/`), `nkd_a/fr/leave.png`, `nks_b/fr/leave.png`,
+`nks_b/fr/status.png`; `nks_a/` (the spoiled run).
+
 ### Reliability notes (for anyone running the reference)
 
 - **Stock mission bits live above 9000 too (wave 51 `trb40_a` / `_b`):**
