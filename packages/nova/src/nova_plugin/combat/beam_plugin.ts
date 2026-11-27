@@ -1,4 +1,4 @@
-import { BEAM_COUNT_RATE } from 'novaparse/parsers/constants';
+import { BEAM_COUNT_RATE, NPC_TURRET_BEAM_COUNT_RATE } from 'novaparse/parsers/constants';
 import { BeamWeaponData, WeaponData } from 'novadatainterface/weapon_data';
 import { EmitNow, Entities, GetWorld, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
@@ -37,7 +37,7 @@ import { SoundEvent } from '../core/index.js';
 import { TargetComponent } from '../ship/index.js';
 import { intervalElapsed, WeaponsSystem } from './weapon_plugin.js';
 import { TargetIndexProvider } from './target_plugin.js';
-import { SetControlledShipSystem } from '../player/index.js';
+import { ControlledByComponent, SetControlledShipSystem } from '../player/index.js';
 import { StellarAutoClearanceSystem } from '../travel/index.js';
 
 
@@ -58,10 +58,61 @@ export interface BeamState {
      * Bible exempts. Optional: beams from older snapshots have none.
      */
     aimOffset?: number;
+    /**
+     * The rate this shot runs its Count (and Decay tail) at, units a
+     * second, stamped once when it is fired (beamCountRateFor): an NPC's
+     * turreted beam NPC_TURRET_BEAM_COUNT_RATE (30), every other beam
+     * BEAM_COUNT_RATE (56), which is also what an absent value means.
+     */
+    countRate?: number;
 }
 
 export const BeamStateComponent = new Component<BeamState>('BeamState');
 export const BeamDataComponent = new Component<BeamWeaponData>('BeamData');
+
+/**
+ * The Count clock of a beam fired by a ship (`playerControlled`: a peer
+ * steers it, ControlledByComponent) from a mount of `guidance`, units a
+ * second. MEASURED (reference "The beam Count clock (the hub's item 2,
+ * E10), wave 52"): only an NPC's TURRETED beam (Guidance 3, a plain beam
+ * and the tractor alike) lives Count / 30 s; an NPC's fixed beam and
+ * the player's fixed and turret beams Count / 56. An NPC is any ship no
+ * peer steers (traffic, hired escorts, bay fighters), as for
+ * WeaponsSystem's isAi. GUESS: a point-defence beam (Guidance 10) is a
+ * turreted beam too (it is re-aimed every tick like Guidance 3; its
+ * clock is unread). A beam fired by no ship (a submunition) keeps
+ * BEAM_COUNT_RATE. Pure.
+ */
+export function beamCountRateFor(guidance: BeamWeaponData['guidance'],
+    playerControlled: boolean): number {
+    const turreted = guidance === 'beamTurret'
+        || guidance === 'pointDefenseBeam';
+    return turreted && !playerControlled
+        ? NPC_TURRET_BEAM_COUNT_RATE : BEAM_COUNT_RATE;
+}
+
+/**
+ * How long a beam shot does damage, ms: its Count at the shot's own clock
+ * (BeamState.countRate). The parsed shotDuration is at BEAM_COUNT_RATE.
+ */
+export function beamShotDuration(beamData: BeamWeaponData,
+    beamState: BeamState): number {
+    const rate = beamState.countRate ?? BEAM_COUNT_RATE;
+    return rate === BEAM_COUNT_RATE ? beamData.shotDuration
+        : beamData.shotDuration * BEAM_COUNT_RATE / rate;
+}
+
+/**
+ * How long a beam shot stays on screen, ms (its Count plus a Decay's
+ * tail), at the shot's own clock like beamShotDuration.
+ */
+export function beamOnScreenDuration(beamData: BeamWeaponData,
+    beamState: BeamState): number {
+    const parsed = beamData.onScreenDuration ?? beamData.shotDuration;
+    const rate = beamState.countRate ?? BEAM_COUNT_RATE;
+    return rate === BEAM_COUNT_RATE ? parsed
+        : parsed * BEAM_COUNT_RATE / rate;
+}
 
 /**
  * BeamState's wire shape: per-beam STATE (not game data — the one of
@@ -79,6 +130,7 @@ export const BeamStateType: t.Type<BeamState> = t.exact(t.partial({
     hitDist: t.number,
     targetHit: t.string,
     aimOffset: t.number,
+    countRate: t.number,
 }));
 
 const BeamSubsQuery = new Query([MovementStateComponent] as const);
@@ -165,6 +217,26 @@ class BeamWeaponEntry extends WeaponEntry {
         return beam;
     }
 
+    /**
+     * A ship's shot, stamped with its Count clock (beamCountRateFor) by
+     * who fires it: ControlledByComponent is synced, so every peer stamps
+     * the same. Only a clock other than BEAM_COUNT_RATE is written.
+     */
+    override fireFromEntity(source: string, inaccuracy = true,
+        weaponTarget?: string): Entity | undefined {
+        const beam = super.fireFromEntity(source, inaccuracy, weaponTarget);
+        const state = beam?.components.get(BeamStateComponent);
+        if (state) {
+            const rate = beamCountRateFor(this.data.guidance,
+                this.entities.get(source)?.components
+                    .has(ControlledByComponent) ?? false);
+            if (rate !== BEAM_COUNT_RATE) {
+                state.countRate = rate;
+            }
+        }
+        return beam;
+    }
+
     override fireSubs(source: string, end: ShotEnd) {
         const [{ position, rotation }] = this.runQuery(BeamSubsQuery, source)[0];
         const endOfBeam = position.add(rotation.getUnitVector()
@@ -193,7 +265,9 @@ export const BeamSystem = new System({
     step(beamData, beamState, movement, fireSubs, fireTime, { time, delta_ms },
         uuid, entities, source, target) {
         // A beam of Count units lives for Count / BEAM_COUNT_RATE s
-        // (reference "Beam Count's unit (E10, ...), wave 41"), judged to
+        // (reference "Beam Count's unit (E10, ...), wave 41"), an NPC's
+        // turret beam Count / 30 s (BeamState.countRate, "The beam Count
+        // clock (the hub's item 2, E10), wave 52"), judged to
         // the nearest tick like a reload (intervalElapsed): a strict `>`
         // here once let a 1-frame beam straddle an extra tick when the
         // accumulated clock came out a hair short, and that tick landed
@@ -202,7 +276,7 @@ export const BeamSystem = new System({
         // window below still closes at Count.
         const timeSinceFire = time - fireTime;
         if (intervalElapsed(timeSinceFire,
-            beamData.onScreenDuration ?? beamData.shotDuration, delta_ms)) {
+            beamOnScreenDuration(beamData, beamState), delta_ms)) {
             // Beam submunitions are a NovaJS extension (the original has
             // none), and their rule is Matthew's: a beam subs at the far
             // end of its ray when it ends, whether or not the ray lay on
@@ -557,9 +631,14 @@ export const BeamDamageSystem = new System({
         // crediting each tick's own slice would lose the sliver past the
         // last tick (a Count-1 beam lives one tick of 16.7 ms against its
         // 17.9). GUESS: the total per shot is the Count, as on the 30 fps
-        // clock; the original was not timed for damage per beam unit.
+        // clock; the original was not timed for damage per beam unit. An
+        // NPC's turret beam spreads the same Count over its longer window
+        // (beamShotDuration: Count / 30 s, wave 52's E10; its damage per
+        // unit is unread), so a tractor's pull and a beam's damage build
+        // about half as fast and last twice as long.
+        const shotDuration = beamShotDuration(beamData, beamState);
         const windowTicks = Math.max(1,
-            Math.round(beamData.shotDuration / delta_ms));
+            Math.round(shotDuration / delta_ms));
         if (Math.round((time - fireTime) / delta_ms) >= windowTicks) {
             return;
         }

@@ -457,16 +457,14 @@ export const TRACTOR_PULL_RANGE = 450;
  * reading (about 100 px/s a shot, x at its 87.5 cap) lies under this law's
  * 113 (x at the cap, y 72): its y was not read on its own.
  *
- * OPEN, left for the next wave: the CLOCK the units land on. The original
- * NPC tractor's Count-30 beam showed for about 1 s (30 units a second), and
- * the pull lasted as long, while the player's Count-30 fixed beam in the
- * same system showed for 16-17 frames (Count / 56, wave 41's
- * BEAM_COUNT_RATE, which NovaJS uses for every beam). Whether that is NPC
- * against player or turret against fixed (the tractor is Guidance 3) is
- * unread (a player turret beam and an NPC fixed beam), so NovaJS still
- * lands a Count-30 tractor's 30 units over 30 / 56 s: the same total a
- * shot as the original, built about twice as fast (about 670 px/s² on 50 t
- * at Impact 20 against the original's 345).
+ * The CLOCK the units land on: MEASURED (reference "The beam Count clock
+ * (the hub's item 2, E10), wave 52"): an NPC's TURRETED beam (the tractor
+ * is Guidance 3) runs its Count at 30 units a second (combat
+ * beamCountRateFor, NPC_TURRET_BEAM_COUNT_RATE), so the NPC tractor's
+ * Count-30 shot lands its 30 units over about 1 s, as wave 51 read: 12
+ * px/s a unit on 50 t at Impact 20 is 360 px/s a second, the measured
+ * steady 345 px/s². A player's tractor (fixed or turret) runs Count / 56
+ * (GUESS from E10's plain beams, about 0.54 s a Count-30 shot, unflown).
  */
 export const TRACTOR_PULL_PER_IMPACT = KNOCKBACK_PER_IMPACT;
 

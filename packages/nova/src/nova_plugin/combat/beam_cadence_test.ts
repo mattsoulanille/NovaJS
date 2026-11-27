@@ -13,7 +13,13 @@ import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import {
     getIntegrationGameData, getSyntheticGameData,
 } from '../../communication/simulation_test_fixture.js';
-import { BeamDataComponent, BeamStateComponent } from './beam_plugin.js';
+import {
+    BEAM_COUNT_RATE, NPC_TURRET_BEAM_COUNT_RATE,
+} from 'novaparse/parsers/constants';
+import {
+    BeamDataComponent, beamCountRateFor, BeamStateComponent,
+} from './beam_plugin.js';
+import { ControlledByComponent } from '../player/index.js';
 import { DamagedEvent } from '../ship/index.js';
 import { completeEntity, loadWeaponsGameData } from '../spawn/index.js';
 import {
@@ -290,6 +296,84 @@ describe('beam fire cadence and damage on the original frame clock', () => {
                 expect(angle).toBeCloseTo(exact, 12);
             }
         }, 120_000);
+    });
+
+    /**
+     * Reference "The beam Count clock (the hub's item 2, E10), wave 52":
+     * a Count-30 beam showed 30 recorded frames (about 1 s) only when an
+     * NPC fired it from a TURRET; an NPC's fixed beam and the player's
+     * turret beam showed 16-18, like the player's fixed beam (Count / 56).
+     */
+    describe('the Count clock by firer and mount (E10, wave 52)', () => {
+        /** A Count-30 beam (its parsed durations at BEAM_COUNT_RATE). */
+        async function count30(world: World, gameData: GameData,
+            guidance: BeamWeaponData['guidance']) {
+            const construct = world.resources
+                .get(WeaponConstructors)!.get('BeamWeaponData')!;
+            const data = await gameData.data.Weapon.get(WIDE_LANCE) as BeamWeaponData;
+            return new construct({
+                ...data,
+                id: `test:count30_${guidance}`,
+                guidance,
+                // Harmless: a turret beam ends with its target, so the
+                // victim must outlive the whole shot.
+                damage: { ...data.damage, shield: 0, armor: 0 },
+                shotDuration: 30 * 1000 / BEAM_COUNT_RATE,
+                onScreenDuration: 30 * 1000 / BEAM_COUNT_RATE,
+            }, world.resources.get(RunQuery)!);
+        }
+
+        async function fly(guidance: BeamWeaponData['guidance'],
+            player: boolean) {
+            const { gameData, world, shooter } = await setUp();
+            if (player) {
+                shooter.components.set(ControlledByComponent,
+                    { peerId: 'pilot' });
+            }
+            shooter.components.set(TargetComponent, { target: 'victim' });
+            const entry = await count30(world, gameData, guidance);
+            damaged = [];
+            const beam = entry.fireFromEntity('shooter', false)!;
+            expect(beam).toBeDefined();
+            const rate = beam.components.get(BeamStateComponent)!.countRate;
+            const beams = run(world, 90);
+            expect(beams.size).toEqual(1);
+            return { ticks: [...beams.values()][0], rate,
+                damage: frameDamages('victim') };
+        }
+
+        it('runs an NPC\'s turret beam at 30 units a second: a Count-30 '
+            + 'shot lives 1 s (60 ticks), its 30 units spread over it',
+            async () => {
+                const { ticks, rate, damage } = await fly('beamTurret', false);
+                expect(rate).toBe(NPC_TURRET_BEAM_COUNT_RATE);
+                expect(ticks).toBe(60);
+                expect(damage).toBeCloseTo(30, 6);
+            }, 120_000);
+
+        it('runs an NPC\'s fixed beam and the player\'s turret and fixed '
+            + 'beams at Count / 56 (32 ticks), unstamped', async () => {
+                for (const [guidance, player] of [
+                    ['beam', false], ['beamTurret', true], ['beam', true],
+                ] as const) {
+                    const { ticks, rate, damage } = await fly(guidance, player);
+                    const context = `${guidance}, player ${player}`;
+                    expect(rate).withContext(context).toBeUndefined();
+                    expect(ticks).withContext(context).toBe(32);
+                    expect(damage).withContext(context).toBeCloseTo(30, 6);
+                }
+            }, 120_000);
+
+        it('picks the clock by firer and mount (GUESS: a point-defence '
+            + 'beam is a turreted one)', () => {
+            expect(beamCountRateFor('beamTurret', false)).toBe(30);
+            expect(beamCountRateFor('pointDefenseBeam', false)).toBe(30);
+            expect(beamCountRateFor('beamTurret', true)).toBe(BEAM_COUNT_RATE);
+            expect(beamCountRateFor('pointDefenseBeam', true))
+                .toBe(BEAM_COUNT_RATE);
+            expect(beamCountRateFor('beam', false)).toBe(BEAM_COUNT_RATE);
+            expect(beamCountRateFor('beam', true)).toBe(BEAM_COUNT_RATE);
+        });
     });
 });
 

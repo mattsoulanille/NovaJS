@@ -13,6 +13,20 @@ export const FPS = 30;
 export const BEAM_COUNT_RATE = 56;
 
 /**
+ * The rate an NPC's TURRETED beam runs its Count (and Decay tail) at,
+ * units per second: the 30 fps game frame, not BEAM_COUNT_RATE. MEASURED
+ * (reference "The beam Count clock (the hub's item 2, E10), wave 52"):
+ * an NPC's Count-30 turret beam showed 30 recorded frames every shot
+ * (seven shots, Impact 0; the NPC tractor 29-31 in waves 50-51), while
+ * an NPC's FIXED beam (16-18) and the player's TURRET beam (17) ran
+ * Count / 56 like the player's fixed beam. GUESS for the cause: the
+ * original re-aims an NPC turret beam once per 1/30 s AI tick and ages it
+ * there. Which beams take it is decided per shot by the firer and the
+ * mount (nova beam_plugin.ts beamCountRateFor).
+ */
+export const NPC_TURRET_BEAM_COUNT_RATE = FPS;
+
+/**
  * The frame rate shïp Deionize (and oütf ModType 39's extra Deionize) is
  * counted in: Deionize 100 drains one point of ion charge a frame of
  * THIS rate, so Deionize D drains D / 100 x DEIONIZE_FRAME_RATE points a

@@ -11,8 +11,8 @@ import { System } from 'nova_ecs/system';
 import { SingletonComponent } from "nova_ecs/world";
 import * as PIXI from "pixi.js";
 import {
-    aimBeam, anchorBeam, BeamDataComponent, BeamState, BeamStateComponent,
-    BeamSystem,
+    aimBeam, anchorBeam, BeamDataComponent, beamOnScreenDuration,
+    beamShotDuration, BeamState, BeamStateComponent, BeamSystem,
 } from "../nova_plugin/combat/index.js";
 import { SourceComponent, TargetComponent } from '../nova_plugin/ship/index.js';
 import { CollisionSystem, CreateTime } from '../nova_plugin/core/index.js';
@@ -169,8 +169,8 @@ export const BeamDisplaySystem: System = new System({
         // tail (beamCoronaFraction); a beam with no CreateTime (never
         // expected) draws its full corona.
         const corona = createTime === undefined ? 1 : beamCoronaFraction(
-            beamData.decay, beamData.shotDuration,
-            beamData.onScreenDuration ?? beamData.shotDuration,
+            beamData.decay, beamShotDuration(beamData, beamState),
+            beamOnScreenDuration(beamData, beamState),
             simTime.time - createTime);
         const length = Math.min(dataLength, beamState.hitDist ?? Infinity);
         const pose = drawnBeamPose(movement, beamState, source,

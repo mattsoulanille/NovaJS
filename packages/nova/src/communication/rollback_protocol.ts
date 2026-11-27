@@ -1096,6 +1096,18 @@ export const STATE_HASH_INTERVAL = 60;
 //    wire schema fingerprint changes (28e54be45bbe19d2 ->
 //    8057c916e5bb0080), and the join gate keeps older and newer builds
 //    apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the beam Count clock (reference "The beam Count
+//    clock (the hub's item 2, E10), wave 52": only an NPC's TURRETED beam
+//    runs its Count at 30 units a second, every other beam at 56).
+//    BeamState gains one OPTIONAL field, `countRate` (units a second),
+//    stamped at the shot by its firer and mount (combat/beam_plugin.ts
+//    beamCountRateFor) and written only when it is not BEAM_COUNT_RATE.
+//    Sim-rule change alongside (wave 52, no further schema): a ship's
+//    uncharged turn is whole degrees a frame (unchargedTurnRate). No input
+//    or message kind changes. The derived wire schema fingerprint changes
+//    (8057c916e5bb0080 -> 624186b4119d5d2b), and the join gate keeps older
+//    and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 
