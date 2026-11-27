@@ -611,6 +611,17 @@ it for `l`; Deionize 0 is NOT "no drain". `scenarios/w41_space_interactive.json`
 / `w41_space_early.json` / `w41_space_early10.json` (10 fps, long watches) /
 `w41_r5_title.json` (title-screen reads of several pushed pilots, no
 plug-in; inbox `w41.jsonl`).
+Wave 42 OPENED spöb **1000-1399**: stock spöb are 128-517 and 1400-1420, so
+518-1399 was never used by the stock files or the kit (checked against the
+stock .ndat files; the kit's new stellars load and land like the 1421+
+ones). It used sÿst 1441-1445, spöb 1000-1006, shïp 686-696, düde 532-534,
+wëap 309-311, oütf 490-491 and bits 9276-9278, and RETIRED wave 11's mïsn
+1041 / 1042 (bits 9087 / 9088; the ships and düdes stay), using them for its
+own. Next free: sÿst 1446, spöb 1007-1399 (and 518-999), shïp 697, düde
+535, ränk 205, mïsn **none** (retire another old kit mission; wave 11's
+1039 is still used by `w39_k3`), wëap 312, oütf 492, gövt 283 and below,
+flët 324, jünk 205, bits 9279. `scenarios/w42_space_interactive.json` /
+`w42_space_early.json` (inbox `w42.jsonl`).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they

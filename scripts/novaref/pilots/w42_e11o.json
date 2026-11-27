@@ -1,0 +1,28 @@
+{
+  "name": "novaref-w42-e11o",
+  "edits": {
+    "ship": 703,
+    "stellar": 1003,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1444": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w42-e11o",
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}
