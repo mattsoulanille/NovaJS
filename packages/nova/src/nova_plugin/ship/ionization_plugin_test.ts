@@ -239,13 +239,14 @@ describe('ionSlowdown', () => {
             const at = (current: number) => ionSlowdown(charge(current));
             for (const current of [0.5, 5, 10, 14, 16]) {
                 expect(at(current).turnRate).toBeCloseTo(2 / 3, 9);
-                // GUESS: main's pre-wave-44 values, kept (unmeasured).
-                expect(at(current).acceleration).toBeCloseTo(7 / 9, 9);
+                // Reference "Thrust on the lower ion plateaus (E6
+                // leftover), wave 45": 0.93 untinted, 0.71 tinted.
+                expect(at(current).acceleration).toBeCloseTo(0.93, 9);
                 expect(at(current).maxVelocity).toBe(1);
             }
             for (const current of [16.5, 17, 25, 38]) {
                 expect(at(current).turnRate).toBeCloseTo(1 / 3, 9);
-                expect(at(current).acceleration).toBeCloseTo(5 / 9, 9);
+                expect(at(current).acceleration).toBeCloseTo(0.71, 9);
             }
             expect(87.8 * at(10).turnRate).toBeCloseTo(60, -1);
             expect(87.8 * at(30).turnRate).toBeCloseTo(30, -1);

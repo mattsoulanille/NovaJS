@@ -113,15 +113,17 @@ export const ION_TINTED_SEVERITY = 2 / 3;
 
 /**
  * The acceleration's multiplier on the two lower steps (untinted, then
- * tinted). NOT measured: the wave-44 pad rig could not read them (the
- * ion bolts push the ship off the pad, reference "Acceleration under
- * ionization (E6 leftover), wave 44"). GUESS: the values main derived
- * before that wave, the turn's shares of the old 1/3 full cut (7/9 and
- * 5/9), kept as they were rather than re-derived from the measured 0.4;
- * they still fall step by step to ION_FULL_ACCELERATION_FACTOR.
+ * tinted). MEASURED, reference "Thrust on the lower ion plateaus (E6
+ * leftover), wave 45": with an Impact-0 ion weapon (no push), two Up
+ * pulses per plateau read about 0.93 of the control's thrust untinted and
+ * 0.71 tinted; above the no-turn line it is ION_FULL_ACCELERATION_FACTOR
+ * (wave 44). The exact values are GUESSES within two pulses each, and
+ * whether the factor steps or slides with the charge inside a plateau was
+ * not read (kept as steps, like the turn's). Was 7/9 and 5/9 (GUESS: the
+ * turn's shares of the old 1/3 full cut).
  */
-export const ION_UNTINTED_ACCELERATION_FACTOR = 7 / 9;
-export const ION_TINTED_ACCELERATION_FACTOR = 5 / 9;
+export const ION_UNTINTED_ACCELERATION_FACTOR = 0.93;
+export const ION_TINTED_ACCELERATION_FACTOR = 0.71;
 
 /** Multipliers ionization puts on a ship's movement physics. */
 export interface IonSlowdown {
@@ -140,9 +142,9 @@ export const NO_ION_SLOWDOWN: Readonly<IonSlowdown> =
  * of the full cut for any charge up to the ionized line; two thirds of it
  * from there to ION_NO_TURN_FRACTION; the measured full cut (no turn, 0.4
  * of the acceleration, wave 44) above. The acceleration's lower steps are
- * ION_UNTINTED/TINTED_ACCELERATION_FACTOR (GUESS). Was a linear ramp to
- * the ionized line (GUESS, wave 41). The top speed is never cut. A pure
- * function of the synced charge.
+ * ION_UNTINTED/TINTED_ACCELERATION_FACTOR (0.93 / 0.71, wave 45). Was a
+ * linear ramp to the ionized line (GUESS, wave 41). The top speed is
+ * never cut. A pure function of the synced charge.
  */
 export function ionSlowdown(
     ionization: { current: number, max: number } | undefined,
