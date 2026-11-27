@@ -778,16 +778,20 @@ killed by the Kit Beam Turret in the Leave's own keys step leaves a known
 charge that drains at 0.29 a second per Deionize point; read the turn off
 the Kit Ring Ion's spoke (`tools/e6rates.sh`, `tools/brk.py`). Scenarios
 `w50_space_interactive.json` (inbox `w50.jsonl`).
-Wave 51 used sÿst 1493, spöb 1215 and oütf 514-518, and RETIRED wave 39's
-shïp 598 (Kit Ring Ion Fade), wave 40's 603 (Kit Jump Slow Ring) and 604
-(Kit Ring Ion D50), wave 41's 629 (Kit Ring Ion D0), wave 6's 792 (Kit
-Lancer Ion) and wave 7's 814 (Kit Lancer Ion Slow), using them for its own
-(pilots `w39_e6f`, `w40_u8r`, `w40_e6d`, `w41_e6`, `w6_ion*` and
-`w7_ionthr` are stale). Next free: sÿst 1494, spöb 1216-1399 (and
-518-999), shïp **none** (retire an old kit hull), düde 328 / 552, ränk 205,
-mïsn **none** (retire another old kit mission: wave 14's 1082-1084), përs:
-override a stock one, wëap 330, oütf 519, gövt 283 and below, flët 324,
-jünk 205, bits 9334, rlëD 1113. **Turn ladder**: shïp 598 / 604 / 629 /
+Wave 51 used sÿst 1493, spöb 1215, wëap 330, oütf 514-518 and bit 9334,
+and RETIRED wave 39's shïp 598 (Kit Ring Ion Fade), wave 40's 603 (Kit
+Jump Slow Ring) and 604 (Kit Ring Ion D50), wave 41's 629 (Kit Ring Ion
+D0), wave 6's 792 (Kit Lancer Ion), wave 7's 814 (Kit Lancer Ion Slow) and
+wave 4's S100 jam set (oütf 631, shïp 777, düde 608, mïsn 968, bit 9009),
+using them for its own (pilots `w39_e6f`, `w40_u8r`, `w40_e6d`, `w41_e6`,
+`w6_ion*`, `w7_ionthr`, `w4_rk_decoyS100` and `w4_rk_passS100` are
+stale). Next free: sÿst 1494, spöb 1216-1399 (and 518-999), shïp **none**
+(retire an old kit hull), düde 328 / 552, ränk 205, mïsn **none** (retire
+another old kit mission: wave 14's 1082-1084), përs: override a stock one,
+wëap 331, oütf 519 (and 631), gövt 283 and below, flët 324, jünk 205, bits
+9335, rlëD 1113. A **second tractor**: shïp 777 Kit Tractor Beamer 40
+(wëap 330, Impact -40) on Kit Knock Grid's first moon by mïsn 968 (bit
+9334), beside wave 50's Impact -20 one (mïsn 1078). **Turn ladder**: shïp 598 / 604 / 629 /
 792 / 814 Kit Ring Ion T10 / T20 / T60 / T100 / T200 are the Kit Ring Ion
 (596, Turn 30) at other Turns; with wave 50's ion clock (mïsn 963 on Kit
 Knock Grid Port, the Kit Beam Turret kill in the Leave's own keys step) a
