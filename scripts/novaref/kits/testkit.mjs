@@ -985,7 +985,9 @@ function wave52Resources() {
     const ids = [1494, 1495, 1496, 1497, 1498, 1499, 1501];
     const names = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf"];
     const pos = [[-800, -3440], [-760, -3440], [-760, -3400], [-800, -3400], [-840, -3400], [-840, -3360], [-800, -3360]];
-    const sides = [["East", 1350, 0], ["West", -1350, 0], ["North", 0, -1350], ["South", 0, 1350]];
+    // Added during the wave: West at -950 (a multi-jump from Alpha arrives at -1,350 heading east and stops about 400 px on, too
+    // far to land on a port at the arrival point).
+    const sides = [["East", 1350, 0], ["West", -950, 0], ["North", 0, -1350], ["South", 0, 1350]];
     ids.forEach((sid, k) => {
         const ports = sides.map((_, j) => 1216 + 4 * k + j);
         const s = system(sid, `Kit MJ ${names[k]}`, pos[k][0], pos[k][1], 363, ports);
