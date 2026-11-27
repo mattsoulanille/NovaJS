@@ -323,6 +323,7 @@ export default {
         ...wave49Resources(),
         ...wave50Resources(),
         ...wave51Resources(),
+        ...wave52Resources(),
     ].map(wave15Patches).map(wave46Patches).map(withoutRunningLights),
 };
 
@@ -874,6 +875,117 @@ function wave51Resources() {
     out.push(dude(608, "Kit Tractor Beamer 40", 3, 362, 777));
     out.push(...misn(968, "Kit TR tractor beamer 40 on the grid", 9335, { availStel: 1170, shipCount: 1, shipDude: 608, shipGoal: -1,
         shipBehav: -1, shipStart: -2, onAccept: "!b9335" }));
+    return out;
+}
+
+/**
+ * Wave-52 experiments (docs/reference_experiments.md, "... wave 52"): the
+ * uncharged turn on non-multiple-of-10 Turns, a destroy / disable mission
+ * goal met by an NPC, the beam Count clock (player turret vs NPC fixed),
+ * the multi-jump outfit. RETIRED: wave 40's shïp 606-614 (Kit E11 A0050
+ * T005 .. A0450 T045, the E11 yard's first nine), wave 14's mïsn 1082 (bit
+ * 9155, Kit A comp abort 338), 1083 (bit 9160, Kit A comp fail 338) and
+ * 1084 (bit 9163, Kit S several finds), using them for its own. Used: sÿst
+ * 1494-1499 / 1501, spöb 1216-1243, shïp 606-614, düde 552-554, wëap
+ * 331-332, oütf 519-520, mïsn 967 / 1082-1084, bits 9336-9347, dësc
+ * 11320-11321. Map: the MJ chain at x -840 .. -760, y -3440 .. -3360. The
+ * next free ids: sÿst 1502+ (1494-1499 / 1501 used; check 1502-1504,
+ * 1513+ against the kit), spöb 1244-1399 (and 518-999), shïp 615-625
+ * (retire the rest of the E11 yard, wave 40, first), përs: override a stock
+ * one (kits/w48_pers225.mjs), ränk 205+, mïsn NONE (retire another old kit
+ * mission), düde 555+, gövt 283 and below, flët 324+, wëap 333+, oütf
+ * 521+ (and 630 / 631), jünk 205+, bits 9348+ (not a stock bit: 9011-9015,
+ * 9111, 9200-9208, 9215-9216, 9333-9334, 9500-9501, 9666, 9812, 9995,
+ * 9998-9999), rlëD 1113+.
+ *
+ *  E6B shïp 606-611 Kit Ring Ion T7 / T9 / T15 / T35 / T55 / T95: wave
+ *      51's Kit Ring Ion (the white-spoke inertialess ring, IonizeMax 100,
+ *      Deionize 1) at those Turns (776 is T25): is the UNCHARGED turn
+ *      floor(Turn / 10) whole degrees a frame for every hull (T7 / T9 would
+ *      not turn at all), and T95 saturated (floor at q 0.7 gives 2, strictly
+ *      below at q 2/3 gives 3 degrees a frame).
+ *  NK  A mission ship killed by an NPC: Kit FF Range (sÿst 2047) with wave
+ *      12's anchored hunter on the far mark (mïsn 1060, bit 9110, the
+ *      spaceport offer) and, as a Mission BBS job on the near mark 150 px
+ *      below it, a cyan anchored prey of the hunter's enemy gövt 357
+ *      (unarmed, shield 0): mïsn 967 (bit 9336) shïp 612 Kit NK Prey 20
+ *      (armor 20: one Kit Raider Gun bolt destroys it outright), ShipGoal 0
+ *      (destroy), ReturnStel 2047, OnShipDone b9338, OnSuccess b9337,
+ *      OnFailure b9339, CompText dësc 11320; mïsn 1082 (bit 9340) shïp 613
+ *      Kit NK Prey 100 (armor 100: disabled before it dies), ShipGoal 1
+ *      (disable), OnShipDone b9342, OnSuccess b9341, OnFailure b9343,
+ *      CompText dësc 11321; düde 552 / 553.
+ *  E10 The beam Count clock: wëap 331 Kit Plain Beam Turret (wave 40's Kit
+ *      Plain Beam, Count 30, green, as a turreted beam 700 px long) and its
+ *      oütf 519, for the player; wëap 332 Kit Fixed Red Beam (the tractor
+ *      beam's red art, Impact 0, Count 30, Reload 120, a FIXED beam 3,000
+ *      px long) on shïp 614 Kit Fixed Beamer (wave 48's immobile beamer,
+ *      Turn 60, of the always-hostile gövt 362, düde 554), which mïsn 1083
+ *      (bit 9344) puts on Kit Knock Grid's first moon (as wave 50's mïsn
+ *      1078 does the tractor).
+ *  MJ  The multi-jump: oütf 520 Kit Multi Jump 2 (ModType 32, ModVal 2:
+ *      two extra jumps a press); sÿst 1494-1499 / 1501 Kit MJ Alpha .. Golf,
+ *      linked A-B-C-D-E-F-G in a U: A (-800, -3440), B 40 east, C 40 south
+ *      of B, D 40 west of C (40 south of A, NOT linked to it), E 40 west of
+ *      D, F 40 south of E, G 40 east of F. Every system has four landable
+ *      ports (spöb 1216 + 4 k ..: East (1350, 0), West (-1350, 0), North (0,
+ *      -1350), South (0, 1350), the 72 px planet art) where a jump arrives,
+ *      so the port on screen at an arrival names the side, and the pilot can
+ *      land and Leave to write itself. mïsn 1084 (bit 9345, offered at
+ *      Alpha East) wants ONE anchored Kit Prey Bare (düde 528, no cloak)
+ *      observed in Bravo (ShipGoal 4: the player merely in its system),
+ *      ShipStart -1, OnShipDone b9346, ReturnStel Delta East, OnSuccess
+ *      b9347.
+ */
+function wave52Resources() {
+    const out = [];
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    // --- E6B: shïp 606-611 (wave 40's E11 hulls, retired): wave 51's ring at more Turns.
+    [[606, 7], [607, 9], [608, 15], [609, 35], [610, 55], [611, 95]].forEach(([id, turn]) => out.push(...shareRled(id, `Kit Ring Ion T${turn}`,
+        1955, 24, { accel: 2000, speed: 800, turn, armor: 30000, shield: 30000, shieldRecharge: 1000, mass: 50, freeMass: 1000, cargo: 200,
+            maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, crew: 10, flags: 0, flags2: 0x00C8, ionization: 100, deionize: 1 })));
+    // --- NK: shïp 612-613 (retired E11), düde 552-553, mïsn 967 / 1082 (wave 14's, retired), bits 9336-9343, dësc 11320-11321.
+    const prey = { accel: 0, speed: 0, turn: 60, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0,
+        shieldRecharge: 0, armorRecharge: 0, shield: 0 };
+    out.push(...shareRled(612, "Kit NK Prey 20", 1976, 24, { ...prey, armor: 20 }));
+    out.push(...shareRled(613, "Kit NK Prey 100", 1976, 24, { ...prey, armor: 100 }));
+    out.push(dude(552, "Kit NK Prey 20", 3, 357, 612), dude(553, "Kit NK Prey 100", 3, 357, 613));
+    const nkJob = { availStel: 2047, availLoc: 0, dispWeight: 30000, shipCount: 1, shipSyst: -1, shipBehav: -1, shipStart: -2, returnStel: 2047 };
+    out.push(...misn(967, "Kit NK destroy the prey", 9336, { ...nkJob, shipDude: 552, shipGoal: 0, compText: 11320, onAccept: "!b9336",
+        onSuccess: "b9337", onShipDone: "b9338", onFailure: "b9339" }));
+    out.push({ type: "dësc", id: 11320, text: "Kit NK destroy: COMPLETE (mission 967 CompText)." });
+    out.push(...misn(1082, "Kit NK disable the prey", 9340, { ...nkJob, shipDude: 553, shipGoal: 1, compText: 11321, onAccept: "!b9340",
+        onSuccess: "b9341", onShipDone: "b9342", onFailure: "b9343" }));
+    out.push({ type: "dësc", id: 11321, text: "Kit NK disable: COMPLETE (mission 1082 CompText)." });
+    // --- E10: wëap 331-332, oütf 519, shïp 614 (retired E11), düde 554, mïsn 1083 (wave 14's, retired), bit 9344.
+    out.push(weap(331, "Kit Plain Beam Turret", 170, { reload: 150, duration: 30, armorDamage: 1, shieldDamage: 1, guidance: 3, beamLength: 700,
+        beamWidth: 2, coronaFalloff: 4, beamColor: 0x0000ff00, coronaColor: 0x00008000, decay: 0 }), gun(519, "Kit Plain Beam Turret", 331));
+    out.push(weap(332, "Kit Fixed Red Beam", 170, { reload: 120, duration: 30, speed: 0, armorDamage: 1, shieldDamage: 1, guidance: 0,
+        beamLength: 3000, beamWidth: 2, impact: 0, ionization: 0, flags: 0 }));
+    out.push(...ship(614, "Kit Fixed Beamer", 136, { armor: 30000, shield: 0, accel: 0, speed: 0, turn: 60, ai: 3, strength: 1, crew: 1,
+        weapons: [332, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
+    out.push(dude(554, "Kit Fixed Beamer", 3, 362, 614));
+    out.push(...misn(1083, "Kit E10 fixed beamer on the grid", 9344, { availStel: 1170, shipCount: 1, shipDude: 554, shipGoal: -1,
+        shipBehav: -1, shipStart: -2, onAccept: "!b9344" }));
+    // --- MJ: oütf 520, sÿst 1494-1499 / 1501, spöb 1216-1243, mïsn 1084 (wave 14's, retired), bits 9345-9347.
+    const mj = gun(520, "Kit Multi Jump 2", 0);
+    mj.set = { ...mj.set, modType: 32, modVal: 2, max: 1 };
+    out.push(mj);
+    const ids = [1494, 1495, 1496, 1497, 1498, 1499, 1501];
+    const names = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf"];
+    const pos = [[-800, -3440], [-760, -3440], [-760, -3400], [-800, -3400], [-840, -3400], [-840, -3360], [-800, -3360]];
+    const sides = [["East", 1350, 0], ["West", -1350, 0], ["North", 0, -1350], ["South", 0, 1350]];
+    ids.forEach((sid, k) => {
+        const ports = sides.map((_, j) => 1216 + 4 * k + j);
+        const s = system(sid, `Kit MJ ${names[k]}`, pos[k][0], pos[k][1], 363, ports);
+        s.set = { ...s.set, links: [...[ids[k - 1], ids[k + 1]].filter((v) => v !== undefined), ...none16].slice(0, 16) };
+        out.push(s, ...sides.map(([side, x, y], j) => spob(ports[j], `Kit MJ ${names[k]} ${side}`, x, y, 138, { flags: 0x03 })));
+    });
+    out.push(...misn(1084, "Kit MJ observe in Bravo", 9345, { availStel: 1216, shipCount: 1, shipSyst: 1495, shipDude: 528, shipGoal: 4,
+        shipBehav: -1, shipStart: -1, returnStel: 1228, onAccept: "!b9345", onShipDone: "b9346", onSuccess: "b9347" }));
     return out;
 }
 
@@ -1815,8 +1927,9 @@ function wave40Resources() {
     out.push(weap(302, "Kit Fade Bolt F1", 131, { ...fade, coronaFalloff: 1 }), gun(485, "Kit Fade Bolt F1", 302));
     out.push(weap(303, "Kit Fade Bolt F4", 131, { ...fade, coronaFalloff: 4 }), gun(486, "Kit Fade Bolt F4", 303));
     out.push(weap(304, "Kit Fade Bolt F0", 131, { ...fade, coronaFalloff: 0 }));
-    // --- E11: shïp 606-625, sÿst 1419, spöb 1980.
-    for (let k = 1; k <= 20; k++) {
+    // --- E11: shïp 606-625, sÿst 1419, spöb 1980. shïp 606-614 (k = 1..9: Kit E11 A0050 T005 .. A0450 T045) were RETIRED in
+    // wave 52 (wave52Resources: E6B the uncharged turn per hull, NK the NPC-killed mission ships, E10 the NPC fixed beamer).
+    for (let k = 10; k <= 20; k++) {
         const accel = 50 * k, turn = 5 * k;
         out.push(...ship(605 + k, `Kit E11 A${String(accel).padStart(4, "0")} T${String(turn).padStart(3, "0")}`, 128, { accel, speed: 300, turn,
             armor: 300, shield: 300, mass: 50, freeMass: 100, cargo: 20, maxGuns: 4, maxTurrets: 4, ai: 3, strength: 10, flags: 0, flags2: 0,
@@ -4828,15 +4941,14 @@ function wave15Resources() {
     const beyond = system(1511, "Kit Spread Beyond", 100, -780, 338, []);
     beyond.set.links = links(1510);
     out.push(unowned, port(1510, "Kit Spread Unowned Port"), beyond);
-    out.push(...misn(1083, "Kit A comp fail 338", 9160, { compGovt: 338, compReward: 1000, timeLimit: 1, returnStel: 2101, onAccept: "!b9160", onFailure: "b9161", onSuccess: "b9162" }));
+    // mïsn 1083 (bit 9160, Kit A comp fail 338) was retired in wave 52 (wave52Resources: E10 the NPC fixed beamer).
 
     // --- S: an ally of the owner scans; several finds in one scan.
     out.push(govt(321, "Kit Smug Ally Owner", { smugPenalty: 70, classes: [321, -1, -1, -1], allies: [320, -1, -1, -1] }));
     out.push(govt(320, "Kit Customs Ally", { scanMask: 0x0001, scanFine: 500, smugPenalty: 50, crimeTol: 30000, classes: [320, -1, -1, -1], allies: [321, -1, -1, -1] }));
     out.push(dude(386, "Kit Customs Ally Cutter", 4, 320, 855));
     out.push(traffic(system(1515, "Kit Scan Ally", -480, -780, 321, [1515]), [[386, 100]], 2), port(1515, "Kit Scan Ally Port"));
-    out.push(...misn(1084, "Kit S several finds", 9163, { availStel: 2053, travelStel: 2055, returnStel: 2053, cargoType: 0, cargoQty: 1, pickupMode: 0, dropoffMode: 0,
-        scanMask: 0x0001, flags: 0x0020, compGovt: 332, compReward: 10, onAccept: "!b9163", onFailure: "b9164", onSuccess: "b9165" }));
+    // mïsn 1084 (bit 9163, Kit S several finds) was retired in wave 52 (wave52Resources: MJ the observe goal passed through).
 
     // --- P: leaving a provoked nosy police; 0x0020 on an ally; distress answerers.
     const nosyGate = system(1520, "Kit Nosy Gate", -80, -780, 363, [1520]);
@@ -5080,7 +5192,7 @@ function wave14Resources() {
     const tolGate = system(2031, "Kit Scan Tolerant Gate", -240, -720, 363, [2156]);
     tolGate.set.links = links(2053);
     out.push(tolGate, port(2156, "Kit Scan Tolerant Gate Port"));
-    out.push(...misn(1082, "Kit A comp abort 338", 9155, { compGovt: 338, compReward: 100, flags: 0x0040, returnStel: 2100, onAccept: "!b9155", onAbort: "b9156", onSuccess: "b9157" }));
+    // mïsn 1082 (bit 9155, Kit A comp abort 338) was retired in wave 52 (wave52Resources: NK the NPC-disabled mission ship).
 
     // --- R: the Raczak rescue with the kit düde and the mission cargo.
     const raczak = { shipCount: 1, shipSyst: -1, shipDude: 330, shipGoal: 5, shipBehav: -1, shipNameID: 25002, compGovt: 144, compReward: 10,

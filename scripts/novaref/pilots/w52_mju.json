@@ -1,0 +1,35 @@
+{
+  "name": "novaref-w52-mju",
+  "edits": {
+    "ship": 703,
+    "stellar": 1216,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1494": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w52-mju",
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0,
+      "520": 1
+    },
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}
