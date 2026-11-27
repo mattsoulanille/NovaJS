@@ -39,7 +39,9 @@ import {
     PEER_LOCAL_COMPONENTS, AnalogControlState, ControlledByComponent,
 } from '../nova_plugin/player/index.js';
 import { EncodedSimulationBridgeEvent, getRegisteredSimulationBridgeEvents } from "./simulation_bridge_events.js";
-import { SimulationBridgeHostApi, SimulationStatus } from "./simulation_bridge_api.js";
+import {
+    SimulationBridgeHostApi, SimulationPerfCounters, SimulationStatus,
+} from "./simulation_bridge_api.js";
 import { DeltaFrameEncoder, SimulationFrame } from "./simulation_frame.js";
 import { RoomClock } from "./room_clock.js";
 import { inputThroughWire } from "./wire_schemas.js";
@@ -173,6 +175,25 @@ interface CapturedEntity {
 /** How many rollback-machinery events the black-box ring retains. */
 const ROLLBACK_LOG_CAPACITY = 64;
 
+/** A monotonic wall clock for the perf counters (worker, main thread and
+ * node alike). Telemetry only: never read by the simulation. */
+function perfNow(): number {
+    return globalThis.performance?.now() ?? Date.now();
+}
+
+type PerfWindow = Omit<SimulationPerfCounters, 'windowMs'>
+    & { startedAt: number };
+
+function emptyPerfWindow(startedAt: number): PerfWindow {
+    return {
+        startedAt, stepCalls: 0, ticks: 0, stepMs: 0, stepCallMaxMs: 0,
+        snapshotCalls: 0, snapshotMs: 0, snapshotMaxMs: 0,
+        rollbacks: 0, rollbackDepthSum: 0, rollbackMaxDepth: 0,
+        // (No prototype: an event name is only ever a count.)
+        events: Object.create(null) as Record<string, number>,
+    };
+}
+
 export class SimulationBridgeHost implements SimulationBridgeHostApi {
     private queuedEvents: EncodedSimulationBridgeEvent[] = [];
     /**
@@ -252,6 +273,12 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     private rollbackCount = 0;
     private rollbackDepthSum = 0;
     private rollbackMaxDepth = 0;
+    /**
+     * The performance telemetry window (perfCounters()): wall-clock cost
+     * of step() / snapshot() and the rollback activity since the last
+     * read. Measured on the side, never read by the simulation.
+     */
+    private perf = emptyPerfWindow(perfNow());
     /** Sequence numbers for published records, so a relay echo of a
      * retimed record can name which local application to move. */
     private nextSeq = 0;
@@ -597,6 +624,25 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     }
 
     step(count = 1) {
+        const started = perfNow();
+        const tickBefore = this.rollback.tick;
+        try {
+            this.stepUntimed(count);
+        } finally {
+            // (After a resync swapped `this.rollback`, the tick can move
+            // backwards: only forward progress counts.)
+            const perf = this.perf;
+            const elapsed = perfNow() - started;
+            perf.stepCalls++;
+            perf.ticks += Math.max(0, this.rollback.tick - tickBefore);
+            perf.stepMs += elapsed;
+            if (elapsed > perf.stepCallMaxMs) {
+                perf.stepCallMaxMs = elapsed;
+            }
+        }
+    }
+
+    private stepUntimed(count: number) {
         if (this.resyncFailed) {
             // Frozen for good (#333): no stepping, and no re-entry either.
             return;
@@ -1134,6 +1180,11 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             if (depth > this.rollbackMaxDepth) {
                 this.rollbackMaxDepth = depth;
             }
+            this.perf.rollbacks++;
+            this.perf.rollbackDepthSum += depth;
+            if (depth > this.perf.rollbackMaxDepth) {
+                this.perf.rollbackMaxDepth = depth;
+            }
             this.logRollbackEvent('rollback', {
                 toTick,
                 depth,
@@ -1300,6 +1351,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         detail?: Record<string, number | string>) {
         this.rollbackEventCounts.set(event,
             (this.rollbackEventCounts.get(event) ?? 0) + 1);
+        this.perf.events[event] = (this.perf.events[event] ?? 0) + 1;
         this.rollbackLog.push({
             event,
             atTick: this.rollback.tick,
@@ -1853,6 +1905,14 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         };
     }
 
+    perfCounters(): SimulationPerfCounters {
+        const now = perfNow();
+        const window = this.perf;
+        this.perf = emptyPerfWindow(now);
+        const { startedAt, ...counters } = window;
+        return { ...counters, windowMs: now - startedAt };
+    }
+
     entityHashes(): { tick: number, entities: [string, string][] } {
         return {
             tick: this.rollback.tick,
@@ -2048,6 +2108,21 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     }
 
     snapshot(): SimulationFrame {
+        const started = perfNow();
+        try {
+            return this.snapshotUntimed();
+        } finally {
+            const perf = this.perf;
+            const elapsed = perfNow() - started;
+            perf.snapshotCalls++;
+            perf.snapshotMs += elapsed;
+            if (elapsed > perf.snapshotMaxMs) {
+                perf.snapshotMaxMs = elapsed;
+            }
+        }
+    }
+
+    private snapshotUntimed(): SimulationFrame {
         if (this.resyncFailed) {
             // Frozen (#333): no state ever leaves the genesis world the
             // failed recovery left behind, so the display holds the last

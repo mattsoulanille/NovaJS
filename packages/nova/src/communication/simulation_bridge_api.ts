@@ -59,6 +59,38 @@ export interface SimulationBridgeHostApi {
     /** Diagnostics: per-entity world hashes (peer-local excluded),
      * for diffing against another world's view. */
     entityHashes(): { tick: number, entities: [string, string][] };
+    /** Performance telemetry (client/perf_telemetry.ts): what stepping
+     * and snapshotting cost since the last call, which resets it. */
+    perfCounters(): SimulationPerfCounters;
+}
+
+/**
+ * The worker's own view of what the simulation cost over one telemetry
+ * window: everything since the previous perfCounters() call. Wall-clock
+ * measurement only, read on the side; nothing here feeds back into the
+ * simulation, so it has no bearing on determinism.
+ */
+export interface SimulationPerfCounters {
+    /** Wall ms the window covers (since the previous call, or the
+     * host's start). */
+    windowMs: number;
+    /** step() calls, and the ticks they advanced the live tick by. */
+    stepCalls: number;
+    ticks: number;
+    /** Wall ms spent inside step(): rollback resimulation, input
+     * integration and hash publishing included. */
+    stepMs: number;
+    stepCallMaxMs: number;
+    snapshotCalls: number;
+    snapshotMs: number;
+    snapshotMaxMs: number;
+    /** Rollbacks this window, their summed and largest depth (ticks). */
+    rollbacks: number;
+    rollbackDepthSum: number;
+    rollbackMaxDepth: number;
+    /** Rollback events logged this window, by name (status()'s
+     * rollbackEvents, windowed). */
+    events: Record<string, number>;
 }
 
 export interface SimulationStatus {
@@ -118,4 +150,5 @@ export interface AsyncSimulationBridgeHostApi {
     resync(): Promise<boolean>;
     status(): Promise<SimulationStatus>;
     entityHashes(): Promise<{ tick: number, entities: [string, string][] }>;
+    perfCounters(): Promise<SimulationPerfCounters>;
 }

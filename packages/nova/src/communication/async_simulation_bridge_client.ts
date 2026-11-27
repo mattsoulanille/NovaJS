@@ -177,6 +177,10 @@ export class AsyncSimulationBridgeClient {
         return this.guard(() => this.host.entityHashes());
     }
 
+    async perfCounters() {
+        return this.guard(() => this.host.perfCounters());
+    }
+
     getSerializer() {
         return this.serializer;
     }

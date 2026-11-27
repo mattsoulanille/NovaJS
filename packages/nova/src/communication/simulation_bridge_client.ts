@@ -134,6 +134,10 @@ export class SimulationBridgeClient {
         return this.host.entityHashes();
     }
 
+    perfCounters() {
+        return this.host.perfCounters();
+    }
+
     spawnNpc(shipId: string) {
         return this.host.spawnNpc(shipId);
     }
