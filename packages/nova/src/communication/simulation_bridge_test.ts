@@ -31,6 +31,7 @@ import { SimulationBridgeHost } from './simulation_bridge_host.js';
 import { emitSimulationBridgeEvent } from './simulation_bridge_events.js';
 import { unwrapRollbackMessage, wrapRollbackMessage } from './rollback_protocol.js';
 import { RollbackRelay } from './rollback_relay.js';
+import type { InputRecord } from './simulation_input.js';
 import { ShipControlStateComponent, ControlledByComponent } from '../nova_plugin/player/index.js';
 import { resetWarnThrottle } from '../common/log_throttle.js';
 
@@ -738,6 +739,67 @@ describe('SimulationBridge', () => {
             const pacing = host.snapshot().pacing!;
             expect(pacing.behindTicks).toBeLessThan(-40);
             expect(pacing.rate).toBeCloseTo(0.95, 5);
+        });
+
+        describe('the entry catch-up (catchUpToRoomClock)', () => {
+            it('steps straight onto the clock target, leaving no drift '
+                + 'for the slew', async () => {
+                const { host, sync } = makePacedHost();
+                sync(500);
+                const stepped = await host.catchUpToRoomClock();
+                // Server tick 500 (plus whatever real time the steps
+                // took) and the 4-tick send-ahead lead.
+                expect(stepped).toBeGreaterThanOrEqual(504);
+                expect(host.status().tick).toBe(stepped);
+                const pacing = host.snapshot().pacing!;
+                expect(pacing.behindTicks).toBeGreaterThan(-1);
+                expect(pacing.behindTicks).toBeLessThan(1);
+                // The smoothed drift was reset with the jump: no
+                // leftover slew against the old position.
+                expect(pacing.rate).toBeGreaterThan(0.99);
+                expect(pacing.rate).toBeLessThan(1.01);
+            });
+
+            it('is a no-op with no room clock (offline play)', async () => {
+                const { host } = makePacedHost();
+                expect(await host.catchUpToRoomClock()).toBe(0);
+                expect(host.status().tick).toBe(0);
+            });
+
+            it('never steps a peer that is already at or ahead of the '
+                + 'clock (steady state is the pacing\'s)', async () => {
+                const { host, sync } = makePacedHost();
+                host.step(60);
+                sync(0);
+                expect(await host.catchUpToRoomClock()).toBe(0);
+                expect(host.status().tick).toBe(60);
+            });
+
+            it('takes a pending insertion through with it, stamped at '
+                + 'the room clock', async () => {
+                const { host, communicator, sync } = makePacedHost();
+                const sent: InputRecord[] = [];
+                const send = communicator.sendMessage.bind(communicator);
+                communicator.sendMessage = (message, destination) => {
+                    const rollback = unwrapRollbackMessage(message);
+                    if (rollback?.kind === 'inputs') {
+                        sent.push(rollback.record);
+                    }
+                    send(message, destination);
+                };
+                sync(300);
+                const serializer = world.resources.get(SerializerResource)!;
+                await host.addEntity('arriving', serializer.encode(
+                    new Entity('arriving').addComponent(FooComponent, { x: 1 })));
+                await host.catchUpToRoomClock();
+                // In the world by the end of the catch-up: the first
+                // in-space frame shows it.
+                expect(world.entities.has('arriving')).toBeTrue();
+                const insertion = sent.find(record => record.inputs.some(
+                    input => input.kind === 'addEntity'))!;
+                expect(insertion).toBeDefined();
+                expect(insertion.tick).toBeGreaterThan(300);
+            });
         });
     });
 

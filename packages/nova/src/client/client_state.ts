@@ -73,6 +73,7 @@ import type { Subscription } from 'rxjs';
 import type {
     AsyncSimulationBridgeClient,
 } from '../communication/async_simulation_bridge_client.js';
+import type { SimulationFrame } from '../communication/simulation_frame.js';
 
 /**
  * Everything a live system is made of. Published as a unit by the system
@@ -91,6 +92,13 @@ export interface LiveSystem {
     readonly worker: Worker;
     /** The room-traffic forwarders into the worker, to unsubscribe. */
     readonly roomSubscriptions: readonly Subscription[];
+    /**
+     * The frames the system entry stepped while catching the world up
+     * to the room's clock (staged, not yet applied): the frame pump
+     * applies them, events and all, before it draws the system's first
+     * frame (frame_pump.ts beginLiveSystem).
+     */
+    readonly entryFrames?: readonly SimulationFrame[];
 }
 
 /** A player ship held out of the simulation while docked. */

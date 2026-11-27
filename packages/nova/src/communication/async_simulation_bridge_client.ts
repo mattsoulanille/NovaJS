@@ -73,6 +73,10 @@ export class AsyncSimulationBridgeClient {
         await this.guard(() => this.host.step(count));
     }
 
+    async catchUpToRoomClock(): Promise<number> {
+        return await this.guard(() => this.host.catchUpToRoomClock());
+    }
+
     async controlEvents(events: ControlEvent[]) {
         await this.guard(() => this.host.controlEvents(events));
     }

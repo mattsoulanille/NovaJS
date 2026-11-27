@@ -82,6 +82,39 @@ describe('advanceSimulationDebt (#371 R1)', () => {
     });
 });
 
+describe('advanceSimulationDebt: the eager snap after an entry', () => {
+    const frame = (behindTicks: number, speed: 1 | 2, eagerSnap?: boolean) =>
+        advanceSimulationDebt({
+            timeDebt: 0,
+            elapsedMs: SIMULATION_STEP_MS,
+            paused: false,
+            pendingSteps: 0,
+            pacing: { rate: speed * 1.05, behindTicks, speed },
+            eagerSnap,
+        });
+
+    it('steps a small post-entry drift at once instead of slewing it', () => {
+        // 12 ticks behind: steady state slews (1 step this frame) ...
+        expect(frame(12, 1).steps).toBe(1);
+        // ... while just after an entry (or docked) it is stepped now.
+        expect(frame(12, 1, true).steps).toBe(1 + 12);
+    });
+
+    it('leaves the steady-state jitter of a tick or two to the slew', () => {
+        expect(frame(2, 1, true).steps).toBe(1);
+        expect(frame(-3, 1, true).steps).toBe(1);
+    });
+
+    it('scales its threshold and cap with the room speed', () => {
+        // 4 ticks at 2x is the same ~33 ms as 2 at 1x: no snap.
+        expect(frame(4, 2, true).steps).toBe(2);
+        expect(frame(9, 2, true).steps).toBe(2 + 9);
+        // Bounded per frame like the steady-state snap.
+        expect(frame(500, 1, true).steps).toBe(1 + 60);
+        expect(frame(500, 2, true).steps).toBe(2 + 120);
+    });
+});
+
 describe('applyDisplaySpeed (#371 R2)', () => {
     it('runs display world TimeResource and movement clamp at 2x when fast', async () => {
         jasmine.clock().install();

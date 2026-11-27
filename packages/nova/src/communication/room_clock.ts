@@ -21,14 +21,41 @@ const PACING_GAIN = 0.01;
 const PACING_MAX_SLEW = 0.05;
 
 /**
+ * How long a sync keeps counting toward the clock estimate (with at most
+ * SYNC_SAMPLES of them): the estimate is the LEAST DELAYED recent sync
+ * extrapolated to now. A tickSync that sat in a busy event loop (the
+ * main thread forwarding room traffic to the worker mid-asset-load, a
+ * long frame) — or a catch-up reply, a big message that arrives late
+ * by its own transfer and decode — used to pull the estimate down until
+ * the next one snapped it back up: 10-25 ticks of sudden drift right
+ * after a system entry, which the slew took seconds over while every
+ * input landed that many ticks late.
+ */
+const SYNC_WINDOW_MS = 4000;
+const SYNC_SAMPLES = 5;
+/**
+ * A sync this many ticks (scaled by speed) BELOW the estimate is not a
+ * late message but a different clock: it replaces the history at once.
+ */
+const SYNC_RESET_TICKS = 60;
+
+/** A server tick and the local time it arrived. */
+interface ClockSample {
+    tick: number;
+    at: number;
+}
+
+/**
  * The room's clock as this peer sees it: the server's canonical tick
- * from its periodic tickSync (or a catch-up / roomSpeed reply), when it
- * arrived, and the room's speed schedule (1x or 2x, switching at an
+ * from its periodic tickSyncs (or a catch-up / roomSpeed reply), when
+ * they arrived, and the room's speed schedule (1x or 2x, switching at an
  * announced tick boundary `atTick`) — extrapolated piecewise-linearly
- * between syncs — plus the smoothed drift the pacing slew is derived from.
+ * from the least delayed recent sync — plus the smoothed drift the
+ * pacing slew is derived from.
  */
 export class RoomClock {
-    private lastTickSync?: { tick: number, at: number };
+    /** Recent syncs, oldest first (see SYNC_WINDOW_MS). */
+    private samples: ClockSample[] = [];
     /** Lightly smoothed pacing drift; tickSync arrival jitter shifts
      * the raw estimate by a tick or two frame to frame. */
     private smoothedDrift?: number;
@@ -43,22 +70,41 @@ export class RoomClock {
 
     /** Records the server's canonical tick as of `now`. */
     sync(tick: number, now = performance.now()) {
-        this.lastTickSync = {
-            tick,
-            at: now,
-        };
+        const estimate = this.estimatedServerTick(now);
+        if (estimate !== undefined
+            && tick < estimate - SYNC_RESET_TICKS * this.nextSpeed) {
+            this.samples = [];
+        }
+        this.samples = this.samples
+            .filter(sample => now - sample.at <= SYNC_WINDOW_MS)
+            .slice(-(SYNC_SAMPLES - 1));
+        this.samples.push({ tick, at: now });
+    }
+
+    /**
+     * Forgets every sync: a join or resync starts a new timeline, whose
+     * clock the reply's tick (sync / setSpeed right after) anchors.
+     */
+    reset() {
+        this.samples = [];
+        this.smoothedDrift = undefined;
     }
 
     /**
      * Records a server speed announcement (`roomSpeed` or `catchUp`),
      * optionally refreshing the clock anchor at the same instant so
-     * piecewise extrapolation across `state.atTick` is exact.
+     * piecewise extrapolation across `state.atTick` is exact. The sync
+     * history restarts from that anchor (or the newest sync): the
+     * extrapolation knows a single speed boundary, and a sync from
+     * before an earlier one would extrapolate wrongly.
      */
     setSpeed(state: RoomSpeedState, syncTick?: number, now = performance.now()) {
         if (syncTick !== undefined) {
-            this.lastTickSync = { tick: syncTick, at: now };
+            this.samples = [{ tick: syncTick, at: now }];
+        } else {
+            this.samples = this.samples.slice(-1);
         }
-        const anchorTick = syncTick ?? this.lastTickSync?.tick ?? 0;
+        const anchorTick = this.samples[0]?.tick ?? 0;
         // A future transition (`atTick > anchorTick`) only exists when
         // flipping between 1x and 2x, so before `atTick` the room runs at
         // the other speed. Once `anchorTick >= atTick`, `state.speed` is
@@ -86,14 +132,23 @@ export class RoomClock {
         this.smoothedDrift = undefined;
     }
 
-    /** The room's clock now, extrapolated piecewise-linearly across any
-     * scheduled speed boundary `speedAtTick`. */
+    /** The room's clock now: each recent sync extrapolated piecewise-
+     * linearly across any scheduled speed boundary `speedAtTick`, and
+     * the furthest of them taken — the least delayed one (messages
+     * arrive late, never early). */
     estimatedServerTick(now = performance.now()): number | undefined {
-        if (!this.lastTickSync) {
-            return undefined;
+        let estimate: number | undefined;
+        for (const sample of this.samples) {
+            const extrapolated = this.extrapolate(sample, now);
+            if (estimate === undefined || extrapolated > estimate) {
+                estimate = extrapolated;
+            }
         }
-        const elapsed = Math.max(0, now - this.lastTickSync.at);
-        const { tick: syncTick } = this.lastTickSync;
+        return estimate;
+    }
+
+    private extrapolate({ tick: syncTick, at }: ClockSample, now: number): number {
+        const elapsed = Math.max(0, now - at);
         if (syncTick < this.speedAtTick && this.prevSpeed !== this.nextSpeed) {
             const ticksBefore = this.speedAtTick - syncTick;
             const msBefore = ticksBefore * (SIMULATION_STEP_MS / this.prevSpeed);
@@ -107,6 +162,22 @@ export class RoomClock {
     }
 
     /**
+     * How far `localTick` trails the pacing target — the extrapolated
+     * server tick plus the speed-scaled send-ahead lead — right now:
+     * the raw drift {@link pacing} slews against, without its smoothing
+     * (and without touching it). Negative when the peer runs ahead.
+     * Undefined until the first sync.
+     */
+    behindTicks(localTick: number, now = performance.now()): number | undefined {
+        const estimatedServerTick = this.estimatedServerTick(now);
+        if (estimatedServerTick === undefined) {
+            return undefined;
+        }
+        return estimatedServerTick
+            + PACING_LEAD_TICKS * this.speedAt(localTick) - localTick;
+    }
+
+    /**
      * How this peer's clock should slew to track the room's: the room's
      * base speed at `localTick` (1x before `atTick`, 2x from `atTick`
      * onward, or vice versa) multiplied by a small slew factor proportional
@@ -114,13 +185,11 @@ export class RoomClock {
      * plus a speed-scaled send-ahead lead.
      */
     pacing(localTick: number, now = performance.now()): SimulationPacing | undefined {
-        const estimatedServerTick = this.estimatedServerTick(now);
-        if (estimatedServerTick === undefined) {
+        const behindTicks = this.behindTicks(localTick, now);
+        if (behindTicks === undefined) {
             return undefined;
         }
         const speed = this.speedAt(localTick);
-        const behindTicks =
-            estimatedServerTick + PACING_LEAD_TICKS * speed - localTick;
         this.smoothedDrift = this.smoothedDrift === undefined ? behindTicks
             : this.smoothedDrift * 0.9 + behindTicks * 0.1;
         const slew = 1 + Math.max(-PACING_MAX_SLEW, Math.min(

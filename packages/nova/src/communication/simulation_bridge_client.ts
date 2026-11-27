@@ -40,6 +40,10 @@ export class SimulationBridgeClient {
         this.host.step(count);
     }
 
+    catchUpToRoomClock() {
+        return this.host.catchUpToRoomClock();
+    }
+
     controlEvents(events: ControlEvent[]) {
         this.host.controlEvents(structuredClone(events));
     }

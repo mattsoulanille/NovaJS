@@ -31,7 +31,9 @@ import {
     SimulationBridgeClosedError,
 } from '../communication/async_simulation_bridge_client.js';
 import type { RoomSpeed } from '../communication/rollback_protocol.js';
-import type { SimulationPacing } from '../communication/simulation_frame.js';
+import type {
+    SimulationFrame, SimulationPacing,
+} from '../communication/simulation_frame.js';
 import {
     advanceDisplayClock, MAX_EXTRAPOLATION_DELTA_MS,
     shouldExtrapolate, snapshotMaxLeadMs,
@@ -60,6 +62,27 @@ const MAX_CATCHUP_STEPS = 6;
  */
 const SNAP_BEHIND_TICKS = 30;
 const HARD_CATCHUP_STEPS = 60;
+/**
+ * Right after a system entry the pump snaps far more eagerly: any drift
+ * beyond ENTRY_SNAP_BEHIND_TICKS (scaled by speed) is stepped at once
+ * rather than slewed, for the first ENTRY_SNAP_WINDOW_MS of a new live
+ * system or a lift-off, and for as long as the player is docked (the
+ * world is behind the spaceport or the gate map then, and drift left to
+ * pile up there — a landed UI's long frames lose steps — would be the
+ * lift-off's control lag). A system entry already stepped the world
+ * onto the room's clock before its first in-space frame
+ * (SimulationBridgeHost.catchUpToRoomClock); this mops up the few ticks
+ * the last of the entry's work cost, which the ±5% slew would otherwise
+ * take seconds over — seconds in which every input lands that many
+ * ticks late. The window is two seconds so that it covers the room's
+ * first periodic tickSync (one a second) after the join: the join
+ * reply that anchored the clock estimate is a big message, late by its
+ * own transfer and decode, and that first tickSync corrects the
+ * estimate UP by however late it was. Steady state in space is
+ * untouched.
+ */
+const ENTRY_SNAP_BEHIND_TICKS = 2;
+export const ENTRY_SNAP_WINDOW_MS = 2000;
 
 /**
  * Pure fixed-timestep accumulator step for the frame pump: converts real
@@ -72,6 +95,9 @@ export function advanceSimulationDebt(input: {
     paused: boolean;
     pendingSteps: number;
     pacing?: SimulationPacing;
+    /** Just entered (or docked; see ENTRY_SNAP_BEHIND_TICKS): snap any
+     * drift beyond ENTRY_SNAP_BEHIND_TICKS instead of slewing it. */
+    eagerSnap?: boolean;
 }): { steps: number; timeDebt: number } {
     let timeDebt = input.timeDebt;
     if (!input.paused && input.elapsedMs > 0) {
@@ -90,8 +116,9 @@ export function advanceSimulationDebt(input: {
     if (input.paused) {
         steps = input.pendingSteps;
         timeDebt = 0;
-    } else if (input.pacing
-        && input.pacing.behindTicks > SNAP_BEHIND_TICKS * speed) {
+    } else if (input.pacing && input.pacing.behindTicks
+        > (input.eagerSnap ? ENTRY_SNAP_BEHIND_TICKS : SNAP_BEHIND_TICKS)
+            * speed) {
         // Too far behind the room to slew: snap by stepping the backlog,
         // bounded per frame (also scaled by speed to keep real-time cap).
         steps += Math.min(Math.floor(input.pacing.behindTicks),
@@ -242,7 +269,6 @@ export class FramePump {
         /** The simulation rate (simulation ms per real ms) it stepped at. */
         rate: number,
     } | undefined;
-    private clockFor: LiveSystem | undefined;
     /**
      * The route this client last sent the simulation, so a change made
      * on the display side (the starmap) is pushed exactly once. Seeded
@@ -250,6 +276,9 @@ export class FramePump {
      */
     private syncedPlayerJumpRoute: string[] | undefined;
     private syncedFor: LiveSystem | undefined;
+    /** The frame time the current live system was taken up at (the
+     * start of its entry snap window, ENTRY_SNAP_WINDOW_MS). */
+    private liveSince: number | undefined;
     private prefetchedSystemId: string | undefined;
     /**
      * When an applied frame last carried authoritative MovementState —
@@ -359,6 +388,9 @@ export class FramePump {
         // Same guard as the simulation frame's early return: mid-
         // transition (no live system) neither stepped before.
         const live = liveSystem(this.runtime.state.state);
+        if (live && this.syncedFor !== live) {
+            this.beginLiveSystem(live, frameTime);
+        }
         if (live) {
             try {
                 // WHEN prediction may run at all. A paused simulation
@@ -378,12 +410,6 @@ export class FramePump {
                 const now = frameTime;
                 if (movementSyncedSinceStep.size > 0) {
                     this.lastMovementSyncMs = now;
-                }
-                if (this.clockFor !== live) {
-                    this.clockFor = live;
-                    this.displaySimTime = undefined;
-                    this.lastFrameTime = undefined;
-                    this.landedSnapshot = undefined;
                 }
                 const displaySpeed =
                     live.world.resources.get(RoomSpeedResource)?.status?.speed
@@ -463,21 +489,20 @@ export class FramePump {
         }
         this.tickInFlight = true;
         this.stats.begin();
-        const { bridge, world: displayWorld, serializer } = live;
-        // A fresh live system means a fresh delta stream and a fresh
-        // route: the pacing from the previous system's frames is stale,
-        // and the route is re-seeded from what its initial frame placed.
-        if (this.syncedFor !== live) {
-            this.syncedFor = live;
-            this.pacing = undefined;
-            this.syncedPlayerJumpRoute =
-                getDisplayPlayerJumpRoute(displayWorld)?.slice();
-        }
+        const { bridge, world: displayWorld } = live;
         try {
             this.world.step();
             this.autopilot.step(displayWorld,
                 runtime.communicator.uuid ?? undefined);
+            // (Read through a call: the state changes under the await.)
+            const stateKind = () => runtime.state.state.kind;
+            const kindBefore = stateKind();
             await runDockingFrame(runtime, live);
+            if (kindBefore !== 'inSpace' && stateKind() === 'inSpace') {
+                // A lift-off is a system entry too: the same eager snap
+                // for its first moments in space.
+                this.liveSince = frameTime;
+            }
             const fleetContext = {
                 fleet: runtime.fleet, gameData: runtime.gameData,
                 ownerUuid: () => runtime.communicator.uuid ?? undefined,
@@ -522,6 +547,13 @@ export class FramePump {
                 paused: simulationControl.paused,
                 pendingSteps,
                 pacing: this.pacing,
+                // Eager snapping while docked, too: the world is behind
+                // the spaceport or the gate map, and drift left to pile
+                // up there (a landed UI's long frames lose steps) would
+                // be the lift-off's control lag.
+                eagerSnap: stateKind() !== 'inSpace'
+                    || (this.liveSince !== undefined
+                        && now - this.liveSince < ENTRY_SNAP_WINDOW_MS),
             });
             this.timeDebt = next.timeDebt;
             const steps = next.steps;
@@ -546,43 +578,10 @@ export class FramePump {
                 if (liveSystem(runtime.state.state) !== live) {
                     return;
                 }
-                // emitEvents: the frame's events are emitted between its
-                // state changes and its removals, so events targeting
-                // entities removed this same frame still find them (see
-                // apply_simulation_frame.ts). onRemove: the same ordering
-                // is what lets the ledger tell a removal that a death or
-                // a carry event explained from one that nothing did — a
-                // LOST escort, to be respawned at the next system entry
-                // (FleetLedger.lost, ruling #148). The local player is
-                // the ship in the world, or the docked one; between
-                // worlds the marker's own player is trusted and the take
-                // filters.
-                const localPlayer = localPlayerShipUuid(displayWorld)
-                    ?? dockedShip(runtime.state.state)?.uuid;
-                applySimulationFrame(frame, serializer, displayWorld, {
-                    emitEvents: true,
-                    onRemove: (uuid, entity) => runtime.fleet.noteRemoved(
-                        uuid, entity, localPlayer, serializer),
-                });
-                // For the presentation clock: what instant this snapshot
-                // represents, and what the pump knew about it.
-                this.landedSnapshot = frame.time ? {
-                    simTimeMs: frame.time.time,
-                    pumpFrameMs: frameTime,
-                    debtMs: this.timeDebt,
+                this.applyFrame(live, frame, {
+                    pumpFrameMs: frameTime, debtMs: this.timeDebt,
                     rate: stepRate,
-                } : undefined;
-                for (const [uuid] of frame.added) {
-                    runtime.fleet.escortReturned(uuid);
-                }
-                this.pacing = frame.pacing;
-                const speedHolder = displayWorld.resources.get(RoomSpeedResource);
-                if (speedHolder) {
-                    speedHolder.status = frame.roomSpeed;
-                }
-                this.syncedPlayerJumpRoute =
-                    getDisplayPlayerJumpRoute(displayWorld)?.slice();
-                this.prefetchJumpDestination(displayWorld);
+                });
             }
             // The display world is NOT stepped here: tick() steps it every
             // ticker frame, whether or not this round trip made it back in
@@ -611,6 +610,94 @@ export class FramePump {
             this.lastPumpDone = performance.now();
             this.stats.end();
         }
+    }
+
+    /**
+     * Takes up a newly published live system, on its first ticker frame
+     * and BEFORE that frame's display step: a fresh delta stream and a
+     * fresh route (the pacing from the previous system's frames is
+     * stale, and the route is re-seeded from what the entry placed),
+     * a fresh step clock (the previous system's last pump frame is no
+     * measure of the time this one owes), the start of the entry snap
+     * window, and the system entry's ENTRY FRAMES.
+     *
+     * The entry frames are what the simulation stepped while the
+     * transition screen was still up, catching the world up to the
+     * room's clock (system_entry.ts, catchUpToRoomClock): applied here,
+     * with the same bookkeeping and events as any pumped frame, so the
+     * first in-space frame drawn is already on the clock — and so is
+     * the player's first input.
+     */
+    private beginLiveSystem(live: LiveSystem, frameTime: number): void {
+        this.syncedFor = live;
+        // The presentation clock re-anchors on this system's snapshots.
+        this.displaySimTime = undefined;
+        this.lastFrameTime = undefined;
+        this.landedSnapshot = undefined;
+        this.pacing = undefined;
+        this.timeDebt = 0;
+        this.lastPumpTime = frameTime;
+        this.liveSince = frameTime;
+        try {
+            for (const frame of live.entryFrames ?? []) {
+                if (frame.resyncFailed) {
+                    onResyncFailed(this.runtime, live);
+                    return;
+                }
+                this.applyFrame(live, frame, {
+                    pumpFrameMs: frameTime, debtMs: 0,
+                    rate: frame.pacing?.rate ?? 1,
+                });
+            }
+        } catch (e) {
+            console.error('Entry frame apply error:', e);
+        }
+        this.syncedPlayerJumpRoute =
+            getDisplayPlayerJumpRoute(live.world)?.slice();
+    }
+
+    /**
+     * Applies one simulation frame (staged already) to the live system's
+     * display world, with everything the client keeps alongside it.
+     */
+    private applyFrame(live: LiveSystem, frame: SimulationFrame,
+        clock: { pumpFrameMs: number, debtMs: number, rate: number }): void {
+        const { runtime } = this;
+        const { world: displayWorld, serializer } = live;
+        // emitEvents: the frame's events are emitted between its
+        // state changes and its removals, so events targeting
+        // entities removed this same frame still find them (see
+        // apply_simulation_frame.ts). onRemove: the same ordering
+        // is what lets the ledger tell a removal that a death or
+        // a carry event explained from one that nothing did — a
+        // LOST escort, to be respawned at the next system entry
+        // (FleetLedger.lost, ruling #148). The local player is
+        // the ship in the world, or the docked one; between
+        // worlds the marker's own player is trusted and the take
+        // filters.
+        const localPlayer = localPlayerShipUuid(displayWorld)
+            ?? dockedShip(runtime.state.state)?.uuid;
+        applySimulationFrame(frame, serializer, displayWorld, {
+            emitEvents: true,
+            onRemove: (uuid, entity) => runtime.fleet.noteRemoved(
+                uuid, entity, localPlayer, serializer),
+        });
+        // For the presentation clock: what instant this snapshot
+        // represents, and what the pump knew about it.
+        this.landedSnapshot = frame.time ? {
+            simTimeMs: frame.time.time, ...clock,
+        } : undefined;
+        for (const [uuid] of frame.added) {
+            runtime.fleet.escortReturned(uuid);
+        }
+        this.pacing = frame.pacing;
+        const speedHolder = displayWorld.resources.get(RoomSpeedResource);
+        if (speedHolder) {
+            speedHolder.status = frame.roomSpeed;
+        }
+        this.syncedPlayerJumpRoute =
+            getDisplayPlayerJumpRoute(displayWorld)?.slice();
+        this.prefetchJumpDestination(displayWorld);
     }
 
     /**

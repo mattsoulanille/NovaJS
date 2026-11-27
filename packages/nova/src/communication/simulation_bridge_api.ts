@@ -29,6 +29,9 @@ export interface SimulationBridgeHostApi {
     /** An in-flight abort of one of the player's own missions. */
     abortMission(aborted: AbortedMission): void | Promise<void>;
     step(count?: number): void;
+    /** System entry: step straight to the room clock's pacing target;
+     * returns the ticks stepped (SimulationBridgeHost.catchUpToRoomClock). */
+    catchUpToRoomClock(): Promise<number>;
     snapshot(): SimulationFrame;
     addEntity(uuid: string, entity: EncodedEntity): void | Promise<void>;
     removeEntity(uuid: string): void;
@@ -79,6 +82,7 @@ export interface AsyncSimulationBridgeHostApi {
     refuseMission(refused: RefusedMission): Promise<void>;
     abortMission(aborted: AbortedMission): Promise<void>;
     step(count?: number): Promise<void>;
+    catchUpToRoomClock(): Promise<number>;
     snapshot(): Promise<SimulationFrame>;
     addEntity(uuid: string, entity: EncodedEntity): Promise<void>;
     removeEntity(uuid: string): Promise<void>;

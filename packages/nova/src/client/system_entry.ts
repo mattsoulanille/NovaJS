@@ -31,6 +31,7 @@ import {
     syncedComponents, warnedUnsyncableEntities,
 } from '../communication/apply_simulation_frame.js';
 import type { AsyncSimulationBridgeClient } from '../communication/async_simulation_bridge_client.js';
+import type { SimulationFrame } from '../communication/simulation_frame.js';
 import {
     makeBrowserSimulationBridgeClient,
 } from '../communication/simulation_bridge_browser_worker.js';
@@ -513,14 +514,64 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
     }
     applyDisplaySpeed(displayWorld,
         initialFrame.roomSpeed?.speed ?? initialFrame.pacing?.speed ?? 1);
+    const entryFrames = await scope.race(
+        catchUpToRoomClock(bridge, gameData));
     // The last thing that can fail is behind us: the session is checked
     // one final time so a world is never published over a title screen.
     scope.check();
     const live: LiveSystem = {
         systemId: to, world: displayWorld, bridge, serializer, worker,
-        roomSubscriptions,
+        roomSubscriptions, entryFrames,
     };
     state.apply(s => arrive(s, live));
+}
+
+/**
+ * At most this many catch-up rounds on entry: each steps to the room's
+ * clock and takes (and stages) the frame it produced, and staging costs
+ * real time — the next round steps what that cost. One round is the
+ * norm; staging a frame whose assets are already warm is quick.
+ */
+const ENTRY_CATCH_UP_ROUNDS = 3;
+/** A round that stepped no more than this many ticks ends the loop. */
+const ENTRY_CATCH_UP_SETTLED_TICKS = 2;
+
+/**
+ * THE ENTRY CATCH-UP. By now the destination world has sat unstepped
+ * since its room join finished — through the display world's build, the
+ * server-peer wait, the insertions and the staging — while the room's
+ * clock ran on: over a real link, a second or more. Left to the frame
+ * pump, that gap was a 60-tick snap plus the ±5% slew, and every input
+ * in the meantime landed the gap's worth of ticks late (inputs are
+ * stamped at the room's clock, never behind it): control lag that took
+ * up to ~10 seconds to fade. Instead, the simulation steps straight to
+ * the clock HERE, while the transition screen still hides the world,
+ * and the frames that produced are handed to the pump (LiveSystem
+ * .entryFrames), which applies them — events and all — before it draws
+ * the first in-space frame. The insertions scheduled above are stamped
+ * at the room's clock as the catch-up steps through them, so the player
+ * is in the world in that first frame.
+ *
+ * The ticks are ordinary live ticks (the pump's snap would have stepped
+ * the very same ones), so the timeline is unchanged; only when they run
+ * moves. Offline (no room clock) nothing is stepped and no frame taken.
+ */
+async function catchUpToRoomClock(bridge: AsyncSimulationBridgeClient,
+    gameData: ClientRuntime['gameData']): Promise<SimulationFrame[]> {
+    const frames: SimulationFrame[] = [];
+    for (let round = 0; round < ENTRY_CATCH_UP_ROUNDS; round++) {
+        const stepped = await bridge.catchUpToRoomClock();
+        if (stepped === 0) {
+            break;
+        }
+        const frame = await bridge.snapshot();
+        await stageSimulationFrameGameData(gameData, frame);
+        frames.push(frame);
+        if (stepped <= ENTRY_CATCH_UP_SETTLED_TICKS) {
+            break;
+        }
+    }
+    return frames;
 }
 
 /** Whether `state` has `systemId` up as its live system (recovery asks). */

@@ -77,4 +77,83 @@ describe('RoomClock', () => {
             .toBeCloseTo(190, 6);
         expect(clock.speedAt(170)).toBe(2);
     });
+
+    describe('behindTicks', () => {
+        it('is the drift pacing() reports, raw and without touching its '
+            + 'smoothing', () => {
+            const clock = new RoomClock();
+            expect(clock.behindTicks(0, 0)).toBeUndefined();
+            clock.sync(100, 0);
+            // Server 100 + 4-tick lead - local 80.
+            expect(clock.behindTicks(80, 0)).toBeCloseTo(24, 6);
+            // Reading it twice changes nothing; pacing() then smooths
+            // from scratch (its first reading IS the raw drift).
+            expect(clock.behindTicks(80, 0)).toBeCloseTo(24, 6);
+            const pacing = clock.pacing(80, 0)!;
+            expect(pacing.behindTicks).toBeCloseTo(24, 6);
+            expect(pacing.rate).toBeCloseTo(1.05, 6);
+            // Ahead of the target: negative.
+            expect(clock.behindTicks(110, 0)).toBeCloseTo(-6, 6);
+        });
+
+        it('scales the send-ahead lead with the room speed', () => {
+            const clock = new RoomClock();
+            clock.setSpeed({
+                speed: 2, atTick: 0, fastVotes: 1, totalVoters: 1,
+            }, 200, 0);
+            // 200 + 8-tick lead at 2x - 190, then 2 ticks per step.
+            expect(clock.behindTicks(190, 0)).toBeCloseTo(18, 6);
+            expect(clock.behindTicks(190, 3 * SIMULATION_STEP_MS))
+                .toBeCloseTo(24, 6);
+        });
+    });
+
+    describe('late syncs', () => {
+        const at = (tick: number) => tick * SIMULATION_STEP_MS;
+
+        it('ignores a sync that arrived late: the estimate never drops '
+            + 'for a delayed message', () => {
+            const clock = new RoomClock();
+            clock.sync(60, at(60));
+            // The tick-120 sync sat 12 ticks in a busy event loop.
+            clock.sync(120, at(132));
+            expect(clock.estimatedServerTick(at(132))).toBeCloseTo(132, 6);
+            // And the next timely one changes nothing either.
+            clock.sync(180, at(180));
+            expect(clock.estimatedServerTick(at(190))).toBeCloseTo(190, 6);
+        });
+
+        it('takes a sync that shows the clock further on (an earlier '
+            + 'anchor was late)', () => {
+            const clock = new RoomClock();
+            // A join reply that arrived 24 ticks after it was sent.
+            clock.sync(100, at(124));
+            expect(clock.estimatedServerTick(at(160))).toBeCloseTo(136, 6);
+            clock.sync(160, at(160));
+            expect(clock.estimatedServerTick(at(160))).toBeCloseTo(160, 6);
+        });
+
+        it('forgets late anchors after the window, so a server that runs '
+            + 'slow is followed', () => {
+            const clock = new RoomClock();
+            clock.sync(0, 0);
+            // From here the server's clock runs 10 ticks behind the
+            // extrapolation; within the window the early anchor wins ...
+            clock.sync(50, at(60));
+            expect(clock.estimatedServerTick(at(60))).toBeCloseTo(60, 6);
+            // ... and once it ages out the slower clock is the estimate.
+            clock.sync(290, at(300));
+            expect(clock.estimatedServerTick(at(300))).toBeCloseTo(290, 6);
+        });
+
+        it('takes a far-lower clock at once (a new timeline, not a late '
+            + 'message), and reset() forgets everything', () => {
+            const clock = new RoomClock();
+            clock.sync(5000, 0);
+            clock.sync(10, at(10));
+            expect(clock.estimatedServerTick(at(10))).toBeCloseTo(10, 6);
+            clock.reset();
+            expect(clock.estimatedServerTick(at(10))).toBeUndefined();
+        });
+    });
 });

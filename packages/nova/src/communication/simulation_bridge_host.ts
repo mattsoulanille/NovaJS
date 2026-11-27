@@ -85,6 +85,18 @@ const STAGING_RETRY_MS = 1_000;
  * replay.
  */
 const FAST_FORWARD_YIELD_TICKS = 120;
+/**
+ * The entry catch-up (catchUpToRoomClock) steps live ticks in chunks
+ * of this many, yielding a macrotask between chunks so the worker keeps
+ * servicing room traffic (tickSyncs, relayed records) while it runs.
+ */
+const CATCH_UP_CHUNK_TICKS = 30;
+/**
+ * The clock moves while the catch-up steps (a tick costs real time), so
+ * it re-targets: at most this many passes, each closing the gap the
+ * previous one left behind.
+ */
+const CATCH_UP_PASSES = 4;
 
 /**
  * How many recent checkpoint states the peer pins for desync dumps:
@@ -599,6 +611,59 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     }
 
     /**
+     * THE ENTRY CATCH-UP: steps this world straight to the room clock's
+     * pacing target (the extrapolated server tick plus the send-ahead
+     * lead), and returns how many ticks it stepped.
+     *
+     * A system entry (a fresh join, a jump arrival) leaves the local tick
+     * behind the room's: the join's own fast-forward stops within 30
+     * ticks of the clock, and everything the entry does after it (the
+     * display world, the server-peer wait, the insertions, staging)
+     * runs while nothing steps this world — over a real link, a second
+     * or more. Left to the frame pump, that gap is closed by a 60-tick
+     * snap plus the ±5% slew, and every input the player gives in the
+     * meantime is stamped at the room clock (never behind it, see step)
+     * and only takes effect when the lagging local tick reaches it: a
+     * control lag of the whole gap that shrinks at ~3 ticks a second.
+     * The system entry calls this instead, while the transition screen
+     * still hides the world, so the first in-space frame is already on
+     * the clock and steady-state pacing has nothing left to correct.
+     *
+     * These are ordinary live ticks — exactly what the pump's snap
+     * would step, through the same step() — so nothing about the
+     * timeline changes, only when the ticks run. Events they emit queue
+     * for the next snapshot as usual. A no-op without a room clock
+     * (offline play) and while a resync rebuilds the world.
+     */
+    async catchUpToRoomClock(): Promise<number> {
+        let stepped = 0;
+        for (let pass = 0; pass < CATCH_UP_PASSES; pass++) {
+            const behind = this.roomClock.behindTicks(this.rollback.tick);
+            let remaining = behind === undefined ? 0 : Math.floor(behind);
+            if (remaining <= 0) {
+                break;
+            }
+            while (remaining > 0) {
+                if (this.resyncing || this.resyncFailed) {
+                    return stepped;
+                }
+                const chunk = Math.min(remaining, CATCH_UP_CHUNK_TICKS);
+                this.step(chunk);
+                stepped += chunk;
+                remaining -= chunk;
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+        if (stepped > 0) {
+            // The local tick just jumped; stale smoothed drift would
+            // slew against the old position.
+            this.roomClock.resetDrift();
+            this.logRollbackEvent('entryCatchUp', { ticks: stepped });
+        }
+        return stepped;
+    }
+
+    /**
      * Joins the room's shared timeline: requests a catch-up from the
      * relay and replays its input log — over the archived baseline
      * when the server has one, else over the deterministic genesis
@@ -679,6 +744,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 // but the sender, and the sender's own ship
                 // diverges until a resync rebuilds it from the
                 // log.
+                this.roomClock.reset();
                 if (reply.roomSpeed) {
                     this.roomClock.setSpeed(reply.roomSpeed, reply.tick);
                 } else {
