@@ -409,6 +409,8 @@ export async function OutfitParse(outf: OutfResource, notFoundFunction: (m: stri
         // oütf ScanMask: matched against a gövt's ScanMask (contraband).
         scanMask: outf.scanMask,
         lcName: outf.lcName,
+        // oütf ShortName: the outfitter grid's caption.
+        shortName: outf.outfitterName,
         murkClear,
         interferenceReduction,
         iff,

@@ -1,7 +1,10 @@
 import 'jasmine';
 import { ShipData } from 'novadatainterface/ship_data';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { CAPTION_LINE_HEIGHT, CAPTION_TOP, captionSegments } from './item_grid.js';
+import { OutfitData } from 'novadatainterface/outfit_data';
+import {
+    CAPTION_LINE_HEIGHT, captionLineTops, CAPTION_TOP, captionSegments,
+} from './item_grid.js';
 import { formatMass } from './outfitter.js';
 import { infoDialogName } from './ship_info.js';
 
@@ -48,15 +51,31 @@ describe('tile caption (shïp ShortName)', () => {
         ]);
     });
 
-    it('falls back to the resource name, minus its developer note', () => {
-        // Outfits have no ShortName field at all, and some ships leave it
-        // blank; both take this path.
-        expect(captionSegments({ name: 'Light Blaster' }))
-            .toEqual([{ text: 'Light Blaster', grey: false }]);
+    it('draws nothing for an empty ShortName', () => {
+        // Reference "Outfitter long item names ..., wave 43": kit outfits
+        // and a kit hull with a blank ShortName showed the icon cell only,
+        // no caption, in the outfitter and the shipyard alike.
         expect(captionSegments({ name: 'Viper; Fighter', shortName: '' }))
-            .toEqual([{ text: 'Viper', grey: false }]);
+            .toEqual([]);
         expect(captionSegments({ name: 'Viper; Fighter', shortName: '   ' }))
-            .toEqual([{ text: 'Viper', grey: false }]);
+            .toEqual([]);
+    });
+
+    it('falls back to the name only for an item with no ShortName field',
+        () => {
+            expect(captionSegments({ name: 'Light Blaster; dev note' }))
+                .toEqual([{ text: 'Light Blaster', grey: false }]);
+        });
+
+    it('never splits a long line: only the literal "\\n" breaks one', () => {
+        // Wave 43 ln_a: a 30-letter ShortName stays ONE line, running over
+        // the neighbouring cells.
+        expect(captionSegments({
+            name: 'x', shortName: 'Kit Very Long Name For A Test',
+        })).toEqual([{ text: 'Kit Very Long Name For A Test', grey: false }]);
+        expect(captionSegments({
+            name: 'x', shortName: 'Antidisestablishmentarianismus',
+        })).toEqual([{ text: 'Antidisestablishmentarianismus', grey: false }]);
     });
 
     it('drops empty segments rather than draw a blank line', () => {
@@ -70,7 +89,21 @@ describe('tile caption (shïp ShortName)', () => {
         // CAPTION_TOP.
         expect(CAPTION_TOP.single - CAPTION_TOP.multi).toBe(8);
         expect(CAPTION_LINE_HEIGHT).toBe(11);
+        expect(captionLineTops(0)).toEqual([]);
+        expect(captionLineTops(1)).toEqual([CAPTION_TOP.single]);
+        expect(captionLineTops(2)).toEqual(
+            [CAPTION_TOP.multi, CAPTION_TOP.multi + CAPTION_LINE_HEIGHT]);
     });
+
+    it('grows a longer caption upward, its last line where two lines end',
+        () => {
+            // Bottom-aligned (wave 43): a third line pushes the block up a
+            // whole pitch rather than running into the cell below.
+            const three = captionLineTops(3);
+            expect(three[2]).toBe(captionLineTops(2)[1]);
+            expect(three[1] - three[0]).toBe(CAPTION_LINE_HEIGHT);
+            expect(three[0]).toBeGreaterThan(0);
+        });
 });
 
 describe('ship info name strip (shïp Long Name)', () => {
@@ -124,6 +157,29 @@ describe('caption strings against the real Nova data', () => {
                         { text: '- used -', grey: true },
                     ]);
             }
+        });
+
+    it('captions stock outfits with their hand-abbreviated ShortName',
+        async () => {
+            // The raw oütf ShortNames the wave-43 reference read: Matthew's
+            // report was "Pirate Thunderhead Bay" wrapped to three lines.
+            const gameData = await getIntegrationGameData();
+            const outfit = (id: string): Promise<OutfitData> =>
+                gameData.data.Outfit.get(id);
+            expect(captionSegments(await outfit('nova:284'))).toEqual([
+                { text: 'Pirate Th-head', grey: false },
+                { text: 'Bay', grey: false },
+            ]);
+            expect(captionSegments(await outfit('nova:138'))).toEqual([
+                { text: 'Grav Missile', grey: false },
+                { text: 'Launcher', grey: false },
+            ]);
+            expect(captionSegments(await outfit('nova:323'))).toEqual([
+                { text: 'Qd Lt Turret', grey: false },
+                { text: '- illegal -', grey: true },
+            ]);
+            expect(captionSegments(await outfit('nova:165')))
+                .toEqual([{ text: 'Thunderhead Bay', grey: false }]);
         });
 
     it('carries the Long Name the info dialog prints', async () => {

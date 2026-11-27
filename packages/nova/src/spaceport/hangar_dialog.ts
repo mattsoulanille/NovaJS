@@ -62,9 +62,10 @@ import {
 
 /**
  * The longest ship name a tile's caption shows in place of the class's
- * short name: one line of the 77 px caption at the 9.4 px caption font
- * (item_grid.ts). A longer name would wrap into the subtitle and the
- * picture, so the tile keeps the class name and the pane shows the name.
+ * short name: about 77 px of the 9.4 px caption font (item_grid.ts), so it
+ * fits its own tile. Captions never wrap; a longer name would run over the
+ * neighbouring tiles, so the tile keeps the class name and the pane shows
+ * the name.
  */
 export const HANGAR_CAPTION_NAME_CHARS = 14;
 

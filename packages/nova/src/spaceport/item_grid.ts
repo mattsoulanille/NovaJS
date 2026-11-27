@@ -54,14 +54,45 @@ export const CAPTION_GREY = 0x4e4e4e;
 export const CAPTION_FONT_SIZE = 9.4;
 
 /**
- * Where a caption wraps. Not the tile's full 83px: on the outfitter
- * captures "Cargo Expansion" (74.4px at our size) stays on one line while
- * "Civilian Radar Jam", "Civilian IR Jammer" (80.7) and "Raven Rocket
- * Pod" (81.3) break, so the original's limit lies in 74.4..80.7. At 10px
- * on the full tile width ours had already landed there by accident; at
- * 9.4px those three would fit on one line.
+ * The y handed to each caption line's PIXI.Text, top to bottom, for a
+ * caption of `lines` lines. The block is BOTTOM-aligned (reference
+ * "Outfitter long item names ..., wave 43"): one line at CAPTION_TOP.single,
+ * two at CAPTION_TOP.multi and a pitch below, and every further line pushes
+ * the block up by a whole pitch (three lines were never seen in the
+ * original; the stock data has none, so that step is the plain reading of
+ * "a second line grows upward").
  */
-export const CAPTION_WRAP_WIDTH = 77;
+export function captionLineTops(lines: number): number[] {
+    if (lines <= 0) {
+        return [];
+    }
+    if (lines === 1) {
+        return [CAPTION_TOP.single];
+    }
+    const first = CAPTION_TOP.multi - (lines - 2) * CAPTION_LINE_HEIGHT;
+    return Array.from({ length: lines },
+        (_, i) => first + i * CAPTION_LINE_HEIGHT);
+}
+
+/**
+ * How far past the grid's outer rule a caption line may spill before it is
+ * clipped. The original draws a long line whole, centred on its cell and
+ * across its neighbours, and cuts it only at the dialog window's edge (wave
+ * 43 ln_a: "Kit Very Long Name For A Test" in the left column loses its
+ * start about 8 px left of the grid's rule, where the outfitter's frame
+ * ends; NovaJS's shops put the grid 8 px inside their dialog art, at x
+ * -373). Used on every side: on the right the original let a line run on
+ * over the frame into the next pane, which only a caption wider than about
+ * 100 px in the right column ever reaches.
+ */
+export const CAPTION_CLIP_MARGIN = 8;
+
+/**
+ * The name of every tile's caption container (ItemTile.caption), which
+ * sits at the tile's own position in the grid's caption layer: headless
+ * drivers find a tile by its caption text through it.
+ */
+export const ITEM_TILE_CAPTION_NAME = 'ItemTileCaption';
 
 /** One rendered line-group of a tile caption: a run of text and its colour. */
 export interface CaptionSegment {
@@ -84,14 +115,20 @@ export interface CaptionSegment {
  * byte -- that is what the parser reads out of the resource (e.g.
  * "Heavy Shuttle\\n- used -", "Asteroid\\nMiner").
  *
- * Items with no ShortName (every outfit; ships whose field is blank) fall
- * back to the resource name with its "; developer note" suffix stripped,
- * as a single white line that PIXI wraps.
+ * The oütf ShortName reads the same (Bible ~:2038), and the original
+ * outfitter and shipyard draw ONLY these lines: no wrapping, truncation or
+ * shrinking, a line too wide for its cell running on over the neighbours,
+ * and an EMPTY ShortName drawing no caption at all (reference "Outfitter
+ * long item names ..., wave 43": kit items with a blank ShortName showed
+ * the icon cell only, on both grids).
+ *
+ * An item with no ShortName FIELD (shortName undefined: not an oütf or a
+ * shïp) falls back to its name with the "; developer note" suffix
+ * stripped, on one line.
  */
 export function captionSegments(
     item: { name: string, shortName?: string }): CaptionSegment[] {
-    const source = item.shortName?.trim()
-        ? item.shortName : displayName(item.name);
+    const source = item.shortName ?? displayName(item.name);
     return source.split(/\\n|\n/)
         .map(line => line.trim())
         .filter(line => line.length > 0)
@@ -141,16 +178,15 @@ function fitWhenLoaded(sprite: PIXI.Sprite, max: number) {
 
 export class ItemTile<I extends Item> {
     private font = {
+        // Never wordWrap: a caption line is drawn whole (captionSegments).
         normal: {
             fontFamily: "Geneva", fontSize: CAPTION_FONT_SIZE, fill: 0xffffff,
-            align: 'center', wordWrap: true,
-            wordWrapWidth: CAPTION_WRAP_WIDTH,
+            align: 'center', wordWrap: false,
             lineHeight: CAPTION_LINE_HEIGHT,
         } as const,
         grey: {
             fontFamily: "Geneva", fontSize: CAPTION_FONT_SIZE,
-            fill: CAPTION_GREY, align: 'center', wordWrap: true,
-            wordWrapWidth: CAPTION_WRAP_WIDTH,
+            fill: CAPTION_GREY, align: 'center', wordWrap: false,
             lineHeight: CAPTION_LINE_HEIGHT,
         } as const,
         count: {
@@ -172,31 +208,31 @@ export class ItemTile<I extends Item> {
     private wrappedQuantity = 0;
     private quantityText: PIXI.Text;
     readonly container = new PIXI.Container();
+    /**
+     * The caption lines, kept OUT of `container` so the grid can layer
+     * every caption above every tile's opaque background: a line wider
+     * than its cell runs on over the neighbours, as the original's does.
+     * Moved, shown and hidden with the tile.
+     */
+    readonly caption = new PIXI.Container();
     private wrappedActive = false;
     public built = false;
     public largePict = new PIXI.Container();
 
     constructor(private displayAssets: DisplayAssetDataInterface, readonly item: I) {
         // The ShortName caption: one PIXI.Text per "\n"-separated segment,
-        // so each can carry its own colour (PIXI has no per-line fill).
-        // PIXI still wraps WITHIN a segment, which is how a long single
-        // segment ("Light Blaster Turret") becomes two white lines.
+        // so each can carry its own colour (PIXI has no per-line fill), and
+        // each exactly one line, centred on the cell however wide it is.
+        this.caption.name = ITEM_TILE_CAPTION_NAME;
         const segments = captionSegments(item);
-        const captionTexts = segments.map(({ text, grey }) => {
-            const style = grey ? this.font.grey : this.font.normal;
-            const line = new PIXI.Text(text, style);
+        const tops = captionLineTops(segments.length);
+        segments.forEach(({ text, grey }, i) => {
+            const line = new PIXI.Text(text,
+                grey ? this.font.grey : this.font.normal);
             line.anchor.x = 0.5;
             line.position.x = TILE_SIZE[0] / 2;
-            return { line, style, text };
-        });
-        const lineCounts = captionTexts.map(({ text, style }) =>
-            PIXI.TextMetrics.measureText(text,
-                new PIXI.TextStyle(style)).lines.length);
-        const totalLines = lineCounts.reduce((a, b) => a + b, 0);
-        let y = totalLines > 1 ? CAPTION_TOP.multi : CAPTION_TOP.single;
-        captionTexts.forEach(({ line }, i) => {
-            line.position.y = y;
-            y += lineCounts[i] * CAPTION_LINE_HEIGHT;
+            line.position.y = tops[i];
+            this.caption.addChild(line);
         });
 
         this.quantityText = new PIXI.Text("", this.font.normal);
@@ -208,9 +244,6 @@ export class ItemTile<I extends Item> {
         this.active = false;
 
         this.container.addChild(this.graphics);
-        for (const { line } of captionTexts) {
-            this.container.addChild(line);
-        }
         this.container.addChild(this.quantityText);
     }
 
@@ -262,16 +295,18 @@ export class ItemTile<I extends Item> {
 
     hide() {
         this.container.visible = false;
+        this.caption.visible = false;
     }
 
     show() {
         this.container.visible = true;
+        this.caption.visible = true;
         this.build(); // Builds if not already built
     }
 
     moveTo(x: number, y: number) {
-        this.container.position.x = x;
-        this.container.position.y = y;
+        this.container.position.set(x, y);
+        this.caption.position.set(x, y);
     }
 
     get quantity() {
@@ -305,9 +340,9 @@ interface Item {
     desc: string,
     pict: string,
     /**
-     * shïp ShortName, the caption the original prints on the tile (see
-     * captionSegments). Ships carry one; outfits have no such field, so
-     * their tiles fall back to the resource name.
+     * shïp / oütf ShortName, the caption the original prints on the tile
+     * (see captionSegments); empty draws none. Items without the field
+     * fall back to the resource name.
      */
     shortName?: string,
 }
@@ -315,7 +350,7 @@ interface Item {
 /**
  * Whether an item matches the shop search's query: a case-insensitive
  * substring of the name the player reads — the resource name without its
- * "; developer note" suffix, or the shïp ShortName caption the tile
+ * "; developer note" suffix, or the shïp / oütf ShortName caption the tile
  * shows (its "\n" line breaks read as spaces). Names only: descriptions
  * are long enough that a short query ("laser", "fed") would match half
  * the shop, which is not what a search box over a grid of names promises.
@@ -338,6 +373,9 @@ export function itemMatches(item: { name: string, shortName?: string },
 const BOX_COUNT = [4, 5];
 /** Tiles on one page of the grid. */
 export const ITEM_GRID_PAGE_SIZE = BOX_COUNT[0] * BOX_COUNT[1];
+/** The grid's outer size, its closing rules included. */
+const GRID_SIZE = [BOX_COUNT[0] * TILE_SIZE[0] + 1,
+    BOX_COUNT[1] * TILE_SIZE[1] + 1] as const;
 
 /** The parts of a PIXI container raiseToTop needs. */
 export interface LayerContainer<C> {
@@ -373,6 +411,14 @@ export const ITEM_GRID_NAME = 'ItemGrid';
 export class ItemGrid<I extends Item> {
     public activeTile = new BehaviorSubject<ItemTile<I> | undefined>(undefined);
     public container = new PIXI.Container();
+    /** The tiles' frames, picts and counts (the selected one raised). */
+    private tileLayer = new PIXI.Container();
+    /**
+     * Every tile's caption, above every tile (ItemTile.caption), clipped
+     * CAPTION_CLIP_MARGIN outside the grid. Not hit-tested, so a caption
+     * running over a neighbour never steals that neighbour's click.
+     */
+    private captionLayer = new PIXI.Container();
     /** Fires after the wheel scrolled the page, so the owner can update
      * its scroll arrows (the arrow and key paths update them directly). */
     readonly scrolled = new Subject<void>();
@@ -389,6 +435,9 @@ export class ItemGrid<I extends Item> {
     constructor(private displayAssets: DisplayAssetDataInterface,
         private items: I[]) {
         this.container.name = ITEM_GRID_NAME;
+        this.captionLayer.eventMode = 'none';
+        this.captionLayer.interactiveChildren = false;
+        this.container.addChild(this.tileLayer, this.captionLayer);
         this.allItems = items;
         this.tiles = items.map(item => this.tileFor(item));
         // The wheel over the grid, empty cells included (NovaJS
@@ -396,7 +445,7 @@ export class ItemGrid<I extends Item> {
         // nothing here). Read per event, so the toggle applies at once.
         this.container.eventMode = 'static';
         this.container.hitArea = new PIXI.Rectangle(0, 0,
-            BOX_COUNT[0] * TILE_SIZE[0] + 1, BOX_COUNT[1] * TILE_SIZE[1] + 1);
+            GRID_SIZE[0], GRID_SIZE[1]);
         this.container.on('wheel', (event: PIXI.FederatedWheelEvent) => {
             const native = event.nativeEvent as WheelEvent & {
                 wheelDeltaY?: number };
@@ -426,6 +475,25 @@ export class ItemGrid<I extends Item> {
         }
     }
 
+    /**
+     * Masks the caption layer to the grid plus CAPTION_CLIP_MARGIN, once.
+     * Built with the first tile rather than in the constructor: a
+     * PIXI.Graphics needs a DOM, and an empty grid (specs) has none.
+     */
+    private clipCaptions() {
+        if (this.captionLayer.mask) {
+            return;
+        }
+        const clip = new PIXI.Graphics();
+        clip.beginFill(0xffffff);
+        clip.drawRect(-CAPTION_CLIP_MARGIN, -CAPTION_CLIP_MARGIN,
+            GRID_SIZE[0] + 2 * CAPTION_CLIP_MARGIN,
+            GRID_SIZE[1] + 2 * CAPTION_CLIP_MARGIN);
+        clip.endFill();
+        this.container.addChild(clip);
+        this.captionLayer.mask = clip;
+    }
+
     /** The tile for an item, built (and cached) on first use. Tiles are
      * pooled by id so setItems can show a different subset without
      * rebuilding sprites. */
@@ -435,7 +503,9 @@ export class ItemGrid<I extends Item> {
             return existing;
         }
         const tile = new ItemTile(this.displayAssets, item);
-        this.container.addChild(tile.container);
+        this.clipCaptions();
+        this.tileLayer.addChild(tile.container);
+        this.captionLayer.addChild(tile.caption);
         tile.container.on('pointerdown', () => this.tileClicked(tile));
         this.tilesDict.set(item.id, tile);
         return tile;
@@ -533,7 +603,7 @@ export class ItemGrid<I extends Item> {
                 this.activeTile.next(tile);
 
                 // Make sure it is above the others
-                raiseToTop(this.container, tile.container);
+                raiseToTop(this.tileLayer, tile.container);
             }
 
             else {

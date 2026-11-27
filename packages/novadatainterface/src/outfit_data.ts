@@ -263,6 +263,16 @@ export interface OutfitData extends BaseData {
      */
     lcName: string,
     /**
+     * oütf ShortName, the outfitter grid's caption (EVN Bible ~:2038:
+     * "The short string that is displayed in the outfit dialog menu for
+     * this item type"). Split into lines ONLY at the two characters "\n"
+     * and never wrapped (reference "Outfitter long item names ..., wave
+     * 43"; nova's spaceport/item_grid.ts captionSegments): stock data
+     * abbreviates by hand, e.g. "Pirate Th-head\nBay". Empty when the oütf
+     * leaves it blank, and then the original's tile has no caption at all.
+     */
+    shortName: string,
+    /**
      * Amount this outfit clears the current system's murk by (ModType 28,
      * "murk modifier"). The Bible's ModVal is the amount to add to the
      * system's murkiness, so this is its negation: a stock Sensor Boost with
@@ -468,6 +478,7 @@ export function getDefaultOutfitData(): OutfitData {
         miningScoop: false,
         scanMask: 0,
         lcName: "",
+        shortName: "",
         murkClear: 0,
         interferenceReduction: 0,
         iff: false,

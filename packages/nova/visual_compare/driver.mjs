@@ -180,7 +180,14 @@ async function clickVisibleGridTile(page, menu, caption, occurrence) {
             if (!node) return;
             const label = (node.children || []).find(
                 c => typeof c.text === 'string' && c.text === text);
-            if (label && node.worldVisible) {
+            if (label && node.worldVisible
+                && node.name === 'ItemTileCaption') {
+                // A tile's caption lives in the grid's caption layer (so a
+                // long line can run over the neighbours), at the tile's
+                // own position: the tile is the 83x54 cell from there.
+                const t = node.worldTransform;
+                matches.push({ x: t.tx, y: t.ty, width: 83, height: 54 });
+            } else if (label && node.worldVisible) {
                 const b = node.getBounds();
                 // Tiles are 83x54; skip anything of another size (the
                 // menu itself would otherwise match through its child).

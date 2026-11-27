@@ -46,6 +46,19 @@ describe("OutfitParse", () => {
         expect(outfit.physics.acceleration).toBeCloseTo(18, 12);
     });
 
+    it("carries the oütf ShortName (the outfitter's caption) verbatim",
+        async () => {
+            // The raw "\n" stays two characters; the grid splits on it.
+            const outfit = await OutfitParse({
+                ...fakeOutf([]), outfitterName: "Pirate Th-head\\nBay",
+            } as OutfResource, () => { });
+            expect(outfit.shortName).toEqual("Pirate Th-head\\nBay");
+            const blank = await OutfitParse({
+                ...fakeOutf([]), outfitterName: "",
+            } as OutfResource, () => { });
+            expect(blank.shortName).toEqual("");
+        });
+
     it("parses fast jump into canJumpWithoutSlowing", async () => {
         const outfit = await OutfitParse(
             fakeOutf([["fast jump", true]]), () => { });
