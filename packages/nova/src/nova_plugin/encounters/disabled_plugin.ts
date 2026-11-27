@@ -10,7 +10,7 @@ import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { EffectiveMovementPhysicsSystem, GravitySystem } from '../travel/index.js';
-import { ReturnAI } from '../escorts/index.js';
+import { BayLaunchBrakeSystem, ReturnAI } from '../escorts/index.js';
 import { CloakActiveComponent, CLOAK_OFF_SOUND } from '../ship/index.js';
 import { IonizationRechargeSystem, ZeroArmorEvent } from '../ship/index.js';
 import { BlastEndSystem } from '../combat/index.js';
@@ -337,7 +337,9 @@ export const DisabledMovementSystem = new System({
         EscortLandingSystem, ReturnAI, FollowAI,
         // A hulk in a gravity well is pulled, then coasts (GUESS: not
         // measured on a disabled ship).
-        GravitySystem],
+        GravitySystem,
+        // A fighter disabled mid-launch sheds its kick, then coasts.
+        BayLaunchBrakeSystem],
     before: [MovementSystem],
 });
 

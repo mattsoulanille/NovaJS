@@ -9,7 +9,8 @@ import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
-import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import { MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movement_plugin';
+import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { CommunicatorResource, MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { markerType, SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { Optional } from 'nova_ecs/optional';
@@ -19,7 +20,7 @@ import { SingletonComponent, World } from 'nova_ecs/world';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
 import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
 import { deriveEntityComponents, SimulationGameDataResource } from '../core/index.js';
-import { OutfitsStateComponent } from '../ship/index.js';
+import { OutfitsStateComponent, ShipPhysicsComponent } from '../ship/index.js';
 import { HitboxHullComponent, HurtboxHullComponent } from '../core/index.js';
 import { CollisionEvent, CollisionHitterComponent, CollisionVulnerabilityComponent } from '../core/index.js';
 import { EscortCommandComponent, findControlledEntity } from '../player/index.js';
@@ -29,7 +30,8 @@ import { WeaponConstructors, WeaponEntry } from '../combat/index.js';
 import { BeamCollisionSystem, BeamResetSystem, BlastCollisionSystem, DropExplodingTargetSystem, TargetIndexProvider } from '../combat/index.js';
 import { OwnerComponent, SourceComponent } from '../ship/index.js';
 import { DeathAIComponent } from '../npc/index.js';
-import { FormationComponent, NpcComponent, NpcSteeringSystem, nextFormationSlot } from '../npc/index.js';
+import { FormationComponent, FormationSystem, NpcAfterburnerSystem, NpcComponent, NpcSteeringSystem, nextFormationSlot } from '../npc/index.js';
+import { GravitySystem } from '../travel/index.js';
 import { EscortLandingComponent, PlayerEscortComponent } from '../player/index.js';
 import { ShipComponent } from '../ship/index.js';
 import { SoundEvent } from '../core/index.js';
@@ -236,11 +238,35 @@ export function applyRefundFighter(world: World, peerId: string | undefined,
  * station on its own AI. GUESS, the section's proposal: Speed / 100 px a
  * frame (400 -> 4, 1000 -> 10), close to the readings once the frames of
  * the fighter clearing the carrier's sprite are discounted. Was a
- * constant 10 px/s for every bay.
+ * constant 10 px/s for every bay. Wave 41 ("Bay launch kick (E8, the
+ * hub's question), wave 41") confirmed the Speed-1000 bay's fighter
+ * leaving at about 10 px a frame and KEEPING it, twice its own top speed,
+ * straight off screen; a kick under the fighter's top speed is braked off
+ * at once (BAY_LAUNCH_BRAKE).
  */
 export function bayExitKick(bay: Pick<BayWeaponData, 'shotSpeed'>): number {
     return bay.shotSpeed;
 }
+
+/**
+ * How fast, in px/s², a fighter whose launch kick was no faster than its
+ * own top speed sheds the kick (its velocity relative to its carrier),
+ * before its formation AI takes over.
+ *
+ * MEASURED (reference "Bay launch kick (E8, the hub's question), wave
+ * 41"): from the Speed-400 bay (a 4 px a frame kick) the fighter, a Kit
+ * Bay Disc with a 4.5 px a frame top speed, 54 px/s² of acceleration and
+ * a 90 deg/s turn, cleared the carrier, slowed to 1-1.5 px a frame and
+ * stopped about 35 px out 0.7 s after launch (wave 40: the same 35 px),
+ * then flew back to its station. Its own engine could not do that: a
+ * turn-and-burn needs 2 s just to face about, and NovaJS's formation
+ * controller, flying exactly that, coasted the kick out about 190 px.
+ * From the Speed-1000 bay (10 px a frame, over its top speed) the fighter
+ * did not brake at all. GUESS: a kick within the fighter's top speed is
+ * shed at a constant 200 px/s² (4 px a frame stops 36 px out in 0.6 s),
+ * one over it coasts like any overspeed (the afterburner's coast-down).
+ */
+export const BAY_LAUNCH_BRAKE = 200;
 
 class BayWeaponEntry extends WeaponEntry {
     declare data: BayWeaponData;
@@ -363,6 +389,14 @@ class BayWeaponEntry extends WeaponEntry {
         // fighter one tick ahead of the live one's, and forked (#134).
         const [world] = this.runQuery(BayWorldQuery)[0];
         deriveEntityComponents(world, ship);
+        // A kick within the fighter's own top speed is braked off at once
+        // (BAY_LAUNCH_BRAKE, reference E8 wave 41); a faster one coasts.
+        const topSpeed = ship.components.get(ShipPhysicsComponent)?.speed;
+        if (topSpeed !== undefined
+            && bayExitKick(this.data) <= topSpeed) {
+            ship.components.set(BayFighterComponent,
+                { bayWeaponId: this.data.id, launchBrake: true });
+        }
         this.entities.set(this.ids.next(`bay:${multiplayerOwner}`), ship);
         const ownerVuln = this.entities.get(source)?.components
             .get(CollisionVulnerabilityComponent);
@@ -394,6 +428,49 @@ class BayWeaponEntry extends WeaponEntry {
 }
 
 const BayFormationQuery = new Query([FormationComponent] as const);
+
+/**
+ * Sheds a freshly launched fighter's kick (BAY_LAUNCH_BRAKE): while its
+ * BayFighter carries `launchBrake`, its velocity relative to its carrier
+ * (SourceComponent) falls by BAY_LAUNCH_BRAKE x the tick, and the flag is
+ * dropped the tick it matches the carrier's (or the carrier is gone).
+ * Runs whatever the fighter's AI is doing, after the formation keeper's
+ * own velocity nudge and before the ship moves. Deterministic: synced
+ * state and the tick's delta, the velocity replaced, never mutated.
+ */
+export const BayLaunchBrakeSystem = new System({
+    name: 'BayLaunchBrakeSystem',
+    args: [BayFighterComponent, MovementStateComponent, SourceComponent,
+        Entities, TimeResource] as const,
+    step(fighter, movement, source, entities, time) {
+        if (!fighter.launchBrake) {
+            return;
+        }
+        const carrier = entities.get(source)?.components
+            .get(MovementStateComponent);
+        if (!carrier) {
+            delete fighter.launchBrake;
+            return;
+        }
+        const carrierVelocity = Vector.fromVectorLike(carrier.velocity);
+        const relative = Vector.fromVectorLike(movement.velocity)
+            .subtract(carrierVelocity);
+        const shed = BAY_LAUNCH_BRAKE * time.delta_s;
+        if (relative.length <= shed) {
+            movement.velocity = carrierVelocity;
+            delete fighter.launchBrake;
+            return;
+        }
+        movement.velocity = Vector.fromVectorLike(movement.velocity)
+            .subtract(relative.normalize(shed));
+    },
+    // #237 pins (shared: *): last of the steering and physics writers
+    // before the move (encounters' DisabledMovementSystem, which coasts a
+    // hulk, runs after it).
+    after: [TimeSystem, FormationSystem, GravitySystem,
+        NpcAfterburnerSystem],
+    before: [MovementSystem],
+});
 
 /** The world, for deriving a launched fighter's components. */
 const BayWorldQuery = new Query([GetWorld, SingletonComponent] as const);
@@ -609,5 +686,6 @@ export const BayPlugin: Plugin = {
         world.addSystem(ReturnVulnerabilitySystem);
         world.addSystem(CollectableEscortAI);
         world.addSystem(OrphanedBayFighterSystem);
+        world.addSystem(BayLaunchBrakeSystem);
     }
 }

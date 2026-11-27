@@ -909,6 +909,21 @@ export const STATE_HASH_INTERVAL = 60;
 //    derived wire schema fingerprint changes (cf33a842962aab5c ->
 //    7c258fc1263a74e7), and the join gate keeps older and newer builds
 //    apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the bay launch brake (reference "Bay launch
+//    kick (E8, the hub's question), wave 41"). One OPTIONAL BayFighter
+//    field, `launchBrake` (ship/bay_fighter_component.ts), set at launch
+//    on a fighter whose kick is no faster than its own top speed and
+//    dropped once escorts/bay_plugin.ts's BayLaunchBrakeSystem has shed
+//    the kick (200 px/s²); a fighter kicked out faster never carries it.
+//    No input kind or message kind changes. Sim-rule changes alongside
+//    (wave 41, no schema): an NPC departure is replaced after a drawn
+//    4-10 s (was a 15 s clock); ionized above 0.3 of IonizeMax with the
+//    turn cut ramping in from the first point of charge, and Deionize 0
+//    read as 100; the afterburner factor floored at 1.5; gravity's pull
+//    23 G + 3.2 G|G| px/s². The derived wire schema fingerprint changes (7c258fc1263a74e7 ->
+//    4ed054bb232c84e8), and the join gate keeps older and newer builds
+//    apart.
 
 export const PROTOCOL_VERSION = 8;
 

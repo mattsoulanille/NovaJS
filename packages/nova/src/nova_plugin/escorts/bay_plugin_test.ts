@@ -16,8 +16,8 @@ import { SoundEvent } from '../core/index.js';
 import { EscortCommandComponent, NO_DEAL } from '../player/index.js';
 import { FormationComponent, NpcComponent, RCS_ACCEL_FRACTION } from '../npc/index.js';
 import {
-    applyRefundFighter, bayExitKick, BayFighterComponent, FighterDockedEvent,
-    startReturnHome,
+    applyRefundFighter, bayExitKick, BayFighterComponent, BAY_LAUNCH_BRAKE,
+    FighterDockedEvent, startReturnHome,
 } from './bay_plugin.js';
 import { CollisionEvent, CollisionVulnerabilityComponent } from '../core/index.js';
 import { MockCommunicator } from 'nova_ecs/plugins/mock_communicator';
@@ -365,8 +365,8 @@ describe('bay weapons', () => {
     it('tags each fighter with the bay that launched it', async () => {
         const { world, carrier } = await makeTestWorld();
         const [, fighter] = await launchOne(world, carrier);
-        expect(fighter.components.get(BayFighterComponent))
-            .toEqual({ bayWeaponId: BAY_ID });
+        expect(fighter.components.get(BayFighterComponent)?.bayWeaponId)
+            .toEqual(BAY_ID);
         expect(fighter.components.get(SourceComponent)).toBe(CARRIER_UUID);
     });
 
@@ -387,13 +387,16 @@ describe('bay weapons', () => {
             // The carrier's motion is inherited, and the leftover is the
             // exit kick — give or take the RCS station-keeping nudges
             // FormationSystem may have made in the (at most two) ticks since
-            // launch: a fighter leaves the bay close beside its slot (a
-            // few tens of px), near enough to be on RCS at once.
+            // launch (a fighter leaves the bay close beside its slot, a
+            // few tens of px, near enough to be on RCS at once), and the
+            // launch brake's shedding of a kick under the fighter's top
+            // speed (BAY_LAUNCH_BRAKE) over the same ticks.
             const kick = launched.subtract(carrierVelocity);
             const rcsPerTick = fighter.components.get(ShipPhysicsComponent)!
                 .acceleration * RCS_ACCEL_FRACTION * SIMULATION_STEP_MS / 1000;
+            const brakePerTick = BAY_LAUNCH_BRAKE * SIMULATION_STEP_MS / 1000;
             expect(Math.abs(kick.length - BAY_SHOT_SPEED))
-                .toBeLessThanOrEqual(2 * rcsPerTick + 1e-9);
+                .toBeLessThanOrEqual(2 * (rcsPerTick + brakePerTick) + 1e-9);
         });
 
     it('kicks the fighter out at the bay\'s own wëap Speed (reference '
@@ -755,5 +758,91 @@ describe('the lost-fighter refund (issue #258)', () => {
             });
             client.step(2);
             expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(2);
+        });
+});
+
+/**
+ * Reference "Bay launch kick (E8, the hub's question), wave 41": the kit's
+ * Bay Disc (Speed / Accel 300, Turn 30: 135 px/s, 54 px/s², 90 deg/s)
+ * launched from a carrier at rest. From the Speed-400 bay it stopped about
+ * 35 px out 0.7 s after launch; from the Speed-1000 bay it kept about 10
+ * px a frame straight off screen.
+ */
+describe('the bay launch kick (E8 wave 41)', () => {
+    async function launchFrom(baySpeed: number) {
+        const gameData = new MockGameData();
+        gameData.data.Weapon.map.set(BAY_ID, {
+            ...getDefaultBayWeaponData(), id: BAY_ID, shipID: FIGHTER_SHIP_ID,
+            ammoType: ['weapon', BAY_ID], maxAmmo: 4, fireGroup: 'secondary',
+            shotSpeed: baySpeed * 3 / 10, reload: 30,
+        });
+        gameData.data.Outfit.map.set(BAY_OUTFIT_ID, {
+            ...getDefaultOutfitData(), id: BAY_OUTFIT_ID,
+            weapons: { [BAY_ID]: 1 },
+        });
+        gameData.data.Outfit.map.set(FIGHTER_A_ID, {
+            ...getDefaultOutfitData(), id: FIGHTER_A_ID, ammoFor: BAY_ID,
+        });
+        gameData.data.Ship.map.set(FIGHTER_SHIP_ID, {
+            ...getDefaultShipData(), id: FIGHTER_SHIP_ID,
+            physics: {
+                ...getDefaultShipPhysics(), speed: 135, acceleration: 54,
+                turnRate: 90 * Math.PI / 180,
+            },
+        });
+        const carrierData: ShipData = {
+            ...getDefaultShipData(), id: CARRIER_ID,
+            outfits: { [BAY_OUTFIT_ID]: 1, [FIGHTER_A_ID]: 2 },
+            physics: { ...getDefaultShipPhysics() },
+        };
+        gameData.data.Ship.map.set(CARRIER_ID, carrierData);
+        const world = await makeSystem('test:system', gameData, undefined,
+            { npcs: false });
+        const carrier = makeShip(carrierData);
+        carrier.components.set(MovementStateComponent, {
+            accelerating: 0, position: new Position(0, 0),
+            rotation: new Angle(0), turnBack: false, turning: 0,
+            velocity: new Vector(0, 0),
+        });
+        await completeEntity(world, carrier);
+        world.entities.set(CARRIER_UUID, carrier);
+        await stepWorld(world, 2);
+        const [, fighter] = await launchOne(world, carrier);
+        /** The fighter's distance from the carrier after `frames` more
+         * 30 fps frames. */
+        const distanceAfter = async (frames: number) => {
+            await stepWorld(world, 2 * frames);
+            return Position.fromVectorLike(fighter.components
+                .get(MovementStateComponent)!.position).length;
+        };
+        return { world, fighter, distanceAfter };
+    }
+
+    it('brakes a kick under the fighter\'s top speed: the Speed-400 bay\'s '
+        + 'fighter stops about 35 px out within 0.7 s', async () => {
+            const { fighter, distanceAfter } = await launchFrom(400);
+            const at07 = await distanceAfter(21);
+            expect(at07).toBeGreaterThan(25);
+            expect(at07).toBeLessThan(45);
+            // Stopped (or turning back toward its station), not coasting.
+            const speed = Vector.fromVectorLike(fighter.components
+                .get(MovementStateComponent)!.velocity).length;
+            expect(speed).toBeLessThan(30);
+            expect(fighter.components.get(BayFighterComponent)!.launchBrake)
+                .toBeUndefined();
+            expect(await distanceAfter(9)).toBeLessThan(45);
+        });
+
+    it('lets a kick over the fighter\'s top speed coast: the Speed-1000 '
+        + 'bay\'s fighter keeps about 10 px a frame', async () => {
+            const { fighter, distanceAfter } = await launchFrom(1000);
+            expect(fighter.components.get(BayFighterComponent)!.launchBrake)
+                .toBeUndefined();
+            const at03 = await distanceAfter(9);
+            const at13 = await distanceAfter(30);
+            // About 100 px at 0.3 s and 400 at 1.3 s on the original.
+            expect(at03).toBeGreaterThan(80);
+            expect(at13).toBeGreaterThan(330);
+            expect((at13 - at03) / 30).toBeGreaterThan(9);
         });
 });

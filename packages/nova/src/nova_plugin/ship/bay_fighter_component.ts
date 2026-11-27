@@ -20,10 +20,19 @@ import { Component } from 'nova_ecs/component';
  * it and still registers it with the serializer; the wire key is the
  * component's name, so its home module does not matter to the wire.
  */
-export const BayFighter = t.type({
+export const BayFighter = t.intersection([t.type({
     /** Global id of the bay wëap this fighter launched from. */
     bayWeaponId: t.string,
-});
+}), t.partial({
+    /**
+     * Present (true) while the fighter is still shedding a launch kick
+     * that was under its own top speed (bay_plugin's
+     * BayLaunchBrakeSystem); dropped once its velocity matches its
+     * carrier's, or the carrier is gone. Never set on a fighter kicked
+     * out faster than it can fly, which coasts on.
+     */
+    launchBrake: t.literal(true),
+})]);
 export type BayFighter = t.TypeOf<typeof BayFighter>;
 export const BayFighterComponent =
     new Component<BayFighter>('BayFighterComponent');
