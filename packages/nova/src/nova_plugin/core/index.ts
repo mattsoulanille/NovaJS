@@ -37,6 +37,7 @@ export * from './sound_plugin.js';
 export * from './stat.js';
 export * from './system_id_resource.js';
 export * from './systems_resource.js';
+export * from './toroidal_grid.js';
 
 import { Domain, domainPlugin } from './domain.js';
 import { TimePlugin } from 'nova_ecs/plugins/time_plugin';

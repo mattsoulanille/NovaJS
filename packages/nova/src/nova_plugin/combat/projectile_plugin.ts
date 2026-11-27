@@ -1,6 +1,6 @@
 import * as t from 'io-ts';
 import { ProjectileWeaponData, WeaponData, WeaponDamage } from 'novadatainterface/weapon_data';
-import { Emit, EmitFunction, EmitNow, Entities, GetEntity, GetWorld, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
+import { ArgsToData, Emit, EmitFunction, EmitNow, Entities, GetEntity, GetWorld, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { EntityMap } from 'nova_ecs/entity_map';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position, PositionType } from 'nova_ecs/datatypes/position';
@@ -29,6 +29,7 @@ import { CollisionEvent, CollisionHitterComponent, CollisionVulnerabilityCompone
 import { CreateTime } from '../core/index.js';
 import { DamagedEvent, ZeroArmorEvent } from '../ship/index.js';
 import { ExitPointData } from './exit_point.js';
+import { spatialBroadphase, ToroidalGrid } from '../core/index.js';
 import { FireSubs, FireSubsFunction, ShipPointDefenseVulnerabilitySystem, SubCounts, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin.js';
 import { ShotEnd } from './submunition_rule.js';
 import { ActiveSecondaryProvider } from './weapon_plugin.js';
@@ -634,6 +635,59 @@ const ProximityFuseCandidates = new Query([UUID, MovementStateComponent,
     HitboxHullComponent, CollisionVulnerabilityComponent] as const,
     'ProximityFuseCandidates');
 
+type ProximityFuseCandidateList = ArgsToData<[typeof ProximityFuseCandidates]>[0];
+
+/**
+ * ProjectileProximityFuseSystem's broadphase: a ToroidalGrid over the
+ * fuse candidates' positions, so a shot tests only the candidates near
+ * it instead of every collidable in the system (the system was
+ * O(shots x collidables), the top cost of a big missile fight).
+ *
+ * Valid for ONE run of the system, over one candidate list, while
+ * nothing has moved: built on the first fused shot of a world step
+ * (World.stepSerial), and dropped whenever a shot detonates, since the
+ * detonation's event handlers (damage, blasts, submunitions) may move,
+ * add or remove candidates. Nothing else runs between two shots' steps.
+ * Not simulation state: per world object, never snapshotted.
+ */
+interface ProximityFuseIndex {
+    serial: number,
+    candidates: ProximityFuseCandidateList,
+    grid: ToroidalGrid,
+    /** The largest hullRadius among the candidates: bounds every reach. */
+    maxHullRadius: number,
+    /** Scratch for ToroidalGrid.near answers. */
+    near: number[],
+}
+const proximityFuseIndices = new WeakMap<World, ProximityFuseIndex>();
+
+function proximityFuseIndex(world: World,
+    candidates: ProximityFuseCandidateList): ProximityFuseIndex {
+    const cached = proximityFuseIndices.get(world);
+    if (cached && cached.serial === world.stepSerial
+        && cached.candidates === candidates
+        && cached.grid.size === candidates.length) {
+        return cached;
+    }
+    const index: ProximityFuseIndex = cached ?? {
+        serial: 0, candidates, grid: new ToroidalGrid(), maxHullRadius: 0,
+        near: [],
+    };
+    index.serial = world.stepSerial;
+    index.candidates = candidates;
+    index.grid.clear();
+    // A NaN radius stays NaN through Math.max, and a NaN reach makes the
+    // grid answer every candidate, as the unindexed loop would.
+    let maxHullRadius = 0;
+    for (const [, otherMovement, hull] of candidates) {
+        index.grid.insert(otherMovement.position.x, otherMovement.position.y);
+        maxHullRadius = Math.max(maxHullRadius, hullRadius(hull));
+    }
+    index.maxHullRadius = maxHullRadius;
+    proximityFuseIndices.set(world, index);
+    return index;
+}
+
 /**
  * A shot's PROXIMITY FUSE (wëap ProxRadius > 0), separate from its body:
  * the shot detonates — damaging the ship that tripped it and firing its
@@ -669,8 +723,18 @@ export const ProjectileProximityFuseSystem = new System({
             createTime, time, entities, world,
         };
         const { x, y } = movement.position;
+        // Only the candidates the broadphase finds near the shot, in the
+        // query's own order: the rest are farther than any candidate's
+        // reach and would fail the distance test below anyway.
+        const index = proximityFuseIndex(world, candidates);
+        const near = index.grid.near(x, y, spatialBroadphase.enabled
+            ? proximityFuseReach(projectileData.proxRadius,
+                index.maxHullRadius)
+            : Infinity, index.near);
         let best: { uuid: string, margin: number } | undefined;
-        for (const [otherUuid, otherMovement, hull, vulnerability] of candidates) {
+        for (let k = 0; k < near.length; k++) {
+            const [otherUuid, otherMovement, hull, vulnerability] =
+                candidates[near[k]];
             if (otherUuid === uuid) {
                 continue;
             }
@@ -710,6 +774,9 @@ export const ProjectileProximityFuseSystem = new System({
         if (!self) {
             return;
         }
+        // The detonation runs event handlers that may move, add or
+        // remove candidates: the next shot rebuilds the index.
+        proximityFuseIndices.delete(world);
         strikeDamage(shot, best.uuid, emitNow);
         detonate(shot, self, best.uuid, 'proximity', fireSubs, emitNow);
     },

@@ -47,6 +47,7 @@ import { GovtComponent } from '../core/index.js';
 import { firstOrderLead, firstOrderWithFallback } from './guidance.js';
 import { isHostileTarget } from './hostility.js';
 import { PointDefenseCandidate, selectPointDefenseTarget } from './point_defense.js';
+import { certainlyBeyond } from '../core/index.js';
 import { ShipComponent, ShipDataComponent, ShipDataProvider } from '../ship/index.js';
 import { TargetComponent } from '../ship/index.js';
 import { WeaponsStateComponent } from '../ship/index.js';
@@ -437,10 +438,18 @@ export abstract class WeaponEntry {
 
         const candidates: (PointDefenseCandidate
             & { movement: MovementState })[] = [];
+        const range = Math.sqrt(this.pointDefenseRangeSquared);
         for (const [movement, candidateOwner, uuid, candidateTarget, entity]
             of this.runQuery(PointDefenseQuery)) {
+            // Far candidates are rejected without building the offset;
+            // the exact test below decides the rest.
+            const position = movement.position;
+            if (certainlyBeyond(position.x, exitPoint.x, range)
+                || certainlyBeyond(position.y, exitPoint.y, range)) {
+                continue;
+            }
             const distanceSquared =
-                movement.position.subtract(exitPoint).lengthSquared;
+                position.subtract(exitPoint).lengthSquared;
             if (distanceSquared > this.pointDefenseRangeSquared) {
                 continue;
             }

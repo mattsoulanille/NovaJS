@@ -30,6 +30,7 @@ import { ProvideFromCache } from '../core/index.js';
 import { OwnerComponent, SourceComponent } from '../ship/index.js';
 import { TargetComponent } from '../ship/index.js';
 import { DisableCreditSystem } from '../reputation/index.js';
+import { certainlyBeyond } from '../core/index.js';
 
 /**
  * ============================================================================
@@ -521,7 +522,14 @@ export function nearestDecoy(decoys: Iterable<DecoyCandidate>,
         // Position.subtract wraps around the toroidal ±BOUNDARY world, so this
         // is the true shortest-path distance (matching how point defense picks
         // its nearest target).
-        const offset = movement.position.subtract(from);
+        // Far decoys (nearly all of a field) are rejected without
+        // building the offset; the exact test below decides the rest.
+        const position = movement.position;
+        if (certainlyBeyond(position.x, from.x, range)
+            || certainlyBeyond(position.y, from.y, range)) {
+            continue;
+        }
+        const offset = position.subtract(from);
         const distSq = offset.lengthSquared;
         if (distSq > rangeSq) {
             continue;

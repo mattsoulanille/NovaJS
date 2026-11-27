@@ -76,6 +76,19 @@ export class World {
     private registered: Array<Sortable> = [];
     private sortables: Array<Sortable> = []; // This includes systems and markers
     private systems: Array<System> = []; // Not a map because order matters.
+    private stepSerialCount = 0;
+    /**
+     * How many times `step()` has been called on THIS world object: a
+     * token that changes with every step, for caches of derived data
+     * that are only valid within one step (e.g. a spatial index a system
+     * builds over a query's positions). It is NOT simulation state: it
+     * is never snapshotted, hashed or restored, so a rollback that
+     * re-simulates a tick still sees a fresh value, and two worlds in
+     * lockstep may disagree on it. Never let it reach state.
+     */
+    get stepSerial(): number {
+        return this.stepSerialCount;
+    }
     /**
      * Systems that respond to each event, in `systems` order. Cleared
      * whenever `systems` changes; a system's event set is fixed at
@@ -604,6 +617,7 @@ export class World {
      * flush the queue by calling Systems on the entities they support.
      */
     step() {
+        this.stepSerialCount++;
         this.eventQueue.push({
             event: StepEvent as UnknownEvent,
             data: true,
