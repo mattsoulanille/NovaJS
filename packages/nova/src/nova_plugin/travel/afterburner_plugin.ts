@@ -146,7 +146,7 @@ export const EffectiveMovementPhysicsSystem = new System({
         }
 
         const base = getShipMovementPhysics(shipPhysics);
-        const ion = ionSlowdown(ionization, base.turnRate);
+        const ion = ionSlowdown(ionization, shipPhysics.turnRate);
         const boost = afterburning ? AFTERBURNER_FACTOR : 1;
         // A strict pilot's top speed only: not its acceleration, not its
         // turn rate (reference #316 wave 10).

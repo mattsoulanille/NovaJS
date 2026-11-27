@@ -22,8 +22,10 @@ const SHIP_ID = 'test:ship';
 /** A ship that turns very slowly: the case that motivated NPCs running
  * the real jump sequence (they used to pop out of existence mid-turn). */
 const SLOW_SHIP_ID = 'test:slowship';
-/** Radians per second. The stock default is 3. */
-const SLOW_TURN_RATE = 0.25;
+/** Radians per second: the slowest a turning hull flies, one whole
+ * degree a frame (Turn 10; any Turn below it turns this fast too,
+ * unchargedTurnRate, E6B wave 52). The stock default is 3. */
+const SLOW_TURN_RATE = Math.PI / 6;
 
 function ticksFor(delayMs: number) {
     return Math.ceil(delayMs / SIMULATION_STEP_MS);

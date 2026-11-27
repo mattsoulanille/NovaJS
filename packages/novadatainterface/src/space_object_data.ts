@@ -31,7 +31,10 @@ export function getDefaultSpaceObjectPhysics(): SpaceObjectPhysics {
         deionize: 10,
         speed: 300,
         acceleration: 300,
-        turnRate: 3,
+        // Turn 60: a whole 6 degrees a frame, so a default hull flies at
+        // the rate it states (a ship turns whole degrees a frame,
+        // reference E6B wave 52; the old 3 rad/s flew as 2.618).
+        turnRate: Math.PI,
         mass: 100,
         inertialess: false,
     }

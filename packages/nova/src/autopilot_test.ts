@@ -13,7 +13,7 @@ import {
     applyAnalogControl, applyControlEvents, ControlledByComponent,
     PlayerShipSelector,
 } from './nova_plugin/player/index.js';
-import { makeShip, ShipPhysicsComponent } from './nova_plugin/ship/index.js';
+import { makeShip, ShipPhysicsComponent, unchargedTurnRate } from './nova_plugin/ship/index.js';
 import { completeEntity } from './nova_plugin/spawn/index.js';
 import {
     LandEvent, LandingBlockedEvent, LandingClearedEvent, landingDistance,
@@ -144,7 +144,9 @@ describe('Autopilot landing on the square zone', () => {
             world.step();
             const flown = ship.components.get(MovementPhysicsComponent)!;
             if (physics) {
-                expect(flown.turnRate).toBeCloseTo(physics.turnRate, 6);
+                // Flown at whole degrees a frame (E6B wave 52).
+                expect(flown.turnRate)
+                    .toBeCloseTo(unchargedTurnRate(physics.turnRate), 9);
             }
             expect(flown.movementType).toBe(inertialess
                 ? MovementType.INERTIALESS : MovementType.INERTIAL);

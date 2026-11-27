@@ -31,7 +31,7 @@ import {
     SCOOP_ARRIVE_SPEED,
 } from './npc_mining.js';
 import { EscortLandingComponent } from '../player/index.js';
-import { ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
+import { ShipDataComponent, ShipPhysicsComponent, unchargedTurnRate } from '../ship/index.js';
 import { waitingForRescue } from './system_hold.js';
 import {
     SHUTTLE_ARRIVE_RADIUS, SHUTTLE_DWELL_MS, SHUTTLE_ONE_STOP_DWELL_MS,
@@ -465,10 +465,18 @@ export const NpcSteeringSystem = new System({
         // an INERTIALESS hull the effective numbers the integrator applies
         // this tick (its throttle converts a speed change with them) and
         // the flag that hands it to arriveInertialess. An inertial ship's
-        // steering reads exactly what it always did.
+        // steering reads its own physics, with the uncharged whole-degree
+        // turn it really flies by (unchargedTurnRate, E6B wave 52) for
+        // the arrival's turn-around room.
         const inertialess = inertialessPhysics(movementPhysics, physics);
         const steering: ArrivePhysics = inertialess
-            ? { ...inertialess, inertialess: true } : physics;
+            ? { ...inertialess, inertialess: true }
+            : {
+                acceleration: physics.acceleration,
+                turnRate: unchargedTurnRate(physics.turnRate),
+                speed: physics.speed,
+                inertialess: physics.inertialess,
+            };
         if (waitingForRescue(entity)) {
             // A ShipStart-2 rescue ship waiting for the player holds still
             // where it is (system_hold.ts; reference wave 19: "Waiting").

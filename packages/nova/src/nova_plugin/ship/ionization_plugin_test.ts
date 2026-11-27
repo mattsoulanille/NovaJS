@@ -13,10 +13,11 @@ import { IonizationComponent } from './health_plugin.js';
 import {
     ION_CHARGE_HOLD, ION_FULL_ACCELERATION_FACTOR, ION_IONIZED_FRACTION,
     ION_TURN_STEP, ionizedNow, ionSlowdown, IsIonizedComponent,
-    NO_ION_SLOWDOWN,
+    NO_ION_SLOWDOWN, unchargedTurnRate,
 } from './ionization_plugin.js';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { makeShip } from './make_ship.js';
+import { ShipPhysicsComponent } from './ship_plugin.js';
 import { makeSystem } from '../make_system.js';
 
 /**
@@ -533,20 +534,99 @@ describe('the ion cut per hull (reference E6, wave 51)', () => {
         }, 120_000);
 
     it('cuts a Turn-25 hull\'s RAW turn (k2_t25: 1 a frame, 29.5 deg/s, '
-        + 'from q 0.57 to 0.43), its uncharged turn left continuous', () => {
-        for (const q of [0.57, 0.5, 0.43]) {
-            const slowdown = ionSlowdown({ current: q * 100, max: 100 },
-                TURN(25));
-            expect(slowdown.turnRate * TURN(25) / ION_TURN_STEP)
-                .withContext(`${q}`).toBeCloseTo(1, 9);
+        + 'from q 0.57 to 0.43), its uncharged turn 2 a frame (E6B wave 52)',
+        () => {
+            for (const q of [0.57, 0.5, 0.43]) {
+                const slowdown = ionSlowdown({ current: q * 100, max: 100 },
+                    TURN(25));
+                expect(slowdown.turnRate * unchargedTurnRate(TURN(25))
+                    / ION_TURN_STEP).withContext(`${q}`).toBeCloseTo(1, 9);
+            }
+            // Uncharged 2 a frame (58.5 deg/s read, waves 51 and 52), and
+            // the first point of charge keeps it (floor(2.5 x 0.9999)).
+            expect(unchargedTurnRate(TURN(25)) / ION_TURN_STEP)
+                .toBeCloseTo(2, 9);
+            expect(ionSlowdown({ current: 0, max: 100 }, TURN(25)).turnRate)
+                .toBe(1);
+            expect(ionSlowdown({ current: 0.01, max: 100 }, TURN(25))
+                .turnRate).toBeCloseTo(1, 9);
+            // 2 a frame to q 0.2, then 1 (floor(2.5 x 0.8) = 2).
+            expect(ionSlowdown({ current: 20, max: 100 }, TURN(25))
+                .turnRate).toBeCloseTo(1, 9);
+            expect(ionSlowdown({ current: 20.5, max: 100 }, TURN(25))
+                .turnRate).toBeCloseTo(0.5, 9);
+        });
+
+    it('flies the ionized ship at the cut of its uncharged whole degrees: '
+        + 'a Turn-25 hull 2 a frame uncharged, 1 at q 0.5 (k2_t25)',
+        async () => {
+            const { world, hit, degrees } = await ionWorld(hull(25));
+            expect(degrees()).toBeCloseTo(2, 9);
+            hit(50);
+            expect(degrees()).toBeCloseTo(1, 9);
+        }, 120_000);
+});
+
+describe('unchargedTurnRate (reference "The UNCHARGED base turn on every '
+    + 'hull (the hub\'s item 1, E6), wave 52")', () => {
+    /** The uncharged turn in whole degrees a frame on a Turn-`turn` hull. */
+    const hull = (turn: number) => ({ ...RING_ION, turnRate: TURN(turn) });
+    const perFrame = (turn: number) =>
+        unchargedTurnRate(TURN(turn)) / ION_TURN_STEP;
+
+    it('turns max(1, floor(Turn / 10)) whole degrees a frame, on every '
+        + 'hull wave 52 measured', () => {
+        // [Turn, degrees a frame, deg/s read (phase vote) on the 29.15 Hz
+        // reference clock]
+        const readings: [number, number, number][] = [
+            [7, 1, 29.0], [9, 1, 30.0], [15, 1, 29.5], [25, 2, 58.5],
+            [35, 3, 87.5], [55, 5, 146.0], [95, 9, 262.0],
+        ];
+        for (const [turn, steps, read] of readings) {
+            const context = `Turn ${turn}`;
+            expect(perFrame(turn)).withContext(context).toBeCloseTo(steps, 9);
+            expect(Math.abs(steps * REFERENCE_STEP - read))
+                .withContext(context).toBeLessThan(1);
         }
-        // Uncharged it keeps 2.5 a frame (75 deg/s): wave 51 read 2
-        // (as Turn 20), deferred to the next wave; see turnFactor.
-        expect(ionSlowdown({ current: 0, max: 100 }, TURN(25)).turnRate)
-            .toBe(1);
-        expect(ionSlowdown({ current: 0.01, max: 100 }, TURN(25)).turnRate
-            * TURN(25) / ION_TURN_STEP).toBeCloseTo(2, 9);
+        // Whole multiples of 10 keep their rate exactly.
+        for (const turn of [10, 20, 30, 60, 100, 200]) {
+            expect(unchargedTurnRate(TURN(turn))).toBe(
+                Math.round(TURN(turn) / ION_TURN_STEP) * ION_TURN_STEP);
+        }
     });
+
+    it('rounds the rad/s round trip before the floor (Turn 20 is 2, not 1)',
+        () => {
+            expect(perFrame(20)).toBeCloseTo(2, 9);
+            expect(perFrame(19.999999)).toBeCloseTo(1, 9);
+        });
+
+    it('GUESS: one degree a frame for Turn 1-6 too; no turn stays none',
+        () => {
+            for (const turn of [1, 3, 6]) {
+                expect(perFrame(turn)).withContext(`Turn ${turn}`)
+                    .toBeCloseTo(1, 9);
+            }
+            expect(unchargedTurnRate(0)).toBe(0);
+            expect(unchargedTurnRate(-TURN(5))).toBe(-TURN(5));
+        });
+
+    it('is what the ship flies at uncharged (MovementPhysics), its raw Turn '
+        + 'kept in ShipPhysics', async () => {
+            for (const [turn, steps] of [[7, 1], [35, 3], [55, 5]]) {
+                const { degrees, ship } = await ionWorld(hull(turn));
+                expect(degrees()).withContext(`Turn ${turn}`)
+                    .toBeCloseTo(steps, 9);
+                expect(ship.components.get(ShipPhysicsComponent)!.turnRate)
+                    .toBeCloseTo(TURN(turn), 12);
+            }
+        }, 120_000);
+
+    it('GUESS: a charged Turn-7 hull stops dead (no minimum of 1 under '
+        + 'the cut, wave 52 finding 3, unread)', () => {
+            expect(ionSlowdown({ current: 1, max: 100 }, TURN(7)).turnRate)
+                .toBe(0);
+        });
 });
 
 describe('ionSlowdown', () => {
@@ -554,7 +634,7 @@ describe('ionSlowdown', () => {
     /** The ionized turn in whole degrees a frame on a Turn-`turn` hull. */
     const perFrame = (turn: number, current: number, max = 100) =>
         ionSlowdown(charge(current, max), TURN(turn)).turnRate
-        * TURN(turn) / ION_TURN_STEP;
+        * unchargedTurnRate(TURN(turn)) / ION_TURN_STEP;
 
     it('is nothing at no charge, or on a hull with no ion capacity', () => {
         for (const turn of [TURN(10), TURN(30), TURN(200), BASE.turnRate]) {
@@ -623,10 +703,12 @@ describe('ionSlowdown', () => {
                     .withContext(`Turn ${turn}, ${current}`).toEqual(held);
             }
         }
-        // The case wave 51 left open: a saturated Turn 95 turns 2 a
-        // frame under this floor-at-0.7 GUESS (3 under "strictly below
-        // at 2/3").
+        // The case wave 51 left open, MEASURED in wave 52 (E6B k6_t95,
+        // finding 4): a saturated Turn 95 turns 2 a frame (58 deg/s),
+        // floor at 0.7 (3 under "strictly below at 2/3").
         expect(perFrame(95, 100)).toBeCloseTo(2, 9);
+        expect(Math.abs(perFrame(95, 100) * REFERENCE_STEP - 58))
+            .toBeLessThan(1);
     });
 
     it('slides the thrust as 1 - q from the first point to 0.3 at the hold, '

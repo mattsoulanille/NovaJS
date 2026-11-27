@@ -16,7 +16,7 @@ import {
     steerFormation,
 } from './npc_formation.js';
 import { EscortLandingComponent } from '../player/index.js';
-import { ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
+import { ShipDataComponent, ShipPhysicsComponent, unchargedTurnRate } from '../ship/index.js';
 
 /**
  * Station-keeping for ships holding a formation slot (the geometry and the
@@ -117,7 +117,9 @@ export const FormationSystem = new System({
             frameWidth = Math.max(frameWidth, shipData?.spriteFrameWidth ?? 0);
         }
         // Base acceleration and turn rate (not the per-tick effective
-        // physics): afterburners must not boost the RCS budget.
+        // physics): afterburners must not boost the RCS budget. The
+        // turn is the uncharged whole-degree one the hull flies by
+        // (unchargedTurnRate, E6B wave 52), not the raw Turn.
         // The follower count goes along for the count-dependent layouts
         // (FORMATION_COUNT_LAYOUTS). Every ship holding a formation on
         // this leader counts, bay fighters and escorts alike: the original
@@ -129,7 +131,8 @@ export const FormationSystem = new System({
         // throttle with the acceleration the integrator will apply.
         steerFormation(movement, leader, formation,
             physics.acceleration, time.delta_s,
-            rank < 0 ? formation.slot : rank, physics.turnRate,
+            rank < 0 ? formation.slot : rank,
+            unchargedTurnRate(physics.turnRate),
             formationSpacing(frameWidth), siblingSlots.length,
             movementPhysics);
     },

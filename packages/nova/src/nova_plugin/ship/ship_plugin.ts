@@ -23,6 +23,7 @@ import { SimulationGameDataResource } from '../core/index.js';
 import { gameDataRefType } from '../core/index.js';
 import { ArmorComponent, FuelComponent, IonizationColorComponent, IonizationComponent, ShieldComponent, shieldFloor } from './health_plugin.js';
 import { applyOutfitPhysics, OutfitsState, OutfitsStateComponent } from './outfit_plugin.js';
+import { unchargedTurnRate } from './ionization_plugin.js';
 import { registerEntityDeriver } from '../core/index.js';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
 import { ControlledByComponent } from '../player/index.js';
@@ -115,13 +116,19 @@ export const ShipPhysicsProvider = ProvideFromCache({
     after: [TimeSystem, ShipOutfitsProvider],
 });
 
+/**
+ * A ship's uncharged movement physics. The turn is whole degrees a frame
+ * (unchargedTurnRate, reference E6B wave 52), not the raw
+ * ShipPhysics.turnRate, which only the ion cut (ionSlowdown) and the
+ * stat displays read.
+ */
 export function getShipMovementPhysics(physics: ShipPhysics): MovementPhysics {
     return {
         acceleration: physics.acceleration,
         maxVelocity: physics.speed,
         movementType: physics.inertialess
             ? MovementType.INERTIALESS : MovementType.INERTIAL,
-        turnRate: physics.turnRate,
+        turnRate: unchargedTurnRate(physics.turnRate),
     };
 }
 

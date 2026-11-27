@@ -247,10 +247,12 @@ describe('FormationSystem flying INERTIALESS escorts', () => {
     /** A held heading (rad): steady to well under a pixel's turn of a
      * 192 px hull. */
     const HEADING_STEADY = 1e-3;
+    /** Turn 40 is exactly 2 pi / 3 rad/s: a rounded 2.094 would now fly
+     * at 3 whole degrees a frame (unchargedTurnRate, E6B wave 52). */
     const HULLS: Hull[] = [
         { name: 'Dart', speed: 270, acceleration: 225, turnRate: 5.236, frame: 32 },
-        { name: 'Javelin', speed: 168.75, acceleration: 90, turnRate: 2.094, frame: 88 },
-        { name: 'Raven', speed: 101.25, acceleration: 63, turnRate: 2.094, frame: 192 },
+        { name: 'Javelin', speed: 168.75, acceleration: 90, turnRate: 2 * Math.PI / 3, frame: 88 },
+        { name: 'Raven', speed: 101.25, acceleration: 63, turnRate: 2 * Math.PI / 3, frame: 192 },
     ];
 
     function inertialessShip(h: Hull, position: Position,

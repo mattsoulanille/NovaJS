@@ -65,16 +65,15 @@ import { IonizationComponent, IonizationRechargeSystem } from "./health_plugin.j
  * The share of IonizeMax past which the charge's cut stops growing: the
  * charge share q = charge / IonizeMax counts only up to this (both cuts
  * below are in min(q, ION_CHARGE_HOLD)), however far past it the pile
- * goes. MEASURED bracket, GUESS value (reference "The ion turn cut on
- * every hull (Matthew's question, E6), wave 51", finding 1 / 4, and "The
- * saturated thrust cut on two Accels (Matthew's question, E6), wave 51",
- * finding 2): six 30-point hits (q up to 1.75) turned exactly as three on
- * Turn 60 / 100 / 200, and the saturated thrust (0.28 / 0.32) puts the
- * hold on wave 50's slide at 0.68-0.72. The turn readings cannot tell
- * floor() with a hold at 0.7 from "strictly below" with a hold at 2/3; 0.7
- * is the GUESS inside the 2/3-0.72 bracket that one law in min(q, hold)
- * fits for both cuts (a saturated Turn-95 hull would decide it: 2 against
- * 3 degrees a frame). Replaces wave 50's no-turn line (two thirds, a line
+ * goes. MEASURED (reference "The ion turn cut on every hull (Matthew's
+ * question, E6), wave 51", finding 1 / 4, and "The saturated thrust cut
+ * on two Accels (Matthew's question, E6), wave 51", finding 2): six
+ * 30-point hits (q up to 1.75) turned exactly as three on Turn 60 / 100 /
+ * 200, and the saturated thrust (0.28 / 0.32) puts the hold on wave 50's
+ * slide at 0.68-0.72. Wave 52 (E6B finding 4) decided floor() with a hold
+ * at 0.7 over "strictly below" at 2/3: a saturated Turn-95 hull turned 2
+ * degrees a frame (floor(9.5 x 0.3)), not 3; with wave 51's Turn 200 (6
+ * a frame) the hold sits in (0.684, 0.70]. Replaces wave 50's no-turn line (two thirds, a line
  * for every hull) and its 0.9 acceleration slope.
  */
 export const ION_CHARGE_HOLD = 0.7;
@@ -109,12 +108,46 @@ export const ION_IONIZED_FRACTION = 1 / 3;
 /**
  * One whole degree a 1/30 s game frame, in the rad/s MovementPhysics
  * turn rates are kept in: Turn 10 (ShipTurnRateConversionFactor's 30
- * deg/s). The original turns an ionized ship in whole degrees a frame
- * (29.15 deg/s a step at the reference machine's 29.15 Hz tick, every
- * wave-51 reading a whole multiple of it); NovaJS's frame is the nominal
- * 30 fps (FPS, the #316 ruling), so a step here is 30 deg/s.
+ * deg/s). The original turns a ship in whole degrees a frame, charged
+ * or not (29.15 deg/s a step at the reference machine's 29.15 Hz tick,
+ * every wave-51 / 52 reading a whole multiple of it); NovaJS's frame is
+ * the nominal 30 fps (FPS, the #316 ruling), so a step here is 30 deg/s.
  */
 export const ION_TURN_STEP = FPS * Math.PI / 180;
+
+/**
+ * A rad/s turn rate in degrees a 1/30 s frame (Turn / 10), snapped to a
+ * 1e-9 grid so the rad/s round trip does not leave a Turn-20 hull at
+ * 1.9999999999999998 (and floor it a whole degree low). Pure.
+ */
+function turnDegreesPerFrame(turnRate: number): number {
+    return Math.round(turnRate / ION_TURN_STEP * 1e9) / 1e9;
+}
+
+/**
+ * The UNCHARGED turn of a ship whose raw turn (shïp Turn plus its
+ * outfits' ModType 6: ShipPhysics.turnRate) is `rawTurnRate` rad/s:
+ * whole degrees a frame, max(1, floor(Turn / 10)). MEASURED (reference
+ * "The UNCHARGED base turn on every hull (the hub's item 1, E6), wave
+ * 52", findings 1-2): Turn 7 / 9 / 15 turn 1 a frame, 25 two, 35 three,
+ * 55 five, 95 nine, so Turn 7 turns 45 % FASTER than its Turn says and
+ * Turn 35 15 % slower. GUESS: the outfits' turn is added to Turn BEFORE
+ * the floor (no turn outfit was flown), and Turn 1-6 turn 1 a frame too
+ * (unread; the stock minimum is 7). A hull with no (or a negative) turn
+ * keeps it: no minimum step for a hull that cannot turn. The ion cut
+ * works on the RAW Turn, not on this (ionSlowdown). Every consumer of a
+ * ship's effective turn reads it through getShipMovementPhysics / the
+ * MovementPhysicsComponent; the raw value stays in ShipPhysics for the
+ * ion cut, the wëap Flags 0x0008 "fast ship" test (in Turn units) and the
+ * spaceport's stat lines. Pure.
+ */
+export function unchargedTurnRate(rawTurnRate: number): number {
+    const degreesPerFrame = turnDegreesPerFrame(rawTurnRate);
+    if (!(degreesPerFrame > 0)) {
+        return rawTurnRate;
+    }
+    return Math.max(1, Math.floor(degreesPerFrame)) * ION_TURN_STEP;
+}
 
 /**
  * The thrust multiplier at a charge share `q` of IonizeMax: 1 - min(q,
@@ -128,46 +161,39 @@ function accelerationFactor(q: number): number {
 }
 
 /**
- * The turn multiplier at a charge share `q` on a ship whose uncharged
- * turn is `baseTurnRate` rad/s. MEASURED (reference "The ion turn cut on
- * every hull (Matthew's question, E6), wave 51", findings 1-2; "A Turn
- * that is not a multiple of 10 (the E6 follow-up), wave 51", finding 2):
- * an ionized ship turns floor(d x (1 - min(q, ION_CHARGE_HOLD))) WHOLE
- * degrees a frame, d its uncharged turn in degrees a frame (Turn / 10;
- * the charge cuts this raw value, not an already-truncated one). So
- * the turn is cut per hull, not in thirds: Turn 10 never turns from the
- * first point of charge; Turn 20 turns 1 a frame while q <= 1/2; Turn 30
- * steps 2 -> 1 -> 0 at 1/3 and 2/3 (the old "thirds" were this
- * staircase's Turn-30 case); at the hold Turn 60 / 100 / 200 still turn
- * 1 / 3 / 6 a frame (29.2 / 87.5 / 174.5 deg/s read), Turn 30 and below
- * none. Turn 200 under a draining two-hit charge climbs 8 -> 15 a frame
- * one step at a time, each where this puts it.
+ * The turn multiplier, on the UNCHARGED turn (unchargedTurnRate), at a
+ * charge share `q` on a ship whose RAW turn is `rawTurnRate` rad/s.
+ * MEASURED (reference "The ion turn cut on every hull (Matthew's
+ * question, E6), wave 51", findings 1-2; "A Turn that is not a multiple
+ * of 10 (the E6 follow-up), wave 51", finding 2; "The UNCHARGED base
+ * turn on every hull (the hub's item 1, E6), wave 52", findings 3-4): an
+ * ionized ship turns floor(d x (1 - min(q, ION_CHARGE_HOLD))) WHOLE
+ * degrees a frame, d its RAW Turn / 10: the charge cuts the raw value,
+ * not the already-truncated uncharged turn, and with no minimum of 1.
+ * So the turn is cut per hull, not in thirds: Turn 10 never turns from
+ * the first point of charge; Turn 20 turns 1 a frame while q <= 1/2;
+ * Turn 25 (2 a frame uncharged) keeps 2 below q 0.2 and turns 1 to q
+ * 0.6 (k2_t25); Turn 30 steps 2 -> 1 -> 0 at 1/3 and 2/3 (the old
+ * "thirds" were this staircase's Turn-30 case); at the hold Turn 60 / 95
+ * / 100 / 200 still turn 1 / 2 / 3 / 6 a frame (29.2 / 58 / 87.5 / 174.5
+ * deg/s read), Turn 30 and below none. Turn 200 under a draining two-hit
+ * charge climbs 8 -> 15 a frame one step at a time, each where this puts
+ * it. GUESS (wave 52 finding 3, unread): a charged Turn-7 / 9 hull stops
+ * dead (the floor of less than one degree), though uncharged it turns 1
+ * a frame.
  *
- * The UNCHARGED turn is NOT truncated here (it stays Turn x
- * ShipTurnRateConversionFactor): wave 51 found an uncharged Turn-25 hull
- * turning as Turn 20 (whole degrees a frame then too), but that rests on
- * one hull and would move 102 stock hulls; it waits for the next old-Mac
- * wave. Until then a hull whose turn is not a whole number of degrees a
- * frame has a step at the first point of charge that the original lacks
- * at that size: Turn 25 drops from 75 deg/s (72.9 on the reference clock)
- * to 2 a frame, 60 deg/s (58.3), the moment it is hit, where in the
- * original it already turned 2 a frame uncharged.
- *
- * The degrees a frame are snapped to a 1e-9 grid first, so the rad/s
- * round trip does not leave a Turn-20 hull at 1.9999999999999998 (and
- * floor it to 0 at q = 1/2); a nudge on the product instead would hand a
- * hull its whole turn back at a charge of a trillionth. A ship with no
- * turn keeps its (zero) turn. Pure.
+ * The degrees a frame are snapped first (turnDegreesPerFrame); a nudge on
+ * the product instead would hand a hull its whole turn back at a charge
+ * of a trillionth. A ship with no turn keeps its (zero) turn. Pure.
  */
-function turnFactor(q: number, baseTurnRate: number): number {
-    const degreesPerFrame =
-        Math.round(baseTurnRate / ION_TURN_STEP * 1e9) / 1e9;
+function turnFactor(q: number, rawTurnRate: number): number {
+    const degreesPerFrame = turnDegreesPerFrame(rawTurnRate);
     if (!(degreesPerFrame > 0)) {
         return 1;
     }
     const kept = Math.floor(
         degreesPerFrame * (1 - Math.min(q, ION_CHARGE_HOLD)));
-    return Math.max(0, kept) / degreesPerFrame;
+    return Math.max(0, kept) / Math.max(1, Math.floor(degreesPerFrame));
 }
 
 /** Multipliers ionization puts on a ship's movement physics. */
@@ -181,9 +207,11 @@ export const NO_ION_SLOWDOWN: Readonly<IonSlowdown> =
     { maxVelocity: 1, acceleration: 1, turnRate: 1 };
 
 /**
- * The slowdown of a ship whose ion charge is `ionization` and whose
- * uncharged turn is `baseTurnRate` rad/s (the turn's cut depends on the
- * hull: turnFactor). Both cuts are in the charge share q = charge /
+ * The slowdown of a ship whose ion charge is `ionization` and whose RAW
+ * turn (ShipPhysics.turnRate, before unchargedTurnRate's whole degrees)
+ * is `rawTurnRate` rad/s (the turn's cut depends on the hull:
+ * turnFactor); the turn multiplier applies to the UNCHARGED turn,
+ * unchargedTurnRate(rawTurnRate). Both cuts are in the charge share q = charge /
  * IonizeMax held at ION_CHARGE_HOLD (wave 51): the turn to whole degrees
  * a frame, floor(Turn / 10 x (1 - q)); the thrust 1 - q, about 0.3 at
  * the hold. The top speed is never cut. Nothing at no charge. A pure
@@ -191,7 +219,7 @@ export const NO_ION_SLOWDOWN: Readonly<IonSlowdown> =
  */
 export function ionSlowdown(
     ionization: { current: number, max: number } | undefined,
-    baseTurnRate: number,
+    rawTurnRate: number,
 ): IonSlowdown {
     if (!ionization || ionization.max <= 0 || !(ionization.current > 0)) {
         return NO_ION_SLOWDOWN;
@@ -200,7 +228,7 @@ export function ionSlowdown(
     return {
         maxVelocity: 1,
         acceleration: accelerationFactor(q),
-        turnRate: turnFactor(q, baseTurnRate),
+        turnRate: turnFactor(q, rawTurnRate),
     };
 }
 

@@ -4,6 +4,7 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import {
     MovementPhysics, MovementState, MovementType,
 } from 'nova_ecs/plugins/movement_plugin';
+import { unchargedTurnRate } from '../ship/index.js';
 
 /**
  * Steering for INERTIALESS hulls (shïp Flags2 0x0040; movement_plugin's
@@ -165,7 +166,8 @@ export function steerInertialessTo(movement: MovementState, goal: Position,
  * The SteeringPhysics to fly an inertialess hull by, or undefined for any
  * other: the effective MovementPhysics when the entity has it (the numbers
  * the integrator applies this tick), else the ship's own (ShipPhysics: an
- * `inertialess` flag, `speed`).
+ * `inertialess` flag, `speed`; its raw turn stepped to the whole degrees
+ * a frame the hull flies by, unchargedTurnRate).
  */
 export function inertialessPhysics(movementPhysics: MovementPhysics | undefined,
     shipPhysics?: SteeringPhysics & { inertialess?: boolean }):
@@ -181,7 +183,7 @@ export function inertialessPhysics(movementPhysics: MovementPhysics | undefined,
     }
     return shipPhysics?.inertialess ? {
         acceleration: shipPhysics.acceleration,
-        turnRate: shipPhysics.turnRate,
+        turnRate: unchargedTurnRate(shipPhysics.turnRate),
         speed: shipPhysics.speed,
     } : undefined;
 }

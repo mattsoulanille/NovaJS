@@ -180,7 +180,7 @@ export const NpcAfterburnerSystem = new System({
             return;
         }
         const base = getShipMovementPhysics(shipPhysics);
-        const ion = ionSlowdown(ionization, base.turnRate);
+        const ion = ionSlowdown(ionization, shipPhysics.turnRate);
         movementPhysics.maxVelocity = Math.max(movementPhysics.maxVelocity,
             base.maxVelocity * ion.maxVelocity * AI_AFTERBURNER_FACTOR);
         movementPhysics.acceleration =
