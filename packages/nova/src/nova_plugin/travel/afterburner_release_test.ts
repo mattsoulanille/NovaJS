@@ -5,9 +5,12 @@ import { Entity } from 'nova_ecs/entity';
 import { MovementPhysicsComponent, MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import {
-    afterburnerFactor, decayedSpeedCap, OVERSPEED_DECAY_FACTOR,
+    AFTERBURNER_FACTOR, AFTERBURNER_THRUST, decayedSpeedCap,
+    OVERSPEED_DECAY_FACTOR,
 } from './afterburner_plugin.js';
-import { ShipSpeedConversionFactor } from 'novaparse/parsers/constants';
+import {
+    ShipAccelerationConversionFactor, ShipSpeedConversionFactor,
+} from 'novaparse/parsers/constants';
 import { completeEntity } from '../spawn/index.js';
 import { makeShip } from '../ship/index.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
@@ -18,7 +21,6 @@ const SHIP_ID = 'test:ship';
 const BASE_SPEED = getDefaultShipPhysics().speed;
 const ACCELERATION = getDefaultShipPhysics().acceleration;
 const DELTA_S = SIMULATION_STEP_MS / 1000;
-const AFTERBURNER_FACTOR = afterburnerFactor(BASE_SPEED);
 /** How much speed one tick of the coast-down sheds. */
 const DECAY_PER_STEP = ACCELERATION * OVERSPEED_DECAY_FACTOR * DELTA_S;
 
@@ -50,30 +52,66 @@ describe('afterburner release', () => {
         });
     });
 
-    it('boosts 1.5 x a Speed-300 hull and 1.75 x a Speed-600 one, and '
-        + 'coasts down at half the hull\'s acceleration (reference "The '
-        + 'player\'s afterburner (U4), wave 39", "The afterburner on a '
-        + 'second hull (U4 leftover), wave 40")', () => {
-            expect(afterburnerFactor(300 * ShipSpeedConversionFactor))
-                .toBeCloseTo(1.5, 9);
-            expect(afterburnerFactor(600 * ShipSpeedConversionFactor))
-                .toBeCloseTo(1.75, 9);
-            expect(OVERSPEED_DECAY_FACTOR).toBe(0.5);
+    it('boosts every hull a flat 1.8 x and coasts down at 0.7 of the '
+        + 'hull\'s acceleration (reference "The afterburner with a ruler '
+        + '(U4), wave 43")', () => {
+            expect(AFTERBURNER_FACTOR).toBe(1.8);
+            expect(OVERSPEED_DECAY_FACTOR).toBe(0.7);
+            expect(AFTERBURNER_THRUST).toBe(250);
         });
 
-    it('boosts a slow hull 1.5 x at least (reference "The afterburner on a '
-        + 'third hull (U4, the hub\'s question), wave 41": Kit Probe C, '
-        + 'Speed 200, x 1.53)', () => {
-            expect(afterburnerFactor(200 * ShipSpeedConversionFactor))
-                .toBeCloseTo(1.5, 9);
-            expect(afterburnerFactor(100 * ShipSpeedConversionFactor))
-                .toBeCloseTo(1.5, 9);
-            // The floor meets the line at Speed 300.
-            expect(afterburnerFactor(360 * ShipSpeedConversionFactor))
-                .toBeCloseTo(1.55, 9);
+    it('comes up to the boosted speed on the burner\'s own thrust, in '
+        + 'about half a second on Kit Probe A (reference "The afterburner '
+        + 'with a ruler (U4), wave 43": 131 -> 237 px/s in 0.4-0.5 s, '
+        + 'about 250 px/s², not 1.8 x its 54 px/s²)', async () => {
+            // Kit Probe A: Speed 300, Accel 300.
+            const probeSpeed = 300 * ShipSpeedConversionFactor;
+            const probeAccel = 300 * ShipAccelerationConversionFactor;
+            const { world, ship } = await makeAfterburnerWorld(0, {
+                speed: probeSpeed, acceleration: probeAccel,
+            });
+            const controls = ship.components.get(ShipControlStateComponent)!;
+            // Cruise first (2.5 s from rest at 54 px/s²).
+            controls.set('accelerate', true);
+            await stepWorld(world, 200);
+            expect(speed(ship)).toBeCloseTo(probeSpeed, 6);
+            controls.set('afterburner', true);
+            expect(ship.components.get(MovementPhysicsComponent)!.acceleration)
+                .toBe(probeAccel);
+            await stepWorld(world, 1);
+            expect(ship.components.get(MovementPhysicsComponent)!.acceleration)
+                .toBe(AFTERBURNER_THRUST);
+            // 0.8 x 135 = 108 px/s at 250 px/s²: 0.43 s, 26 ticks.
+            await stepWorld(world, 24);
+            expect(speed(ship)).toBeLessThan(probeSpeed * AFTERBURNER_FACTOR);
+            await stepWorld(world, 3);
+            expect(speed(ship))
+                .toBeCloseTo(probeSpeed * AFTERBURNER_FACTOR, 6);
+
+            // The coast back down with Up held: 0.7 x 54 = 37.8 px/s²
+            // (measured 44 on Probe A), 108 px/s in about 2.9 s.
+            controls.set('afterburner', false);
+            await stepWorld(world, 60);
+            expect(speed(ship)).toBeCloseTo(
+                probeSpeed * AFTERBURNER_FACTOR - 0.7 * probeAccel, 3);
+            await stepWorld(world, 120);
+            expect(speed(ship)).toBeCloseTo(probeSpeed, 6);
         });
 
-    async function makeAfterburnerWorld(ionization = 0) {
+    it('keeps a hull\'s own acceleration when it beats the burner\'s '
+        + 'thrust', async () => {
+            const { world, ship } = await makeAfterburnerWorld(0, {
+                acceleration: 400,
+            });
+            ship.components.get(ShipControlStateComponent)!
+                .set('afterburner', true);
+            await stepWorld(world, 1);
+            expect(ship.components.get(MovementPhysicsComponent)!.acceleration)
+                .toBe(400);
+        });
+
+    async function makeAfterburnerWorld(ionization = 0,
+        physics: Partial<ShipData['physics']> = {}) {
         const gameData = new MockGameData();
         const shipData: ShipData = {
             ...getDefaultShipData(),
@@ -84,6 +122,7 @@ describe('afterburner release', () => {
                 // Plenty of fuel to hold the burn as long as we like.
                 afterburner: 1,
                 ionization,
+                ...physics,
             },
         };
         gameData.data.Ship.map.set(SHIP_ID, shipData);
@@ -109,8 +148,8 @@ describe('afterburner release', () => {
         const { world, ship } = await makeAfterburnerWorld();
         ship.components.get(ShipControlStateComponent)!
             .set('afterburner', true);
-        // Boosted acceleration is 1.5 x 300, so 450 units of speed takes
-        // about a second; 120 steps is two seconds.
+        // The default hull's own 300 beats the burner's 250, so 540
+        // units of speed take 1.8 s; 120 steps is two seconds.
         await stepWorld(world, 120);
         return { world, ship };
     }
@@ -145,8 +184,8 @@ describe('afterburner release', () => {
 
         let previous = speed(ship);
         const drops: number[] = [];
-        // The whole coast-down is half of BASE_SPEED of overspeed at half
-        // of ACCELERATION per second — one second, i.e. 60 steps.
+        // The whole coast-down is 0.8 of BASE_SPEED of overspeed at 0.7
+        // of ACCELERATION per second: about 1.14 s, i.e. 68 steps.
         for (let i = 0; i < 55; i++) {
             await stepWorld(world, 1);
             const current = speed(ship);
@@ -167,7 +206,7 @@ describe('afterburner release', () => {
         const { world, ship } = await burnToTopSpeed();
         ship.components.get(ShipControlStateComponent)!
             .set('afterburner', false);
-        // Long past the ~1 second the coast-down needs.
+        // Long past the ~1.14 seconds the coast-down needs.
         await stepWorld(world, 180);
         expect(speed(ship)).toBeCloseTo(BASE_SPEED, 6);
         expect(ship.components.get(MovementPhysicsComponent)!.maxVelocity)

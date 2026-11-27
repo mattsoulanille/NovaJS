@@ -4,7 +4,7 @@ import { getDefaultShipData, getDefaultShipPhysics, ShipData } from 'novadataint
 import { Entity } from 'nova_ecs/entity';
 import { MovementPhysicsComponent, MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
-import { afterburnerFactor, STRICT_PLAY_SPEED_FACTOR } from './afterburner_plugin.js';
+import { AFTERBURNER_FACTOR, STRICT_PLAY_SPEED_FACTOR } from './afterburner_plugin.js';
 import { completeEntity } from '../spawn/index.js';
 import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
@@ -117,7 +117,7 @@ describe('strict play', () => {
             .set('afterburner', true);
         await stepWorld(world, 240);
         expect(speed(strict)).toBeCloseTo(
-            BASE_SPEED * STRICT_PLAY_SPEED_FACTOR * afterburnerFactor(BASE_SPEED), 6);
+            BASE_SPEED * STRICT_PLAY_SPEED_FACTOR * AFTERBURNER_FACTOR, 6);
     });
 
     it('takes effect, and lifts, with the component', async () => {
