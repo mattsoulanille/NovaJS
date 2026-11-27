@@ -183,6 +183,37 @@ describe('in-flight mission info key (wave 11)', () => {
         expect(dialog.container.visible).toBeFalse();
     });
 
+    it('sends a deferred auto-abort the moment the sim marks it, once '
+        + '(reference "The deferred (përs) auto-abort (R16), wave 43")',
+        async () => {
+            const courier = SYNTHETIC.missions.courier;
+            const { world, aborts, dialog } =
+                await flight([[courier, active(courier)]]);
+            world.entities.get('player')!.components.set(
+                ControlBitsComponent, new Set([BITS.courierAccepted]));
+            world.step();
+            await settle();
+            expect(aborts).toEqual([]);
+            // The board: rescueBoarded marks it on the owner's list.
+            world.entities.get('player')!.components.get(MissionsComponent)!
+                .get(courier)!.autoAbortPending = true;
+            for (let i = 0; i < 2000 && aborts.length === 0; i++) {
+                world.step();
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+            expect(aborts).toEqual([{
+                missionId: courier, bitsCleared: [BITS.courierAccepted],
+            }]);
+            // No dialog ("Target ship has been boarded." and nothing
+            // else), and not sent again while the record is on its way.
+            expect(dialog.container.visible).toBeFalse();
+            for (let i = 0; i < 20; i++) {
+                world.step();
+            }
+            await settle();
+            expect(aborts.length).toBe(1);
+        });
+
     it('greys Abort for a CanAbort 0 mission', async () => {
         const courier = SYNTHETIC.missions.courier;
         const original = MissionUniverse.prototype.getMission;

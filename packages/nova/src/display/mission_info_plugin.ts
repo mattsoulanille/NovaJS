@@ -1,6 +1,8 @@
+import { GetEntity, GetWorld } from 'nova_ecs/arg_types';
 import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
 import { Resource } from 'nova_ecs/resource';
+import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
 import { Subscription } from 'rxjs';
 import {
@@ -8,14 +10,18 @@ import {
     SystemIdResource,
 } from '../nova_plugin/core/index.js';
 import type { AbortedMission } from '../nova_plugin/missions/index.js';
-import { PlayerShipSelector } from '../nova_plugin/player/index.js';
+import {
+    MissionsComponent, PlayerShipSelector,
+} from '../nova_plugin/player/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import {
     listedMissions, MissionInfoDialog, NO_MISSIONS, NO_MISSIONS_STRING_INDEX,
     NO_MISSIONS_STRING_TABLE,
 } from '../spaceport/mission_info.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
-import { buildMissionAbort } from '../spaceport/ship_mission_accept.js';
+import {
+    buildDeferredAutoAbort, buildMissionAbort,
+} from '../spaceport/ship_mission_accept.js';
 import {
     keepCentred, ScreenSize, stopCentring,
 } from './screen_size_plugin.js';
@@ -43,6 +49,59 @@ function getPlayerShip(world: World) {
     }
     return undefined;
 }
+
+/**
+ * Mission ids whose deferred auto-abort this display world has already
+ * sent (DeferredAutoAbortSystem's once-guard).
+ */
+export const DeferredAutoAbortSentResource =
+    new Resource<Set<string>>('DeferredAutoAbortSent');
+
+/**
+ * Ends a deferred auto-abort mission (mïsn Flags 0x0001 on a board/rescue
+ * goal offered by a përs whose ship the special ship replaced) AT THE
+ * BOARD, in flight: the simulation marks it `autoAbortPending` the tick
+ * the owner boards the special ship (mission_ship_plugin's
+ * rescueBoarded); the owner's display sees the flag on its own mission
+ * list and sends the player-local half — OnAbort, the removal,
+ * DatePostInc — as an in-flight abort record (buildDeferredAutoAbort),
+ * exactly as the 'i' dialog's Abort does. MEASURED (reference "The
+ * deferred (përs) auto-abort (R16), wave 43"): one board ended the
+ * mission at once ("You have no active missions." seconds later, no
+ * landing or jump) and moved the date by its DatePostInc (June 28th ->
+ * July 5th), with no dialog ("Target ship has been boarded." only), so
+ * the abort's notices are dropped.
+ *
+ * Player-local: PlayerShipSelector is this client's own ship, so only the
+ * owner sends. Once per mission per display world; a duplicate (a rebuilt
+ * world before the apply) is a no-op in the apply (the mission must be on
+ * the list), and so is a date advance getting there first
+ * (runPendingAutoAborts, the fallback).
+ */
+export const DeferredAutoAbortSystem = new System({
+    name: 'DeferredAutoAbortSystem',
+    args: [DeferredAutoAbortSentResource, SimulationGameDataResource,
+        PlayerShipSelector, MissionsComponent, GetEntity, GetWorld] as const,
+    step(sent, gameData, _player, missions, entity, world) {
+        for (const [missionId, active] of missions) {
+            if (!active.autoAbortPending || sent.has(missionId)) {
+                continue;
+            }
+            sent.add(missionId);
+            void buildDeferredAutoAbort(entity, missionId, gameData,
+                MissionUniverse.shared(gameData),
+                { systemId: world.resources.get(SystemIdResource) })
+                .then(abort => {
+                    if (abort) {
+                        world.emit(AbortMissionEvent,
+                            { record: abort.record });
+                    }
+                }).catch(e => {
+                    console.warn('Deferred auto-abort failed:', e);
+                });
+        }
+    },
+});
 
 export const MissionInfoPlugin: Plugin = {
     name: 'MissionInfoPlugin',
@@ -167,8 +226,12 @@ export const MissionInfoPlugin: Plugin = {
                 }
                 void openInFlight();
             }));
+        world.resources.set(DeferredAutoAbortSentResource, new Set());
+        world.addSystem(DeferredAutoAbortSystem);
     },
     remove(world) {
+        world.removeSystem(DeferredAutoAbortSystem);
+        world.resources.delete(DeferredAutoAbortSentResource);
         world.resources.get(MissionInfoControlsSubscription)?.unsubscribe();
         const stage = world.resources.get(Stage);
         const dialog = world.resources.get(MissionInfoResource);

@@ -66,11 +66,21 @@ const BEHAV_PROTECT_PLAYER = 1;
  * the mission's ShipBehav says outlive an abort (see the module note).
  * Call BEFORE the mission leaves the owner's list: `objective` is the
  * aborted mission's own, and nothing else records the ShipBehav.
+ *
+ * `all` releases EVERY special ship of the mission whatever its ShipBehav:
+ * a deferred auto-abort ending at the board (applyAbortMission, when the
+ * mission is `autoAbortPending`). The original's boarded "Kit Pers Hulk"
+ * stayed where it was, an ordinary ship ("No Shields", no longer
+ * boardable), after the mission ended in flight (reference "The deferred
+ * (përs) auto-abort (R16), wave 43"); deleting it with the mission would
+ * make it vanish from under the player.
  */
 export function releaseAbortedMissionShips(world: World, ownerUuid: string,
-    missionId: string, objective: ShipObjective | undefined): void {
+    missionId: string, objective: ShipObjective | undefined,
+    all = false): void {
     const behavior = objective?.behavior;
-    if (behavior !== BEHAV_ATTACK_PLAYER && behavior !== BEHAV_PROTECT_PLAYER) {
+    if (!all && behavior !== BEHAV_ATTACK_PLAYER
+        && behavior !== BEHAV_PROTECT_PLAYER) {
         return;
     }
     const now = world.resources.get(TimeResource)?.time ?? 0;
@@ -88,9 +98,10 @@ export function releaseAbortedMissionShips(world: World, ownerUuid: string,
         if (hold === 'missionGoal' || hold === 'rescue') {
             entity.components.delete(SystemHoldComponent);
         }
-        if (behavior === BEHAV_ATTACK_PLAYER) {
-            // Still aggressed at the owner (mission_ship_spawn), so it
-            // keeps fighting; nothing to change.
+        if (behavior !== BEHAV_PROTECT_PLAYER) {
+            // ShipBehav 0: still aggressed at the owner
+            // (mission_ship_spawn), so it keeps fighting; nothing to
+            // change. Any other (an `all` release): its own AI already.
             continue;
         }
         // ShipBehav 1: out of the owner's flock — no formation, no shared

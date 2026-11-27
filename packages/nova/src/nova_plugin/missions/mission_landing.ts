@@ -93,17 +93,28 @@ export function runPendingShipDone(machinery: MissionMachineryContext,
 }
 
 /**
- * Runs the PLAYER-LOCAL half of a deferred auto-abort (mïsn Flags 0x0001
- * on a board/rescue-goal mission — see deferredAutoAbort).
+ * Runs the PLAYER-LOCAL half of one deferred auto-abort (mïsn Flags 0x0001
+ * on a board/rescue-goal mission — see deferredAutoAbort): `missionId`'s,
+ * which the sim marked `autoAbortPending` when its owner boarded the
+ * special ship. A no-op (false) when that mission is not active or not
+ * pending.
  *
  * The simulation already did the parts it owns, the tick the owner
  * boarded the special ship: paying mïsn Flags2 0x0002's Pay, taking
  * Flags 0x0008's 100 units of fuel, and lifting the rescue target's
- * disable so it flies off (MissionShipTrackSystem's rescueBoarded). What
- * is left needs the mission UNIVERSE, which the sim cannot see: the
- * OnAbort set string, dropping the mission from the list, and its notice.
- * That is exactly the split `shipDonePending` already uses, so this runs
- * beside runPendingShipDone at every date advance.
+ * disable (MissionShipTrackSystem's rescueBoarded). What is left needs
+ * the mission UNIVERSE, which the sim cannot see: the OnAbort set string,
+ * dropping the mission from the list, its DatePostInc, and its notice.
+ *
+ * WHEN. At the board itself, in flight: the owner's display sees the
+ * pending flag and sends the result as an in-flight abort record
+ * (spaceport/ship_mission_accept.ts buildDeferredAutoAbort, display/
+ * mission_info_plugin.ts). MEASURED (reference "The deferred (përs)
+ * auto-abort (R16), wave 43"): one board ended the mission at once in
+ * flight ("You have no active missions." seconds later, no landing or
+ * jump) and moved the date by its DatePostInc there (June 28th -> July
+ * 5th). runPendingAutoAborts is the fallback at the next date advance,
+ * for a record that never went out (the client closed in between).
  *
  * Reusing the abort transition rather than open-coding it is what keeps
  * the deferred case honest: the Bible calls this an ABORT ("the mission
@@ -112,33 +123,52 @@ export function runPendingShipDone(machinery: MissionMachineryContext,
  * though, so it goes through `autoAbortMission`, which leaves out the
  * player-abort CompReward reversal (Flags 0x0040) exactly as the
  * immediate auto-abort in acceptOffer does (#320; see autoAbortMission).
- * Returns how many ran.
+ * DatePostInc ("after successful completion or auto-aborting", the Bible)
+ * comes with it, as it does with the immediate auto-abort (reference
+ * "DatePostInc on an immediate auto-abort (R16), wave 41").
+ */
+export function runDeferredAutoAbort(machinery: MissionMachineryContext,
+    missionId: string, outfits?: Map<string, number>): boolean {
+    const active = machinery.state.missions.get(missionId);
+    if (!active?.autoAbortPending) {
+        return false;
+    }
+    // The half of mïsn Flags2 0x0002's Pay that needs the government
+    // table: PayVal's record-cleaning encodings. The sim already settled
+    // the two arithmetic ones from the frozen
+    // autoAbortPay/autoAbortTakePercent (autoAbortPayEffects); this one is
+    // re-decoded from the mission data, which is exactly what this side
+    // of the split has and the sim does not.
+    const mission = machinery.getMission(missionId);
+    if (mission?.flags.applyPayOnAutoAbort) {
+        const pay = decodePayVal(mission.payVal);
+        if (pay.type === 'cleanRecord') {
+            applyPayVal(machinery, mission, pay);
+        }
+    }
+    if (mission) {
+        machinery.state.dateAdvance += Math.max(0, mission.datePostInc);
+    }
+    autoAbortMission(machinery, missionId, outfits);
+    return true;
+}
+
+/**
+ * Runs runDeferredAutoAbort for every active mission still marked
+ * `autoAbortPending` (beside runPendingShipDone at every date advance):
+ * the fallback for a deferred auto-abort whose in-flight record never
+ * went out. Returns how many ran.
  */
 export function runPendingAutoAborts(machinery: MissionMachineryContext,
     outfits?: Map<string, number>): number {
-    const { state } = machinery;
     let ran = 0;
-    for (const active of [...state.missions.values()]) {
+    for (const id of [...machinery.state.missions.keys()]) {
         // The snapshot can go stale under an earlier mission's set string
-        // (the same hazard runPendingShipDone documents).
-        if (!state.missions.has(active.id) || !active.autoAbortPending) {
-            continue;
+        // (the same hazard runPendingShipDone documents);
+        // runDeferredAutoAbort skips a mission that is gone.
+        if (runDeferredAutoAbort(machinery, id, outfits)) {
+            ran++;
         }
-        // The half of mïsn Flags2 0x0002's Pay that needs the government
-        // table: PayVal's record-cleaning encodings. The sim already
-        // settled the two arithmetic ones from the frozen
-        // autoAbortPay/autoAbortTakePercent (autoAbortPayEffects); this
-        // one is re-decoded from the mission data, which is exactly what
-        // this side of the split has and the sim does not.
-        const mission = machinery.getMission(active.id);
-        if (mission?.flags.applyPayOnAutoAbort) {
-            const pay = decodePayVal(mission.payVal);
-            if (pay.type === 'cleanRecord') {
-                applyPayVal(machinery, mission, pay);
-            }
-        }
-        autoAbortMission(machinery, active.id, outfits);
-        ran++;
     }
     return ran;
 }

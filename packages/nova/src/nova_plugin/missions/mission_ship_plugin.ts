@@ -200,9 +200,12 @@ function pickUpOnBoarding(active: ActiveMission, owner: Entity): void {
  * The parts that need the mission UNIVERSE — running the OnAbort set
  * string, dropping the mission from the list, showing its popup — cannot
  * happen in the sim, which never reads mission game data. They are marked
- * `autoAbortPending` and run at the owner's next date advance, exactly as
- * `shipDonePending` already does for OnShipDone (mission_session's
- * processInFlightMissions).
+ * `autoAbortPending`, and the owner's display sends them straight back as
+ * an in-flight abort record (display/mission_info_plugin.ts
+ * DeferredAutoAbortSystem), so the mission ends at the board, in flight,
+ * as on the original (reference "The deferred (përs) auto-abort (R16),
+ * wave 43"); the owner's next date advance runs any still pending
+ * (mission_session's processInFlightMissions, the fallback).
  *
  * Everything here is guarded on the FIRST boarding, so a re-board (which
  * the one-plunder rule makes impossible today, but which is not something

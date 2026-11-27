@@ -25,7 +25,9 @@ import {
 } from '../nova_plugin/ship/index.js';
 import { completeEntity, makeNpcShip } from '../nova_plugin/spawn/index.js';
 import { MissionUniverse } from './mission_universe.js';
-import { buildMissionAbort } from './ship_mission_accept.js';
+import {
+    buildDeferredAutoAbort, buildMissionAbort,
+} from './ship_mission_accept.js';
 
 /**
  * ============================================================================
@@ -156,6 +158,43 @@ describe('aborting a mission in flight', () => {
         // Pilot B's courier run is untouched.
         expect(world.entities.get('ship b')!.components.get(MissionsComponent)!
             .has(COURIER)).toBeTrue();
+    });
+
+    it('ends a deferred auto-abort the sim marked at the board, with its '
+        + 'DatePostInc, and keeps its special ship (reference "The deferred '
+        + '(përs) auto-abort (R16), wave 43")', async () => {
+        rewriteCourier(mission => ({ ...mission, datePostInc: 7 }));
+        const { gameData, universe, world, systemId, a } = await flying();
+        // Not marked: nothing to send.
+        expect(await buildDeferredAutoAbort(a, COURIER, gameData, universe,
+            { systemId })).toBeNull();
+        // The tick the owner boards the special ship (rescueBoarded).
+        const ship = world.entities.get('ship a')!;
+        ship.components.get(MissionsComponent)!.get(COURIER)!
+            .autoAbortPending = true;
+        const abort = await buildDeferredAutoAbort(a, COURIER, gameData,
+            universe, { systemId });
+        expect(abort).not.toBeNull();
+        expect(abort!.record).toEqual({
+            missionId: COURIER,
+            dateDelta: 7,
+            bitsCleared: [BITS.courierAccepted],
+            cargoDelta: [[CARGO, -10]],
+        });
+        expect(SimulationInputType.is({ kind: 'abortMission', aborted: abort!.record }))
+            .toBeTrue();
+
+        await apply(world, 'a', abort!.record);
+        expect(ship.components.get(MissionsComponent)!.has(COURIER)).toBeFalse();
+        // April 3rd + 7.
+        expect(ship.components.get(GameDateComponent))
+            .toEqual({ day: 10, month: 4, year: 1177 });
+        world.step();
+        expect(world.entities.has('special'))
+            .withContext('the boarded ship stays, no longer the mission\'s')
+            .toBeTrue();
+        expect(world.entities.get('special')!.components
+            .get(MissionShipComponent)!.untethered).toBeTrue();
     });
 
     it('applies a record once', async () => {

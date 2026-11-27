@@ -15,6 +15,7 @@ import {
     startMissionById,
     LOCATION_MISSION_COMPUTER,
     processLanding,
+    runDeferredAutoAbort,
     runPendingAutoAborts,
     stellarRecord,
     StellarInfo,
@@ -654,6 +655,28 @@ describe('auto-aborts and the CompReward abort reversal (#320)', () => {
             expect(state.records!.get('nova:129')).toBe(0);
             // ...and the 0x0040 reversal did not: still 10, not 10 - 15.
             expect(state.records!.get('nova:128')).toBe(10);
+        });
+
+    it('a DEFERRED auto-abort adds its DatePostInc with the abort, not at '
+        + 'the accept (reference "The deferred (përs) auto-abort (R16), '
+        + 'wave 43": June 28th -> July 5th across the board)', () => {
+            const mission = deferredMission();
+            mission.datePostInc = 7;
+            const state = makeState({});
+            const machinery = makeMachinery(state, [mission]);
+            acceptOffer(machinery, deferredOffer(mission, machinery));
+            expect(state.dateAdvance).toBe(0);
+            // Not pending yet (not boarded): nothing runs.
+            expect(runDeferredAutoAbort(machinery, mission.id)).toBeFalse();
+            expect(state.missions.has(mission.id)).toBeTrue();
+            state.missions.get(mission.id)!.autoAbortPending = true;
+            expect(runDeferredAutoAbort(machinery, mission.id)).toBeTrue();
+            expect(state.missions.has(mission.id)).toBeFalse();
+            expect(state.dateAdvance).toBe(7);
+            // Once only.
+            expect(runDeferredAutoAbort(machinery, mission.id)).toBeFalse();
+            expect(runPendingAutoAborts(machinery)).toBe(0);
+            expect(state.dateAdvance).toBe(7);
         });
 
     it('WITHOUT a përs replacement the same board-goal mission aborts at '

@@ -7,8 +7,8 @@ import {
     abortMission, AbortedMission,
     AcceptedMission, AcceptedMissionShip, acceptOffer, EncodedActiveMission,
     LOCATION_SHIP, makeMissionOffer, MissionEvent, MissionOffer,
-    missionMatchesLocation, RefusedMission, refuseOffer, SetStringEffects,
-    ShipChange, SystemMove,
+    missionMatchesLocation, RefusedMission, refuseOffer, runDeferredAutoAbort,
+    SetStringEffects, ShipChange, SystemMove,
 } from '../nova_plugin/missions/index.js';
 import {
     ShipObjective, ActiveMission, ActiveMissionType, CreditsComponent, GameDateComponent, MissionsComponent,
@@ -607,6 +607,45 @@ export async function buildMissionAbort(player: Entity, missionId: string,
     const { session, before, outcome } = await detachedSession(player,
         gameData, universe, options.systemId);
     abortMission(session.machinery, missionId, session.outfits);
+    const events = session.commit();
+    const effects = diffSetStringEffects(before, session.target, missionId,
+        outcome, universe.legalGeography());
+    return { events, record: { missionId, ...effects } };
+}
+
+/**
+ * The owner's half of a DEFERRED auto-abort (mïsn Flags 0x0001 on a
+ * board/rescue-goal mission offered by a përs whose ship the special ship
+ * replaced — deferredAutoAbort), resolved IN FLIGHT once the simulation
+ * has marked it `autoAbortPending` (the board): runDeferredAutoAbort
+ * (OnAbort, no CompReward reversal, the record-cleaning Pay, DatePostInc)
+ * against a detached copy of the player, returned as the same in-flight
+ * abort record the 'i' dialog sends (mission_accept.ts
+ * AbortedMissionType, whose apply sees the pending flag and leaves the
+ * boarded ship in place). MEASURED (reference "The deferred (përs)
+ * auto-abort (R16), wave 43"): the board ends the mission at once in
+ * flight, and its DatePostInc comes with it.
+ *
+ * Null when there is nothing to send: the mission is not on the player's
+ * list, or not pending. CanAbort does not apply: the player is not the
+ * one aborting it. The caller drops the notices (the original shows none:
+ * "Target ship has been boarded." and nothing else).
+ */
+export async function buildDeferredAutoAbort(player: Entity,
+    missionId: string, gameData: SimulationGameDataInterface,
+    universe: MissionUniverse,
+    options: { systemId?: string } = {}): Promise<MissionAbort | null> {
+    await universe.load();
+    if (!player.components.get(MissionsComponent)?.get(missionId)
+        ?.autoAbortPending) {
+        return null;
+    }
+    const { session, before, outcome } = await detachedSession(player,
+        gameData, universe, options.systemId);
+    if (!runDeferredAutoAbort(session.machinery, missionId,
+        session.outfits)) {
+        return null;
+    }
     const events = session.commit();
     const effects = diffSetStringEffects(before, session.target, missionId,
         outcome, universe.legalGeography());

@@ -11,7 +11,7 @@ import {
 } from '../../communication/simulation_test_fixture.js';
 import { MissionUniverse } from '../../spaceport/mission_universe.js';
 import {
-    buildShipMissionAccept, buildShipMissionOffer,
+    buildDeferredAutoAbort, buildShipMissionAccept, buildShipMissionOffer,
 } from '../../spaceport/ship_mission_accept.js';
 import { shipOfferConsequence } from '../../spaceport/ship_mission_offer.js';
 import { BoardedComponent } from '../ship/index.js';
@@ -24,7 +24,7 @@ import { WeaponEntries } from '../combat/index.js';
 import { FuelComponent } from '../ship/index.js';
 import { JUMP_DISTANCE } from '../travel/index.js';
 import {
-    applyAcceptMission, ShipOfferSpentComponent,
+    applyAbortMission, applyAcceptMission, ShipOfferSpentComponent,
 } from './mission_accept.js';
 import { buildAcceptedMissionShips } from './mission_ship_spawn.js';
 import { MissionShipComponent } from '../player/index.js';
@@ -269,6 +269,59 @@ describe('the Refuel Trader, hail to undock (mïsn 141)', () => {
                 .components.has(DisabledComponent)).toBeFalse();
             expect(world.entities.get(shipUuids[0])!
                 .components.has(SystemHoldComponent)).toBeFalse();
+        }, 30_000);
+
+    it('ends the mission at the board, in flight, and leaves the boarded '
+        + 'ship in place (reference "The deferred (përs) auto-abort (R16), '
+        + 'wave 43")', async () => {
+            const { world, player, playerUuid, record, shipUuids, gameData } =
+                await hailTheTrader();
+            const universe = MissionUniverse.shared(gameData);
+            applyAcceptMission(world, undefined, record);
+            for (let i = 0; i < 30; i++) {
+                world.step();
+                await new Promise(resolve => setImmediate(resolve));
+            }
+            // Not pending before the board: nothing to send.
+            expect(await buildDeferredAutoAbort(player, 'nova:141',
+                gameData, universe)).toBeNull();
+            const dateBefore = { ...player.components.get(GameDateComponent)! };
+
+            world.entities.get(shipUuids[0])!.components
+                .set(BoardedComponent,
+                    { boarder: playerUuid, plundered: true });
+            for (let i = 0; i < 10; i++) {
+                world.step();
+            }
+            expect(player.components.get(MissionsComponent)!
+                .get('nova:141')!.autoAbortPending).toBeTrue();
+
+            // The owner's display builds the abort off its mirror and
+            // sends it as an in-flight abort record.
+            const abort = await buildDeferredAutoAbort(player, 'nova:141',
+                gameData, universe);
+            expect(abort).not.toBeNull();
+            expect(abort!.record.missionId).toEqual('nova:141');
+            // Stock mïsn 141 has DatePostInc 0: no date in the record.
+            expect(abort!.record.dateDelta).toBeUndefined();
+            applyAbortMission(world, undefined, abort!.record);
+            expect(player.components.get(MissionsComponent)!.has('nova:141'))
+                .toBeFalse();
+            expect(player.components.get(GameDateComponent))
+                .toEqual(dateBefore);
+
+            // The boarded ship stays, an ordinary ship now (untethered:
+            // no longer the mission's), rather than vanishing with it.
+            for (let i = 0; i < 10; i++) {
+                world.step();
+            }
+            const rescued = world.entities.get(shipUuids[0]);
+            expect(rescued).toBeDefined();
+            expect(rescued!.components.get(MissionShipComponent)?.untethered)
+                .toBeTrue();
+            // A replay is a no-op.
+            applyAbortMission(world, undefined, abort!.record);
+            expect(world.entities.has(shipUuids[0])).toBeTrue();
         }, 30_000);
 
     it('will not offer again from a hull whose offer is spent',

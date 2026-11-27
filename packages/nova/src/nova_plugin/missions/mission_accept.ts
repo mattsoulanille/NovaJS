@@ -479,9 +479,13 @@ export function applyAbortMission(world: World, peerId: string | undefined,
     if (!missions || !active) {
         return;
     }
-    // Before the mission goes: its ShipBehav lives on its objective.
+    // Before the mission goes: its ShipBehav lives on its objective. A
+    // deferred auto-abort the sim marked at the board (autoAbortPending;
+    // the owner's buildDeferredAutoAbort sends this same record) keeps
+    // every special ship, the boarded one included (reference "The
+    // deferred (përs) auto-abort (R16), wave 43").
     releaseAbortedMissionShips(world, controlled.uuid, aborted.missionId,
-        active.shipObjective);
+        active.shipObjective, active.autoAbortPending === true);
     missions.delete(aborted.missionId);
     applyMissionListDeltas(missions, aborted,
         `the abort of ${aborted.missionId}`);
