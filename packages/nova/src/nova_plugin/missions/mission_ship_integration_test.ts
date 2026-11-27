@@ -34,6 +34,7 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { ActiveMission, ControlledByComponent, MissionsComponent } from '../player/index.js';
 import { applyInputRecords } from '../../communication/simulation_input.js';
 import { SystemHoldComponent } from '../npc/index.js';
+import { CloakComponent } from '../ship/index.js';
 
 const LETHAL_DAMAGE = {
     shield: 1e9, armor: 1e9, ionization: 0, ionizationColor: 0,
@@ -75,7 +76,8 @@ function makeActive(objective: ShipObjective): ActiveMission {
 }
 
 describe('mission ships in the shared simulation', () => {
-    async function makeWorldWithMissionShip(goal: number, total = 1) {
+    async function makeWorldWithMissionShip(goal: number, total = 1,
+        position = new Position(500, 0)) {
         const harness = await makeSimulationBridgeHarness(
             getSyntheticGameData());
         const { world, shipUuid } = harness;
@@ -88,7 +90,7 @@ describe('mission ships in the shared simulation', () => {
 
         const shipData = await gameData.data.Ship.get(harness.shipId);
         const missionShip = makeNpcShip(shipData, 3, null,
-            new Position(500, 0), new Angle(0), new Vector(0, 0));
+            position, new Angle(0), new Vector(0, 0));
         missionShip.components.set(MissionShipComponent,
             { mission: MISSION_ID, owner: shipUuid });
         missionShip.components.set(MultiplayerData, { owner: 'server' });
@@ -225,6 +227,43 @@ describe('mission ships in the shared simulation', () => {
         const objective = activeObjective()!;
         expect(objective.satisfied).toBe(1);
         expect(objective.complete).toBe(true);
+    }, 30_000);
+
+    it('observes a cloakless ship anywhere in the system, though it has '
+        + 'a (canCloak: false) CloakComponent', async () => {
+            // Far outside OBSERVE_RANGE: nova:676's second Aurora Cruiser,
+            // scattered across SPC-1421, never counted while the player
+            // was not near it.
+            const { world, missionShipUuid, activeObjective } =
+                await makeWorldWithMissionShip(GOAL_OBSERVE, 1,
+                    new Position(4000, 0));
+            world.step();
+            const cloak = world.entities.get(missionShipUuid)!
+                .components.get(CloakComponent);
+            expect(cloak).withContext('every outfitted ship has one')
+                .toBeDefined();
+            expect(cloak!.canCloak).toBe(false);
+            expect(activeObjective()!.satisfied).toBe(1);
+            expect(activeObjective()!.complete).toBe(true);
+        }, 30_000);
+
+    it('observes a cloak-capable ship only within OBSERVE_RANGE', async () => {
+        const { world, missionShipUuid, activeObjective } =
+            await makeWorldWithMissionShip(GOAL_OBSERVE, 1,
+                new Position(4000, 0));
+        const ship = world.entities.get(missionShipUuid)!;
+        // Freshly unobserved, with a cloaking device: the far ship stays
+        // unobserved (re-registered, its earlier credit undone here).
+        const objective = activeObjective()!;
+        objective.satisfied = 0;
+        objective.complete = false;
+        objective.live.clear();
+        ship.components.set(CloakComponent,
+            { ...ship.components.get(CloakComponent)!, canCloak: true,
+                isCloak: true });
+        world.step();
+        expect(activeObjective()!.live.has(missionShipUuid)).toBe(true);
+        expect(activeObjective()!.satisfied).toBe(0);
     }, 30_000);
 
     it('despawns mission ships whose owner left the simulation',

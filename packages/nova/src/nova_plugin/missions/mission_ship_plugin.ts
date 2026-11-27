@@ -327,7 +327,19 @@ const MissionShipTrackSystem = new System({
         // Observation: no cloak capability = observed by co-presence
         // (the owner inserted us into their own system); cloak-capable
         // ships must be seen up close while visible.
-        if (!cloak) {
+        //
+        // "No cloak capability" is `canCloak: false`, NOT a missing
+        // component: CloakProvider gives EVERY outfitted ship a
+        // CloakComponent, a `canCloak: false` one when it owns no cloaking
+        // device. Testing `!cloak` sent every ship down the proximity
+        // branch, so an observe target counted only once the player came
+        // within OBSERVE_RANGE of it. That stranded Matthew's "Auroran 19:
+        // Observe Auroran Border" (nova:676) at 1 of 2: he crossed
+        // SPC-1421 near one of the two cloakless Aurora Cruisers, and the
+        // other, scattered far off (and since A12 free to leave), never
+        // counted. Absent altogether (outfit data not cached yet, or no
+        // outfits to derive from), nothing says it can cloak: co-presence.
+        if (!cloak?.canCloak) {
             shipObserved(objective, uuid);
         } else if (isTargetable(cloakActive)) {
             const owner = entities.get(missionShip.owner)?.components
