@@ -8,7 +8,8 @@ import {
     AcceptedMission, AcceptedMissionShip, acceptOffer, EncodedActiveMission,
     LOCATION_SHIP, makeMissionOffer, MissionEvent, MissionOffer,
     missionMatchesLocation, RefusedMission, refuseOffer, runDeferredAutoAbort,
-    SetStringEffects, ShipChange, SystemMove,
+    runMissionSetString, SetStringEffects, setStringPrefix, ShipChange,
+    SystemMove,
 } from '../nova_plugin/missions/index.js';
 import {
     ShipObjective, ActiveMission, ActiveMissionType, CreditsComponent, GameDateComponent, MissionsComponent,
@@ -650,4 +651,48 @@ export async function buildDeferredAutoAbort(player: Entity,
     const effects = diffSetStringEffects(before, session.target, missionId,
         outcome, universe.legalGeography());
     return { events, record: { missionId, ...effects } };
+}
+
+/**
+ * The two set strings the capture prompt's "Use As My Ship" runs, IN
+ * FLIGHT, against a detached copy of the player's state: the OLD class's
+ * shïp OnRetire ("evaluated when you sell a ship of this type and/or
+ * replace it with a captured ship", EVN Bible ~:2639), then the PRIZE
+ * class's OnCapture ("evaluated when you capture a ship of this type",
+ * ~:2636), each under its own class's writer prefix (setStringPrefix) —
+ * retiring before capturing, the order a shipyard trade runs OnRetire and
+ * OnPurchase in (shipyard_rules.ts runShipTradeSetStrings), so a bit both
+ * strings touch ends as the prize's says. MEASURED (reference "Capture
+ * \"Use As My Ship\" (the hub's CU), wave 45"): both ran (b9288 from the
+ * prize's OnCapture, b9290 from the old hull's OnRetire); the prize class's
+ * own OnRetire did not.
+ *
+ * Returned as the in-flight deltas (SetStringEffects) the `captureShip`
+ * record carries (encounters/boarding_plugin.ts CapturedShipType), which
+ * the simulation applies to the new hull after the swap; empty when both
+ * strings are blank or change nothing. Through MissionSession rather than
+ * the shipyard's bare bit hooks so an `Sxxx` / `Axxx` / `Gxxx` / `Kxxx` in
+ * either string means what it means in any other set string, as for an
+ * abort's OnAbort. `player` is the display world's mirror of the player's
+ * ship, read and never written.
+ */
+export async function buildCaptureSetStrings(player: Entity,
+    retired: ShipData, captured: ShipData,
+    gameData: SimulationGameDataInterface, universe: MissionUniverse,
+    options: { systemId?: string } = {}): Promise<SetStringEffects> {
+    if (!retired.onRetire && !captured.onCapture) {
+        return {};
+    }
+    await universe.load();
+    const { session, before, outcome } = await detachedSession(player,
+        gameData, universe, options.systemId);
+    runMissionSetString(session.machinery, retired.onRetire,
+        setStringPrefix(retired), session.outfits);
+    runMissionSetString(session.machinery, captured.onCapture,
+        setStringPrefix(captured), session.outfits);
+    // The notices a string's mission starts or ends would give are dropped:
+    // the original shows the status line and nothing else here.
+    session.commit();
+    return diffSetStringEffects(before, session.target, '', outcome,
+        universe.legalGeography());
 }

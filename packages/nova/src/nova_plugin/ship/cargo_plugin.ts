@@ -57,9 +57,9 @@ export function cargoUsed(cargo: Cargo): number {
  * Map order). Not the trade-in's proportional cut (spaceport/
  * shipyard_rules' cargoForNewShip, R11): on an exchange nothing is
  * destroyed, so the receiving hull is filled to the brim and the rest stays
- * on the other one. Shared by the hangar's swaps (spaceport/
- * ship_storage.ts) and the capture's "Use As My Ship" (encounters/
- * boarding_plugin.ts), so it lives in the simulation layer.
+ * on the other one. The hangar's swaps' (spaceport/ship_storage.ts). (The
+ * capture's "Use As My Ship" exchanges nothing: both holds are lost there,
+ * encounters/boarding_plugin.ts tradePlacesWithCaptain.)
  */
 export function fillHold(pooled: Cargo, capacity: number): Cargo {
     const result = new Map(pooled);
@@ -83,10 +83,9 @@ export function fillHold(pooled: Cargo, capacity: number): Cargo {
 }
 
 /**
- * THE HOLD EXCHANGE of two hulls (a hangar swap, or trading places with a
- * captured ship's captain): the pilot's hold and the incoming hull's are
- * pooled, the incoming hull takes what {@link fillHold} gives it, and the
- * rest stays aboard the hull being left.
+ * THE HOLD EXCHANGE of two hulls (a hangar swap): the pilot's hold and
+ * the incoming hull's are pooled, the incoming hull takes what
+ * {@link fillHold} gives it, and the rest stays aboard the hull being left.
  */
 export function exchangeHolds(pilot: Cargo, incoming: Iterable<[string, number]>,
     capacity: number): { aboard: Cargo, leftBehind: Cargo } {

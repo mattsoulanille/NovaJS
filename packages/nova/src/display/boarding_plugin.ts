@@ -1,5 +1,6 @@
 import { Entity } from 'nova_ecs/entity';
 import { Plugin } from 'nova_ecs/plugin';
+import { World } from 'nova_ecs/world';
 import { Query } from 'nova_ecs/query';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
@@ -22,6 +23,15 @@ import {
     cappedEscortCount, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
 } from '../nova_plugin/escorts/index.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
+import { CapturedShip } from '../nova_plugin/encounters/index.js';
+import { ShipComponent } from '../nova_plugin/ship/index.js';
+import { SystemIdResource } from '../nova_plugin/core/index.js';
+import { MissionUniverse } from '../spaceport/mission_universe.js';
+import { buildCaptureSetStrings } from '../spaceport/ship_mission_accept.js';
+import {
+    CAPTURED_SHIP_NAME_PROMPT_INDEX, CAPTURED_SHIP_NAME_PROMPT_TEXT,
+    CapturedShipNamePrompt,
+} from '../spaceport/ship_name_prompt.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { STANDARD_CARGO_NAMES } from '../nova_plugin/missions/index.js';
 import { formatCredits, standardCargoIndex } from './status_bar_content.js';
@@ -75,6 +85,15 @@ const SHIP_DONE_WAIT_FRAMES = 60;
  */
 export const PlunderActionEvent =
     new EcsEvent<{ action: ControlAction }>('PlunderActionEvent');
+
+/**
+ * The capture prompt's "Use As My Ship", answered: the rename prompt's name
+ * and the swap's set strings resolved (encounters/boarding_plugin.ts
+ * CapturedShipType), forwarded by game_session.ts to the sim as a
+ * `captureShip` input record.
+ */
+export const CaptureShipEvent =
+    new EcsEvent<{ capture: CapturedShip }>('CaptureShipEvent');
 
 // Geometry lives in spaceport/hail_layout.ts, measured off PICT 8515/8516's
 // own art and space/board_ship.png (frame at screen 806,441) — see that file
@@ -599,6 +618,9 @@ export const CAPTURE_PROMPT_TEXT = 'Do you want to use this ship as an '
 export const CAPTURE_PROMPT_STRING_TABLE = 'nova:2002';
 export const CAPTURE_PROMPT_INDEX = 117;
 
+/** The capture prompt's two answers. */
+export type CaptureAnswer = 'ship' | 'escort';
+
 /**
  * The capture prompt's two answers, top to bottom, as the original stacks
  * them (space/capture_assignment.png): Use As My Ship over Use As Escort.
@@ -606,12 +628,16 @@ export const CAPTURE_PROMPT_INDEX = 117;
  * not have). The prompt only ever appears below the escort cap: at the cap
  * the plunder dialog greys Capture Ship (reference "Capture, wave 33",
  * finding 7), so no capture can succeed there.
+ *
+ * Use As Escort is the plunder dialog's 'plunderCaptureEscort' control; Use
+ * As My Ship first asks for the new hull's name (BoardingUi's rename) and
+ * then sends a `captureShip` record (CaptureShipEvent).
  */
 export const CAPTURE_PROMPT_BUTTONS: readonly {
-    label: string, action: ControlAction,
+    label: string, answer: CaptureAnswer,
 }[] = [
-    { label: 'Use As My Ship', action: 'plunderCaptureShip' },
-    { label: 'Use As Escort', action: 'plunderCaptureEscort' },
+    { label: 'Use As My Ship', answer: 'ship' },
+    { label: 'Use As Escort', answer: 'escort' },
 ];
 
 /**
@@ -621,9 +647,11 @@ export const CAPTURE_PROMPT_BUTTONS: readonly {
  * keeps the plunder buttons behind it from being clicked, and its
  * MenuControls, bound on top of the plunder dialog's, take the keyboard.
  *
- * KEYS, GUESS (unmeasured): `accept` (A) answers Use As Escort, the answer
- * that changes least; Escape and Return do nothing, so the prompt is only
- * ever closed by one of its two answers.
+ * KEYS: Return and `u` do nothing (MEASURED, reference "Capture \"Use As
+ * My Ship\" (the hub's CU), wave 45", finding 8), and nor does Escape, so
+ * the prompt is only ever closed by one of its two answers. GUESS
+ * (unmeasured, `a` was not tried): `accept` (A) answers Use As Escort, the
+ * answer that changes least.
  */
 class CaptureAssignmentDialog {
     readonly container = new PIXI.Container();
@@ -636,7 +664,7 @@ class CaptureAssignmentDialog {
 
     constructor(private displayAssets: DisplayAssetDataInterface,
         controlEvents: Observable<ControlEvent>,
-        send: (action: ControlAction) => void) {
+        answer: (answer: CaptureAnswer) => void) {
         this.container.name = 'CaptureAssignment';
         this.container.visible = false;
 
@@ -676,19 +704,19 @@ class CaptureAssignmentDialog {
             CAP_ORIGIN_Y + CAPTURE_FRAME.text.y);
         this.container.addChild(this.question);
 
-        CAPTURE_PROMPT_BUTTONS.forEach(({ label, action }, row) => {
+        CAPTURE_PROMPT_BUTTONS.forEach(({ label, answer: which }, row) => {
             const button = new Button(displayAssets, label,
                 CAPTURE_FRAME.buttonWidth, {
                     x: CAP_ORIGIN_X + CAPTURE_FRAME.buttonX - BUTTON_CAP_INSET,
                     y: CAP_ORIGIN_Y + CAPTURE_FRAME.buttonTop
                         + row * CAPTURE_FRAME.buttonPitch,
                 });
-            button.click.subscribe(() => send(action));
+            button.click.subscribe(() => answer(which));
             this.container.addChild(button.container);
         });
 
         this.controls = new MenuControls(controlEvents, {
-            accept: () => send('plunderCaptureEscort'),
+            accept: () => answer('escort'),
         });
         void this.loadQuestion();
     }
@@ -799,6 +827,14 @@ class BoardingUi {
     /** Frames spent holding the plunder dialog back waiting for the sim
      * to settle a board/rescue goal (see SHIP_DONE_WAIT_FRAMES). */
     private settleFrames = 0;
+    /** The target of the session on screen (the capture prompt's answers
+     * name no target of their own). */
+    private current?: string;
+    /** The target whose "Use As My Ship" rename prompt is up. */
+    private renaming?: string;
+    /** Targets "Use As My Ship" has been SENT for: the capture prompt stays
+     * down while the record makes its way to the sim and back. */
+    private tradedFor = new Set<string>();
 
     constructor(displayAssets: DisplayAssetDataInterface,
         controlEvents: Observable<ControlEvent>,
@@ -814,10 +850,51 @@ class BoardingUi {
         private shipDone?: {
             status: (targetUuid: string) => ShipDoneBoardStatus,
             present: (targetUuid: string) => Promise<boolean>,
+        },
+        /** "Use As My Ship": asks for the new hull's name and sends the
+         * `captureShip` record, resolving whether it was sent; `dismiss`
+         * takes a rename prompt down when the session ends under it. The
+         * plugin wires it to useCapturedShip. Omitted in specs that only
+         * drive the dialogs. */
+        private useAsShip?: {
+            ask: (targetUuid: string) => Promise<boolean>,
+            dismiss: () => void,
         }) {
         this.plunder = new PlunderDialog(displayAssets, controlEvents, send);
-        this.assignment =
-            new CaptureAssignmentDialog(displayAssets, controlEvents, send);
+        this.assignment = new CaptureAssignmentDialog(displayAssets,
+            controlEvents, answer => this.answerCapture(answer));
+    }
+
+    /**
+     * The capture prompt's answer. Use As Escort is a plain control. Use As
+     * My Ship takes the prompt down (the original shows the rename alert
+     * over the plunder dialog alone, 63-use1.png) and runs the rename; the
+     * prompt stays down while the record is on its way, and comes back only
+     * if the answer was not sent after all.
+     */
+    private answerCapture(answer: CaptureAnswer) {
+        if (answer === 'escort') {
+            this.send('plunderCaptureEscort');
+            return;
+        }
+        const target = this.current;
+        if (!this.useAsShip || target === undefined
+            || this.renaming !== undefined || this.tradedFor.has(target)) {
+            return;
+        }
+        this.renaming = target;
+        this.assignment.close();
+        void this.useAsShip.ask(target).then(sent => {
+            if (sent) {
+                this.tradedFor.add(target);
+            }
+        }).catch(e => {
+            console.warn('Use As My Ship failed:', e);
+        }).finally(() => {
+            if (this.renaming === target) {
+                this.renaming = undefined;
+            }
+        });
     }
 
     reposition() {
@@ -829,6 +906,7 @@ class BoardingUi {
     update(boarding: BoardingState | undefined, target: Entity | undefined,
         playerCrew: number, atEscortCap = false) {
         this.reposition();
+        this.current = boarding?.target;
         if (boarding && this.offerMission
             && !this.offered.has(boarding.target)) {
             this.offered.add(boarding.target);
@@ -901,6 +979,12 @@ class BoardingUi {
                 this.shipDoneTried.clear();
                 this.settleFrames = 0;
                 this.holding = undefined;
+                this.tradedFor.clear();
+                // The session ended under a rename prompt (the prize
+                // destroyed, say): nothing is left to rename.
+                if (this.renaming !== undefined) {
+                    this.useAsShip?.dismiss();
+                }
                 return;
             case 'offer':
                 // The offer popup owns the screen (and the keyboard,
@@ -930,7 +1014,14 @@ class BoardingUi {
                 this.plunder.open();
                 this.plunder.refresh(boarding!, target, playerCrew,
                     atEscortCap);
-                this.assignment.open();
+                // Down while Use As My Ship's rename is up or its record
+                // is on the way (answerCapture).
+                if (this.renaming === boarding!.target
+                    || this.tradedFor.has(boarding!.target)) {
+                    this.assignment.close();
+                } else {
+                    this.assignment.open();
+                }
                 return;
             case 'missionWait':
                 // Nothing on screen while the simulation settles the
@@ -950,6 +1041,77 @@ class BoardingUi {
 }
 
 const BoardingUiResource = new Resource<BoardingUi>('BoardingUi');
+
+/** The capture's rename prompt, for headless driving (confirm / type /
+ * cancel through its `alert`). */
+export const CapturedShipNamePromptResource =
+    new Resource<CapturedShipNamePrompt>('CapturedShipNamePrompt');
+
+/** This client's own ship in the display world. */
+function localPlayerShip(world: World): Entity | undefined {
+    for (const entity of world.entities.values()) {
+        if (entity.components.has(PlayerShipSelector)) {
+            return entity;
+        }
+    }
+    return undefined;
+}
+
+/**
+ * "Use As My Ship", the owner's half: asks "Now rename this captured
+ * ship:" (CapturedShipNamePrompt, its wording out of STR# 2002 118), then
+ * resolves the swap's set strings — the old class's OnRetire and the
+ * prize class's OnCapture — against a detached copy of the pilot
+ * (buildCaptureSetStrings) and emits the `captureShip` record
+ * (CaptureShipEvent). Resolves whether it was sent: not when the classes
+ * cannot be read, or when the capture no longer stands once the prompt is
+ * answered (the session ended under it) — the sim would refuse the record
+ * anyway (applyCaptureShip), this only spares the round trip.
+ *
+ * Read off the display world's mirror, never written; the pilot is read
+ * AFTER the prompt, so the set strings run against the state the player
+ * is in when they confirm.
+ */
+async function useCapturedShip(world: World,
+    gameData: SimulationGameDataInterface,
+    displayAssets: DisplayAssetDataInterface,
+    namePrompt: CapturedShipNamePrompt, screen: { x: number, y: number },
+    targetUuid: string): Promise<boolean> {
+    const prizeId = world.entities.get(targetUuid)?.components
+        .get(ShipComponent)?.id;
+    if (prizeId === undefined) {
+        return false;
+    }
+    const prize = await gameData.data.Ship.get(prizeId);
+    let prompt = CAPTURED_SHIP_NAME_PROMPT_TEXT;
+    try {
+        const table = await displayAssets.data.StringTable
+            .get(CAPTURE_PROMPT_STRING_TABLE);
+        const text = table.strings[CAPTURED_SHIP_NAME_PROMPT_INDEX];
+        if (text?.trim()) {
+            prompt = text;
+        }
+    } catch {
+        // Keep the built-in wording.
+    }
+    const { x, y } = screenCentre(screen);
+    namePrompt.container.position.set(x, y);
+    const name = await namePrompt.ask(prize.name, prompt);
+
+    const player = localPlayerShip(world);
+    const boarding = player?.components.get(BoardingComponent);
+    const oldId = player?.components.get(ShipComponent)?.id;
+    if (!player || oldId === undefined || boarding?.target !== targetUuid
+        || boarding.capture !== 'succeeded') {
+        return false;
+    }
+    const retired = await gameData.data.Ship.get(oldId);
+    const effects = await buildCaptureSetStrings(player, retired, prize,
+        gameData, MissionUniverse.shared(gameData),
+        { systemId: world.resources.get(SystemIdResource) });
+    world.emit(CaptureShipEvent, { capture: { name, ...effects } });
+    return true;
+}
 
 // Runs each frame for the local player's ship (PlayerShipSelector),
 // opening/closing/refreshing the dialogs from its synced
@@ -993,6 +1155,8 @@ export const BoardingDisplayPlugin: Plugin = {
         }
         const send = (action: ControlAction) =>
             world.emit(PlunderActionEvent, { action });
+        const gameData = world.resources.get(SimulationGameDataResource);
+        const namePrompt = new CapturedShipNamePrompt(controls);
         const ui = new BoardingUi(displayAssets, controls, send, screen,
             // përs Flags 0x0200: the boarding trigger for a ship-offered
             // mission. A no-op for every hull that isn't such a përs.
@@ -1006,15 +1170,23 @@ export const BoardingDisplayPlugin: Plugin = {
                     boardShipDoneStatusOf(world, targetUuid),
                 present: targetUuid =>
                     presentBoardShipDone(world, targetUuid),
-            });
+            },
+            // The capture prompt's "Use As My Ship": the rename, then the
+            // `captureShip` record.
+            gameData ? {
+                ask: targetUuid => useCapturedShip(world, gameData,
+                    displayAssets, namePrompt, screen, targetUuid),
+                dismiss: () => namePrompt.alert.cancel(),
+            } : undefined);
         // jünk commodity names for the booty line come from the game data.
-        const gameData = world.resources.get(SimulationGameDataResource);
         ui.plunder.cargoName = key => cargoKeyDisplayName(key, gameData);
         // Derelict govts (gövt 0x0800) grey Capture at 0% (ruling #378).
         ui.plunder.lookupGovt = govtId => gameData?.data.Govt.getCached(govtId);
         stage.addChild(ui.plunder.container);
         stage.addChild(ui.assignment.container);
+        stage.addChild(namePrompt.container);
         world.resources.set(BoardingUiResource, ui);
+        world.resources.set(CapturedShipNamePromptResource, namePrompt);
         world.addSystem(BoardingUiSystem);
     },
     remove(world) {
@@ -1032,5 +1204,12 @@ export const BoardingDisplayPlugin: Plugin = {
             ui.assignment.container.destroy({ children: true });
         }
         world.resources.delete(BoardingUiResource);
+        const namePrompt = world.resources.get(CapturedShipNamePromptResource);
+        if (namePrompt) {
+            // An open prompt resolves (and its keyboard listeners go) first.
+            namePrompt.alert.cancel();
+            namePrompt.container.destroy({ children: true });
+        }
+        world.resources.delete(CapturedShipNamePromptResource);
     },
 };

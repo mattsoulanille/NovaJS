@@ -385,9 +385,9 @@ describe('the capture prompt', () => {
     });
 
     it('offers Use As My Ship over Use As Escort, and nothing else', () => {
-        expect(CAPTURE_PROMPT_BUTTONS.map(b => [b.label, b.action])).toEqual([
-            ['Use As My Ship', 'plunderCaptureShip'],
-            ['Use As Escort', 'plunderCaptureEscort'],
+        expect(CAPTURE_PROMPT_BUTTONS.map(b => [b.label, b.answer])).toEqual([
+            ['Use As My Ship', 'ship'],
+            ['Use As Escort', 'escort'],
         ]);
     });
 

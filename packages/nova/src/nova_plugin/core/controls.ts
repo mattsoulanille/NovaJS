@@ -51,9 +51,9 @@ const SavedControlsPartialObject = t.partial({
     'plunderAmmo': ControlInputs,
     'plunderCapture': ControlInputs,
     'plunderCaptureEscort': ControlInputs,
-    // The capture prompt's "Use As My Ship": trade places with the captured
-    // ship's captain (boarding_plugin's tradePlacesWithCaptain).
-    'plunderCaptureShip': ControlInputs,
+    // (The capture prompt's "Use As My Ship" is not a control: it carries
+    // the rename prompt's answer, so it rides its own `captureShip` input,
+    // boarding_plugin's applyCaptureShip.)
     'plunderDone': ControlInputs,
     // "This boarding produced a MISSION OFFER and nothing else" — sent by
     // the display when a përs Flags 0x0200 offer took the plunder

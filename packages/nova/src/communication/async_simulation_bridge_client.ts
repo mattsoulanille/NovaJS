@@ -2,7 +2,7 @@ import { Entity } from "nova_ecs/entity";
 import { EncodedEntity, Serializer } from "nova_ecs/plugins/serializer_plugin";
 import { ControlEvent } from "../nova_plugin/core/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
-import { HailAction } from "../nova_plugin/encounters/index.js";
+import { CapturedShip, HailAction } from "../nova_plugin/encounters/index.js";
 import {
     AbortedMission, AcceptedMission, RefusedMission,
 } from "../nova_plugin/missions/index.js";
@@ -115,6 +115,10 @@ export class AsyncSimulationBridgeClient {
 
     async abortMission(aborted: AbortedMission) {
         await this.guard(() => this.host.abortMission(aborted));
+    }
+
+    async captureShip(capture: CapturedShip) {
+        await this.guard(() => this.host.captureShip(capture));
     }
 
     async addEntity(uuid: string, entity: Entity) {

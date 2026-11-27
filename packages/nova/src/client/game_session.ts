@@ -25,7 +25,7 @@ import { v4 } from 'uuid';
 import { Autopilot, ControlSinks } from '../autopilot.js';
 import type { AsyncSimulationBridgeClient } from '../communication/async_simulation_bridge_client.js';
 import { warnedUnsyncableEntities } from '../communication/apply_simulation_frame.js';
-import { PlunderActionEvent } from '../display/boarding_plugin.js';
+import { CaptureShipEvent, PlunderActionEvent } from '../display/boarding_plugin.js';
 import { LeaveGateMapEvent } from '../display/gate_map_plugin.js';
 import {
     EscortActionEvent, HailRequestEvent,
@@ -212,6 +212,14 @@ function wireWorld(runtime: ClientRuntime, pump: FramePump): WorldWiring {
         world.events.get(AbortMissionEvent).subscribe(({ data }) => {
             void bridge.abortMission(data.record).catch(e => {
                 console.warn('Failed to abort a mission:', e);
+            });
+        });
+        // The capture prompt's "Use As My Ship", renamed and its set strings
+        // resolved (display/boarding_plugin.ts useCapturedShip), on its own
+        // input kind (encounters/boarding_plugin.ts CapturedShipType).
+        world.events.get(CaptureShipEvent).subscribe(({ data }) => {
+            void bridge.captureShip(data.capture).catch(e => {
+                console.warn('Failed to use the captured ship:', e);
             });
         });
         world.events.get(LandEvent).subscribe(({ data, entities }) => {

@@ -20,7 +20,10 @@ import {
     PlayerShipSelector, applyAnalogControl, applyControlEvents, ControlledByComponent,
 } from '../nova_plugin/player/index.js';
 import { applySetTarget } from "../nova_plugin/combat/index.js";
-import { applyHail, HailAction, HailActionType } from "../nova_plugin/encounters/index.js";
+import {
+    applyCaptureShip, applyHail, CapturedShip, CapturedShipType, HailAction,
+    HailActionType,
+} from "../nova_plugin/encounters/index.js";
 import {
     AcceptedMission, AcceptedMissionType, applyAcceptMission,
     AbortedMission, AbortedMissionType, applyAbortMission,
@@ -79,6 +82,16 @@ export type SimulationInput =
      * refusal carries. See mission_accept.ts AbortedMissionType.
      */
     | { kind: 'abortMission', aborted: AbortedMission }
+    /**
+     * The capture prompt's "Use As My Ship", answered on the owning client:
+     * the name its rename prompt ("Now rename this captured ship:") gave
+     * the new hull and the deltas of the swap's set strings (the old
+     * class's OnRetire, the prize class's OnCapture), resolved there as an
+     * abort's OnAbort is. The swap itself is recomputed sim-side, against
+     * the SENDER's own boarding session (encounters/boarding_plugin.ts
+     * applyCaptureShip).
+     */
+    | { kind: 'captureShip', capture: CapturedShip }
     /**
      * A hail-dialog ESCORT MANAGEMENT action against one of the player's
      * own escorts: release it, or queue/cancel an upgrade or a sale
@@ -177,6 +190,7 @@ export const SimulationInputType: t.Type<SimulationInput, unknown> = t.union([
     t.strict({ kind: t.literal('acceptMission'), accepted: AcceptedMissionType }),
     t.strict({ kind: t.literal('refuseMission'), refused: RefusedMissionType }),
     t.strict({ kind: t.literal('abortMission'), aborted: AbortedMissionType }),
+    t.strict({ kind: t.literal('captureShip'), capture: CapturedShipType }),
     t.strict({ kind: t.literal('escortAction'), action: EscortActionType }),
     t.strict({ kind: t.literal('refundFighter'), refund: FighterRefundType }),
     t.strict({ kind: t.literal('addEntity'), uuid: t.string, entity: EncodedEntity }),
@@ -261,7 +275,8 @@ export async function loadSetStringEffectsGameData(world: World,
  * applies (see loadInputRecordsGameData). */
 export function inputNeedsStaging(input: SimulationInput): boolean {
     return input.kind === 'addEntity' || input.kind === 'acceptMission'
-        || input.kind === 'refuseMission' || input.kind === 'abortMission';
+        || input.kind === 'refuseMission' || input.kind === 'abortMission'
+        || input.kind === 'captureShip';
 }
 
 /**
@@ -343,6 +358,9 @@ export async function loadInputRecordsGameData(
                 : undefined,
             input.kind === 'abortMission'
                 ? loadSetStringEffectsGameData(world, input.aborted)
+                : undefined,
+            input.kind === 'captureShip'
+                ? loadSetStringEffectsGameData(world, input.capture)
                 : undefined,
             input.kind === 'refundFighter'
                 ? loadWeaponsGameData(world, [input.refund.bayWeaponId])
@@ -684,6 +702,10 @@ function applySimulationInput(world: World, input: SimulationInput,
         }
         case 'abortMission': {
             applyAbortMission(world, peerId, input.aborted);
+            break;
+        }
+        case 'captureShip': {
+            applyCaptureShip(world, peerId, input.capture);
             break;
         }
         case 'escortAction': {

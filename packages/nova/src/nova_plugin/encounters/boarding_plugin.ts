@@ -1,6 +1,6 @@
 import * as t from 'io-ts';
 import { GovtData } from 'novadatainterface/govt_data';
-import { Emit, EmitFunction, Entities, GetEntity, GetWorld, UUID } from 'nova_ecs/arg_types';
+import { Emit, EmitFunction, Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
 import { Entity } from 'nova_ecs/entity';
 import { EntityMap } from 'nova_ecs/entity_map';
 import { EcsEvent } from 'nova_ecs/events';
@@ -14,7 +14,6 @@ import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { Time, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
-import { ShipData } from 'novadatainterface/ship_data';
 import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
 import {
     AmmoOutfitInfo, axesAligned, BoardBlockReason, BoardedComponent,
@@ -34,7 +33,7 @@ import {
     retrieveRescueCargo, spendRescueBoard,
 } from './rescue_board.js';
 import { MissionShipComponent } from '../player/index.js';
-import { CargoComponent, cargoUsed, exchangeHolds, fillHold } from '../ship/index.js';
+import { CargoComponent, cargoUsed } from '../ship/index.js';
 import { CollisionHitterComponent } from '../core/index.js';
 import { HurtboxHullComponent } from '../core/index.js';
 import { OutfitsState, OutfitsStateComponent } from '../ship/index.js';
@@ -77,8 +76,12 @@ import {
 import { PlayerSoundEvent } from '../core/index.js';
 import { TargetComponent } from '../ship/index.js';
 import { makeNpcShip, PersComponent } from '../spawn/index.js';
-import { rehullShip } from '../missions/index.js';
-import { PlayerNamesComponent } from '../player/index.js';
+import {
+    applySetStringEffects, rehullShip, SetStringEffectsType,
+} from '../missions/index.js';
+import {
+    findControlledEntity, PlayerNamesComponent, sanitizeShipName,
+} from '../player/index.js';
 import { SystemHoldComponent, waitingForRescue } from '../npc/index.js';
 
 /** Interface beep when a plunder session opens (snd nova:390), heard only
@@ -1370,19 +1373,6 @@ function outfitCountsOf(entity: Entity): Map<string, number> {
     return counts;
 }
 
-/** The hold of a `ship` hull carrying `outfits`: the class's cargo space
- * plus every outfit's (spaceport/shipyard_rules' newShipCargoCapacity, the
- * sum ShipPhysicsProvider derives). */
-function holdCapacity(ship: ShipData, outfits: ReadonlyMap<string, number>,
-    gameData: SimulationGameDataInterface): number {
-    let capacity = ship.physics.freeCargo;
-    for (const [id, count] of outfits) {
-        capacity += (gameData.data.Outfit.getCached(id)?.physics.freeCargo
-            ?? 0) * count;
-    }
-    return Math.max(0, capacity);
-}
-
 /**
  * Gives a hull about to enter the world its shield, armor and fuel at the
  * given levels (each clamped to the hull's own capacity; `undefined` leaves
@@ -1433,66 +1423,70 @@ function presetCondition(hull: Entity, levels: {
  * prize, where it lies, and the prize's captain takes the pilot's old hull,
  * which stays where it was and becomes the pilot's escort.
  *
- * MEASURED: only the prompt itself (reference "Capture, wave 33": the text,
- * the two buttons, laid over the plunder dialog). EVERYTHING the answer does
- * is a GUESS, built from the game's own strings and the rules NovaJS already
- * has for a change of hull:
+ * MEASURED (reference "Capture \"Use As My Ship\" (the hub's CU), wave 45",
+ * the pilot file before and after):
  *
+ *  - THE NAME: the answer first asks "Now rename this captured ship:" (STR#
+ *    2002 118), a plain Mac alert prefilled "<class name> <number>", Cancel
+ *    and OK; the typed name becomes the ship's name. The prompt is the
+ *    owner's client's (display/boarding_plugin.ts); its answer rides the
+ *    `captureShip` input record (applyCaptureShip below), cleaned here.
  *  - THE OLD HULL BECOMES AN ESCORT: STR# 2002 303 "You retained your old
- *    ship as an escort." (and 304 "You were unable to retain your old ship
- *    as an escort.", which NovaJS gives only at the escort cap — the
- *    capture attempt itself is unavailable there, reference wave 33 finding
- *    7, so it should never happen). It is the pilot's own property, so it
- *    is a CAPTURED escort (no wage, sellable), as the hangar's swap makes
- *    the hull it leaves behind (spaceport/ship_storage.ts swapWithEscort).
- *  - THE OUTFITS: the prize keeps what it has aboard (what the boarding
- *    left of it: plundered ammo is gone); the pilot's PERSISTENT outfits
- *    (oütf 0x0004, "stays with you when you trade ships"; the Bible's
- *    0x0020 note names capture as a 0x0004 case) move across and leave the
- *    old hull; everything else stays on the old hull.
- *  - THE HOLDS are exchanged as the hangar's swap does (exchangeHolds: the
- *    prize takes every ton of mission cargo and as much of the pooled hold
- *    as fits); what is left goes to the old hull up to its own hold (mission
- *    cargo always), and anything past that is lost.
+ *    ship as an escort." It is the pilot's own property, so it is a
+ *    CAPTURED escort (no wage, sellable), as the hangar's swap makes the
+ *    hull it leaves behind (spaceport/ship_storage.ts swapWithEscort).
+ *    Hired escorts stay hired. (304 "You were unable to retain your old
+ *    ship as an escort." NovaJS gives only at the escort cap — the capture
+ *    attempt itself is unavailable there, reference wave 33 finding 7, so
+ *    it should never happen.)
+ *  - THE OUTFITS: the prize keeps what it has aboard (its own weapons and
+ *    outfits; plundered ammo is gone); the pilot's PERSISTENT outfits
+ *    (oütf 0x0004) move across and leave the old hull; everything else
+ *    stays on the old hull.
+ *  - BOTH HOLDS ARE LOST: the pilot's 10 t of food and the prize's 20 t
+ *    were both gone (the new hull's HUD "Free: 80" of 80; the pilot file's
+ *    cargo 0). GUESS, unmeasured: MISSION cargo is not part of either hold
+ *    — the original keeps it with the mission, not in the commodity hold —
+ *    so it stays with the pilot, aboard the new hull, whatever its size.
+ *    The old hull, now an escort, keeps none.
+ *  - THE SET STRINGS: the prize class's OnCapture and the OLD class's
+ *    OnRetire both run (bits 9288 and 9290 set; the prize class's own
+ *    OnRetire, 9289, not). Set strings are resolved on the owner's client
+ *    (spaceport/ship_mission_accept.ts buildCaptureSetStrings, the in-flight
+ *    mission records' detached-copy machinery) and ride the same record as
+ *    deltas, applied to the new hull after the swap.
  *  - THE PILOT'S STATE (credits, missions, bits, records, rating, escorts,
  *    stored ships, ...) follows the pilot: the change goes through the
  *    in-flight change of hull (missions/mission_ship_change.ts rehullShip),
  *    at the pilot's own uuid, so everything keyed on it — the control link,
  *    the camera, the escorts' formation leader — follows without a remap.
- *  - THE CONDITION: the new hull is the prize as it lay — its armor lifted
- *    just over the disable line, as a prize kept as an escort is
- *    (convertToEscort), its shields and its fuel as they were (an Energy
+ *  - THE CONDITION: the new hull is the prize as it lay ("damaged but
+ *    flyable": no shield, about a third of its armor, little fuel) — its
+ *    armor lifted just over the disable line, as a prize kept as an escort
+ *    is (convertToEscort), its shields and its fuel as they were (an Energy
  *    take leaves the tanks empty); the old hull keeps the armor, shields
  *    and fuel the pilot left it with.
- *  - THE SHIP'S NAME: the original then asks "Now rename this captured
- *    ship:" (STR# 2002 118). NovaJS has no in-flight rename yet, so the new
- *    hull has no name of its own (the derived "<class> <number>" stands in,
- *    as for a ship taken from an escort in the hangar) until the player
- *    names one at a shipyard.
  *  - THE TARGET is cleared (it named the prize, which is now the pilot).
- *  - NOT RUN: the prize class's OnCapture and the old class's OnRetire set
- *    strings (Bible: OnRetire runs when you "replace it with a captured
- *    ship"). Neither capture route runs OnCapture yet; set strings run on
- *    the client, outside this system.
  *
- * DETERMINISM: synchronous, no randomness, a pure function of synced state.
- * Both classes and every outfit aboard either hull are staged (both hulls
- * are in the world), so every getCached below is warm on every peer. Both
- * hulls enter the world fully derived (deriveEntityComponents, rule 11 of
- * docs/rollback_multiplayer.md). The old hull takes the PRIZE's uuid: the
- * prize leaves the world as the pilot's new hull, and the uuid that named a
- * hulk now names the escort that replaced it beside the pilot (its old
- * wing is reassigned and every ship's grudge against it dropped first, as
- * for a prize kept as an escort).
+ * DETERMINISM: synchronous, no randomness, a pure function of synced state
+ * and the record's name. Both classes and every outfit aboard either hull
+ * are staged (both hulls are in the world), so every getCached below is
+ * warm on every peer. Both hulls enter the world fully derived
+ * (deriveEntityComponents, rule 11 of docs/rollback_multiplayer.md). The
+ * old hull takes the PRIZE's uuid: the prize leaves the world as the
+ * pilot's new hull, and the uuid that named a hulk now names the escort
+ * that replaced it beside the pilot (its old wing is reassigned and every
+ * ship's grudge against it dropped first, as for a prize kept as an
+ * escort).
  *
- * Returns whether the old hull was kept as an escort, or undefined when the
- * swap could not be made (a class not staged), in which case nothing
- * changed.
+ * Returns the pilot's new hull and whether the old hull was kept as an
+ * escort, or undefined when the swap could not be made (a class not
+ * staged), in which case nothing changed.
  */
 export function tradePlacesWithCaptain(world: World, pilotUuid: string,
     pilot: Entity, prizeUuid: string, prize: Entity,
-    gameData: SimulationGameDataInterface): { oldShipRetained: boolean }
-    | undefined {
+    gameData: SimulationGameDataInterface, shipName: string):
+    { hull: Entity, oldShipRetained: boolean } | undefined {
     const prizeClass = prize.components.get(ShipComponent)?.id;
     const oldClass = pilot.components.get(ShipComponent)?.id;
     const prizeData = prizeClass !== undefined
@@ -1520,15 +1514,13 @@ export function tradePlacesWithCaptain(world: World, pilotUuid: string,
         oldOutfits.delete(id);
     }
 
-    const { aboard, leftBehind } = exchangeHolds(
-        pilot.components.get(CargoComponent) ?? new Map(),
-        prize.components.get(CargoComponent) ?? new Map(),
-        holdCapacity(prizeData, newOutfits, gameData));
-
     // ── The pilot's new hull: the prize's class, at the prize's place. ──
     const hull = rehullShip(pilot, prizeData, new Map([...newOutfits]
         .map(([id, count]) => [id, { count }])));
-    hull.components.set(CargoComponent, aboard);
+    // Both holds are lost; the pilot's mission cargo stays (see the note).
+    hull.components.set(CargoComponent, new Map([...pilot.components
+        .get(CargoComponent) ?? []]
+        .filter(([key]) => key.startsWith('mission:'))));
     // Position and Angle are immutable, so the prize's are shared as they
     // are; the control-driven fields stay the pilot's.
     hull.components.set(MovementStateComponent, {
@@ -1538,13 +1530,12 @@ export function tradePlacesWithCaptain(world: World, pilotUuid: string,
         rotation: prizeMove.rotation,
     });
     hull.components.set(TargetComponent, { target: undefined });
-    // No name of its own yet (see the note); replaced, never mutated —
-    // the old hull shares the record.
-    const names = hull.components.get(PlayerNamesComponent);
-    if (names?.ship !== undefined) {
-        const { ship: _left, ...rest } = names;
-        hull.components.set(PlayerNamesComponent, rest);
-    }
+    // The name the rename prompt gave it. Replaced, never mutated — the
+    // old hull shares the record.
+    hull.components.set(PlayerNamesComponent, {
+        ...hull.components.get(PlayerNamesComponent),
+        ship: shipName,
+    });
     deriveEntityComponents(world, hull);
     const prizeArmor = prize.components.get(ArmorComponent);
     const hullPhysics = hull.components.get(ShipPhysicsComponent);
@@ -1570,8 +1561,8 @@ export function tradePlacesWithCaptain(world: World, pilotUuid: string,
             pilotMove.rotation, pilotMove.velocity);
         escort.components.set(OutfitsStateComponent, new Map([...oldOutfits]
             .map(([id, count]) => [id, { count }])));
-        escort.components.set(CargoComponent, fillHold(leftBehind,
-            holdCapacity(oldData, oldOutfits, gameData)));
+        // Its hold went with the pilot's (see the note).
+        escort.components.set(CargoComponent, new Map());
         const slot = nextFormationSlot(formationsIn(entities), pilotUuid);
         escort.components.set(FormationComponent, { leader: pilotUuid, slot });
         escort.components.set(EscortCommandComponent, { command: 'formation' });
@@ -1605,7 +1596,96 @@ export function tradePlacesWithCaptain(world: World, pilotUuid: string,
     } else {
         entities.delete(prizeUuid);
     }
-    return { oldShipRetained };
+    return { hull, oldShipRetained };
+}
+
+/**
+ * The capture prompt's "Use As My Ship", as it crosses the wire: the name
+ * the owner's rename prompt gave the new hull ("Now rename this captured
+ * ship:", STR# 2002 118) and the deltas of the two set strings the swap
+ * runs (the old class's OnRetire, then the prize class's OnCapture),
+ * resolved on the owner's client exactly as an in-flight mission abort's
+ * OnAbort is (spaceport/ship_mission_accept.ts buildCaptureSetStrings).
+ *
+ * A NEW INPUT KIND rather than the plunder dialog's control-event path the
+ * other capture answer takes, because it carries data — the name and the
+ * deltas — and both must land on the very tick the hull changes on every
+ * peer: a name or a bit sent separately could be reordered against
+ * another peer's records, or lost with the client, leaving a swapped hull
+ * without its name or its bits.
+ *
+ * `name` is player-typed and UNTRUSTED: it is cleaned and cut on apply
+ * (capturedShipName), so a hostile record can neither carry markup nor
+ * grow the world. JSON-safe like every record (primitives and arrays).
+ */
+export const CapturedShipType = t.intersection([
+    t.type({ name: t.string }),
+    SetStringEffectsType,
+]);
+export type CapturedShip = t.TypeOf<typeof CapturedShipType>;
+
+/**
+ * The most of a record's `name` the apply even looks at, in UTF-16 code
+ * units: the prompt's own typing ceiling (spaceport/ship_name_prompt.ts
+ * SHIP_NAME_TYPING_LENGTH), so a hostile kilobyte costs nothing to clean.
+ */
+const CAPTURED_NAME_READ_LENGTH = 255;
+
+/**
+ * The new hull's name from a record's `name`: cleaned and cut to the
+ * pilot file's 31 characters as the shipyard's prompt cleans one
+ * (player_names.ts sanitizeShipName); an emptied field names the ship
+ * with nothing, as the shipyard's does. Pure, so every peer keeps the
+ * same name.
+ */
+export function capturedShipName(name: string): string {
+    return sanitizeShipName(name.slice(0, CAPTURED_NAME_READ_LENGTH)) ?? '';
+}
+
+/**
+ * Applies a `captureShip` record on every peer at the same tick: the actor
+ * from `peerId` (never the record); the swap only when that pilot's OWN
+ * boarding session holds a capture that succeeded and the prize is still
+ * capturable — the same gate the "Use As Escort" answer has — so a
+ * duplicated, replayed or stale record (the session already ended: the new
+ * hull carries no BoardingComponent) is a no-op, and no peer can trade
+ * into a ship it did not capture. Then the set strings' deltas on the new
+ * hull (mission_accept.ts applySetStringEffects) and the status line's
+ * event.
+ *
+ * Synchronous and free of randomness and wall-clock reads (the rollback
+ * driver replays it).
+ */
+export function applyCaptureShip(world: World, peerId: string | undefined,
+    capture: CapturedShip): void {
+    const controlled = findControlledEntity(world, peerId);
+    if (!controlled) {
+        return;
+    }
+    const { uuid, entity } = controlled;
+    const boarding = entity.components.get(BoardingComponent);
+    if (!boarding || boarding.capture !== 'succeeded') {
+        return;
+    }
+    const target = world.entities.get(boarding.target);
+    const gameData = world.resources.get(SimulationGameDataResource);
+    if (!target || !gameData || !capturable(target, boardingGovtLookup(
+        world.resources.get(GovtsResource), gameData))) {
+        return;
+    }
+    // The pilot's new hull is written at this uuid WITHOUT the
+    // BoardingComponent, which is what ends the session; the old entity
+    // leaves the world.
+    const traded = tradePlacesWithCaptain(world, uuid, entity,
+        boarding.target, target, gameData, capturedShipName(capture.name));
+    if (!traded) {
+        return;
+    }
+    boarding.capture = 'assigned';
+    applySetStringEffects(world, uuid, traded.hull, capture);
+    world.emit(CaptureAssignedEvent, {
+        kept: 'ship', oldShipRetained: traded.oldShipRetained,
+    }, [uuid]);
 }
 
 /**
@@ -1624,10 +1704,10 @@ const BoardingActionSystem = new System({
         Optional(WeaponsStateComponent), GetEntity, UUID, Entities,
         RandomResource, Optional(GovtsResource), SimulationGameDataResource,
         Emit, Optional(LegalGeographyResource),
-        Optional(SystemIdResource), TimeResource, GetWorld] as const,
+        Optional(SystemIdResource), TimeResource] as const,
     step(controls, boarding, shipData, cargo, physics, credits, fuel, records,
         boarderOutfits, boarderWeapons, entity, uuid, entities, random, govts,
-        gameData, emit, geography, systemId, time, world) {
+        gameData, emit, geography, systemId, time) {
         const target = entities.get(boarding.target);
 
         // Charges the BoardPenalty crime once per session, the first
@@ -1683,24 +1763,9 @@ const BoardingActionSystem = new System({
             return;
         }
 
-        // "Use As My Ship": the pilot trades places with the prize's
-        // captain (tradePlacesWithCaptain). Same gate as the escort answer.
-        // The pilot's new hull is written at this uuid WITHOUT the
-        // BoardingComponent, which is what ends the session; the old
-        // entity, the one this step was handed, leaves the world.
-        if (controls.get('plunderCaptureShip') === 'start'
-            && boarding.capture === 'succeeded'
-            && capturable(target, boardingGovtLookup(govts, gameData))) {
-            const traded = tradePlacesWithCaptain(world, uuid, entity,
-                boarding.target, target, gameData);
-            if (traded) {
-                boarding.capture = 'assigned';
-                emit(CaptureAssignedEvent, {
-                    kept: 'ship', oldShipRetained: traded.oldShipRetained,
-                }, [uuid]);
-            }
-            return;
-        }
+        // "Use As My Ship" is not a control: it carries the rename prompt's
+        // answer and the set strings' deltas, so it rides its own input
+        // record (applyCaptureShip).
 
         // The remaining actions need the victim to still be a boardable
         // hulk; a repair or a stray killing blow ends the session.

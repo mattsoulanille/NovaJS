@@ -21,7 +21,7 @@ import {
     loadSetStringEffectsGameData, SimulationInput,
 } from "./simulation_input.js";
 import { warnThrottled } from "../common/log_throttle.js";
-import { HailAction } from "../nova_plugin/encounters/index.js";
+import { CapturedShip, HailAction } from "../nova_plugin/encounters/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import {
     AbortedMission, AcceptedMission, RefusedMission,
@@ -1799,6 +1799,18 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     async abortMission(aborted: AbortedMission) {
         await loadSetStringEffectsGameData(this.world, aborted);
         this.schedule({ kind: 'abortMission', aborted });
+    }
+
+    /**
+     * The capture prompt's "Use As My Ship" (encounters/boarding_plugin.ts
+     * CapturedShipType): the new hull's name and its set strings' deltas.
+     * Both hulls are already in the world, so their classes and outfits
+     * are staged; what the set strings name (a granted outfit, a change of
+     * ship) is staged BEFORE scheduling, as for an abort.
+     */
+    async captureShip(capture: CapturedShip) {
+        await loadSetStringEffectsGameData(this.world, capture);
+        this.schedule({ kind: 'captureShip', capture });
     }
 
     snapshot(): SimulationFrame {

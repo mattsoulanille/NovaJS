@@ -210,10 +210,9 @@ export function incomingOutfits(record: StoredShip,
     return merged;
 }
 
-/** The hold exchange of a swap (see the module comment's THE HOLD): moved
- * to the simulation layer (nova_plugin/ship/cargo_plugin.ts), which the
- * capture's "Use As My Ship" shares, and re-exported for this module's
- * callers. */
+/** The hold exchange of a swap (see the module comment's THE HOLD): in the
+ * simulation layer (nova_plugin/ship/cargo_plugin.ts), and re-exported for
+ * this module's callers. */
 export { exchangeHolds };
 
 /**

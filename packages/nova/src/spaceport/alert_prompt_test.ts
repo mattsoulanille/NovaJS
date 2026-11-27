@@ -9,8 +9,9 @@ import {
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { MenuControls } from './menu_controls.js';
 import {
-    confirmedShipName, prefillShipNumber, SHIP_NAME_FIELD_LENGTH,
-    SHIP_NAME_PROMPT_LAYOUT, ShipNamePrompt,
+    CAPTURED_SHIP_NAME_PROMPT_INDEX, CAPTURED_SHIP_NAME_PROMPT_TEXT,
+    CapturedShipNamePrompt, confirmedShipName, prefillShipNumber,
+    SHIP_NAME_FIELD_LENGTH, SHIP_NAME_PROMPT_LAYOUT, ShipNamePrompt,
     shipNamePromptText,
 } from './ship_name_prompt.js';
 
@@ -191,5 +192,56 @@ describe('the ship name prompt', () => {
             .toBeTruthy();
         expect(dialog.container.getChildByName('Button:Cancel', true))
             .toBeTruthy();
+    });
+});
+
+/**
+ * The capture's "Use As My Ship" rename (reference "Capture \"Use As My
+ * Ship\" (the hub's CU), wave 45", 63-use1.png): "Now rename this captured
+ * ship:", prefilled "Kit Prize Hull 631" and selected, Cancel and OK, the
+ * shipyard's alert at the shipyard's size.
+ */
+describe('the captured ship rename prompt', () => {
+    beforeAll(() => installHeadlessPixi());
+
+    it('asks in the original\'s words (STR# 2002 0-based 118)', () => {
+        expect(CAPTURED_SHIP_NAME_PROMPT_TEXT)
+            .toBe('Now rename this captured ship:');
+        expect(CAPTURED_SHIP_NAME_PROMPT_INDEX).toBe(118);
+    });
+
+    it('opens prefilled "<class name> <number>" and selected, owns the '
+        + 'keyboard, and names the ship what was typed on OK', async () => {
+        const prompt = new CapturedShipNamePrompt(new Subject<ControlEvent>());
+        expect(prompt.container.name).toBe('CapturedShipNamePrompt');
+        const answer = prompt.ask('Kit Prize Hull; CU prize', undefined,
+            () => 531.5 / 900);
+        expect(prompt.alert.shown).toBeTrue();
+        expect(prompt.alert.value).toEqual(field('Kit Prize Hull 631', true));
+        expect(isTextEntryActive()).toBeTrue();
+        prompt.alert.type('Prize Taken');
+        prompt.alert.confirm();
+        expect(await answer).toBe('Prize Taken');
+        expect(prompt.alert.shown).toBeFalse();
+        expect(isTextEntryActive()).toBeFalse();
+        expect(MenuControls.focused).toBeUndefined();
+    });
+
+    it('keeps the prefilled name on Cancel (GUESS: the swap is made '
+        + 'either way)', async () => {
+        const prompt = new CapturedShipNamePrompt(new Subject<ControlEvent>());
+        const answer = prompt.ask('Kit Prize Hull', 'Custom wording:',
+            () => 0.5);
+        prompt.alert.type('Never kept');
+        prompt.alert.cancel();
+        expect(await answer).toBe('Kit Prize Hull 550');
+    });
+
+    it('cleans and cuts a name as the shipyard\'s prompt does', async () => {
+        const prompt = new CapturedShipNamePrompt(new Subject<ControlEvent>());
+        const answer = prompt.ask('Kit Prize Hull');
+        prompt.alert.type('  ' + 'y'.repeat(40));
+        prompt.alert.confirm();
+        expect(await answer).toBe('y'.repeat(31));
     });
 });

@@ -26,9 +26,16 @@ import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import {
     BayCaptureEvent, BoardingBlockedEvent, CaptureAssignedEvent, captureOddsDraw,
-    clearHostilityToward,
+    CapturedShip, clearHostilityToward,
     EscortRepairedEvent, PlunderSelfDestructEvent, reassignCapturedWing,
 } from './boarding_plugin.js';
+import {
+    applySimulationInputs, SimulationInput, SimulationInputType,
+} from '../../communication/simulation_input.js';
+import { MissionUniverse } from '../../spaceport/mission_universe.js';
+import { buildCaptureSetStrings } from '../../spaceport/ship_mission_accept.js';
+import { ControlBitsComponent } from '../ncb/index.js';
+import { PlayerNamesComponent } from '../player/index.js';
 import { AggressionComponent } from '../combat/index.js';
 import { MissionShipComponent, NO_DEAL } from '../player/index.js';
 import { SystemHoldComponent } from '../npc/index.js';
@@ -2535,17 +2542,24 @@ describe('boarding in a live world', () => {
     /**
      * "Use As My Ship" (the capture prompt's other answer, stock STR# 2002
      * 117: "...trade places with its captain and use it as your own
-     * ship?"). Only the prompt is measured (reference "Capture, wave 33");
-     * what the answer does is boarding_plugin's tradePlacesWithCaptain,
-     * every part of it a GUESS — these specs pin the guesses.
+     * ship?"). MEASURED (reference "Capture \"Use As My Ship\" (the hub's
+     * CU), wave 45"): the old hull stays as a captured escort, the new hull
+     * carries the prize's own items plus the pilot's persistent outfits,
+     * BOTH holds are lost, the rename prompt's name is the ship's name, and
+     * the prize class's OnCapture and the old class's OnRetire run. The
+     * answer arrives as a `captureShip` input record (boarding_plugin's
+     * applyCaptureShip), driven here through the real input path.
      *
      * The boarder is a Wren Skiff (cargo 10 + a Cargo Pod) carrying the
-     * persistent Courier Charter and two tons of Food; the prize a disabled
-     * Gannet Corsair with three tons of Industrial aboard.
+     * persistent Courier Charter, two tons of Food and a ton of mission
+     * cargo; the prize a disabled Gannet Corsair with three tons of
+     * Industrial aboard.
      */
     describe('Use As My Ship', () => {
         const CHARTER = SYNTHETIC.outfits.charter;
         const POD = SYNTHETIC.outfits.cargoPod;
+        const PEER = 'test peer';
+        const MISSION_CARGO = 'mission:nova:999';
 
         async function swapWorld() {
             const ctx = await boardingWorld({
@@ -2556,12 +2570,13 @@ describe('boarding in a live world', () => {
                 cargo: new Map([['cargo:1', 3]]),
             });
             const { world, boarder } = ctx;
-            boarder.components.set(ControlledByComponent,
-                { peerId: 'test peer' });
-            boarder.components.set(CargoComponent, new Map([['cargo:0', 2]]));
+            boarder.components.set(ControlledByComponent, { peerId: PEER });
+            boarder.components.set(CargoComponent, new Map([['cargo:0', 2],
+                [MISSION_CARGO, 1]]));
             boarder.components.set(CreditsComponent, { credits: 12_345 });
             boarder.components.set(LegalRecordsComponent,
                 new Map([[MERIDIAN, 7]]));
+            boarder.components.set(ControlBitsComponent, new Set([9292]));
             const events: { kept: string, oldShipRetained: boolean }[] = [];
             world.addSystem(new System({
                 name: 'CollectCaptureAssigned',
@@ -2572,13 +2587,29 @@ describe('boarding in a live world', () => {
             return { ...ctx, events };
         }
 
-        function captureAndSwap(world: World, boarder: Entity) {
+        /** The `captureShip` record, as the owner's client sends it, through
+         * the wire codec and the input apply; then one step. */
+        function useAsMyShip(world: World,
+            capture: CapturedShip = { name: 'Prize Taken' },
+            peerId = PEER) {
+            const input: SimulationInput = { kind: 'captureShip', capture };
+            expect(SimulationInputType.is(input)).toBeTrue();
+            applySimulationInputs(world, [input], peerId);
+            world.step();
+        }
+
+        function capture(world: World, boarder: Entity) {
             forceCaptureRoll(world, true);
             press(world, BOARDER, 'board');
             press(world, BOARDER, 'plunderCapture');
             expect(boarder.components.get(BoardingComponent)?.capture)
                 .toEqual('succeeded');
-            press(world, BOARDER, 'plunderCaptureShip');
+        }
+
+        function captureAndSwap(world: World, boarder: Entity,
+            record?: CapturedShip) {
+            capture(world, boarder);
+            useAsMyShip(world, record);
         }
 
         it('puts the pilot in the prize, where it lay, at the pilot\'s own '
@@ -2594,7 +2625,7 @@ describe('boarding in a live world', () => {
                 expect(hull.components.get(ShipDataComponent)!.id)
                     .toEqual(SYNTHETIC.ships.corsair);
                 expect(hull.components.get(ControlledByComponent))
-                    .toEqual({ peerId: 'test peer' });
+                    .toEqual({ peerId: PEER });
                 expect(hull.components.has(BoardingComponent)).toBeFalse();
                 expect(hull.components.has(DisabledComponent)).toBeFalse();
                 const at = hull.components.get(MovementStateComponent)!
@@ -2661,16 +2692,75 @@ describe('boarding in a live world', () => {
                     [SYNTHETIC.outfits.blaster, 1], [POD, 1]]));
             });
 
-        it('exchanges the holds: the prize keeps its cargo and takes the '
-            + 'pilot\'s as far as it fits', async () => {
+        it('loses BOTH holds, the pilot\'s and the prize\'s, keeping only '
+            + 'the pilot\'s mission cargo (GUESS)', async () => {
                 const { world, boarder } = await swapWorld();
                 captureAndSwap(world, boarder);
-                const hull = world.entities.get(BOARDER)!;
-                // Corsair: 15 t of hold, room for both.
-                expect(hull.components.get(CargoComponent)).toEqual(
-                    new Map([['cargo:0', 2], ['cargo:1', 3]]));
+                world.step();
+                expect(world.entities.get(BOARDER)!.components
+                    .get(CargoComponent)).toEqual(
+                    new Map([[MISSION_CARGO, 1]]));
                 expect(world.entities.get(TARGET)!.components
                     .get(CargoComponent)).toEqual(new Map());
+            });
+
+        it('names the new hull what the rename prompt gave it, cleaned '
+            + 'and cut to 31 characters', async () => {
+                const name = async (typed: string) => {
+                    const { world, boarder } = await swapWorld();
+                    captureAndSwap(world, boarder, { name: typed });
+                    world.step();
+                    return world.entities.get(BOARDER)!.components
+                        .get(PlayerNamesComponent)?.ship;
+                };
+                expect(await name('Prize Taken')).toEqual('Prize Taken');
+                expect(await name(' Prize\u0007 Taken‮ ')).toEqual(
+                    'Prize Taken');
+                expect(await name('x'.repeat(300))).toEqual('x'.repeat(31));
+                // An emptied field: a blank name, as the shipyard's.
+                expect(await name('')).toEqual('');
+            });
+
+        it('runs the set strings\' deltas on the new hull: the prize\'s '
+            + 'OnCapture and the old hull\'s OnRetire (wave 45: b9288, '
+            + 'b9290)', async () => {
+                const { world, boarder } = await swapWorld();
+                captureAndSwap(world, boarder,
+                    { name: 'Prize Taken', bitsSet: [9288, 9290] });
+                world.step();
+                const hull = world.entities.get(BOARDER)!;
+                expect([...hull.components.get(ControlBitsComponent)!].sort())
+                    .toEqual([9288, 9290, 9292]);
+                expect(world.entities.get(TARGET)!.components
+                    .has(ControlBitsComponent)).toBeFalse();
+            });
+
+        it('end to end: the owner\'s client resolves OnRetire and OnCapture '
+            + 'and the swap applies them', async () => {
+                const { world, boarder, gameData } = await swapWorld();
+                const skiff = (await gameData.data.Ship.get(
+                    SYNTHETIC.ships.skiff))!;
+                const corsair = (await gameData.data.Ship.get(
+                    SYNTHETIC.ships.corsair))!;
+                capture(world, boarder);
+                // The kit's strings: the old class's OnRetire, the prize
+                // class's OnCapture (and its own OnRetire, which must NOT
+                // run).
+                const effects = await buildCaptureSetStrings(boarder,
+                    { ...skiff, onRetire: 'b9290' },
+                    { ...corsair, onCapture: 'b9288', onRetire: 'b9289' },
+                    gameData, MissionUniverse.shared(gameData));
+                expect(effects).toEqual({ bitsSet: [9290, 9288] });
+                // Resolved on a detached copy: the pilot is not written.
+                expect([...boarder.components.get(ControlBitsComponent)!])
+                    .toEqual([9292]);
+                useAsMyShip(world, { name: 'Prize Taken', ...effects });
+                world.step();
+                const hull = world.entities.get(BOARDER)!;
+                expect([...hull.components.get(ControlBitsComponent)!].sort())
+                    .toEqual([9288, 9290, 9292]);
+                expect(hull.components.get(PlayerNamesComponent)?.ship)
+                    .toEqual('Prize Taken');
             });
 
         it('flies the prize in the condition it lay in, lifted over the '
@@ -2688,7 +2778,7 @@ describe('boarding in a live world', () => {
                 press(world, BOARDER, 'plunderCapture');
                 expect(world.entities.get(BOARDER)!.components
                     .get(BoardingComponent)?.capture).toEqual('succeeded');
-                press(world, BOARDER, 'plunderCaptureShip');
+                useAsMyShip(world);
                 const hull = world.entities.get(BOARDER)!;
                 const armor = hull.components.get(ArmorComponent)!;
                 const fraction = hull.components.get(ShipDataComponent)!
@@ -2702,7 +2792,7 @@ describe('boarding in a live world', () => {
         it('does nothing without a successful capture', async () => {
             const { world, boarder, events } = await swapWorld();
             press(world, BOARDER, 'board');
-            press(world, BOARDER, 'plunderCaptureShip');
+            useAsMyShip(world);
             expect(world.entities.get(BOARDER)).toBe(boarder);
             expect(boarder.components.get(BoardingComponent)?.capture)
                 .toEqual('none');
@@ -2710,6 +2800,23 @@ describe('boarding in a live world', () => {
                 .id).toEqual(SYNTHETIC.ships.corsair);
             expect(events).toEqual([]);
         });
+
+        it('takes no record from another peer, and applies a duplicate '
+            + 'once', async () => {
+                const { world, boarder, events } = await swapWorld();
+                capture(world, boarder);
+                useAsMyShip(world, { name: 'Not Yours' }, 'other peer');
+                expect(world.entities.get(BOARDER)).toBe(boarder);
+                useAsMyShip(world, { name: 'Prize Taken', bitsSet: [1] });
+                const hull = world.entities.get(BOARDER)!;
+                useAsMyShip(world, { name: 'Again', bitsSet: [2] });
+                expect(world.entities.get(BOARDER)).toBe(hull);
+                expect(hull.components.get(PlayerNamesComponent)?.ship)
+                    .toEqual('Prize Taken');
+                expect(hull.components.get(ControlBitsComponent)!.has(2))
+                    .toBeFalse();
+                expect(events).toEqual([{ kept: 'ship', oldShipRetained: true }]);
+            });
 
         it('says so when the prize is kept as an escort instead',
             async () => {
@@ -2727,7 +2834,8 @@ describe('boarding in a live world', () => {
             press(world, BOARDER, 'plunderCapture');
             const before = snapshotWorld(world);
             const run = () => {
-                press(world, BOARDER, 'plunderCaptureShip');
+                useAsMyShip(world,
+                    { name: 'Prize Taken', bitsSet: [9288, 9290] });
                 const hashes = [hashWorld(world).hash];
                 for (let i = 0; i < 30; i++) {
                     world.step();

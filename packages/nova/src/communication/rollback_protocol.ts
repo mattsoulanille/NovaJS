@@ -971,6 +971,23 @@ export const STATE_HASH_INTERVAL = 60;
 //    new system. No input kind or message kind changes. The derived wire
 //    schema fingerprint changes (a7b47d05196b53ff -> e384c60c7fd52926), and
 //    the join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the capture prompt's "Use As My Ship" as
+//    measured (reference "Capture \"Use As My Ship\" (the hub's CU), wave
+//    45"). The new `captureShip` input kind (encounters/boarding_plugin.ts
+//    CapturedShipType: the rename prompt's `name` — "Now rename this
+//    captured ship:" — and the same OPTIONAL set-string delta fields an
+//    abort carries, the old class's OnRetire and the prize class's
+//    OnCapture resolved on the owning client) replaces the
+//    `plunderCaptureShip` control action, which is gone from
+//    core/controls.ts. The sim swaps only against the SENDER's own
+//    boarding session with a capture that succeeded (a duplicate is a
+//    no-op), cleans and cuts the name to 31 characters, empties both holds
+//    (mission cargo stays with the pilot, a GUESS) and applies the deltas
+//    to the new hull. New union member and one control action fewer, so
+//    the derived wire schema fingerprint changes (e384c60c7fd52926 ->
+//    096d8b66658e5381); every other kind and field is unchanged, and the
+//    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 
