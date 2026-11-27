@@ -29,6 +29,18 @@ export abstract class Menu<T> {
      */
     onMapKey?: () => void;
     private results = new Subject<T>();
+    private shownSubject = new Subject<void>();
+    /**
+     * Emits each time {@link show} puts the menu on screen: the container
+     * made visible and the menu's keys bound, in the same synchronous step.
+     * A subclass whose show() awaits its data first (the trade center, the
+     * outfitter) reaches that step a few awaits after the call, so a caller
+     * that has to act the moment the menu is up (the spaceport's venue
+     * offers, which go up over the venue — see Spaceport.openVenue) waits
+     * on this rather than on the call. A show() that gives up before it
+     * gets there (a failed load, a teardown) never emits.
+     */
+    readonly shown: Observable<void> = this.shownSubject.asObservable();
     protected input!: T;
 
     constructor(protected displayAssets: DisplayAssetDataInterface,
@@ -100,6 +112,7 @@ export abstract class Menu<T> {
         this.container.visible = true;
         this.controls.bind();
         this.setInput(input);
+        this.shownSubject.next();
         const result = await firstValueFrom(this.results);
         this.container.visible = false;
         this.controls.unbind();

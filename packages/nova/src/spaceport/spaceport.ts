@@ -47,6 +47,7 @@ import { OfferPopup, presentOffers } from './offer_popup.js';
 import { landingOffers } from './mission_offers.js';
 import { MissionUniverse } from './mission_universe.js';
 import { presentVenueOffersIn } from './venue_offers.js';
+import { afterNextRender } from './after_render.js';
 import { Outfitter } from './outfitter.js';
 import { playerIdentitySubs } from './player_identity.js';
 import { runShipBuildWorld } from './ship_build_world.js';
@@ -274,17 +275,17 @@ export class Spaceport extends Menu<Entity> {
             if (!this.enterVenue()) {
                 return;
             }
-            // Outfitter (AvailLoc 6) mission offers first: the Federation
-            // string opens here (nova:428). See presentVenueOffers.
-            await this.presentVenueOffers(LOCATION_OUTFIT);
-            if (!this.stillDocked()) {
-                return;
-            }
             // The outfitter mutates the ship's outfits and the
             // player's control bits.
             this.setLiveStatus(() => outfitter.dockedStatus());
-            const outfitsBefore = outfitCounts(this.input);
-            this.input = await outfitter.show(this.input);
+            // Taken as each visit opens — again at the reopen after the
+            // entry offers — so an accept's `Gxxx` grant is not announced
+            // as a purchase.
+            let outfitsBefore = outfitCounts(this.input);
+            // Outfitter (AvailLoc 6) mission offers over it: the Federation
+            // string opens here (nova:428). See openVenue.
+            this.input = await this.openVenue(outfitter, LOCATION_OUTFIT,
+                () => { outfitsBefore = outfitCounts(this.input); });
             this.setLiveStatus(undefined);
             // An OnPurchase `Hxxx` (stock 314 "Chrome Valk Upgrade") may
             // have swapped the hull mid-visit; its stat providers are
@@ -371,15 +372,11 @@ export class Spaceport extends Menu<Entity> {
             if (!this.enterVenue()) {
                 return;
             }
-            // Trading (AvailLoc 4) mission offers first (Tutorial 002-004,
-            // United Shipping 5). See presentVenueOffers.
-            await this.presentVenueOffers(LOCATION_TRADING);
-            if (!this.stillDocked()) {
-                return;
-            }
             // The trade center mutates cargo and credits.
             this.setLiveStatus(() => tradeCenter.dockedStatus());
-            this.input = await tradeCenter.show(this.input);
+            // Trading (AvailLoc 4) mission offers over it (Tutorial
+            // 002-004, United Shipping 5). See openVenue.
+            this.input = await this.openVenue(tradeCenter, LOCATION_TRADING);
             this.setLiveStatus(undefined);
             this.refreshRefuelButton();
             this.rebindControls();
@@ -394,17 +391,13 @@ export class Spaceport extends Menu<Entity> {
             if (!this.enterVenue()) {
                 return;
             }
-            // Shipyard (AvailLoc 5) mission offers first: the Sigma
+            // Shipyard (AvailLoc 5) mission offers over it: the Sigma
             // Shipyards string (nova:555/897/898), Pirate 009a (709). See
-            // presentVenueOffers.
-            await this.presentVenueOffers(LOCATION_SHIPYARD);
-            if (!this.stillDocked()) {
-                return;
-            }
+            // openVenue.
             // Any purchase inside the visit has already been adopted (and
             // has already set this.input); this just picks up the entity the
             // menu closes on, which is the same one.
-            this.input = await shipyard.show(this.input);
+            this.input = await this.openVenue(shipyard, LOCATION_SHIPYARD);
             // The new hull's stat providers are still running: hold the
             // spaceport's controls until they finish, exactly as awaiting
             // runShipBuildWorld here used to.
@@ -706,14 +699,15 @@ export class Spaceport extends Menu<Entity> {
     }
 
     /**
-     * Whether a venue may still open after the await its entry makes on
-     * the venue-entry offers (presentVenueOffers): a departure hides the
-     * container (Menu.show) and a world teardown destroys it
-     * (Spaceport.dismiss, then spaceport_plugin's remove) while the
-     * popups are up. Either way the venue must not open over a spaceport
-     * that is gone — it would draw destroyed graphics and take a keyboard
-     * nobody gives back (the mid-visit teardown spec) — the same guard
-     * rebindControls applies on the way out.
+     * Whether a venue's entry offers may still go up, or the venue reopen,
+     * after the awaits its entry makes (openVenue: the venue's first frame,
+     * the offer popups): a departure hides the container (Menu.show) and a
+     * world teardown destroys it (Spaceport.dismiss, then
+     * spaceport_plugin's remove) meanwhile. Either way the venue must not
+     * open over a spaceport that is gone — it would draw destroyed
+     * graphics and take a keyboard nobody gives back (the mid-visit
+     * teardown spec) — the same guard rebindControls applies on the way
+     * out.
      */
     private stillDocked(): boolean {
         return this.container.visible && !this.container.destroyed;
@@ -860,30 +854,118 @@ export class Spaceport extends Menu<Entity> {
     }
 
     /**
-     * The venue-entry mission offers (mïsn AvailLoc 4 trading, 5 shipyard,
-     * 6 outfitter), presented over the spaceport as the player walks in —
-     * before the venue opens, so an accept's effects are on the entity the
-     * venue builds its working copy from (see venue_offers.ts). The blocker
-     * holds the keyboard while the pointer-only popups are up, as the
-     * landing sequence's does. The rolls are the system visit's
-     * (mission_offers.ts OfferRolls), shared with the bar and the BBS.
+     * Opens a venue that makes mission offers as the player walks in (mïsn
+     * AvailLoc 4 trading, 5 shipyard, 6 outfitter), and resolves with the
+     * entity it closes on, as the venue's own show() does.
+     *
+     * THE OFFERS GO UP OVER THE VENUE, once its screen has been drawn
+     * (Matthew's 2026-11-26 playtest ruling: "shipyard mission offer should
+     * appear after the shipyard screen renders"). They used to be put to
+     * the player over the spaceport, before the venue opened at all.
+     *
+     * So the venue opens first, and the offers wait for its `shown` (an
+     * async show() — the trade center's, the outfitter's — gets there a few
+     * awaits after the call) and then for its first frame
+     * (afterNextRender). The popup blocker is bound in the same step the
+     * venue goes up, so no key reaches the venue under the popups.
+     *
+     * AN ANSWERED OFFER REOPENS THE VENUE. The venue built its view from
+     * the working copy as it stood at entry; an accept can move any of it
+     * — bits that open or close grid entries (the Sigma string), the hold
+     * (PickupMode 0 cargo), credits, a `Gxxx` outfit, the hull itself (an
+     * `Hxxx`, stock nova:709). Rather than teach each venue to re-read all
+     * of that, the untouched first visit (nothing could be done in it: the
+     * keyboard was blocked and the popup shields the pointer) is closed —
+     * its savepoint released, the offers' nested in it — and the venue
+     * reopened on the spaceport's current hull, through exactly the entry
+     * it always had after the offers. Both happen between two frames, so
+     * the player sees the venue stay up. `beforeOpen` runs before each
+     * open (the outfitter's purchase baseline).
+     *
+     * A venue whose show() gives up before it goes up (a failed load) still
+     * has its offers put, over the spaceport, as before.
      */
-    private async presentVenueOffers(location: number) {
-        if (!this.transaction) {
-            return;
+    private async openVenue(venue: Menu<Entity>, location: number,
+        beforeOpen?: () => void): Promise<Entity> {
+        let settle!: (shown: boolean) => void;
+        const shownOrClosed = new Promise<boolean>(resolve => {
+            settle = resolve;
+        });
+        // Subscribed before show(): the shipyard's goes up synchronously.
+        const subscription = venue.shown.subscribe(() => settle(true));
+        beforeOpen?.();
+        let visit = venue.show(this.input);
+        visit.then(() => settle(false), () => settle(false));
+        const shown = await shownOrClosed;
+        subscription.unsubscribe();
+        const presented = await this.presentVenueOffers(location,
+            shown ? venue : undefined);
+        if (presented && shown && this.stillDocked()
+            && venue.container.visible) {
+            venue.dismiss();
+            await visit;
+            if (this.stillDocked()) {
+                beforeOpen?.();
+                visit = venue.show(this.input);
+            }
         }
-        this.popupBlocker.bind();
+        return visit;
+    }
+
+    /**
+     * How {@link openVenue} waits for a venue's first frame. A seam: the
+     * specs, which have no renderer, hold it or release it at will.
+     */
+    private venueDrawn: (container: PIXI.Container) => Promise<void> =
+        container => afterNextRender(container);
+
+    /**
+     * The venue-entry mission offers (mïsn AvailLoc 4 trading, 5 shipyard,
+     * 6 outfitter; see venue_offers.ts), put to the player over `venue`
+     * once it has been drawn — or over the spaceport when there is no venue
+     * on screen to wait for. Resolves true when offers were put (see
+     * openVenue: the venue is then reopened). The blocker holds the
+     * keyboard while the pointer-only popups are up, as the landing
+     * sequence's does — bound only when there is something to offer, so a
+     * venue with nothing to offer is interactive at once. The rolls are the
+     * system visit's (mission_offers.ts OfferRolls), shared with the bar
+     * and the BBS.
+     */
+    private async presentVenueOffers(location: number,
+        venue?: Menu<Entity>): Promise<boolean> {
+        const transaction = this.transaction;
+        if (!transaction) {
+            return false;
+        }
+        let asked = false;
+        let bound = false;
         try {
-            await presentVenueOffersIn(this.transaction, this.offerPopup,
-                location);
+            await presentVenueOffersIn(transaction, this.offerPopup,
+                location, undefined, async () => {
+                    this.popupBlocker.bind();
+                    bound = true;
+                    if (venue) {
+                        await this.venueDrawn(venue.container);
+                        // Left or torn down while it drew: no offers over
+                        // a venue that is gone.
+                        if (!venue.container.visible) {
+                            return false;
+                        }
+                    }
+                    asked = this.stillDocked();
+                    return asked;
+                });
             // A shipyard offer's `Hxxx` (stock nova:709) may have swapped
-            // the hull the venue is about to open over.
+            // the hull the venue is about to reopen on.
             await this.shipBuild;
         } catch (e) {
             console.warn('Venue mission offers failed:', e);
         } finally {
-            this.popupBlocker.unbind();
+            if (bound) {
+                this.popupBlocker.unbind();
+            }
         }
+        return asked;
     }
 
     /**

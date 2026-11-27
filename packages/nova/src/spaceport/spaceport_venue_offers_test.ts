@@ -20,6 +20,7 @@ import { MenuControls } from './menu_controls.js';
 import { offerRollsForSystem, resetOfferRolls } from './mission_offers.js';
 import { MissionUniverse } from './mission_universe.js';
 import { OfferPopup } from './offer_popup.js';
+import { Menu } from './menu.js';
 import { Spaceport } from './spaceport.js';
 
 /**
@@ -171,7 +172,9 @@ describe('spaceport venue offers', () => {
             }
             await departed;
         });
-        return { entity, shown, press, venues };
+        const pressKey = (action: ControlEvent['action']) =>
+            controlEvents.next({ action, state: 'start' });
+        return { entity, shown, press, pressKey, venues, spaceport };
     }
 
     it('offers the AvailLoc 6 job at the outfitter', async () => {
@@ -200,6 +203,148 @@ describe('spaceport venue offers', () => {
         expect(shown.some(text => text.startsWith(TRADING_OFFER))).toBeTrue();
         expect(entity.components.get(MissionsComponent)!.has(TRADING_JOB))
             .toBeTrue();
+    });
+
+    /**
+     * The venue-entry offers go up OVER the venue, after its screen has
+     * been drawn (Matthew's 2026-11-26 playtest ruling: "shipyard mission
+     * offer should appear after the shipyard screen renders").
+     *
+     * Each venue opens through Menu's own show() — visible, keys bound,
+     * `shown` — with its content hook (setInput) stubbed out, and gets there
+     * a few macrotasks after the call, as the trade center's and the
+     * outfitter's data loads do: the offers must wait for the venue to go
+     * up, not for the call. The spaceport's first-frame wait
+     * (Spaceport.venueDrawn) is held by the spec and released by hand.
+     */
+    describe('over the venue', () => {
+        type VenueKey = 'outfitter' | 'shipyard' | 'tradeCenter';
+        const CASES: { venue: VenueKey, offer: string, job: string }[] = [
+            { venue: 'outfitter', offer: OUTFITTER_OFFER, job: OUTFITTER_JOB },
+            { venue: 'shipyard', offer: SHIPYARD_OFFER, job: SHIPYARD_JOB },
+            { venue: 'tradeCenter', offer: TRADING_OFFER, job: TRADING_JOB },
+        ];
+
+        interface VenueInternals {
+            container: PIXI.Container,
+            controls: MenuControls,
+            show(e: Entity): Promise<Entity>,
+        }
+
+        /**
+         * Lands as land() does, then swaps in the venues' slow Menu.show
+         * and the held first-frame wait, and has the popup recorder note
+         * what was on screen at each popup.
+         */
+        async function landOverVenues(acceptText: string) {
+            const docked = await land(acceptText);
+            const port = docked.spaceport;
+            const spaceport = docked.venues as unknown as
+                Record<VenueKey, VenueInternals> & {
+                    venueDrawn: (c: PIXI.Container) => Promise<void>,
+                    offerPopup: OfferPopup,
+                };
+            for (const key of ['outfitter', 'shipyard', 'tradeCenter'] as
+                VenueKey[]) {
+                const venue = spaceport[key];
+                spyOn(venue as unknown as { setInput(e: Entity): void },
+                    'setInput').and.callFake(function (this: { input: Entity },
+                        e: Entity) {
+                        this.input = e;
+                    });
+                (venue.show as jasmine.Spy).and.callFake(async (e: Entity) => {
+                    for (let i = 0; i < 3; i++) {
+                        await new Promise(resolve => setTimeout(resolve, 0));
+                    }
+                    return Menu.prototype.show.call(venue as never, e);
+                });
+            }
+            const drawRequests: PIXI.Container[] = [];
+            let draw: () => void = () => undefined;
+            spaceport.venueDrawn = container => {
+                drawRequests.push(container);
+                return new Promise(resolve => {
+                    draw = resolve;
+                });
+            };
+            const onScreen: { text: string, venues: VenueKey[] }[] = [];
+            const recorder = spaceport.offerPopup;
+            const recordShow = recorder.show.bind(recorder);
+            recorder.show = (async (text: string, buttons: never) => {
+                onScreen.push({
+                    text,
+                    venues: CASES.map(c => c.venue)
+                        .filter(key => spaceport[key].container.visible),
+                });
+                return recordShow(text, buttons);
+            }) as typeof recorder.show;
+            return {
+                ...docked, spaceport, port, drawRequests, onScreen,
+                draw: () => draw(),
+            };
+        }
+
+        for (const { venue: key, offer, job } of CASES) {
+            it(`puts the ${key}'s offer up over the ${key} once it is drawn, `
+                + 'and reopens it on the accept', async () => {
+                const {
+                    entity, shown, spaceport, drawRequests, onScreen, draw,
+                    pressKey,
+                } = await landOverVenues(offer);
+                const venue = spaceport[key];
+                const press = {
+                    outfitter: 'outfitter', shipyard: 'shipyard',
+                    tradeCenter: 'tradeCenter',
+                }[key] as ControlEvent['action'];
+                // Walk in.
+                pressKey(press);
+                await waitFor(() => venue.container.visible);
+                // Up, but not yet drawn: nothing offered, and the venue's
+                // keys are already held by the popup blocker.
+                await settle();
+                expect(drawRequests).toEqual([venue.container]);
+                expect(shown.length).withContext('before the frame').toBe(0);
+                expect(MenuControls.focused).not.toBe(venue.controls);
+                // Drawn: the offer goes up over it.
+                draw();
+                await waitFor(() => shown.length > 0);
+                expect(shown[0].startsWith(offer)).toBeTrue();
+                expect(onScreen[0].venues).toEqual([key]);
+                // Accepted, and the venue reopened on the result: a second
+                // open, on the screen, with its keys back.
+                await waitFor(() => (venue.show as jasmine.Spy).calls.count()
+                    === 2 && MenuControls.focused === venue.controls);
+                expect(venue.container.visible).toBeTrue();
+                expect(entity.components.get(MissionsComponent)!.has(job))
+                    .toBeTrue();
+                // No offer put twice; nothing waited on a second frame.
+                expect(shown.filter(text => text.startsWith(offer)).length)
+                    .toBe(1);
+                expect(drawRequests.length).toBe(1);
+            });
+        }
+
+        it('opens a venue with nothing to offer at once, without waiting '
+            + 'for its frame', async () => {
+            const { shown, spaceport, drawRequests, draw, pressKey, port } =
+                await landOverVenues(TRADING_OFFER);
+            const venue = spaceport.tradeCenter;
+            pressKey('tradeCenter');
+            await waitFor(() => drawRequests.length === 1);
+            draw();
+            await waitFor(() => MenuControls.focused === venue.controls
+                && (venue.show as jasmine.Spy).calls.count() === 2);
+            const offered = shown.length;
+            // Out, and in again: the job is taken, so nothing is offered,
+            // and the venue is the keyboard as soon as it is up.
+            pressKey('depart');
+            await waitFor(() => port.onMainScreen);
+            pressKey('tradeCenter');
+            await waitFor(() => MenuControls.focused === venue.controls);
+            expect(drawRequests.length).toBe(1);
+            expect(shown.length).toBe(offered);
+            expect((venue.show as jasmine.Spy).calls.count()).toBe(3);
+        });
     });
 
     it('does not re-offer at a second visit to the same venue', async () => {
