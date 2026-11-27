@@ -105,9 +105,18 @@ export class CompositeHull extends Hull {
     }
 
     get bbox() {
-        const rotated = rotateAabb(this.bboxShape, this.angle);
-        return translateAabb(rotated, this.pos);
+        // rotateAabb is a pure function of the (fixed) resting box and
+        // the angle, so it is memoized on the angle: most hulls keep
+        // theirs from tick to tick. A FRESH box is still returned every
+        // call (CollisionSystem turns it into its rbush entry).
+        if (this.rotatedBboxAngle !== this.angle) {
+            this.rotatedBbox = rotateAabb(this.bboxShape, this.angle);
+            this.rotatedBboxAngle = this.angle;
+        }
+        return translateAabb(this.rotatedBbox!, this.pos);
     }
+    private rotatedBbox: BBox | undefined;
+    private rotatedBboxAngle: number | undefined;
 }
 
 export class MultiFrameHull extends Hull {
@@ -128,6 +137,7 @@ export class MultiFrameHull extends Hull {
     }
     set angle(angle: number) {
         this.activeHull.angle = angle;
+        this.wrappedAngle = angle;
     }
     set frame(frame: number) {
         const newHull = this.hulls[frame];
@@ -141,6 +151,24 @@ export class MultiFrameHull extends Hull {
         newHull.angle = this.wrappedAngle;
         newHull.pos = this.pos;
         this.activeHull = newHull;
+    }
+
+    /**
+     * `frame = frame` then `angle = angle`, without first turning a newly
+     * active frame's hull to the OLD angle: each turn recomputes every
+     * polygon (SAT's _recalc), and the end state is the same.
+     */
+    setFrameAndAngle(frame: number, angle: number) {
+        const newHull = this.hulls[frame];
+        if (newHull !== this.activeHull) {
+            if (newHull) {
+                newHull.pos = this.pos;
+                this.activeHull = newHull;
+            } else {
+                console.warn(`Tried to set hull to ${frame} but only ${this.hulls.length} are available`);
+            }
+        }
+        this.angle = angle;
     }
 
     get bbox() {
@@ -347,12 +375,13 @@ export const UpdateHitboxHullSystem = new System({
             if (animation) {
                 ({ frame, angle } = getFrameFromMovement(animation, movement));
             }
-            hull.frame = frame;
+            hull.setFrameAndAngle(frame, angle);
+        } else {
+            hull.angle = angle;
         }
 
         hull.pos.x = movement.position.x;
         hull.pos.y = movement.position.y;
-        hull.angle = angle;
     },
     after: [MovementSystem],
 });
