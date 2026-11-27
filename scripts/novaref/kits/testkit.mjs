@@ -885,18 +885,20 @@ function wave51Resources() {
  * the multi-jump outfit. RETIRED: wave 40's shïp 606-614 (Kit E11 A0050
  * T005 .. A0450 T045, the E11 yard's first nine), wave 14's mïsn 1082 (bit
  * 9155, Kit A comp abort 338), 1083 (bit 9160, Kit A comp fail 338) and
- * 1084 (bit 9163, Kit S several finds), and (added) wave 5's mïsn 998 / 999 (bits
- * 9039 / 9040, Kit Static Range / Control J0 targets), using them for its own. Used: sÿst
- * 1494-1499 / 1501-1503, spöb 1216-1275, shïp 606-614, düde 552-554, wëap
- * 331-333, oütf 519-521, mïsn 967 / 998-999 / 1082-1084, bits 9336-9349, dësc
+ * 1084 (bit 9163, Kit S several finds), and (added) wave 5's mïsn 996-999 (bits
+ * 9037-9040, the Kit Decoy Range and Kit Static Range / Control J0 targets), using them for its own. Used: sÿst
+ * 1494-1499 / 1501-1504, spöb 1216-1291, shïp 606-614, düde 552-554, wëap
+ * 331-333, oütf 519-521, mïsn 967 / 996 / 998-999 / 1082-1084, bits 9336-9350, dësc
  * 11320-11321. Map: the MJ chain at x -840 .. -760, y -3440 .. -3360. The
- * next free ids: sÿst 1504 (then check 1513+ against the kit), spöb 1276-1399 (and 518-999), shïp NONE
+ * next free ids: sÿst 1513 (then check 1514+ against the kit), spöb 1292-1399 (and 518-999), shïp NONE
  * (retire the rest of wave 40's E11 yard, 615-625, first), përs: override a stock
  * one (kits/w48_pers225.mjs), ränk 205+, mïsn NONE (retire another old kit
- * mission), düde 555+, gövt 283 and below, flët 324+, wëap 334+, oütf
- * 522+ (and 630 / 631), jünk 205+, bits 9350+ (not a stock bit: 9011-9015,
+ * mission; 997 is free: retired, unused), düde 555+, gövt 283 and below, flët 324+, wëap 334+, oütf
+ * 522+ (and 630 / 631), jünk 205+, bits 9351+ (not a stock bit: 9011-9015,
  * 9111, 9200-9208, 9215-9216, 9333-9334, 9500-9501, 9666, 9812, 9995,
- * 9998-9999), rlëD 1113+.
+ * 9998-9999), rlëD 1113+. THE KIT'S RESOURCE NAME LIST IS FULL (64 KB of
+ * names: a 500 px tractor range would not build); give new resources short
+ * names.
  *
  *  E6B shïp 606-611 Kit Ring Ion T7 / T9 / T15 / T35 / T55 / T95: wave
  *      51's Kit Ring Ion (the white-spoke inertialess ring, IonizeMax 100,
@@ -936,9 +938,10 @@ function wave51Resources() {
  *      observed in Bravo (ShipGoal 4: the player merely in its system),
  *      ShipStart -1, OnShipDone b9346, ReturnStel Delta East, OnSuccess
  *      b9347.
- *  TR  (added) sÿst 1502 / 1503 Kit Tractor Range 450 / 475: wave 50's
- *      Kit Tractor Range layout with the marker 450 / 475 px west; mïsn 998 /
- *      999 (bits 9348 / 9349) put the Kit Tractor Beamer 20 on it: the
+ *  TR  (added) sÿst 1502 / 1503 / 1504 Kit Tractor Range 450 / 475 / 490:
+ *      wave 50's Kit Tractor Range layout with the marker that far west;
+ *      mïsn 998 / 999 / 996 (bits 9348-9350) put the Kit Tractor Beamer 20
+ *      on it: the
  *      pull / brake edge on a still hull (held at 425, pulled at 500).
  */
 function wave52Resources() {
@@ -1004,7 +1007,10 @@ function wave52Resources() {
     // Beamer 20 (düde 548) on the marker.
     const trGrid = [];
     for (const y of [-300, 0, 300]) for (const x of [-400, -200, 0, 200, 400]) if ((x || y) && !(x === -400 && y === 0)) trGrid.push([x, y]);
-    [[1502, 1244, 450, 998, 9348], [1503, 1260, 475, 999, 9349]].forEach(([sid, port, d, mid, bit], k) => {
+    // Added (450 and 475 held): sÿst 1504 Kit Tractor Range 490, spöb 1276-1291, mïsn 996 (wave 5's, retired), bit 9350. A 500 px
+    // twin did not build: plugin-make's round trip failed on its LAST spöb wherever it went (1300, then 1316): the kit's resource
+    // NAME list is at its 64 KB limit (16-bit name offsets), so new kit resources need short names (or retire old ones).
+    [[1502, 1244, 450, 998, 9348], [1503, 1260, 475, 999, 9349], [1504, 1276, 490, 996, 9350]].forEach(([sid, port, d, mid, bit], k) => {
         out.push(system(sid, `Kit Tractor Range ${d}`, -640 + 40 * k, -3240, 363, [port, port + 1, ...trGrid.map((_, j) => port + 2 + j)]),
             spob(port, `Kit Tractor Range ${d} Port`, 0, 0, 138, { flags: 0x43 }),
             spob(port + 1, `Kit Tractor Range ${d} Marker`, -d, 0, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] }),
@@ -6608,7 +6614,7 @@ function wave5Resources() {
         s.set = { ...s.set, asteroids: rocks, asteroidTypes: 0x0001 };
         out.push(s, spob(sid, `${name} Port`, 0, 0, 138, { flags: 0x43 }),
             spob(sid + 1, `${name} Marker`, 250, 0, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
-        out.push(...misn(misnId, `Kit decoy J0 target ${rocks}`, bit, { availStel: sid, shipCount: 1, shipDude: 615, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+        // mïsn 996 / 997 (bits 9037 / 9038) were retired in wave 52 (wave52Resources: TR the tractor range edge at 490 px; 997 unused).
     };
     decoyRange(2172, "Kit Decoy Range", -1140, 1, 996, 9037);
     decoyRange(2174, "Kit Decoy Range 3", -1170, 3, 997, 9038);
