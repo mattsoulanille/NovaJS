@@ -421,21 +421,23 @@ describe('hull AI flags (reference W1 / C1 wave 15)', () => {
                 false, true)).toBeFalse();
         });
 
-        it('steps at a rating between 1,326 and 1,333, with no spells '
-            + '(reference "The Flags 0x0020 burn with longer runs (A13 '
-            + 'leftover), wave 44"; "... rating edge (A13 leftover), wave '
-            + '46")', () => {
-                expect(ADVANCED_RATING_BURN_MIN).toBeGreaterThan(1325);
-                expect(ADVANCED_RATING_BURN_MIN).toBeLessThanOrEqual(1333);
+        it('steps at exactly 1,332, with no spells (reference "The Flags '
+            + '0x0020 burn with longer runs (A13 leftover), wave 44"; '
+            + '"... rating edge (A13 leftover), wave 46" and "... wave '
+            + '47")', () => {
+                expect(ADVANCED_RATING_BURN_MIN).toBe(1332);
                 // Never in 4 minutes (800), 2 minutes (1,200), wave 45's
-                // 1,300, wave 46's 165 s (1,325).
-                for (const rating of [0, 800, 1200, 1300, 1325]) {
+                // 1,300, wave 46's 165 s (1,325), wave 47's 175 s (1,329,
+                // 1,331).
+                for (const rating of [0, 800, 1200, 1300, 1325, 1329, 1330,
+                    1331]) {
                     expect(advancedRatingBurns(rating))
                         .withContext(`${rating}`).toBeFalse();
                 }
                 // Burned: every 10 s window of 2-4 minutes (wave 44), 1,400
-                // (wave 45), 1,333 / 1,334 / 1,350 (wave 46).
-                for (const rating of [1333, 1334, 1350, 1400, 1599, 1600,
+                // (wave 45), 1,333 / 1,334 / 1,350 (wave 46), 1,332 (wave
+                // 47).
+                for (const rating of [1332, 1333, 1334, 1350, 1400, 1599, 1600,
                     3200, 12_800, 1_000_000]) {
                     expect(advancedRatingBurns(rating))
                         .withContext(`${rating}`).toBeTrue();
@@ -461,13 +463,19 @@ describe('hull AI flags (reference W1 / C1 wave 15)', () => {
             return top;
         }
 
-        it('runs at the 0x0040 burn\'s speed against a 1,000,000 or a '
-            + '1,600 player and at its own against a rating-800 one, a '
+        it('runs at the 0x0040 burn\'s speed against a 1,000,000, a '
+            + '1,600 or a 1,332 player and at its own against a 1,331 or '
+            + 'a rating-800 one, a '
             + 'rating-0 one or an NPC', async () => {
                 expect(await attackRun(1_000_000))
                     .toBeCloseTo(SPEED * AI_AFTERBURNER_FACTOR, 0);
                 expect(await attackRun(1600))
                     .toBeCloseTo(SPEED * AI_AFTERBURNER_FACTOR, 0);
+                // The edge, measured to the point in reference wave 47.
+                expect(await attackRun(1332))
+                    .toBeCloseTo(SPEED * AI_AFTERBURNER_FACTOR, 0);
+                expect(await attackRun(1331))
+                    .toBeLessThanOrEqual(SPEED + 1e-6);
                 expect(await attackRun(800))
                     .toBeLessThanOrEqual(SPEED + 1e-6);
                 expect(await attackRun(0)).toBeLessThanOrEqual(SPEED + 1e-6);

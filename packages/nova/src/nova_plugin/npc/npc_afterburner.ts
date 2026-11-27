@@ -94,17 +94,20 @@ import { NpcComponent, NpcState } from './npc_component.js';
  * "The Flags 0x0020 burn's rating edge (A13 leftover), wave 46" to
  * 1,326-1,333: 1,325 never drew a burn in 165 s, 1,333 burned at once and
  * throughout (so not 4,000 / 3, "from 1,334"), 1,334 and 1,350 burned too
- * (1,334 after a 30 s lull: spells above the edge, unmodelled).
+ * (1,334 after a 30 s lull: spells above the edge, unmodelled). Wave 47
+ * ("... rating edge (A13 leftover), wave 47") put it to the point: 1,329
+ * and 1,331 never drew a burn in 175 s, 1,332 did (with a 25 s lull, the
+ * spells again), so the edge is exactly 1,332 (one point under 4,000 / 3).
  *
  * So the 0x0040 burn (the same factor, the same attack-only rule) gated
  * by the rating of the player it is ATTACKING (GUESS for multiplayer: its
  * own target's pilot, not the room's best) being at least
- * ADVANCED_RATING_BURN_MIN (GUESS 1,330, inside the 1,326-1,333 bracket;
- * was 1,400). A target with no combat rating (an NPC, a player's escort
+ * ADVANCED_RATING_BURN_MIN (1,332, measured; was the GUESS 1,330, and
+ * 1,400 before that). A target with no combat rating (an NPC, a player's escort
  * or fighter) counts as 0 (GUESS: only a player was measured). Was
  * rating / 6,400 odds per 25 s spell (wave 42's proposal).
  */
-export const ADVANCED_RATING_BURN_MIN = 1330;
+export const ADVANCED_RATING_BURN_MIN = 1332;
 
 /**
  * Whether a Flags 0x0020 hull burns against a player of combat rating
