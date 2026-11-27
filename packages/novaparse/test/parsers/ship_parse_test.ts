@@ -70,28 +70,34 @@ describe("ShipParse", () => {
         });
 
     describe("Deionize", () => {
-        it("reads 100 as one point of ion charge a 1/56 s frame (reference "
-            + "\"Ion charge against the turn, in 5-point steps (E6), wave "
-            + "42\")", async () => {
-            expect(DEIONIZE_FRAME_RATE).toBe(56);
+        it("reads 100 as one point of ion charge a 1/30 s game frame "
+            + "(reference \"The ion charge read directly (E6, the hub's "
+            + "item 2), wave 50\")", async () => {
+            expect(DEIONIZE_FRAME_RATE).toBe(FPS);
+            expect(DEIONIZE_FRAME_RATE).toBe(30);
             const ship = await parse({ deionize: 100 });
-            expect(ship.physics.deionize).toBeCloseTo(56, 9);
-            // Deionize 1 drains about 2 points in the 3.6 s between hits.
+            expect(ship.physics.deionize).toBeCloseTo(30, 9);
+            // Deionize 1: 0.30 a second, so one 30-point hit drains in
+            // 100 s of game time (read 102.9 / 103.0 s on the reference
+            // machine's 29.13 Hz tick: 0.2913 a second).
             const one = await parse({ deionize: 1 });
-            expect(one.physics.deionize * 3.6).toBeCloseTo(2.0, 1);
+            expect(one.physics.deionize).toBeCloseTo(0.3, 9);
+            expect(30 / one.physics.deionize).toBeCloseTo(100, 9);
+            expect(30 / one.physics.deionize * 30 / 29.13)
+                .toBeCloseTo(103, 0);
         });
 
-        it("reads a ZERO Deionize as 70, not as no drain (reference "
+        it("reads a ZERO Deionize as 130, not as no drain (reference "
             + "\"Ionization below a full charge (E6 leftover), wave 41\")",
             async () => {
                 const zero = await parse({ deionize: 0 });
-                expect(zero.physics.deionize).toBeCloseTo(0.7 * 56, 9);
+                expect(zero.physics.deionize).toBeCloseTo(1.3 * 30, 9);
                 // A 20-point hit is gone in about half a second (15 of
                 // the 30 fps recorded frames).
                 expect(20 / zero.physics.deionize * FPS).toBeGreaterThan(12);
                 expect(20 / zero.physics.deionize * FPS).toBeLessThan(18);
                 const one = await parse({ deionize: 1 });
-                expect(one.physics.deionize).toBeCloseTo(0.56, 9);
+                expect(one.physics.deionize).toBeCloseTo(0.3, 9);
             });
     });
 

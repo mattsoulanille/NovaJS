@@ -24973,6 +24973,23 @@ re-read), `w42_e6c_a.pts.txt` / `w42_e6b_b.pts.txt` (wave 42's frame
 times for its episode files), `tools/e6rates.sh`, `tools/brk.py`,
 `tools/episodes.py`.
 
+**Applied 2026-11-27**: `DEIONIZE_FRAME_RATE` = `FPS` (30): Deionize 1
+drains 1 / 100 x 30 = 0.30 a second of game time, so the 30-point hit
+lasts 100 game seconds, 103 on the reference machine's 29.13 Hz clock
+(the 2.8 % the speeds carry too). `ION_IONIZED_FRACTION` 1/3,
+`ION_NO_TURN_FRACTION` 2/3 (`N/nova_plugin/ship/ionization_plugin.ts`);
+the acceleration is max(0.4, 1 - `ION_ACCELERATION_SLOPE` 0.9 x q) from
+the first point of charge (no untinted 0.96 level, no tint-line 0.85,
+no 0.556 end: the slide meets 0.4 at the no-turn line); the turn keeps
+its thirds. `DEIONIZE_ZERO_FALLBACK` re-derived to 130 (39 points a
+second, the same drain in time as the old 70 at 1/56 s, so wave 41's
+0.5 s dips are unchanged; GUESS). Specs: one 30-point hit holds the
+two-thirds turn 100 game s (103 reference s), untinted; two hits tint
+for about 87.6 reference s (88.8 read); six never turn in 170 s; the
+5-point rise tints at its 9th hit and stops the turn at its 17th, and
+waves 47 / 48's twelve pulses lie within 0.07 of the slide (rms 0.04).
+The room-seed stepped hashes moved (every hull's synced drain rate).
+
 ### A tractor beam's rate with Mass and distance (the KB leftover), wave 50: it PULLS a lighter hull from about 500 px (a still 50 t Kit Probe A to 181-185 px/s toward the beamer in one Count-30 shot, at about 300 px/s², each velocity axis held at the hull's top speed; a 150 t hull to about 100 px/s at about 115 px/s²), but holds a still hull at 250, 350 and 425 px, and never moves a hull HEAVIER than the beamer (255 t, 300 t; the beamer is 175 t) or an inertialess one (2026-11-27)
 
 **Question** (the Wave 49 leftovers row): the tractor's rate with Impact

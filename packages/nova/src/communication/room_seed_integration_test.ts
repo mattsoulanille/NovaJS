@@ -249,11 +249,17 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // drain rate, carried in its synced ionization stat, changed
             // (no synthetic weapon ionizes). Genesis and both Random
             // states did not move.
+            //
+            // Both stepped hashes were re-pinned for "The ion charge read
+            // directly (E6, the hub's item 2), wave 50": shïp Deionize is
+            // counted in 1/30 s game frames again (DEIONIZE_FRAME_RATE =
+            // FPS), so every hull's synced ion drain rate changed once
+            // more. Genesis and both Random states did not move.
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
-                [THESSALY, '27100915', '6112cf2b',
+                [THESSALY, '27100915', '2219917e',
                     [2692022053, 1542226132, 2680743810, 396450618]],
-                [SYNTHETIC.systems.kestrel, 'dac4a238', 'f72bbd30',
+                [SYNTHETIC.systems.kestrel, 'dac4a238', '683e83d3',
                     [2312166265, 2407210324, 1413610751, 1491742322]],
             ];
             for (const [systemId, genesis, stepped, random] of pins) {

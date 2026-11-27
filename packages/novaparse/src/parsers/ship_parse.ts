@@ -80,19 +80,24 @@ export type AmmoOutfitMap = ShipPictMap;
 
 /**
  * shïp Deionize as the hull's drain, in Deionize units (100 = one point of
- * ion charge a 1/56 s frame, DEIONIZE_FRAME_RATE). A ZERO field is not
+ * ion charge a 1/30 s game frame, DEIONIZE_FRAME_RATE). A ZERO field is not
  * "never drains": MEASURED (reference "Ionization below a full charge (E6
  * leftover), wave 41") a Deionize-0 hull of IonizeMax 100 shed each
  * 20-point hit within about 20-30 recorded frames and was never
  * ion-tinted across twenty hits, where a Deionize-1 hull kept its charge.
- * GUESS: 0 falls back to 70, about 39 points a second: with the turn cut
- * in steps (wave 42: two thirds of the turn for ANY untinted charge) a
- * 20-point hit then holds the cut about 0.5 s, which reproduces wave 41's
- * folded dips (58 deg/s in the first 10 recorded frames after a hit, 68
- * in the next 10, the control 87.8); was 100 at 1/30 s frames (30 a
- * second, a cut through both windows). Any other value is used as given.
+ * GUESS: 0 falls back to 130, 39 points a second: with the turn cut in
+ * steps (wave 42: two thirds of the turn for ANY untinted charge) a
+ * 20-point hit then holds the cut about 0.51 s, which reproduces wave
+ * 41's folded dips (58 deg/s in the first 10 recorded frames after a hit,
+ * 68 in the next 10, the control 87.8: a cut that ends 0.5-0.6 s after
+ * the hit; 120 would put it at 0.56 s, 100 cuts through both windows).
+ * Re-derived for wave 50's drain unit (reference "The ion charge read
+ * directly (E6, the hub's item 2), wave 50": 0.01 x Deionize a 1/30 s
+ * frame): was 70 at the old 1/56 s frames, 39.2 a second, so the drain
+ * in time is unchanged. A 20-point hit stays under the wave-50 tint line
+ * (a third of IonizeMax) either way. Any other value is used as given.
  */
-export const DEIONIZE_ZERO_FALLBACK = 70;
+export const DEIONIZE_ZERO_FALLBACK = 130;
 export function shipDeionize(deionize: number): number {
     return deionize === 0 ? DEIONIZE_ZERO_FALLBACK : deionize;
 }
