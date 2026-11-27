@@ -2,7 +2,7 @@ import "jasmine";
 import { BeamWeaponData, ProjectileWeaponData } from "novadatainterface/weapon_data";
 import { WeaponParse } from "../../src/parsers/weapon_parse.js";
 import { WeapResource } from "../../src/resource_parsers/weap_resource.js";
-import { FPS } from "../../src/parsers/constants.js";
+import { BEAM_COUNT_RATE } from "../../src/parsers/constants.js";
 
 /**
  * Builds a WeapResource from a hand-assembled 134-byte wëap record, so
@@ -154,8 +154,8 @@ describe("beam wëap Decay and on-screen time", () => {
             expect(beam.type).toEqual("BeamWeaponData");
             expect(beam.decay).toEqual(100);
             // Count is still how long the beam damages.
-            expect(beam.shotDuration).toBeCloseTo(15 * 1000 / FPS, 9);
-            expect(beam.onScreenDuration).toBeCloseTo(31 * 1000 / FPS, 9);
+            expect(beam.shotDuration).toBeCloseTo(15 * 1000 / BEAM_COUNT_RATE, 9);
+            expect(beam.onScreenDuration).toBeCloseTo(31 * 1000 / BEAM_COUNT_RATE, 9);
         });
 
     it("Autumn Petal shape: Count 1, Decay 12 -> 17 frames onscreen", async () => {
@@ -163,8 +163,8 @@ describe("beam wëap Decay and on-screen time", () => {
             guidance: BEAM, duration: 1, decay: 12, coronaFalloff: 0,
         }));
         const beam = data as BeamWeaponData;
-        expect(beam.shotDuration).toBeCloseTo(1 * 1000 / FPS, 9);
-        expect(beam.onScreenDuration).toBeCloseTo(17 * 1000 / FPS, 9);
+        expect(beam.shotDuration).toBeCloseTo(1 * 1000 / BEAM_COUNT_RATE, 9);
+        expect(beam.onScreenDuration).toBeCloseTo(17 * 1000 / BEAM_COUNT_RATE, 9);
     });
 
     it("subtracts the corona falloff from the tail", async () => {
@@ -173,7 +173,7 @@ describe("beam wëap Decay and on-screen time", () => {
             guidance: BEAM, duration: 1, decay: 16, coronaFalloff: 8,
         }));
         expect((data as BeamWeaponData).onScreenDuration)
-            .toBeCloseTo(9 * 1000 / FPS, 9);
+            .toBeCloseTo(9 * 1000 / BEAM_COUNT_RATE, 9);
     });
 
     it("never shortens a beam below its Count (falloff past the Bible's 16 ceiling)",
@@ -193,7 +193,20 @@ describe("beam wëap Decay and on-screen time", () => {
         const beam = data as BeamWeaponData;
         expect(beam.decay).toEqual(0);
         expect(beam.onScreenDuration).toEqual(beam.shotDuration);
-        expect(beam.shotDuration).toBeCloseTo(1000 / FPS, 9);
+        expect(beam.shotDuration).toBeCloseTo(1000 / BEAM_COUNT_RATE, 9);
+    });
+
+    it("runs a beam's Count at 56 a second, not the 30 fps frame (reference "
+        + "\"Beam Count's unit (E10, ...), wave 41\": Count 10 / 30 / 60 "
+        + "showed 5 / 16 / 32 recorded 30 fps frames)", async () => {
+        expect(BEAM_COUNT_RATE).toBe(56);
+        for (const [count, frames] of [[10, 5], [30, 16], [60, 32]]) {
+            const { data } = await parse(weapFromBytes({
+                guidance: BEAM, duration: count, decay: 0,
+            }));
+            const recorded = (data as BeamWeaponData).shotDuration * 30 / 1000;
+            expect(Math.abs(recorded - frames)).toBeLessThan(0.7);
+        }
     });
 
     it("clamps a negative Decay to none, like the projectile decay", async () => {

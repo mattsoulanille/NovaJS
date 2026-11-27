@@ -6,7 +6,7 @@ import { AmmoType, BaseWeaponData, BayGuidanceSet, BayWeaponData, BeamGuidanceSe
 import { BLEND_MODES } from "novadatainterface/blend_modes";
 import { WeapResource } from "../resource_parsers/weap_resource.js";
 import { BaseParse } from "./base_parse.js";
-import { FPS, ShipTurnRateConversionFactor } from "./constants.js";
+import { BEAM_COUNT_RATE, FPS, ShipTurnRateConversionFactor } from "./constants.js";
 
 export const WEAP_SPEED_FACTOR = 3 / 10;
 
@@ -346,7 +346,10 @@ async function BeamWeaponParse(weap: WeapResource, notFoundFunction: (m: string)
         type: "BeamWeaponData",
         guidance,
         decay,
-        onScreenDuration: onScreenFrames * 1000 / FPS,
+        // A beam's Count and its tail run at BEAM_COUNT_RATE, not FPS
+        // (reference "Beam Count's unit (E10, ...), wave 41").
+        shotDuration: weap.duration * 1000 / BEAM_COUNT_RATE,
+        onScreenDuration: onScreenFrames * 1000 / BEAM_COUNT_RATE,
         beamAnimation: {
             lightningAmplitude: weap.lightningAmplitude,
             lightningDensity: weap.lightningDensity,

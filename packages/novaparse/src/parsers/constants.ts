@@ -1,6 +1,17 @@
 // Used for converting from 'frames per' to 'times per second'
 export const FPS = 30;
 
+/**
+ * The rate a BEAM's wëap Count (and its Decay tail) runs at, units per
+ * second: not the 30 fps game frame every other Count uses. MEASURED
+ * (reference "Beam Count's unit (E10, the hub's question), wave 41"):
+ * Count 10 / 30 / 60 beams showed for 5 / 16 / 32 recorded 30 fps frames,
+ * proportional with no offset, about Count / 56 s: one unit per frame of
+ * the original's own drawing (F12 read about 56 fps on that machine).
+ * GUESS: a fixed 56 a second (the Count-10 beam read nearer 60).
+ */
+export const BEAM_COUNT_RATE = 56;
+
 // shïp Speed and Accel, measured on the original EV Nova 1.1.1 (#316;
 // docs/reference_experiments.md, "U1"): they do NOT share the wëap Speed
 // encoding (pixels/frame * 100, WEAP_SPEED_FACTOR in weapon_parse.ts).

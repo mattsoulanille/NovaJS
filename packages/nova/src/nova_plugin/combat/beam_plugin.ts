@@ -1,3 +1,4 @@
+import { BEAM_COUNT_RATE } from 'novaparse/parsers/constants';
 import { BeamWeaponData, WeaponData } from 'novadatainterface/weapon_data';
 import { EmitNow, Entities, GetWorld, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
@@ -186,11 +187,12 @@ export const BeamSystem = new System({
         Optional(TargetComponent)] as const,
     step(beamData, beamState, movement, fireSubs, fireTime, { time, delta_ms },
         uuid, entities, source, target) {
-        // A beam of Count frames lives for exactly Count frames of ticks
-        // (two 60 Hz ticks per frame), judged to the nearest tick like a
-        // reload (intervalElapsed): a strict `>` here let a 1-frame beam
-        // straddle a THIRD tick when 2 x 16.67 ms came out a hair under
-        // 33.33 ms, and that tick landed damage. A beam with a Decay
+        // A beam of Count units lives for Count / BEAM_COUNT_RATE s
+        // (reference "Beam Count's unit (E10, ...), wave 41"), judged to
+        // the nearest tick like a reload (intervalElapsed): a strict `>`
+        // here once let a 1-frame beam straddle an extra tick when the
+        // accumulated clock came out a hair short, and that tick landed
+        // damage. A beam with a Decay
         // outlives its Count on screen (onScreenDuration); the damage
         // window below still closes at Count.
         const timeSinceFire = time - fireTime;
@@ -537,23 +539,27 @@ export const BeamDamageSystem = new System({
             return;
         }
 
-        // This tick credits the slice [timeSinceFire, timeSinceFire +
-        // delta_ms) of the beam's Count-frame damage window, clipped to
-        // the window's end, so a Count-N beam deals exactly N frames of
-        // its per-frame damage over its life: 1.0 for a 1-frame Polaron
-        // shot (two half-frame ticks), 15.0 for a Pulse Laser. The
-        // window is `shotDuration` (Count) even when a Decay keeps the
-        // beam on screen longer — the shrinking tail does no damage (see
-        // BeamWeaponData.onScreenDuration). `remaining` is judged to
-        // the nearest tick like the beam's own expiry (intervalElapsed),
-        // so float noise in the accumulated clock can neither add a
-        // sliver of a tick nor drop one.
-        const remaining = beamData.shotDuration - (time - fireTime);
-        if (remaining < delta_ms / 2) {
+        // A Count-N beam deals exactly N units of its per-frame damage
+        // over its life: 1.0 for a 1-frame Polaron shot, 15.0 for a Pulse
+        // Laser. Its damage window is `shotDuration` (Count units at
+        // BEAM_COUNT_RATE a second, reference "Beam Count's unit (E10,
+        // ...), wave 41"), even when a Decay keeps the beam on screen
+        // longer — the shrinking tail does no damage (see
+        // BeamWeaponData.onScreenDuration). The window is judged in whole
+        // ticks, to the nearest tick like the beam's own expiry
+        // (intervalElapsed), and the N units are shared evenly over them:
+        // a 56-a-second unit is not a whole number of 60 Hz ticks, so
+        // crediting each tick's own slice would lose the sliver past the
+        // last tick (a Count-1 beam lives one tick of 16.7 ms against its
+        // 17.9). GUESS: the total per shot is the Count, as on the 30 fps
+        // clock; the original was not timed for damage per beam unit.
+        const windowTicks = Math.max(1,
+            Math.round(beamData.shotDuration / delta_ms));
+        if (Math.round((time - fireTime) / delta_ms) >= windowTicks) {
             return;
         }
-        const damageTime = Math.min(delta_ms, remaining);
-        const scale = damageTime * 30 / 1000;
+        const scale = beamData.shotDuration * BEAM_COUNT_RATE / 1000
+            / windowTicks;
 
         emitNow(DamagedEvent, { damage: beamData.damage, damager: uuid, scale }, [beamState.targetHit]);
     },

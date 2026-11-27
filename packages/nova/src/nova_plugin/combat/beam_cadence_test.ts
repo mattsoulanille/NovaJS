@@ -170,7 +170,7 @@ describe('beam fire cadence and damage on the original frame clock', () => {
                 .toBeCloseTo(30, 6);
         }, 120_000);
 
-    it('Wide Lance: on screen for its 15 frames, damaging for all of them '
+    it('Wide Lance: on screen for its 15 units, damaging for all of them '
         + '(#93)', async () => {
             const { world, shooter } = await setUp();
             // Staged in setUp; the cache read is the contract.
@@ -181,12 +181,13 @@ describe('beam fire cadence and damage on the original frame clock', () => {
             expect(beam).toBeDefined();
 
             // Count 15 with Decay 0, so no shrinking corona tail: 15
-            // frames = 30 ticks alive, then gone. (The stock Pulse Laser
-            // spec below is the Decay > 0 case, where the tail adds
-            // 16 - CoronaFalloff frames of screen time.)
+            // units of 1/56 s (reference "Beam Count's unit (E10, ...),
+            // wave 41") = 268 ms = 16 ticks alive, then gone. (The stock
+            // Pulse Laser spec below is the Decay > 0 case, where the
+            // tail adds 16 - CoronaFalloff units of screen time.)
             const beams = run(world, 70);
             expect(beams.size).toEqual(1);
-            expect([...beams.values()][0]).toEqual(30);
+            expect([...beams.values()][0]).toEqual(16);
             expect(frameDamages('victim')).toBeCloseTo(15, 6);
         }, 120_000);
 
@@ -298,7 +299,7 @@ describe('a beam with a positive Decay outlives its damage (real data)', () => {
     const SHUTTLE = 'nova:128';
     const PULSE_LASER = 'nova:146';
 
-    it('Pulse Laser: on screen 31 frames, damaging for its 15 (#93)',
+    it('Pulse Laser: on screen 31 units, damaging for its 15 (#93)',
         async () => {
             const gameData = await getIntegrationGameData();
             const world = await makeSystem('nova:226', gameData, undefined,
@@ -343,8 +344,8 @@ describe('a beam with a positive Decay outlives its damage (real data)', () => {
             damaged.length = 0;
             expect(laser!.fireFromEntity('shooter', false)).toBeDefined();
 
-            // Count 15 + 16 - CoronaFalloff 0 = 31 frames = 62 ticks
-            // alive, then gone.
+            // Count 15 + 16 - CoronaFalloff 0 = 31 units of 1/56 s =
+            // 554 ms = 33 ticks alive, then gone (E10 wave 41).
             const beams = new Map<string, number>();
             for (let i = 0; i < 70; i++) {
                 world.step();
@@ -355,7 +356,7 @@ describe('a beam with a positive Decay outlives its damage (real data)', () => {
                 }
             }
             expect(beams.size).toEqual(1);
-            expect([...beams.values()][0]).toEqual(62);
+            expect([...beams.values()][0]).toEqual(33);
             expect(damaged.filter(d => d.uuid === 'victim')
                 .reduce((sum, d) => sum + d.scale, 0)).toBeCloseTo(15, 6);
         }, 120_000);
