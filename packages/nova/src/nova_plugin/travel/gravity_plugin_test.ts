@@ -74,22 +74,25 @@ describe('gravityDeltaV', () => {
     });
 
     it('falls off as (300 / d)^1.5 beyond 300 px (reference "A Gravity-5 '
-        + 'ramp from far out ..., wave 42": about 195 / 45 / 15 px/s² from '
-        + '300 / 1,000 / 2,000 px)', () => {
+        + 'ramp from far out ..., wave 42": the shape of 195 / 45 / 15 '
+        + 'px/s² from 300 / 1,000 / 2,000 px, star readings)', () => {
             const at = (d: number) =>
                 gravityDeltaV([{ dx: 0, dy: d, gravity: 5 }], 1).length;
-            expect(at(300)).toBeCloseTo(195, 9);
-            expect(at(1000)).toBeCloseTo(195 * Math.pow(0.3, 1.5), 9);
-            expect(at(2000)).toBeCloseTo(195 * Math.pow(0.15, 1.5), 9);
-            // Within the reading's whole-pixel slack: 32 against 45, 11
-            // against 15.
-            expect(at(1000)).toBeGreaterThan(25);
-            expect(at(1000)).toBeLessThan(50);
-            expect(at(2000)).toBeGreaterThan(8);
-            expect(at(2000)).toBeLessThan(20);
+            expect(at(300)).toBeCloseTo(140, 9);
+            expect(at(1000)).toBeCloseTo(140 * Math.pow(0.3, 1.5), 9);
+            expect(at(2000)).toBeCloseTo(140 * Math.pow(0.15, 1.5), 9);
         });
 
-    it('holds the 300 px strength inside 300 px (GUESS)', () => {
+    it('pulls a constant 140 px/s² at Gravity 5 inside 300 px (reference '
+        + '"Gravity inside 300 px (U7 leftover), wave 43": 140 / 142 / 131 '
+        + 'from 300 / 150 / 85 px)', () => {
+            for (const d of [300, 150, 85, 10]) {
+                expect(gravityDeltaV([{ dx: d, dy: 0, gravity: 5 }], 1)
+                    .length).withContext(`${d} px`).toBeCloseTo(140, 9);
+            }
+        });
+
+    it('holds the 300 px strength inside 300 px', () => {
         expect(gravityFalloff(300)).toBe(1);
         expect(gravityFalloff(50)).toBe(1);
         expect(gravityFalloff(0)).toBe(1);
@@ -107,16 +110,15 @@ describe('gravityDeltaV', () => {
                 .toBe(0);
         });
 
-    it('is about 1 px a frame per second at Gravity 1', () => {
-        // 30 fps frames: 30 px/s² is 1 px a frame per s (wave 40).
-        expect(gravityAcceleration(1) / 30).toBeCloseTo(1, 0);
-    });
-
-    it('pulls about 39 / 55 px/s² a unit at Gravity 5 / 10 (reference '
-        + '"Gravity damping and strength (U7, ...), wave 41")', () => {
-        expect(gravityAcceleration(5) / 5).toBeCloseTo(39, 9);
-        expect(gravityAcceleration(10) / 10).toBeCloseTo(55, 9);
-    });
+    it('scales the wave-41 quadratic (39 / 55 px/s² a unit at Gravity 5 '
+        + '/ 10, star readings) by 0.72 so Gravity 5 is the moon reading, '
+        + '140 (reference "Gravity inside 300 px (U7 leftover), wave 43")',
+        () => {
+            expect(gravityAcceleration(5)).toBeCloseTo(140, 9);
+            expect(gravityAcceleration(10)).toBeCloseTo(395, 9);
+            expect(gravityAcceleration(10) / 550).toBeCloseTo(0.72, 2);
+            expect(gravityAcceleration(1)).toBeCloseTo(18.8, 9);
+        });
 });
 
 describe('GravitySystem', () => {

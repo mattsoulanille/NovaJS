@@ -37,7 +37,10 @@ import { ControlShipSystem } from './ship_controller_plugin.js';
  *    Gravity-5 well pulled about 15 px/s² 2,000-1,450 px out, 45 from
  *    1,000 px, 195 from 300 px, roughly 1 / d^1.5). Waves 40-41's "no
  *    falloff" came from Gravity 100 / 1000, which reach the top-speed cap
- *    within a frame at any range and so could not show one.
+ *    within a frame at any range and so could not show one. Inside 300 px
+ *    it is CONSTANT (reference "Gravity inside 300 px (U7 leftover), wave
+ *    43": about 140 px/s² at Gravity 5 from 300, 150 and 85 px, read off
+ *    moon decorations, not the star field).
  * 4. A negative Gravity pushes the ship away the same way.
  * 5. An inertialess hull is not moved at all.
  *
@@ -62,22 +65,26 @@ import { ControlShipSystem } from './ship_controller_plugin.js';
  * MovementState and physics, the tick's delta) — no trig, no PRNG, and
  * the velocity is replaced, never mutated in place.
  */
-export const GRAVITY_LINEAR = 23;
-export const GRAVITY_QUADRATIC = 3.2;
+export const GRAVITY_LINEAR = 16.5;
+export const GRAVITY_QUADRATIC = 2.3;
 
 /**
  * A well's pull, in px/s², from its spöb Gravity (signed: negative
  * pushes), at GRAVITY_REFERENCE_DISTANCE (300 px) or closer; farther out
- * it is scaled by gravityFalloff. The per-unit pull GROWS with the field: MEASURED from rest
- * about 39 px/s² a unit at Gravity 5 and 55 at Gravity 10 (reference
- * "Gravity damping and strength (U7, the hub's questions), wave 41": 1 ->
- * 5 px a frame in about 0.7 s and 0.27 s), and about 30 at Gravity 1
- * (wave 40). GUESS: a quadratic, 23 x G + 3.2 x G x |G|, through the
- * Gravity-5 and -10 readings exactly (195 and 550 px/s²), 26 at Gravity
- * 1 (the short ramps read in integer px steps, so the constants are
- * rough). Was linear, 30 a unit. All three readings started from rest
- * 300 px out, so gravityFalloff leaves them as they were. Arithmetic
- * only (no trig, no PRNG).
+ * it is scaled by gravityFalloff.
+ *
+ * MEASURED off moon decorations (reference "Gravity inside 300 px (U7
+ * leftover), wave 43"): a constant 140 px/s² at Gravity 5 from 300, 150
+ * and 85 px. The per-unit pull GROWS with the field (star-field readings,
+ * reference "Gravity damping and strength (U7, the hub's questions),
+ * wave 41": about 39 px/s² a unit at Gravity 5 and 55 at Gravity 10, and
+ * about 30 at Gravity 1, wave 40), but the star field reads biased
+ * (wave 42), and the moon reading puts Gravity 5 at 140, not 195. GUESS:
+ * the quadratic through the wave-41 readings (23 x G + 3.2 x G x |G|)
+ * scaled by 0.72 so Gravity 5 gives the moon reading exactly: 16.5 x G +
+ * 2.3 x G x |G| (18.8 at Gravity 1, 395 at Gravity 10), until a
+ * Gravity-10 moon run. Was 23 / 3.2 (195 at Gravity 5), and linear, 30 a
+ * unit, before that. Arithmetic only (no trig, no PRNG).
  */
 export function gravityAcceleration(gravity: number): number {
     return GRAVITY_LINEAR * gravity
@@ -96,10 +103,9 @@ export const GRAVITY_REFERENCE_DISTANCE = 300;
  * it: (300 / d)^1.5 beyond 300 px, MEASURED roughly (reference "A
  * Gravity-5 ramp from far out ..., wave 42": 195 / 45 / 15 px/s² from 300
  * / 1,000 / 2,000 px; the exponent a GUESS from three points read in
- * whole-pixel star steps: this gives 32 and 11 at 1,000 and 2,000 px).
- * Inside 300 px it stays 1 (GUESS, the section's proposal: nothing was
- * measured closer in, and the ramp readings at 300 px, which hold
- * unchanged, were taken as the ship fell inward from there). Written as
+ * whole-pixel star steps). Inside 300 px it stays 1 (MEASURED, reference
+ * "Gravity inside 300 px (U7 leftover), wave 43": the same pull from
+ * 300, 150 and 85 px). Written as
  * r x sqrt(r) rather than Math.pow so it is exact IEEE arithmetic on
  * every engine (determinism).
  */
