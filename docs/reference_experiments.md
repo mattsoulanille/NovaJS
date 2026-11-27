@@ -25103,6 +25103,164 @@ by a negative Impact still take the reversed push (unmeasured).
 - **E6**: the no-turn line to better than 64-67 (a rise that crosses it,
   e.g. two 30-point hits plus 5-point ticks).
 
+### The ion turn cut on every hull (Matthew's question, E6), wave 51: NOT thirds of the turn and not a fixed subtraction: an ionized hull turns floor(Turn / 10 x (1 - q)) WHOLE degrees a frame (q = charge / IonizeMax), with q held at about 2/3 once above it; so fast hulls keep turning when saturated (Turn 60: 29 deg/s, 100: 87.5, 200: 175), slow ones stop at the first hit (Turn 10 never turns, Turn 20 only while q < 1/2), and the Turn-30 "two thirds / a third / none at 1/3 and 2/3" was this staircase's Turn-30 case (2026-11-27)
+
+**Question** (Matthew, the hub's item 1): does ionization stop EVERY ship
+turning, or do fast-turning ships still turn? Every reading in waves
+39-50 used Turn-30 hulls (87.6 deg/s: two thirds untinted, a third
+tinted, none above about 2/3 of IonizeMax), steps of exactly 10 Turn
+units, so is the cut a scale or a subtraction?
+
+**Rig** (`wave51Resources` "E6T"). Wave 50's ion clock on Kit Knock Grid
+Port (sÿst 1490): mïsn 963's Kit Ion Shot Target on the port hits the
+ship every 3.6-3.8 s with Ionization 30 (the first hit lands at the
+Leave), the Kit Beam Turret kills it in the Leave's own keys step, and the
+charge then drains 0.2915 a second (Deionize 1, wave 50). The hulls are
+the Kit Ring Ion (596, Turn 30) at Turn 10 / 20 / 60 / 100 / 200 (shïp 598
+/ 604 / 629 / 792 / 814: the inertialess white-spoke ring, IonizeMax 100,
+Deionize 1), each taken off the port (Up 0.8 s, Down) and turned with
+Right held. Per hull (pilots `w51_t<Turn>`):
+- `c_t<n>`: the control, Enter Ship without landing (no mission, no ion
+  source), 15 s of turn;
+- `k6_t<n>`: land, accept, Leave, the kill at about 21 s after five or
+  six hits (charge about 145-175: saturated), 30 s of turn after it;
+- `k2_t<n>`: the kill at about 5.5 s after TWO hits (58.9 just after the
+  second, then draining: 50 about 30 s later, 33.3 about 88 s later), 125
+  s of turn.
+The hits are counted off the orange bolt episodes from the Leave
+(`tools/colorcount.mjs`, `tools/episodes.py`); the spoke's heading on
+every frame (`tools/turnrun.sh`, `headings.mjs` SPOKE=vw step 1), and the
+rate per window by `tools/hough.py` (the rate whose phase line holds most
+read headings: a moon under the ring and the tint's flicker misread the
+spoke, which drags a least-squares fit on the fast hulls but not this).
+
+| Turn (control deg/s) | untinted, q 0.21-0.33 | 1/3 < q < 1/2 | 1/2 < q < 0.59 | saturated (q 0.88-1.75) |
+|---|---|---|---|---|
+| 10 (29.0) | **0** (k6 after the first hit; k2's tail to q 0.21) | **0** | **0** | **0** |
+| 20 (57) | **30** (k6, one hit, q 0.30) | **29-33** (k2 from 67 s, q < 0.5) | **0** (k2 to 65 s) | **0** |
+| 30 (87.6, wave 50) | 58.4 | 29 | 29 (wave 50's e6k_d: 27-31 all the way from 58.9 to 33) | 0 |
+| 60 (175.0) | **116-120** | **86.5-88.6** | **56-60** | **29.2** (27-31 for 42 s) |
+| 100 (290.5) | **204** (q 0.21-0.30), 175-177 (0.30-0.40) | 147-149 (0.40-0.50) | **118-119** | **87.5-88** |
+| 200 (581) | 378-379 (0.31-0.33), 408-410 (0.26-0.30), 436-438 (0.22-0.25) | 350 (0.37-0.39), 322 (0.41-0.44), 292 (0.45-0.50) | 262-265 (0.51-0.54), 234-239 (0.55-0.57) | **174.5** (two 15 s windows) |
+
+Every reading is a whole multiple of 29.15 deg/s (one degree a frame at
+this machine's 29.15 Hz tick; Turn / 10 degrees a frame uncharged). The
+Turn-200 hull's two-hit run steps one degree a frame at a time as the
+charge drains, each step where floor(20 x (1 - q)) predicts it (8 at q
+0.57-0.55, 9 from 0.54, 10 from 0.50, 11 from 0.44, 12 from 0.39, 13 from
+0.34, 14 from 0.29, 15 from 0.25: 25 windows of 5 s, every one on the
+predicted step, the changes inside the predicted windows); Turn 100 steps
+4 -> 5 -> 6 -> 7 at q 0.50, 0.40 and 0.30 (67, 101 and 136 s), Turn 60
+2 -> 3 -> 4 at 0.50 and 1/3 (66.5 and 124 s), Turn 20 0 -> 1 at 0.50 (67
+s), as predicted to about a window.
+
+**Findings.**
+1. **Ionization does NOT stop every ship turning**: the saturated turn
+   is 0 for Turn 10 / 20 / 30 but 1, 3 and 6 degrees a frame for Turn 60,
+   100 and 200 (29.2, 87.5, 174.5 deg/s), i.e. the WHOLE degrees a frame
+   strictly below Turn / 30: the charge's cut stops growing at about two
+   thirds of IonizeMax (six 30-point hits, q up to 1.75, turned exactly as
+   three).
+2. **Below that the turn is floor(Turn / 10 x (1 - q)) degrees a
+   frame**, LINEAR in the charge and truncated to whole degrees: neither
+   thirds of the turn (Turn 10 would turn at 19.5 deg/s untinted; it
+   never turns once hit) nor a fixed number of Turn units per stage (Turn
+   200 saturated would be 437). The truncation is why a slow hull loses
+   everything at once (Turn 10: floor(0.99) = 0 from the first point of
+   charge) and why Turn 30 showed exactly three levels at 1/3 and 2/3:
+   those lines are where 3 x (1 - q) crosses 2 and 1. A hull whose Turn is
+   a multiple of 30 has steps at 1/3 and 2/3; Turn 60 also at 1/2, Turn
+   200 every 0.05.
+3. **The tint line (1/3) is a visual line, not a turn line**: Turn 200
+   changed its turn at q 0.35 (12 -> 13) inside the tint and at 0.30 (13
+   -> 14) outside it, nothing at 0.333 itself.
+4. **The saturation's exact form** is either q held at 2/3 with the turn
+   STRICTLY below Turn / 10 x (1 - q) (ceil(x) - 1, which equals floor(x)
+   for every non-whole x), or floor with q held at about 0.7; the hulls
+   flown here (Turn / 10 x 1/3 = 0.33, 0.67, 1, 2, 3.33, 6.67) cannot tell
+   them apart, and nothing else here depends on it.
+
+**NovaJS (main ff820fb6):** `ionSlowdown` multiplies the turn by thirds
+of the full cut whatever the hull: two thirds up to `ION_IONIZED_FRACTION`
+(1/3), a third up to `ION_NO_TURN_FRACTION` (2/3), `ION_FULL_TURN_FACTOR`
+0 above (`N/nova_plugin/ship/ionization_plugin.ts:80`, `:95`, `:107`,
+`:118-119`, `:174-197`; applied as `base.turnRate x ion.turnRate`,
+`N/nova_plugin/travel/afterburner_plugin.ts:168`): **matches** only for
+Turn 30 (and any hull at no charge); **mismatch** for every other Turn: a
+saturated Turn-60 / 100 / 200 hull is stopped (the original keeps 29 /
+87.5 / 175 deg/s), a Turn-10 hull keeps 19.5 deg/s untinted and 9.7
+tinted (the original 0 at any charge), Turn 60 tinted turns 58 deg/s
+throughout (the original 87.5 while q < 1/2), Turn 200 untinted 387 deg/s
+fixed (the original 379-437 by the charge).
+**Proposed:** replace the turn's thirds by the staircase: with q =
+min(current / max, 2/3) and the uncharged turn in degrees per 1/30 s
+frame d = Turn / 10 (the parse's `ShipTurnRateConversionFactor` scale), an
+ionized ship (current > 0) turns ceil(d x (1 - q)) - 1 whole degrees a
+frame (equivalently floor(d x (1 - q) - 1e-9)), never below 0, i.e. a
+turnRate multiplier of that over d; the acceleration and the tint keep
+their own lines. GUESS for a Turn that is not a multiple of 10 (the
+uncharged turn may itself be whole degrees; not measured) and for the
+strict-below form at exactly 2/3. Confidence: high (five hulls, three
+stages each, a 25-window staircase on Turn 200 and the step times on
+Turn 20 / 60 / 100 / 200 all where the formula puts them).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w51/c_t10/` ..
+`k2_t200/` (`recording.mp4`), `*.hd1.txt` (headings), `*.orange.txt`
+(hits), `k2_t200.hough.txt`, `k2_t100.hough.txt`, `fr_t200/sat90.png`
+(the saturated Turn-200 ring over a moon: the misreads),
+`tools/turnrun.sh`, `tools/hough.py`, `tools/rrate.py`, `tools/incr.py`.
+
+### The saturated thrust cut on two Accels (Matthew's question, E6), wave 51: a FRACTION, not a fixed amount: about 0.3 of the hull's thrust on both (Accel 300: 14.6 of 51.7 px/s², 0.28; Accel 900: 47.6 of 146.8, 0.32), below NovaJS's 0.4 floor; with wave 50's slide (1.03 - 1.01 q) the thrust reads as Accel x (1 - q) held at about q = 0.7, the same hold as the turn's (2026-11-27)
+
+**Question** (the hub's item 1): is the acceleration cut at saturation a
+third of Accel, or Accel minus a fixed amount? Read on two hulls with
+different Accel.
+
+**Rig** (`wave51Resources` "E6A"). Wave 44's Kit Probe Ion (791: inertial,
+Accel 300, Speed 300, IonizeMax 100, Deionize 1) and Kit Probe Ion A900
+(603: the same at Accel 900, Speed 600) with the Kit Beam Turret on Kit
+Knock Grid Port (the 200 x 300 px moon grid, `tools/padsum.sh <run> pad`,
+`tools/pulses.py`). `a6_pion` / `a6_p900`: land, accept mïsn 963, Leave
+and sit on the port under the Kit Ion Shot Target's 30-point hits; Tab and
+the beam kill it 19 s after the Leave (six hits, about 175: q about 1.7);
+3 s later three Up pulses 2.9 s apart (0.57 s on Accel 300, 0.37 s on
+Accel 900). `c6_pion` / `c6_p900`: the same pulses with no landing (no
+mission, no charge). The velocity change per pulse from linear fits of the
+grid track 0.6 s either side.
+
+| hull | control (px/s², three pulses) | saturated (px/s², three pulses) | ratio | control minus saturated |
+|---|---|---|---|---|
+| Kit Probe Ion, Accel 300 | 49.0, 55.0, 51.2 (51.7) | 15.1, 11.5, 17.1 (14.6) | **0.28** | 37 |
+| Kit Probe Ion A900, Accel 900 | 147.1, 146.1, 147.2 (146.8) | 43.6, 48.6, 50.6 (47.6) | **0.32** | 99 |
+
+**Findings.**
+1. **The saturated thrust is a FRACTION of the hull's**: 0.28 and 0.32
+   (+- 0.03 a pulse) on Accels three times apart; a fixed subtraction
+   (37 px/s² from Accel 300) would leave Accel 900 at 110, not 48.
+2. **It is about 0.3, not wave 44's 0.4**: wave 44's "past the no-turn
+   line" hull was only just past it; with q at 1.7 the cut is deeper.
+   Wave 50's re-mapped slide (1.03 - 1.01 q, wave 48's pulses on the
+   measured charge) reaches 0.3 at q = 0.72, so the thrust fits Accel x
+   (1 - q) with q held at about 0.7, the hold the turn needs too (the
+   section above, finding 4). GUESS: one charge share, min(q, about
+   0.7), cuts both (the turn truncated to whole degrees a frame, the
+   thrust not).
+
+**NovaJS (main ff820fb6):** `accelerationFactor` = max(0.4, 1 - 0.9 q)
+(`ION_FULL_ACCELERATION_FACTOR` 0.4, `ION_ACCELERATION_SLOPE` 0.9,
+`N/nova_plugin/ship/ionization_plugin.ts:81`, `:139`, `:146-149`):
+**matches** the multiplicative form (finding 1), **mismatch** in the floor
+(0.4 against about 0.3). **Proposed:** acceleration factor = 1 -
+min(q, 0.7) (GUESS 0.7, between the measured 0.68 and 0.72; wave 50's
+free fit 1.03 - 1.01 q), i.e. `ION_ACCELERATION_SLOPE` 1 and
+`ION_FULL_ACCELERATION_FACTOR` 0.3, reached at q = 0.7. Confidence: high
+for the fraction (two Accels, six saturated pulses), medium for 0.3 vs a
+third (0.28 / 0.32 +- 0.03).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w51/a6_pion/`,
+`c6_pion/`, `a6_p900/`, `c6_p900/` (`recording.mp4`), `*.pos.txt`
+(`tools/padsum.sh`, `tools/pulses.py`).
+
 ### Reliability notes (for anyone running the reference)
 
 - **A stock hull's red markings defeat `redcount.py` (wave 50 `tre_a`):**
