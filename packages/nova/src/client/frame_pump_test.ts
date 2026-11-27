@@ -6,7 +6,10 @@ import { MAX_EXTRAPOLATION_DELTA_MS } from '../display/movement_extrapolation_pl
 import { SIMULATION_STEP_MS } from '../nova_plugin/make_system.js';
 import {
     advanceSimulationDebt, applyDisplaySpeed, STEP_BATCH_BUDGET_MS, stepBatchCap,
+    updateWithoutDrawing,
 } from './frame_pump.js';
+import { Ticker, UPDATE_PRIORITY } from 'pixi.js';
+import type * as PIXI from 'pixi.js';
 
 describe('advanceSimulationDebt (#371 R1)', () => {
     it('advances 1 step per frame at 1x and 2 steps per frame at 2x', () => {
@@ -170,6 +173,27 @@ describe('advanceSimulationDebt: a slow worker\'s batch is bounded', () => {
             pendingSteps: 30, msPerStep: 50,
         });
         expect(next.steps).toBe(30);
+    });
+});
+
+describe('updateWithoutDrawing (the heartbeat never draws)', () => {
+    it('runs the other ticker listeners but not the draw, then restores the draw', () => {
+        const ticker = new Ticker();
+        ticker.autoStart = false;
+        const calls: string[] = [];
+        const app = {
+            ticker,
+            render() { calls.push('render'); },
+        };
+        ticker.add(app.render, app, UPDATE_PRIORITY.LOW);
+        ticker.add(() => calls.push('pump'));
+        updateWithoutDrawing(app as unknown as PIXI.Application, 1000);
+        expect(calls).toEqual(['pump']);
+        // An ordinary (animation-frame) update draws again, after the pump.
+        calls.length = 0;
+        ticker.update(1016);
+        expect(calls).toEqual(['pump', 'render']);
+        ticker.destroy();
     });
 });
 

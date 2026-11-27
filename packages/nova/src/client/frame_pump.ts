@@ -22,6 +22,7 @@ import { MovementTimeLimitResource } from 'nova_ecs/plugins/movement_plugin';
 import { TimeScaleResource } from 'nova_ecs/plugins/time_plugin';
 import type { World } from 'nova_ecs/world';
 import type * as PIXI from 'pixi.js';
+import { UPDATE_PRIORITY } from 'pixi.js';
 import type Stats from 'stats.js';
 import type { Autopilot } from '../autopilot.js';
 import {
@@ -185,6 +186,21 @@ export function applyDisplaySpeed(displayWorld: World, speed: RoomSpeed): void {
     const movementLimit = displayWorld.resources.get(MovementTimeLimitResource);
     if (movementLimit) {
         movementLimit.maxDeltaMs = MAX_EXTRAPOLATION_DELTA_MS * speed;
+    }
+}
+
+/**
+ * Runs one ticker frame without the application's draw: every other
+ * ticker listener (the frame pump, the held-jump arrival check) runs as
+ * on any frame, and the stage is drawn by the next real animation frame.
+ * For the frame pump's heartbeat (FramePump.install).
+ */
+export function updateWithoutDrawing(app: PIXI.Application, now: number): void {
+    app.ticker.remove(app.render, app);
+    try {
+        app.ticker.update(now);
+    } finally {
+        app.ticker.add(app.render, app, UPDATE_PRIORITY.LOW);
     }
 }
 
@@ -383,7 +399,11 @@ export class FramePump {
         // heartbeat drives the ticker whenever real rAF stalls. The
         // staleness check covers occluded-but-not-hidden windows, and
         // keeps the heartbeat from stacking on healthy rAF (which would
-        // run the sim fast).
+        // run the sim fast). It never DRAWS (updateWithoutDrawing): a
+        // hidden or occluded window shows nothing, and a visible one
+        // whose rAF is merely slow is slow because drawing cannot keep
+        // up — extra draws there only deepen the GPU's backlog, which
+        // starves rAF further (seconds between presented frames).
         let lastAnimationFrame = performance.now();
         let heartbeatAlive = true;
         const animationFrameAlive = () => {
@@ -403,7 +423,7 @@ export class FramePump {
             }
             if (document.hidden
                 || performance.now() - lastAnimationFrame > 100) {
-                app.ticker.update(performance.now());
+                updateWithoutDrawing(app, performance.now());
             }
         };
         return () => {
