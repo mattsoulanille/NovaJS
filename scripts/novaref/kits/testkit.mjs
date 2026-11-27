@@ -366,8 +366,9 @@ export default {
  *  R18 sÿst 1447 Kit Tribute Leave Two (owner 290; spöb 1008: DefCount
  *      1062 of düde 512) linked to 1448 Kit Tribute Land Next (port spöb
  *      1009, the 250 px art, at (-1300, 0): where a jump from 1447 arrives).
- *  FM  sÿst 1449 Kit Stock Outfitter (port spöb 1010: outfitter, SpecialTech
- *      115) for the stock Rebel Starbridge's free mass.
+ *  FM  sÿst 1449 Kit Stock Outfitter (port spöb 1010: outfitter, TechLevel 3,
+ *      SpecialTech 115) for the stock Rebel Starbridge's and the second-hand
+ *      Terrapin's (stock Carbon Fiber) free mass.
  */
 function wave42Resources() {
     const out = [];
@@ -443,6 +444,9 @@ function wave42Resources() {
     out.push(...shareRled(698, "Kit Pers Filler", RLED.green, 24, { ...still, flags2: 0x0004 }));
     out.push(dude(535, "Kit Pers Hulk", 1, 363, 697), dude(536, "Kit Pers Filler", 1, 363, 698));
     out.push(withTraffic(system(1446, "Kit Pers Range", nextX(), Y, 363, [1007]), [536], 20), port(1007, "Kit Pers Port"));
+    // përs 1151 never appeared (r16p_a: six rolls of twenty ships). An override of the stock Refuel Trader përs 225 (alive in
+    // every pilot; r16p_c) got two rolls, and the second Tab found a stock any-system person (David Dunham, who jumped out),
+    // so it is inconclusive; it was reverted to 1151 so that no stock person is changed for the other kit runs.
     out.push({ type: "përs", id: 1151, name: "Kit Refuel Person", clone: "përs:225", set: { linkSystem: 1446, govt: 363, ai: 1,
         aggression: 1, cowardice: 0, ship: 697, weapons: none4, weaponCounts: zero4, weaponAmmo: zero4, credits: 0, shieldMod: 100,
         hailPict: 0, commQuote: -1, hailQuote: -1, linkMission: 1044, flags: 0x0040, activeOn: "", grantClass: 0, grantCount: 0,
@@ -461,7 +465,9 @@ function wave42Resources() {
     // outfitter, TechLevel 0, SpecialTech 115: the Rebel tech of the Gravimetric Missile and its launcher) for the stock
     // Rebel Starbridge (shïp 178: FreeMass 20, 15 Gravimetric Missiles at 1 t).
     out.push(system(1449, "Kit Stock Outfitter", nextX(), Y, 363, [1010]),
-        port(1010, "Kit Stock Outfitter Port", { flags: 0x05, techLevel: 0, specialTech: [115, -1, -1] }));
+        // TechLevel 3 (added for the Carbon Fiber half: oütf 180 is tech 3) after the Starbridge run, which saw only the two
+        // tech-115 Gravimetric items.
+        port(1010, "Kit Stock Outfitter Port", { flags: 0x05, techLevel: 3, specialTech: [115, -1, -1] }));
     return out;
 }
 

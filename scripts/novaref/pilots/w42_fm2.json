@@ -1,0 +1,42 @@
+{
+  "name": "novaref-w42-fm2",
+  "edits": {
+    "ship": 370,
+    "stellar": 1010,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1449": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w42-fm2",
+    "weapons": {
+      "128": 0,
+      "129": 2
+    },
+    "outfits": {
+      "128": 0,
+      "129": 2,
+      "180": 3,
+      "184": 1,
+      "185": 1,
+      "197": 1,
+      "228": 2,
+      "256": 3
+    },
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "name": "novaref-w42-fm3",
+  "edits": {
+    "ship": 366,
+    "stellar": 1010,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1449": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w42-fm3",
+    "weapons": {
+      "128": 0,
+      "129": 2,
+      "131": 2
+    },
+    "outfits": {
+      "128": 0,
+      "129": 2,
+      "131": 2,
+      "180": 3,
+      "184": 1,
+      "185": 1,
+      "186": 1,
+      "193": 2,
+      "197": 1,
+      "257": 1,
+      "260": 1
+    },
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}

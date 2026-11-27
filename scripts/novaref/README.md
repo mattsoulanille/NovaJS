@@ -625,8 +625,9 @@ pilot marks alive** (its personAlive array holds only përs 128-643 and 1151;
 `pilot-make` has no person edit, so override a stock përs), wëap 312, oütf
 492, gövt 283 and below, flët 324, jünk 205, bits 9284. Lessons: the star
 field moves in two speed clusters, so a 1 s mean of the star shift reads a
-speed RATIO low; EV Nova has no landing autopilot (a landing after a jump
-needs the port where the ship arrives, about 1,350 px out). Scenarios
+speed RATIO low; `l` does not fly the ship in from beyond the landing window (a landing
+after a jump needs the port where the ship arrives, about 1,350 px out, and
+Down held about 1.5 s on arrival). Scenarios
 `scenarios/w42_space_interactive.json` / `w42_space_early.json` (inbox
 `w42.jsonl`) and `w42_pers_board.json` (a përs hail and accept, then
 `loops/board.mjs` on the special ship, then hand-driven again).
