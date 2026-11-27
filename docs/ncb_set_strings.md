@@ -57,7 +57,13 @@ string: their NCB fields are tests.
   OnFailure run at the next date advance or landing rather than the moment
   the goal completes or fails. Moving them onto the pending-and-record
   pattern used for OnDominate is about half a day each (the in-flight
-  failure paths are several).
-- **Unmeasured acquisition paths:** an escort UPGRADE (a new hull for an
-  escort) and an escort SALE run no shïp OnPurchase / OnRetire; whether the
-  original does is unknown. Each is small to add once measured.
+  failure paths are several). Reference wave 47 ("OnShipDone and an
+  in-flight OnFailure ..."): traffic gated on the bits did not appear in
+  3.5 minutes of flight after either event and appeared at the next
+  take-off, which is consistent with the late run (that reader cannot
+  tell "late" from "AppearOn is only checked when a visit's traffic is
+  built"); no change until a stronger reader exists.
+- **Escort upgrade and sale (measured, reference wave 47):** an escort
+  UPGRADE runs neither the new hull's OnPurchase nor the old hull's
+  OnRetire, and an escort SALE runs no OnRetire, in the original as in
+  NovaJS. Nothing to add.
