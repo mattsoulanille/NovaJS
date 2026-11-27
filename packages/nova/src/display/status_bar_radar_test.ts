@@ -168,20 +168,22 @@ describe('centerArrowPixels (the original\'s thin grey line arrow)', () => {
     });
 });
 
-describe('centerArrowShown (reference K8, waves 43-44)', () => {
-    it('gates on the distance to the centre: a circle of 2,404-2,650 px '
-        + '(reference "The centre arrow\'s onset (K8 leftover), wave 44")',
-        () => {
-            expect(CENTER_ARROW_RADIUS).toBeGreaterThan(2404);
+describe('centerArrowShown (reference K8, waves 43-45)', () => {
+    it('gates on the distance to the centre: a circle of 2,601-2,650 px '
+        + '(reference "The centre arrow\'s onset (K8 leftover)", waves 44 '
+        + 'and 45)', () => {
+            expect(CENTER_ARROW_RADIUS).toBeGreaterThanOrEqual(2600);
             expect(CENTER_ARROW_RADIUS).toBeLessThan(2650);
             expect(centerArrowShown({ x: 0, y: 0 })).toBeFalse();
             // The axis starts: shown at 2,650 / 2,750 / 2,850, not at
-            // 2,400 / 2,200 / 2,000 / 1,700.
+            // 2,600 / 2,550 / 2,500 / 2,450 (wave 45) nor 2,400 / 2,200 /
+            // 2,000 / 1,700 (wave 44).
             for (const x of [2650, 2750, 2850]) {
                 expect(centerArrowShown({ x: -x, y: 0 })).withContext(`${x}`)
                     .toBeTrue();
             }
-            for (const x of [2400, 2200, 2000, 1700]) {
+            for (const x of [2600, 2550, 2500, 2450, 2400, 2200, 2000,
+                1700]) {
                 expect(centerArrowShown({ x: -x, y: 0 })).withContext(`${x}`)
                     .toBeFalse();
             }

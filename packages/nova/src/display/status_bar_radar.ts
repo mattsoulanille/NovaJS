@@ -182,11 +182,14 @@ export function centerArrowPixels(dx: number, dy: number,
  * the arrow at (2650, 0) and at (2000, 2000) (2,828 px out, 2,000 on each
  * axis) and not at (2400, 0) nor (1700, 1700) (2,404 px out), so the gate
  * is the distance and the onset lies between 2,404 and 2,650 px, well
- * inside the radar's edge. GUESS 2,500 inside that bracket. Was an
+ * inside the radar's edge. "The centre arrow's onset radius (K8
+ * leftover), wave 45" narrowed it: no arrow at rest on (2450 / 2500 /
+ * 2550 / 2600, 0), so the onset is 2,601-2,650 px. GUESS 2,625, the middle
+ * of that bracket (was 2,500, a GUESS inside 2,404-2,650). Was an
  * either-axis gate at 84 / 88 of the radar's half-span (2,864 px; wave
  * 43's one flight).
  */
-export const CENTER_ARROW_RADIUS = 2500;
+export const CENTER_ARROW_RADIUS = 2625;
 
 /**
  * Whether the radar draws its system-centre arrow (blink aside): whenever
