@@ -20,7 +20,7 @@ import { BoardingPlugin } from './boarding_plugin.js';
 
 export const EncountersDomain: Domain = {
     name: 'encounters',
-    dependsOn: ['combat', 'core', 'escorts', 'ncb', 'npc', 'player', 'reputation', 'ship', 'spawn', 'travel'],
+    dependsOn: ['combat', 'core', 'escorts', 'missions', 'ncb', 'npc', 'player', 'reputation', 'ship', 'spawn', 'travel'],
     plugins: [HailPlugin, DisabledPlugin, BoardingPlugin],
 };
 export const EncountersDomainPlugin = domainPlugin(EncountersDomain);

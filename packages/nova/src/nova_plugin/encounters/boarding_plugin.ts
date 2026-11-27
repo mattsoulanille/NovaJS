@@ -1,6 +1,6 @@
 import * as t from 'io-ts';
 import { GovtData } from 'novadatainterface/govt_data';
-import { Emit, EmitFunction, Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
+import { Emit, EmitFunction, Entities, GetEntity, GetWorld, UUID } from 'nova_ecs/arg_types';
 import { Entity } from 'nova_ecs/entity';
 import { EntityMap } from 'nova_ecs/entity_map';
 import { EcsEvent } from 'nova_ecs/events';
@@ -13,6 +13,8 @@ import { RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { Time, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
+import { World } from 'nova_ecs/world';
+import { ShipData } from 'novadatainterface/ship_data';
 import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
 import {
     AmmoOutfitInfo, axesAligned, BoardBlockReason, BoardedComponent,
@@ -32,7 +34,7 @@ import {
     retrieveRescueCargo, spendRescueBoard,
 } from './rescue_board.js';
 import { MissionShipComponent } from '../player/index.js';
-import { CargoComponent, cargoUsed } from '../ship/index.js';
+import { CargoComponent, cargoUsed, exchangeHolds, fillHold } from '../ship/index.js';
 import { CollisionHitterComponent } from '../core/index.js';
 import { HurtboxHullComponent } from '../core/index.js';
 import { OutfitsState, OutfitsStateComponent } from '../ship/index.js';
@@ -48,9 +50,12 @@ import { cappedEscortCount, MAX_ESCORTS } from '../escorts/index.js';
 import { OwnerComponent, SourceComponent } from '../ship/index.js';
 import { FiringGroupComponent } from '../ship/index.js';
 import { isInFlock } from '../combat/index.js';
-import { SimulationGameDataResource } from '../core/index.js';
+import { deriveEntityComponents, SimulationGameDataResource } from '../core/index.js';
 import { GovtComponent, SystemIdResource } from '../core/index.js';
-import { ArmorComponent, ShieldComponent, ZeroArmorEvent } from '../ship/index.js';
+import {
+    ArmorComponent, ShieldComponent, shieldFloor, shipFuelBounds, ZeroArmorEvent,
+} from '../ship/index.js';
+import { Stat } from '../core/index.js';
 import { FuelComponent } from '../ship/index.js';
 import {
     endContrabandHostility, formationsIn, FormationComponent, nextFormationSlot,
@@ -71,7 +76,9 @@ import {
 } from '../ship/index.js';
 import { PlayerSoundEvent } from '../core/index.js';
 import { TargetComponent } from '../ship/index.js';
-import { PersComponent } from '../spawn/index.js';
+import { makeNpcShip, PersComponent } from '../spawn/index.js';
+import { rehullShip } from '../missions/index.js';
+import { PlayerNamesComponent } from '../player/index.js';
 import { SystemHoldComponent, waitingForRescue } from '../npc/index.js';
 
 /** Interface beep when a plunder session opens (snd nova:390), heard only
@@ -167,6 +174,27 @@ export const BayCaptureEvent =
     new EcsEvent<{ shipId: string }>('BayCaptureEvent');
 export const BayCaptureEventType = t.type({ shipId: t.string });
 registerSimulationBridgeEvent({ event: BayCaptureEvent });
+
+/**
+ * Emitted (targeted at the boarding ship) when the capture prompt is
+ * answered: `kept` 'escort' for "Use As Escort", 'ship' for "Use As My
+ * Ship", with `oldShipRetained` saying whether the hull the pilot left
+ * became an escort. The prompt closes with the session on the same tick,
+ * so the status line is where the player reads what happened (stock STR#
+ * 2002 0-based 122, "You assigned this ship to your fleet of escorts.", and
+ * 303 / 304, "You retained your old ship as an escort." / "You were unable
+ * to retain your old ship as an escort."). GUESS: the original shows those
+ * lines here (they sit beside the capture prompt's own text in STR# 2002;
+ * wave 33 never answered the prompt). Never mutates the simulation.
+ */
+export const CaptureAssignedEvent = new EcsEvent<{
+    kept: 'escort' | 'ship', oldShipRetained: boolean,
+}>('CaptureAssignedEvent');
+export const CaptureAssignedEventType = t.type({
+    kept: t.union([t.literal('escort'), t.literal('ship')]),
+    oldShipRetained: t.boolean,
+});
+registerSimulationBridgeEvent({ event: CaptureAssignedEvent });
 
 /**
  * Builds the planAmmoPlunder inputs from live entities + game data: the
@@ -1330,6 +1358,256 @@ function convertToEscort(target: Entity, targetUuid: string,
     target.components.delete(DisabledComponent);
 }
 
+/** A hull's outfits aboard as id -> count, zero counts dropped. */
+function outfitCountsOf(entity: Entity): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const [id, { count }] of
+        entity.components.get(OutfitsStateComponent) ?? []) {
+        if (count > 0) {
+            counts.set(id, count);
+        }
+    }
+    return counts;
+}
+
+/** The hold of a `ship` hull carrying `outfits`: the class's cargo space
+ * plus every outfit's (spaceport/shipyard_rules' newShipCargoCapacity, the
+ * sum ShipPhysicsProvider derives). */
+function holdCapacity(ship: ShipData, outfits: ReadonlyMap<string, number>,
+    gameData: SimulationGameDataInterface): number {
+    let capacity = ship.physics.freeCargo;
+    for (const [id, count] of outfits) {
+        capacity += (gameData.data.Outfit.getCached(id)?.physics.freeCargo
+            ?? 0) * count;
+    }
+    return Math.max(0, capacity);
+}
+
+/**
+ * Gives a hull about to enter the world its shield, armor and fuel at the
+ * given levels (each clamped to the hull's own capacity; `undefined` leaves
+ * that stat to its provider, which fills it). The stats are not derived at
+ * insertion — the ship_plugin providers create them full on the next step —
+ * so they are built here with the very bounds those providers set
+ * (ShipShieldProvider, ShipArmorProvider, shipFuelBounds), which the
+ * providers then leave alone.
+ */
+function presetCondition(hull: Entity, levels: {
+    shield?: number, armor?: number, fuel?: number,
+}) {
+    const physics = hull.components.get(ShipPhysicsComponent);
+    const shipData = hull.components.get(ShipDataComponent);
+    if (!physics || !shipData) {
+        return;
+    }
+    const preset = (component: typeof ArmorComponent,
+        bounds: { max: number, min: number, recharge: number },
+        current: number | undefined) => {
+        if (current === undefined) {
+            return;
+        }
+        hull.components.set(component, new Stat({
+            ...bounds,
+            current: Math.max(bounds.min, Math.min(bounds.max, current)),
+        }));
+    };
+    preset(ShieldComponent, {
+        max: physics.shield, min: shieldFloor(physics.shield),
+        recharge: physics.shieldRecharge,
+    }, levels.shield);
+    preset(ArmorComponent, {
+        max: physics.armor, min: 0, recharge: physics.armorRecharge,
+    }, levels.armor);
+    preset(FuelComponent, shipFuelBounds(physics, shipData,
+        hull.components.has(ControlledByComponent)), levels.fuel);
+}
+
+/**
+ * ============================================================================
+ * "USE AS MY SHIP": TRADING PLACES WITH THE CAPTURED SHIP'S CAPTAIN
+ * ============================================================================
+ *
+ * The capture prompt's other answer (stock STR# 2002 0-based 117: "Do you
+ * want to use this ship as an escort, or would you rather trade places with
+ * its captain and use it as your own ship?"). The pilot moves into the
+ * prize, where it lies, and the prize's captain takes the pilot's old hull,
+ * which stays where it was and becomes the pilot's escort.
+ *
+ * MEASURED: only the prompt itself (reference "Capture, wave 33": the text,
+ * the two buttons, laid over the plunder dialog). EVERYTHING the answer does
+ * is a GUESS, built from the game's own strings and the rules NovaJS already
+ * has for a change of hull:
+ *
+ *  - THE OLD HULL BECOMES AN ESCORT: STR# 2002 303 "You retained your old
+ *    ship as an escort." (and 304 "You were unable to retain your old ship
+ *    as an escort.", which NovaJS gives only at the escort cap — the
+ *    capture attempt itself is unavailable there, reference wave 33 finding
+ *    7, so it should never happen). It is the pilot's own property, so it
+ *    is a CAPTURED escort (no wage, sellable), as the hangar's swap makes
+ *    the hull it leaves behind (spaceport/ship_storage.ts swapWithEscort).
+ *  - THE OUTFITS: the prize keeps what it has aboard (what the boarding
+ *    left of it: plundered ammo is gone); the pilot's PERSISTENT outfits
+ *    (oütf 0x0004, "stays with you when you trade ships"; the Bible's
+ *    0x0020 note names capture as a 0x0004 case) move across and leave the
+ *    old hull; everything else stays on the old hull.
+ *  - THE HOLDS are exchanged as the hangar's swap does (exchangeHolds: the
+ *    prize takes every ton of mission cargo and as much of the pooled hold
+ *    as fits); what is left goes to the old hull up to its own hold (mission
+ *    cargo always), and anything past that is lost.
+ *  - THE PILOT'S STATE (credits, missions, bits, records, rating, escorts,
+ *    stored ships, ...) follows the pilot: the change goes through the
+ *    in-flight change of hull (missions/mission_ship_change.ts rehullShip),
+ *    at the pilot's own uuid, so everything keyed on it — the control link,
+ *    the camera, the escorts' formation leader — follows without a remap.
+ *  - THE CONDITION: the new hull is the prize as it lay — its armor lifted
+ *    just over the disable line, as a prize kept as an escort is
+ *    (convertToEscort), its shields and its fuel as they were (an Energy
+ *    take leaves the tanks empty); the old hull keeps the armor, shields
+ *    and fuel the pilot left it with.
+ *  - THE SHIP'S NAME: the original then asks "Now rename this captured
+ *    ship:" (STR# 2002 118). NovaJS has no in-flight rename yet, so the new
+ *    hull has no name of its own (the derived "<class> <number>" stands in,
+ *    as for a ship taken from an escort in the hangar) until the player
+ *    names one at a shipyard.
+ *  - THE TARGET is cleared (it named the prize, which is now the pilot).
+ *  - NOT RUN: the prize class's OnCapture and the old class's OnRetire set
+ *    strings (Bible: OnRetire runs when you "replace it with a captured
+ *    ship"). Neither capture route runs OnCapture yet; set strings run on
+ *    the client, outside this system.
+ *
+ * DETERMINISM: synchronous, no randomness, a pure function of synced state.
+ * Both classes and every outfit aboard either hull are staged (both hulls
+ * are in the world), so every getCached below is warm on every peer. Both
+ * hulls enter the world fully derived (deriveEntityComponents, rule 11 of
+ * docs/rollback_multiplayer.md). The old hull takes the PRIZE's uuid: the
+ * prize leaves the world as the pilot's new hull, and the uuid that named a
+ * hulk now names the escort that replaced it beside the pilot (its old
+ * wing is reassigned and every ship's grudge against it dropped first, as
+ * for a prize kept as an escort).
+ *
+ * Returns whether the old hull was kept as an escort, or undefined when the
+ * swap could not be made (a class not staged), in which case nothing
+ * changed.
+ */
+export function tradePlacesWithCaptain(world: World, pilotUuid: string,
+    pilot: Entity, prizeUuid: string, prize: Entity,
+    gameData: SimulationGameDataInterface): { oldShipRetained: boolean }
+    | undefined {
+    const prizeClass = prize.components.get(ShipComponent)?.id;
+    const oldClass = pilot.components.get(ShipComponent)?.id;
+    const prizeData = prizeClass !== undefined
+        ? gameData.data.Ship.getCached(prizeClass) : undefined;
+    const oldData = oldClass !== undefined
+        ? gameData.data.Ship.getCached(oldClass) : undefined;
+    const pilotMove = pilot.components.get(MovementStateComponent);
+    const prizeMove = prize.components.get(MovementStateComponent);
+    if (!prizeData || !oldData || !pilotMove || !prizeMove) {
+        return undefined;
+    }
+    const entities = world.entities;
+
+    // The pilot's persistent outfits follow the pilot.
+    const oldOutfits = outfitCountsOf(pilot);
+    const persistent = new Map<string, number>();
+    for (const [id, count] of oldOutfits) {
+        if (gameData.data.Outfit.getCached(id)?.persistent) {
+            persistent.set(id, count);
+        }
+    }
+    const newOutfits = outfitCountsOf(prize);
+    for (const [id, count] of persistent) {
+        newOutfits.set(id, (newOutfits.get(id) ?? 0) + count);
+        oldOutfits.delete(id);
+    }
+
+    const { aboard, leftBehind } = exchangeHolds(
+        pilot.components.get(CargoComponent) ?? new Map(),
+        prize.components.get(CargoComponent) ?? new Map(),
+        holdCapacity(prizeData, newOutfits, gameData));
+
+    // ── The pilot's new hull: the prize's class, at the prize's place. ──
+    const hull = rehullShip(pilot, prizeData, new Map([...newOutfits]
+        .map(([id, count]) => [id, { count }])));
+    hull.components.set(CargoComponent, aboard);
+    // Position and Angle are immutable, so the prize's are shared as they
+    // are; the control-driven fields stay the pilot's.
+    hull.components.set(MovementStateComponent, {
+        ...pilotMove,
+        position: prizeMove.position,
+        velocity: prizeMove.velocity,
+        rotation: prizeMove.rotation,
+    });
+    hull.components.set(TargetComponent, { target: undefined });
+    // No name of its own yet (see the note); replaced, never mutated —
+    // the old hull shares the record.
+    const names = hull.components.get(PlayerNamesComponent);
+    if (names?.ship !== undefined) {
+        const { ship: _left, ...rest } = names;
+        hull.components.set(PlayerNamesComponent, rest);
+    }
+    deriveEntityComponents(world, hull);
+    const prizeArmor = prize.components.get(ArmorComponent);
+    const hullPhysics = hull.components.get(ShipPhysicsComponent);
+    const fraction = prizeData.disableArmorFraction;
+    presetCondition(hull, {
+        armor: prizeArmor && hullPhysics
+            ? isBelowDisableThreshold(prizeArmor, fraction)
+                ? repairedArmor(hullPhysics.armor, fraction)
+                : prizeArmor.current
+            : undefined,
+        shield: prize.components.get(ShieldComponent)?.current,
+        fuel: prize.components.get(FuelComponent)?.current,
+    });
+
+    // ── The old hull: the captain's now, the pilot's escort. ──
+    // Counted BEFORE the prize leaves (it is no escort, so it is not in
+    // the count either way).
+    const oldShipRetained =
+        cappedEscortCount(pilotUuid, { world: entities }) < MAX_ESCORTS;
+    let escort: Entity | undefined;
+    if (oldShipRetained) {
+        escort = makeNpcShip(oldData, 0, null, pilotMove.position,
+            pilotMove.rotation, pilotMove.velocity);
+        escort.components.set(OutfitsStateComponent, new Map([...oldOutfits]
+            .map(([id, count]) => [id, { count }])));
+        escort.components.set(CargoComponent, fillHold(leftBehind,
+            holdCapacity(oldData, oldOutfits, gameData)));
+        const slot = nextFormationSlot(formationsIn(entities), pilotUuid);
+        escort.components.set(FormationComponent, { leader: pilotUuid, slot });
+        escort.components.set(EscortCommandComponent, { command: 'formation' });
+        escort.components.set(FiringGroupComponent, { group: pilotUuid });
+        escort.components.set(PlayerEscortComponent, {
+            player: pilotUuid, parent: pilotUuid, provenance: 'captured',
+            deal: NO_DEAL,
+            ammoStock: ammoStockOf(oldOutfits, id =>
+                Boolean(gameData.data.Outfit.getCached(id)?.ammoFor)),
+        });
+        const owner = pilot.components.get(MultiplayerData)?.owner;
+        if (owner !== undefined) {
+            escort.components.set(MultiplayerData, { owner });
+        }
+        deriveEntityComponents(world, escort);
+        presetCondition(escort, {
+            armor: pilot.components.get(ArmorComponent)?.current,
+            shield: pilot.components.get(ShieldComponent)?.current,
+            fuel: pilot.components.get(FuelComponent)?.current,
+        });
+    }
+
+    // The prize's uuid stops naming a hulk: its wing elects a leader of its
+    // own and no ship keeps a grudge against what is now the pilot's
+    // escort (or nothing at all).
+    clearHostilityToward(prizeUuid, entities);
+    reassignCapturedWing(prizeUuid, entities);
+    entities.set(pilotUuid, hull);
+    if (escort) {
+        entities.set(prizeUuid, escort);
+    } else {
+        entities.delete(prizeUuid);
+    }
+    return { oldShipRetained };
+}
+
 /**
  * The plunder-dialog actions. Each is idempotent (a per-action flag or
  * the capture state guards a repeated control edge), so a replayed input
@@ -1346,10 +1624,10 @@ const BoardingActionSystem = new System({
         Optional(WeaponsStateComponent), GetEntity, UUID, Entities,
         RandomResource, Optional(GovtsResource), SimulationGameDataResource,
         Emit, Optional(LegalGeographyResource),
-        Optional(SystemIdResource), TimeResource] as const,
+        Optional(SystemIdResource), TimeResource, GetWorld] as const,
     step(controls, boarding, shipData, cargo, physics, credits, fuel, records,
         boarderOutfits, boarderWeapons, entity, uuid, entities, random, govts,
-        gameData, emit, geography, systemId, time) {
+        gameData, emit, geography, systemId, time, world) {
         const target = entities.get(boarding.target);
 
         // Charges the BoardPenalty crime once per session, the first
@@ -1400,6 +1678,27 @@ const BoardingActionSystem = new System({
                 gameData);
             boarding.capture = 'assigned';
             entity.components.delete(BoardingComponent);
+            emit(CaptureAssignedEvent,
+                { kept: 'escort', oldShipRetained: false }, [uuid]);
+            return;
+        }
+
+        // "Use As My Ship": the pilot trades places with the prize's
+        // captain (tradePlacesWithCaptain). Same gate as the escort answer.
+        // The pilot's new hull is written at this uuid WITHOUT the
+        // BoardingComponent, which is what ends the session; the old
+        // entity, the one this step was handed, leaves the world.
+        if (controls.get('plunderCaptureShip') === 'start'
+            && boarding.capture === 'succeeded'
+            && capturable(target, boardingGovtLookup(govts, gameData))) {
+            const traded = tradePlacesWithCaptain(world, uuid, entity,
+                boarding.target, target, gameData);
+            if (traded) {
+                boarding.capture = 'assigned';
+                emit(CaptureAssignedEvent, {
+                    kept: 'ship', oldShipRetained: traded.oldShipRetained,
+                }, [uuid]);
+            }
             return;
         }
 
@@ -1747,6 +2046,8 @@ export const BoardingPlugin: Plugin = {
             EscortRepairedEvent, EscortRepairedEventType);
         world.resources.get(SerializerResource)?.addEvent(
             BayCaptureEvent, BayCaptureEventType);
+        world.resources.get(SerializerResource)?.addEvent(
+            CaptureAssignedEvent, CaptureAssignedEventType);
         world.resources.get(SerializerResource)?.addEvent(
             BoardingRepelledEvent, BoardingRepelledEventType);
         world.resources.get(SerializerResource)?.addEvent(

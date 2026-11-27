@@ -382,6 +382,31 @@ export function captureRepelledMessage(): string {
     return CAPTURE_REPELLED_MESSAGE;
 }
 
+/** Stock STR# 2002 0-based 122, verbatim: the prize kept as an escort. */
+export const CAPTURE_KEPT_AS_ESCORT_MESSAGE =
+    'You assigned this ship to your fleet of escorts.';
+/** Stock STR# 2002 0-based 303 / 304, verbatim: the hull the pilot left for
+ * a captured one ("Use As My Ship"), kept as an escort or not. */
+export const OLD_SHIP_RETAINED_MESSAGE =
+    'You retained your old ship as an escort.';
+export const OLD_SHIP_NOT_RETAINED_MESSAGE =
+    'You were unable to retain your old ship as an escort.';
+
+/**
+ * The status line once the capture prompt is answered (boarding_plugin's
+ * CaptureAssignedEvent). GUESS: the original shows these stock lines at
+ * this moment (unmeasured; they sit beside the prompt's own text in STR#
+ * 2002).
+ */
+export function captureAssignedMessage(kept: 'escort' | 'ship',
+    oldShipRetained: boolean): string {
+    if (kept === 'escort') {
+        return CAPTURE_KEPT_AS_ESCORT_MESSAGE;
+    }
+    return oldShipRetained ? OLD_SHIP_RETAINED_MESSAGE
+        : OLD_SHIP_NOT_RETAINED_MESSAGE;
+}
+
 /**
  * The line when the player's own ship is disabled: stock STR# 2002 0-based
  * 286, verbatim (reference "A disabled player (A10), wave 37", finding 3:

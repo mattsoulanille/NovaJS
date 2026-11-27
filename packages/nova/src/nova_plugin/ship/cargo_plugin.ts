@@ -50,6 +50,61 @@ export function cargoUsed(cargo: Cargo): number {
     return used;
 }
 
+/**
+ * What of `pooled` goes aboard a `capacity` hold when two hulls exchange
+ * holds: every ton of mission cargo, then commodities until the hold is
+ * full, the highest key given up first (so the result does not depend on
+ * Map order). Not the trade-in's proportional cut (spaceport/
+ * shipyard_rules' cargoForNewShip, R11): on an exchange nothing is
+ * destroyed, so the receiving hull is filled to the brim and the rest stays
+ * on the other one. Shared by the hangar's swaps (spaceport/
+ * ship_storage.ts) and the capture's "Use As My Ship" (encounters/
+ * boarding_plugin.ts), so it lives in the simulation layer.
+ */
+export function fillHold(pooled: Cargo, capacity: number): Cargo {
+    const result = new Map(pooled);
+    const droppable = [...result.keys()]
+        .filter(key => !key.startsWith('mission:'))
+        .sort()
+        .reverse();
+    for (const key of droppable) {
+        const over = cargoUsed(result) - capacity;
+        if (over <= 0) {
+            break;
+        }
+        const held = result.get(key) ?? 0;
+        if (held <= over) {
+            result.delete(key);
+        } else {
+            result.set(key, held - over);
+        }
+    }
+    return result;
+}
+
+/**
+ * THE HOLD EXCHANGE of two hulls (a hangar swap, or trading places with a
+ * captured ship's captain): the pilot's hold and the incoming hull's are
+ * pooled, the incoming hull takes what {@link fillHold} gives it, and the
+ * rest stays aboard the hull being left.
+ */
+export function exchangeHolds(pilot: Cargo, incoming: Iterable<[string, number]>,
+    capacity: number): { aboard: Cargo, leftBehind: Cargo } {
+    const pooled = new Map(pilot);
+    for (const [key, tons] of incoming) {
+        pooled.set(key, (pooled.get(key) ?? 0) + tons);
+    }
+    const aboard = fillHold(pooled, capacity);
+    const leftBehind: Cargo = new Map();
+    for (const [key, tons] of pooled) {
+        const left = tons - (aboard.get(key) ?? 0);
+        if (left > 0) {
+            leftBehind.set(key, left);
+        }
+    }
+    return { aboard, leftBehind };
+}
+
 export const ShipCargoProvider = Provide({
     name: "ShipCargoProvider",
     provided: CargoComponent,

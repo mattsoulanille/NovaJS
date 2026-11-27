@@ -947,6 +947,17 @@ export const STATE_HASH_INTERVAL = 60;
 //    spells drawn from a hash. The derived wire schema fingerprint
 //    changes (4ed054bb232c84e8 -> 91d46a29ee183365), and the join gate
 //    keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the capture prompt's "Use As My Ship"
+//    (reference "Capture, wave 33"; encounters/boarding_plugin.ts
+//    tradePlacesWithCaptain). One new control action, `plunderCaptureShip`
+//    (core/controls.ts), riding the existing control-event input like the
+//    other plunder actions; one new serializer-registered event,
+//    CaptureAssignedEvent (`kept` 'escort' | 'ship', `oldShipRetained`;
+//    display only, the status line). No input kind or message kind
+//    changes. The derived wire schema fingerprint changes
+//    (91d46a29ee183365 -> a7b47d05196b53ff), and the join gate keeps older
+//    and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

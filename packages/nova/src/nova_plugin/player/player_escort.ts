@@ -289,10 +289,11 @@ export function durableEscortFields(existing: PlayerEscort | undefined):
  * ============================================================================
  *
  * An OWNED escort is one whose provenance is 'captured': a prize kept at
- * boarding ("Keep as Escort", boarding_plugin's convertToEscort), a stored
+ * boarding ("Use As Escort", boarding_plugin's convertToEscort), a stored
  * ship sent along from the hangar (ship_storage's storedToEscort), or the
  * pilot's own hull left behind as an escort in a hangar swap
- * (swapWithEscort). It is the player's ship, so when it lands with them it
+ * (swapWithEscort) or for a prize ("Use As My Ship", boarding_plugin's
+ * tradePlacesWithCaptain). It is the player's ship, so when it lands with them it
  * is rearmed back up to what it had aboard when it BECAME an escort — the
  * `ammoStock` snapshot — rather than to capacity, as a hired pilot's ship is
  * (Matthew's ruling, 2026-11-24). The refill happens at the same lift-offs

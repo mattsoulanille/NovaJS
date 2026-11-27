@@ -15,8 +15,8 @@ import {
     StoredShipsComponent,
 } from '../nova_plugin/player/index.js';
 import {
-    applyOutfitPhysics, Cargo, CargoComponent, cargoUsed, FuelComponent,
-    OutfitsStateComponent, ShipComponent, SourceComponent,
+    applyOutfitPhysics, Cargo, CargoComponent, cargoUsed, exchangeHolds,
+    FuelComponent, OutfitsStateComponent, ShipComponent, SourceComponent,
 } from '../nova_plugin/ship/index.js';
 import { makeNpcShip } from '../nova_plugin/spawn/index.js';
 import {
@@ -210,55 +210,11 @@ export function incomingOutfits(record: StoredShip,
     return merged;
 }
 
-/**
- * What of `pooled` goes aboard a `capacity` hold on a swap: every ton of
- * mission cargo, then commodities until the hold is full, the highest key
- * given up first (so the result does not depend on Map order). Not the
- * trade-in's proportional cut (shipyard_rules' cargoForNewShip, R11): on
- * a swap nothing is destroyed, so the incoming hull is filled to the
- * brim and the rest stays on the hull put away.
- */
-function fillHold(pooled: Cargo, capacity: number): Cargo {
-    const result = new Map(pooled);
-    const droppable = [...result.keys()]
-        .filter(key => !key.startsWith('mission:'))
-        .sort()
-        .reverse();
-    for (const key of droppable) {
-        const over = cargoUsed(result) - capacity;
-        if (over <= 0) {
-            break;
-        }
-        const held = result.get(key) ?? 0;
-        if (held <= over) {
-            result.delete(key);
-        } else {
-            result.set(key, held - over);
-        }
-    }
-    return result;
-}
-
-/**
- * THE HOLD EXCHANGE of a swap (see the module comment): what the incoming
- * hull carries away, and what stays aboard the hull being put away.
- */
-export function exchangeHolds(pilot: Cargo, incoming: Iterable<[string, number]>,
-    capacity: number): { aboard: Cargo, leftBehind: Cargo } {
-    const pooled = new Map(pilot);
-    for (const [key, tons] of incoming) {
-        pooled.set(key, (pooled.get(key) ?? 0) + tons);
-    }
-    const aboard = fillHold(pooled, capacity);
-    const leftBehind: Cargo = new Map();
-    for (const [key, tons] of pooled) {
-        const left = tons - (aboard.get(key) ?? 0);
-        if (left > 0) {
-            leftBehind.set(key, left);
-        }
-    }
-    return { aboard, leftBehind };
-}
+/** The hold exchange of a swap (see the module comment's THE HOLD): moved
+ * to the simulation layer (nova_plugin/ship/cargo_plugin.ts), which the
+ * capture's "Use As My Ship" shares, and re-exported for this module's
+ * callers. */
+export { exchangeHolds };
 
 /**
  * The fuel tank of a `shipData` hull carrying `outfits`: the class's energy

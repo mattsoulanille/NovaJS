@@ -19,9 +19,9 @@ import {
     GameDateComponent, PlayerNamesComponent, playerShipName, PlayerShipSelector,
 } from '../nova_plugin/player/index.js';
 import { Optional } from 'nova_ecs/optional';
-import { ArrivalRoute, bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, JUMP_COLLAPSED_MESSAGE, jumpArrivalMessage, landingBlockedMessage, landingRequestMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage, SHIP_DISABLED_MESSAGE, SHIP_REPAIRED_MESSAGE, stellarClearedMessage } from "./status_bar_content.js";
+import { ArrivalRoute, bayCaptureMessage, boardingBlockedMessage, captureAssignedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, JUMP_COLLAPSED_MESSAGE, jumpArrivalMessage, landingBlockedMessage, landingRequestMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage, SHIP_DISABLED_MESSAGE, SHIP_REPAIRED_MESSAGE, stellarClearedMessage } from "./status_bar_content.js";
 import { LandingBlockedEvent, LandingClearedEvent, LandingRequestEvent } from "../nova_plugin/travel/index.js";
-import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, PlunderSelfDestructEvent, SentHailComponent, ShipDisabledEvent, ShipRepairedEvent } from "../nova_plugin/encounters/index.js";
+import { BayCaptureEvent, BOARD_SOUND, CaptureAssignedEvent, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, PlunderSelfDestructEvent, SentHailComponent, ShipDisabledEvent, ShipRepairedEvent } from "../nova_plugin/encounters/index.js";
 import { missionCargoName } from '../nova_plugin/missions/index.js';
 import {
     ContrabandScanEvent, DistressCallEvent, distressCallMessage, distressLine,
@@ -295,6 +295,20 @@ const ShowBoardingRepelledMessage = new System({
     step(statusLine, { time }, _player, emit) {
         statusLine.setMessage(captureRepelledMessage(), time);
         emit(UiSoundEvent, { id: BEEP_CANT_DO });
+    },
+});
+
+// The capture prompt was answered ("Use As Escort" / "Use As My Ship"):
+// the prompt closed with the session on the same tick, so the status line
+// says what became of the prize and of the hull the pilot left.
+const ShowCaptureAssignedMessage = new System({
+    name: 'ShowCaptureAssignedMessage',
+    events: [CaptureAssignedEvent],
+    args: [CaptureAssignedEvent, StatusLineResource, TimeResource,
+        PlayerShipSelector] as const,
+    step({ kept, oldShipRetained }, statusLine, { time }) {
+        statusLine.setMessage(captureAssignedMessage(kept, oldShipRetained),
+            time);
     },
 });
 
@@ -629,6 +643,7 @@ export const StatusMessagePlugin: Plugin = {
         world.addSystem(ShowLandingRequestMessage);
         world.addSystem(ShowBoardingBlockedMessage);
         world.addSystem(ShowBoardingRepelledMessage);
+        world.addSystem(ShowCaptureAssignedMessage);
         world.addSystem(ShowPlunderSelfDestructMessage);
         world.addSystem(ShowPlayerPlunderedMessage);
         world.addSystem(ShowContrabandScanMessage);
@@ -651,6 +666,7 @@ export const StatusMessagePlugin: Plugin = {
         world.removeSystem(ShowLandingRequestMessage);
         world.removeSystem(ShowBoardingBlockedMessage);
         world.removeSystem(ShowBoardingRepelledMessage);
+        world.removeSystem(ShowCaptureAssignedMessage);
         world.removeSystem(ShowPlunderSelfDestructMessage);
         world.removeSystem(ShowPlayerPlunderedMessage);
         world.removeSystem(ShowContrabandScanMessage);
