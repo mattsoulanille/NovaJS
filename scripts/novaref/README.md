@@ -631,6 +631,24 @@ Down held about 1.5 s on arrival). Scenarios
 `scenarios/w42_space_interactive.json` / `w42_space_early.json` (inbox
 `w42.jsonl`) and `w42_pers_board.json` (a përs hail and accept, then
 `loops/board.mjs` on the special ship, then hand-driven again).
+Wave 43 used sÿst 1450-1456, spöb 1011-1034, shïp 699 (Kit Probe E, Speed
+1000) / 719 / 727-729, düde 537-538, oütf 492-496 (long item names), rlëD
+1109 / 1111 (two 100 px discs) and bits 9284-9285, and RETIRED wave 12's mïsn
+1049 / 1050 (bits 9097 / 9098; düde 339 / 340 stay), using them for its own.
+Next free: sÿst 1457, spöb 1035-1399 (and 518-999), shïp 738-739 / 761 /
+766-768 / 791 / 888-894 (and 416-419), düde 539, ränk 205, mïsn **none** (retire another old
+kit mission), përs: a sÿst Person slot places a person, but the kit's 1151
+never appears; override a STOCK përs in a run-only plug-in
+(`kits/w43_pers225.mjs`), wëap 312, oütf 497, gövt 283 and below, flët 324,
+jünk 205, bits 9286, rlëD 1113 (and the odd ids 1001-1107). The **ruler**:
+sÿst 1450 Kit Ruler Start (a decoration 2,000 px out) jumps into 1451 Kit
+Ruler, whose 15 moon decorations every 500 px along y = 80 give the ship's
+world x per frame (evidence `tools/ruler.mjs`), so speeds need no star
+field; read them as slopes over 0.5 s or more (single-frame steps jump
+1-6 px even for stellars). Scenarios `scenarios/w43_space_interactive.json`
+/ `w43_space_early.json` (inbox `w43.jsonl`), `w43_pers_board.json` (përs
+1151 in sÿst 1455's Person slot) and `w43_pers225_board.json` (with
+`kits/w43_pers225.mjs`; board.mjs by colour, sweeping at 10 px).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they

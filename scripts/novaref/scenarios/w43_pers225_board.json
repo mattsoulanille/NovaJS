@@ -10,7 +10,7 @@
   { "wait": 1500 },
   { "shot": "space", "window": true },
   { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w43.jsonl", "maxMs": 900000 } },
-  { "script": "../loops/board.mjs", "args": { "speedPxS": 360, "turnDegS": 174.2, "near": 260, "stepMs": 60, "maxSteps": 40, "maxLegs": 10, "calMs": 400, "fineBelowPx": 60, "fineStepMs": 25, "dialogClicks": [], "sweep": { "atPx": 30, "startOnSilent": false, "repeat": 2, "turnMs": 40, "presses": 40, "stopAfter": 1 } } },
+  { "script": "../loops/board.mjs", "args": { "speedPxS": 360, "turnDegS": 174.2, "near": 260, "stepMs": 60, "maxSteps": 40, "maxLegs": 10, "calMs": 400, "fineBelowPx": 60, "fineStepMs": 25, "dialogClicks": [], "sweep": { "atPx": 10, "startOnSilent": false, "repeat": 2, "turnMs": 40, "presses": 40, "stopAfter": 1 } } },
   { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w43.jsonl", "maxMs": 600000 } },
   { "record": "stop" },
   { "shot": "end", "window": true }

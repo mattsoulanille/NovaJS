@@ -322,14 +322,16 @@ export default {
  * Wave-43 experiments (docs/reference_experiments.md, "... wave 43"): the
  * wave-42 leftovers. RETIRED: wave 12's mïsn 1049 (bit 9097, Kit D shooter
  * bolt) and 1050 (bit 9098, Kit D shooter blast); their ships and düdes
- * stay. Used: sÿst 1450-1455, spöb 1011-1033, shïp 699 / 719 / 727, düde
- * 537-538, mïsn 1049-1050, bits 9284-9285, rlëD 1109 / 1111. Map row y =
- * -2880 (x -800 .. -600). The next free ids: sÿst 1456+, spöb 1034-1399
- * (and 518-999), shïp 728-729 / 738-739 / 761 / 766-768 / 791 / 888-894
- * (and 416-419), düde 539+, përs NONE the base pilot marks alive (a sÿst
- * Person slot places a kit përs: see R16), ränk 205+, mïsn NONE (retire
- * another old kit mission), gövt 283 and below, flët 324+, wëap 312+, oütf
- * 492+, jünk 205+, bits 9286+, rlëD 1113+ (odd ids 1001-1107 too).
+ * stay. Used: sÿst 1450-1456, spöb 1011-1034, shïp 699 / 719 / 727-729,
+ * düde 537-538, oütf 492-496, mïsn 1049-1050, bits 9284-9285, rlëD 1109 /
+ * 1111. Map row y = -2880 (x -800 .. -560). The next free ids: sÿst 1457+,
+ * spöb 1035-1399 (and 518-999), shïp 738-739 / 761 / 766-768 / 791 / 888-894
+ * (and 416-419), düde 539+, përs NONE the base pilot marks alive (the kit's
+ * 1151 never appears, even from a sÿst Person slot: override a stock përs
+ * in a run-only plug-in, kits/w43_pers225.mjs), ränk 205+, mïsn NONE
+ * (retire another old kit mission), gövt 283 and below, flët 324+, wëap
+ * 312+, oütf 497+, jünk 205+, bits 9286+, rlëD 1113+ (odd ids 1001-1107
+ * too).
  *
  *  U4  sÿst 1450 Kit Ruler Start (a decoration start, spöb 1011, 2,000 px
  *      east of the centre: outside the 1,000 px no-jump zone) linked to
@@ -356,7 +358,13 @@ export default {
  *      përs 1151 in the system's first Person slot at 100% (the Bible: "Want
  *      to make a 'pers' type ship always appear? Put its ID into one of the
  *      Person fields"): wave 42's draw from twenty fillers competed with the
- *      23 stock persons that may appear in any kit system.
+ *      23 stock persons that may appear in any kit system. 1151 never
+ *      appeared even so; the slot also lists the stock përs 225, which
+ *      kits/w43_pers225.mjs (the R16 scenario only) turns into the person.
+ *  LN  (the hub's question, added during the wave) sÿst 1456 Kit Long Names,
+ *      port spöb 1034 (outfitter + shipyard, SpecialTech 9408 and 12): oütf
+ *      492-495 long names with an EMPTY ShortName, 496 with one; shïp 728 /
+ *      729 "Pirate Thunderhead Long Hull" with / without a ShortName.
  */
 function wave43Resources() {
     const out = [];
@@ -398,6 +406,26 @@ function wave43Resources() {
     const pers = system(1455, "Kit Pers Slot", nextX(), Y, 363, [1033]);
     pers.set = { ...pers.set, persons: [1151, 225, ...none8].slice(0, 8), personProbs: [100, 100, ...zero8].slice(0, 8) };
     out.push(pers, port(1033, "Kit Pers Slot Port"));
+    // --- LN (added during the wave, the hub's question): long item names in the outfitter and shipyard grids. sÿst 1456 Kit
+    // Long Names, port spöb 1034 (outfitter + shipyard, SpecialTech 9408 only); oütf 492-495 (the Kit Escort Gun under long
+    // names: the stock "Pirate Thunderhead Bay" exactly, a 30-letter single word, a two-line name, a six-word name; 496 with a
+    // ShortName) and shïp 728 / 729 (the Kit Lancer under a long name, with and without a ShortName), all TechLevel 9408.
+    const LN_TECH = 9408;
+    // ln_a: with ShortName = the name every caption was ONE line, centred and spilling over the neighbours; the stock outfits
+    // all have an EMPTY ShortName (the grid then shows the resource name, wrapped: Earth's "Light Blaster / Turret"), so 492-495
+    // have an empty ShortName like the stock ones, and 496 keeps a ShortName to compare. The port also sells stock TechLevel 12
+    // (SpecialTech 12: Pirate Thunderhead Bay itself with its icon).
+    const longGun = (id, name, shortName = "") => { const g = gun(id, name, 365); g.set = { ...g.set, techLevel: LN_TECH, shortName }; return g; };
+    out.push(longGun(492, "Pirate Thunderhead Bay"), longGun(493, "Antidisestablishmentarianismus"),
+        longGun(494, "Heavy Kit Turret"), longGun(495, "Kit Very Long Name For A Test"),
+        longGun(496, "Kit Short Name Set Long Turret", "Kit Short Name Set Long Turret"));
+    out.push(...ship(728, "Pirate Thunderhead Long Hull", 135, { accel: 2000, speed: 800, turn: 60, armor: 300, shield: 300, mass: 50,
+        freeMass: 100, cargo: 20, maxGuns: 4, maxTurrets: 4, ai: 3, strength: 10, flags: 0, flags2: 0x00C8, techLevel: LN_TECH }));
+    // shïp 729: the same name with an EMPTY ShortName (ln_a's 728 has ShortName = its name: one line, clipped at the grid edge).
+    out.push(...ship(729, "Pirate Thunderhead Long Hull 2", 135, { accel: 2000, speed: 800, turn: 60, armor: 300, shield: 300, mass: 50,
+        freeMass: 100, cargo: 20, maxGuns: 4, maxTurrets: 4, ai: 3, strength: 10, flags: 0, flags2: 0x00C8, techLevel: LN_TECH, shortName: "" }));
+    out.push(system(1456, "Kit Long Names", nextX(), Y, 363, [1034]),
+        port(1034, "Kit Long Names Port", { flags: 0x0D, techLevel: 0, specialTech: [LN_TECH, 12, -1] }));
     return out;
 }
 
