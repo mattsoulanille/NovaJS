@@ -929,6 +929,24 @@ export const STATE_HASH_INTERVAL = 60;
 //    at its lift-off abort. The derived wire schema fingerprint changes (7c258fc1263a74e7 ->
 //    4ed054bb232c84e8), and the join gate keeps older and newer builds
 //    apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): a strong-engined bay fighter's launch coast
+//    (reference "Bay launch kicks under the fighter's top speed (E8
+//    leftover), wave 42"). One OPTIONAL BayFighter field, `launchCoast`
+//    (ship/bay_fighter_component.ts): the seconds a fighter above shïp
+//    Accel 300 still coasts its kick before escorts/bay_plugin.ts's
+//    BayLaunchBrakeSystem brakes it (0.8 s, then 500 px/s²), counted down
+//    to 0 and dropped with `launchBrake`. No input kind or message kind
+//    changes. Sim-rule changes alongside (wave 42, no schema): the ion
+//    turn cut in three steps (2/3, 1/3, 0) with lines at 0.16 / 0.38 of
+//    IonizeMax and shïp Deionize counted in 1/56 s frames; ship-info Accel
+//    Poor from 130 and Average from 250 (display); gravity falling off as
+//    (300 / d)^1.5 beyond 300 px; a paid planet bribe one landing
+//    clearance on the 24.4 s clock; shïp Flags 0x0020 hulls burning the
+//    AI afterburner by their target player's combat rating, in 25 s
+//    spells drawn from a hash. The derived wire schema fingerprint
+//    changes (4ed054bb232c84e8 -> 91d46a29ee183365), and the join gate
+//    keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 
