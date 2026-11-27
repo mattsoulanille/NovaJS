@@ -1,0 +1,41 @@
+{
+  "name": "novaref-w42-tl2",
+  "edits": {
+    "ship": 651,
+    "stellar": 1008,
+    "credits": 100000,
+    "fuel": 300,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1447": 2,
+      "1448": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w42-tl2",
+    "weapons": {
+      "128": 0,
+      "360": 1,
+      "365": 1
+    },
+    "outfits": {
+      "128": 0,
+      "600": 1,
+      "607": 1
+    },
+    "rating": 12800,
+    "stellarShipCount": {
+      "1008": 6,
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}

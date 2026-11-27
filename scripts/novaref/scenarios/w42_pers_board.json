@@ -1,0 +1,19 @@
+{
+ "name": "w42_pers_board",
+ "_comment": "Wave 42 R16 (the deferred auto-abort): Kit Pers Range (sÿst 1446), whose traffic is twenty untargetable fillers, so a Tab finds përs 1151 Kit Refuel Person or nothing. Hand-driven (loops/interactive.mjs, inbox w42.jsonl; evidence tools/r16.mjs): Tab (land and take off to re-roll the traffic until the person is there), hail, accept its LinkMission 1044 (auto-abort, ShipGoal 5, DatePostInc 7), the mission list, Tab to the special ship; {done} hands over to loops/board.mjs (rescue_raczak's settings: steer by the target's grey brackets, sweep); then hand-driven again (the mission list, land, Leave). Recording from the start at 30 fps; the pilot is pulled at the end.",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true },
+  { "wait": 1500 },
+  { "shot": "space", "window": true },
+  { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w42.jsonl", "maxMs": 900000 } },
+  { "script": "../loops/board.mjs", "args": { "locateBy": "bracket", "bracketColours": ["grey"], "speedPxS": 360, "turnDegS": 174.2, "near": 260, "stepMs": 60, "maxSteps": 40, "maxLegs": 10, "calMs": 400, "fineBelowPx": 60, "fineStepMs": 25, "dialogClicks": [], "sweep": { "atPx": 30, "startOnSilent": true, "repeat": 2, "turnMs": 40, "presses": 40, "stopAfter": 1 } } },
+  { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w42.jsonl", "maxMs": 600000 } },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ],
+ "pull": true
+}

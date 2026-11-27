@@ -322,13 +322,15 @@ export default {
  * wave-41 leftovers. OPENED spöb 1000-1399 (stock spöb are 128-517 and
  * 1400-1420, so 518-1399 was never used by either; checked against the
  * stock .ndat files and the kit). RETIRED: wave 11's mïsn 1041 (bit 9087,
- * the rescue without auto-abort) and 1042 (bit 9088, the sub target);
- * their ships and düdes stay. Used: sÿst 1441-1445, spöb 1000-1006, shïp
- * 686-696, düde 532-534, wëap 309-311, oütf 490-491, mïsn 1041-1042, bits
- * 9276-9278. Map row y = -2820 (x -800 .. -640). The next free ids: sÿst
- * 1446+, spöb 1007-1399 (and 518-999), shïp 697+, düde 535+, ränk 205+,
+ * the rescue without auto-abort), 1042 (bit 9088, the sub target), 1043
+ * (bit 9089, the A14 victim trader) and 1044 (bit 9090, the pirate trader);
+ * their ships and düdes stay. Used: sÿst 1441-1449, spöb 1000-1010, shïp
+ * 686-698, düde 532-536, përs 1151, wëap 309-311, oütf 490-491, mïsn
+ * 1041-1044, bits 9276-9283. Map row y = -2820 (x -800 .. -480). The next free ids: sÿst
+ * 1450+, spöb 1011-1399 (and 518-999), shïp 699, düde 537+, përs NONE
+ * the base pilot marks alive (override a stock përs), ränk 205+,
  * mïsn NONE (retire another old kit mission), gövt 283 and below, flët
- * 324+, wëap 312+, oütf 492+, jünk 205+, bits 9279+.
+ * 324+, wëap 312+, oütf 492+, jünk 205+, bits 9284+.
  *
  *  E9  shïp 686 Kit E9 Excluded (a red disc, immobile AI 1, AppearOn b9276:
  *      a bit no pilot sets) and 687 Kit E9 Admitted (the same, green, no
@@ -355,6 +357,17 @@ export default {
  *      (spöb 1003).
  *  U7  sÿst 1445 Kit Gravity 5 Far: spöb 1004 the well (Gravity 5) and
  *      spöb 1005 / 1006 decoration starts 2,000 / 1,000 px east.
+ *  R14 mïsn 1043 (bit 9279, no dësc): wave 40's text-less offer at Kit R14
+ *      Port (spöb 1973) with Flags 0x0400 alone.
+ *  R16 përs 1151 Kit Refuel Person (shïp 697 Kit Pers Hulk, LinkMission
+ *      1044: auto-abort rescue, DatePostInc 7, bits 9280-9283) in sÿst 1446
+ *      Kit Pers Range (port spöb 1007; traffic twenty untargetable shïp 698
+ *      Kit Pers Filler, düde 536); düde 535 for the special ship.
+ *  R18 sÿst 1447 Kit Tribute Leave Two (owner 290; spöb 1008: DefCount
+ *      1062 of düde 512) linked to 1448 Kit Tribute Land Next (port spöb
+ *      1009, the 250 px art, at (-1300, 0): where a jump from 1447 arrives).
+ *  FM  sÿst 1449 Kit Stock Outfitter (port spöb 1010: outfitter, SpecialTech
+ *      115) for the stock Rebel Starbridge's free mass.
  */
 function wave42Resources() {
     const out = [];
@@ -366,6 +379,7 @@ function wave42Resources() {
         sys.set = { ...sys.set, avgShips, dudes: [...dudes, ...none8].slice(0, 8), dudeProbs: [...dudes.map(() => Math.floor(100 / dudes.length)), ...zero8].slice(0, 8) };
         return sys;
     };
+    const linked = (sys, links) => { sys.set = { ...sys.set, links: [...links, ...none16].slice(0, 16) }; return sys; };
     const shareRled = (id, name, rledId, size, set) => [
         { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
         { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
@@ -414,6 +428,40 @@ function wave42Resources() {
         spob(1005, "Kit Gravity 5 Start 2000", 2000, 0, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] }),
         // Added during the wave (the 2,000 px ramp was about 20 x weaker than wave 41's 300 px one): a 1,000 px start.
         spob(1006, "Kit Gravity 5 Start 1000", 1000, 0, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] }));
+    // --- R14 (added during the wave, the catalogue sweep): wave 40's text-less offer at Kit R14 Port (spöb 1973) with Flags
+    // 0x0400 (invisible) ALONE: mïsn 1043 (bit 9279; no dësc), OnAccept b9256, OnRefuse b9257 as wave 40's 1024.
+    out.push({ type: "mïsn", id: 1043, name: "Kit R14 no text invisible", clone: "mïsn:128", set: { ...misnBase, availBits: "b9279",
+        availStel: 1973, flags: 0x0400, onAccept: "b9256 !b9279", onRefuse: "b9257" } });
+    // --- R16 (the deferred auto-abort): përs 1151 Kit Refuel Person (the only person id the novaref base pilot marks alive
+    // outside the stock 128-643: index 1023), a clone of the stock Refuel Trader përs 225 in sÿst 1446 Kit Pers Range, flying
+    // shïp 697 Kit Pers Hulk (an immobile magenta disc), Flags 0x0040 (replace it with the mission's single special ship),
+    // LinkMission 1044 (bit 9280, AvailLoc 2): auto-abort, ShipGoal 5 (rescue), ShipSyst -6, ShipStart 0, düde 535 (shïp
+    // 697), DatePostInc 7, OnAccept b9281, OnAbort b9282, OnSuccess b9283. A person shows up with 5% of ship creations, so the
+    // system's traffic is twenty shïp 698 Kit Pers Filler (immobile green discs with Flags2 0x0004: Tab skips them, so a
+    // Tab finds the person or nothing; düde 536).
+    out.push(...shareRled(697, "Kit Pers Hulk", RLED.magenta, 24, { ...still, armor: 3000, shield: 0, strength: 10 }));
+    out.push(...shareRled(698, "Kit Pers Filler", RLED.green, 24, { ...still, flags2: 0x0004 }));
+    out.push(dude(535, "Kit Pers Hulk", 1, 363, 697), dude(536, "Kit Pers Filler", 1, 363, 698));
+    out.push(withTraffic(system(1446, "Kit Pers Range", nextX(), Y, 363, [1007]), [536], 20), port(1007, "Kit Pers Port"));
+    out.push({ type: "përs", id: 1151, name: "Kit Refuel Person", clone: "përs:225", set: { linkSystem: 1446, govt: 363, ai: 1,
+        aggression: 1, cowardice: 0, ship: 697, weapons: none4, weaponCounts: zero4, weaponAmmo: zero4, credits: 0, shieldMod: 100,
+        hailPict: 0, commQuote: -1, hailQuote: -1, linkMission: 1044, flags: 0x0040, activeOn: "", grantClass: 0, grantCount: 0,
+        grantChance: 0, subtitle: "", color: 0, flags2: 0 } });
+    out.push(...misn(1044, "Kit R16 deferred auto-abort", 9280, { availStel: -1, availLoc: 2, shipCount: 1, shipSyst: -6, shipDude: 535,
+        shipGoal: 5, shipBehav: -1, shipStart: 0, flags: 0x0001, datePostInc: 7, onAccept: "b9281", onAbort: "b9282", onSuccess: "b9283" }));
+    // --- R18 (added during the wave: wave 41's Leave Next port is at the centre, 1,350 px from where a jump arrives, and the
+    // tk_a run never got there): sÿst 1447 Kit Tribute Leave Two (owner 290; spöb 1008 = wave 39's Strong Six: düde 512,
+    // DefCount 1062) linked to 1448 Kit Tribute Land Next, whose port spöb 1009 (the 250 px planet art, so a wide landing
+    // window) sits at (-1300, 0), where a jump from 1447 (to its west) arrives.
+    out.push(linked(system(1447, "Kit Tribute Leave Two", nextX(), Y, 290, [1008]), [1448]),
+        port(1008, "Kit Tribute Leave Two Six", { govt: 290, tribute: -1, techLevel: 4, defenseDude: 512, defenseCount: 1062 }));
+    out.push(linked(system(1448, "Kit Tribute Land Next", nextX(), Y, 363, [1009]), [1447]),
+        spob(1009, "Kit Tribute Land Next Port", -1300, 0, 176, { flags: 0x43 }));
+    // --- Free mass with stock items (the hub's question on 89fbe05e): sÿst 1449 Kit Stock Outfitter, port spöb 1010 (land +
+    // outfitter, TechLevel 0, SpecialTech 115: the Rebel tech of the Gravimetric Missile and its launcher) for the stock
+    // Rebel Starbridge (shïp 178: FreeMass 20, 15 Gravimetric Missiles at 1 t).
+    out.push(system(1449, "Kit Stock Outfitter", nextX(), Y, 363, [1010]),
+        port(1010, "Kit Stock Outfitter Port", { flags: 0x05, techLevel: 0, specialTech: [115, -1, -1] }));
     return out;
 }
 
@@ -4521,12 +4569,12 @@ export function withoutRunningLights(r) {
  *      100), 351 Kit Owner Govt (Disab 7, Board 3, Kill 13). sÿst/spöb 2061
  *      Kit Owner Range (owned by 351), sÿst 2062 Kit Victim Home (350),
  *      2063 Kit Owner Home 2 (351). düde 333 Kit Victim Trader (AI 1, 350,
- *      shïp 708), mïsn 1043 (bit 9089) beside the player at 2061's port.
+ *      shïp 708), mïsn 1043 (bit 9089) beside the player at 2061's port (RETIRED in wave 42).
  *      gövt 352 Kit Law Govt (Disab 30, Kill 100; enemy of 353's class),
  *      353 Kit Pirate Govt (Disab 20, Kill 40; enemy of 352's class).
  *      sÿst/spöb 2064 Kit Law Range (352), sÿst 2065 Kit Pirate Home (353),
  *      2066 Kit Law Home 2 (352). düde 334 Kit Pirate Trader (AI 1, 353),
- *      mïsn 1044 (bit 9090) beside the player at 2064's port.
+ *      mïsn 1044 (bit 9090) beside the player at 2064's port (RETIRED in wave 42).
  *  E   AppearOn: shïp 853 / 854 Kit Appear A / B (Kit Trader clones whose
  *      AppearOn tests the unset bits 9095 / 9096), düde 335 (AI 1, gövt
  *      363, 50 / 50), mïsn 1045 (bit 9091) at Kit Port, ShipStart -1.
@@ -4600,7 +4648,7 @@ function wave11Resources() {
     home3.set = { ...home3.set, dudes: [337, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 2 };
     out.push(home3, spob(2070, "Kit Victim Port 3", 0, 0, 138, { flags: 0x43 }));
     out.push(...misn(1048, "Kit A victim trader home 3", 9094, { availStel: 2070, shipCount: 1, shipDude: 333, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9094" }));
-    out.push(...misn(1043, "Kit A victim trader", 9089, { availStel: 2061, shipCount: 1, shipDude: 333, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9089" }));
+    // mïsn 1043 (bit 9089, the victim trader at 2061) was retired in wave 42 (wave42Resources: R14); düde 333 stays.
     out.push(govt(352, "Kit Law Govt", { disabPenalty: 30, boardPenalty: 5, killPenalty: 100, classes: [352, -1, -1, -1], enemies: [353, -1, -1, -1] }));
     out.push(govt(353, "Kit Pirate Govt", { disabPenalty: 20, boardPenalty: 5, killPenalty: 40, classes: [353, -1, -1, -1], enemies: [352, -1, -1, -1] }));
     out.push(system(2064, "Kit Law Range", -400, -700, 352, [2064]));
@@ -4608,7 +4656,7 @@ function wave11Resources() {
     out.push(system(2065, "Kit Pirate Home", -360, -740, 353, []));
     out.push(system(2066, "Kit Law Home 2", -360, -700, 352, []));
     out.push(dude(334, "Kit Pirate Trader", 1, 353, 708));
-    out.push(...misn(1044, "Kit A pirate trader", 9090, { availStel: 2064, shipCount: 1, shipDude: 334, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9090" }));
+    // mïsn 1044 (bit 9090, the pirate trader at 2064) was retired in wave 42 (wave42Resources: R16); düde 334 stays.
 
     // --- E: a mission düde whose every class the player's bits exclude.
     out.push(...ship(853, "Kit Appear A", 138, { armor: 1000, shield: 1000, ai: 1, strength: 20, crew: 10, appearOn: "b9095" }));

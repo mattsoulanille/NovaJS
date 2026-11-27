@@ -614,14 +614,22 @@ plug-in; inbox `w41.jsonl`).
 Wave 42 OPENED spöb **1000-1399**: stock spöb are 128-517 and 1400-1420, so
 518-1399 was never used by the stock files or the kit (checked against the
 stock .ndat files; the kit's new stellars load and land like the 1421+
-ones). It used sÿst 1441-1445, spöb 1000-1006, shïp 686-696, düde 532-534,
-wëap 309-311, oütf 490-491 and bits 9276-9278, and RETIRED wave 11's mïsn
-1041 / 1042 (bits 9087 / 9088; the ships and düdes stay), using them for its
-own. Next free: sÿst 1446, spöb 1007-1399 (and 518-999), shïp 697, düde
-535, ränk 205, mïsn **none** (retire another old kit mission; wave 11's
-1039 is still used by `w39_k3`), wëap 312, oütf 492, gövt 283 and below,
-flët 324, jünk 205, bits 9279. `scenarios/w42_space_interactive.json` /
-`w42_space_early.json` (inbox `w42.jsonl`).
+ones). It used sÿst 1441-1449, spöb 1000-1010, shïp 686-698, düde 532-536,
+përs 1151 (the kit's first person), wëap 309-311, oütf 490-491 and bits
+9276-9283, and RETIRED wave 11's mïsn 1041-1044 (bits 9087-9090; the ships
+and düdes stay), using them for its own. Next free: sÿst 1450, spöb
+1011-1399 (and 518-999), shïp 699 (then stock gaps such as 719 / 727-729 /
+888-894), düde 537, ränk 205, mïsn **none** (retire another old kit
+mission; wave 11's 1039 is still used by `w39_k3`), përs **none the base
+pilot marks alive** (its personAlive array holds only përs 128-643 and 1151;
+`pilot-make` has no person edit, so override a stock përs), wëap 312, oütf
+492, gövt 283 and below, flët 324, jünk 205, bits 9284. Lessons: the star
+field moves in two speed clusters, so a 1 s mean of the star shift reads a
+speed RATIO low; EV Nova has no landing autopilot (a landing after a jump
+needs the port where the ship arrives, about 1,350 px out). Scenarios
+`scenarios/w42_space_interactive.json` / `w42_space_early.json` (inbox
+`w42.jsonl`) and `w42_pers_board.json` (a përs hail and accept, then
+`loops/board.mjs` on the special ship, then hand-driven again).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they
