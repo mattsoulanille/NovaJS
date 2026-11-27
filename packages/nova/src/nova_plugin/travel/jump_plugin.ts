@@ -158,10 +158,65 @@ export const JUMP_ARRIVAL_MARGIN_S = 3;
  * that speed: the original's ship arrives about 1,350 px out at Speed 800
  * (about 350 px/s), i.e. 1,000 + one second (reference "Jump phases and
  * fuel (U8), wave 38", finding 3; GUESS that it scales with top speed
- * rather than being a fixed 1,350: one hull measured). One second is
- * still plenty to chain a route: a held jump key needs one tick, and
- * multi-jump continues on the tick after the arrival. */
+ * rather than being a fixed 1,350: one hull measured). A held jump key
+ * that reaches the simulation only after the ship has coasted inside the
+ * zone still chains: see ARRIVAL_JUMP_GRACE_MS. Multi-jump continues on
+ * the tick after the arrival. */
 export const PLAYER_JUMP_ARRIVAL_MARGIN_S = 1;
+
+/**
+ * THE ARRIVAL GRACE: how long (logical ms) after a ship comes out of
+ * hyperspace a jump press still starts the route's next hop although the
+ * ship has coasted into the no-jump zone since.
+ *
+ * Why it exists. On the original a held `j` chains a route hop after hop
+ * "each jump starting as soon as the previous one arrived" (reference
+ * "Multi-jump routes and the `j` key, wave 11"): the key is read on the
+ * arrival frame, a whole second of flight outside the zone. Here the
+ * arriving ship is live in the room's simulation (and coasting in on the
+ * room's clock) before the player can see it: the client builds and
+ * draws the new system first, behind the white flash, and only then
+ * passes the held key on (client/control_routing.ts — a key let go while
+ * the screen was white must not jump again). That first frame alone can
+ * take most of the second (measured headless under load: 0.5-0.8 s; the
+ * window is half as long in wall time at 2x), and once the ship was
+ * inside the zone the held key did nothing at all — "even when holding
+ * j, it does not jump right as I enter" (Matthew, 2026-11-26). So for
+ * this long after the arrival the no-jump zone does not refuse a jump;
+ * every other condition (route, fuel, disabled, a jump under way) still
+ * does.
+ *
+ * GUESS: 3 s. The player sees the arrival a first frame late (S, in
+ * room time; twice the wall time at 2x), so the original's one second
+ * to press outside the zone becomes this grace minus S: a full second
+ * whenever S is under 2 s. Measured headless under heavy load: S + the
+ * key's way in = 0.9-1.0 s at 1x and 1.7-2.0 s at 2x, where 2 s of
+ * grace still missed half the hops. A press this late after the arrival
+ * can start from well inside the zone (a fast hull would be past the
+ * centre), which the original never allows; nothing here is measured.
+ */
+export const ARRIVAL_JUMP_GRACE_MS = 3000;
+
+/**
+ * When (logical ms, the destination world's clock) this ship came out of
+ * hyperspace: set by JumpSequenceSystem's 'arriving' stage and read for
+ * the arrival grace (ARRIVAL_JUMP_GRACE_MS) by PlayerJumpControl and the
+ * display's readiness readouts. Dropped when a jump starts and once the
+ * grace is over. Synced (serializer-registered), so the display's
+ * jump-ready cue and readout quote the same answer as the gate.
+ */
+export const HyperspaceArrivalComponent =
+    new Component<{ at: number }>('HyperspaceArrival');
+
+/**
+ * Whether a ship that came out of hyperspace at `arrival.at` is still in
+ * its arrival grace at logical time `now` (see ARRIVAL_JUMP_GRACE_MS).
+ */
+export function inArrivalJumpGrace(arrival: { at: number } | undefined,
+    now: number): boolean {
+    return arrival !== undefined && now - arrival.at >= 0
+        && now - arrival.at <= ARRIVAL_JUMP_GRACE_MS;
+}
 
 /** How closely (radians) an inertial ship must face retrograde before
  * it thrusts to kill its velocity. */
@@ -430,6 +485,9 @@ function beginJump(entity: Entity, systemId: string, destination: string,
         dest.position[0] - origin.position[0],
         dest.position[1] - origin.position[1]);
     jumpRoute.route.shift();
+    // A ship that jumps again leaves its arrival grace behind (a jump a
+    // disable cancels does not get it back).
+    entity.components.delete(HyperspaceArrivalComponent);
     entity.components.set(JumpComponent, {
         to: destination,
         // Ships with "fast jumping" skip coming to a stop.
@@ -532,16 +590,24 @@ export function beginFollowJump(entity: Entity, leader: string,
  * jump key departs at the first instant a jump becomes possible —
  * flying out of the no-jump zone with the key held, or chain-jumping:
  * ships arrive outside the no-jump radius, so a held key starts the
- * route's next jump immediately.
+ * route's next jump immediately, and for ARRIVAL_JUMP_GRACE_MS after
+ * the arrival the zone does not refuse it even once the ship has coasted
+ * inside (the held key reaches a new system only after its first frame
+ * has been seen: client/control_routing.ts).
  */
 const PlayerJumpControl = new System({
     name: 'PlayerJumpControl',
     args: [ShipControlStateComponent, GetEntity, SystemIdResource,
         JumpRouteComponent, MovementStateComponent, ShipPhysicsComponent,
-        FuelComponent, SimulationGameDataResource,
-        Optional(DisabledComponent)] as const,
+        FuelComponent, SimulationGameDataResource, TimeResource,
+        Optional(DisabledComponent),
+        Optional(HyperspaceArrivalComponent)] as const,
     step(controlState, entity, systemId, jumpRoute, movement, shipPhysics,
-        fuel, gameData, disabled) {
+        fuel, gameData, time, disabled, arrival) {
+        const arrivalGrace = inArrivalJumpGrace(arrival, time.time);
+        if (arrival && !arrivalGrace) {
+            entity.components.delete(HyperspaceArrivalComponent);
+        }
         // Truthy while held ('start'/'repeat'/true); false on release.
         if (!controlState.get('hyperjump')) {
             return;
@@ -563,6 +629,7 @@ const PlayerJumpControl = new System({
             fuelPerJump: FUEL_PER_JUMP,
             disabled: disabled !== undefined,
             jumping: entity.components.has(JumpComponent),
+            arrivalGrace,
         });
         // The destination re-check is redundant with the 'noRoute' blocker;
         // it is what narrows the type for beginJump.
@@ -579,7 +646,9 @@ const PlayerJumpControl = new System({
             gameData, autoJumpsLeft);
     },
     // #237 pin (shared: ControlledBy, JumpRouteComponent): JumpPlugin
-    // registers this before its route provider.
+    // registers this before its route provider. After TimeSystem: it reads
+    // the clock for the arrival grace (determinism rule 4).
+    after: [TimeSystem],
     before: [JumpRouteProvider],
 });
 
@@ -1010,6 +1079,11 @@ export const JumpSequenceSystem = new System({
                     { id: warpUpSound(shipPhysics), stop: true }, [uuid]);
                 emit(PlayerSoundEvent, { id: WARP_OUT_SOUND }, [uuid]);
                 entity.components.delete(JumpComponent);
+                // The arrival grace starts now (ARRIVAL_JUMP_GRACE_MS): the
+                // route's next hop may start even after the ship has
+                // coasted into the no-jump zone.
+                entity.components.set(HyperspaceArrivalComponent,
+                    { at: time.time });
                 // "multi-jump" (ModType 32): if the ship still has auto-jump
                 // budget, leave a marker so MultiJumpContinueSystem starts the
                 // route's next jump this tick without the player re-pressing
@@ -1064,6 +1138,9 @@ export const JumpPlugin: Plugin = {
         // destination world), so it must serialize.
         serializer?.addComponent(MultiJumpContinueComponent,
             t.type({ left: t.number }));
+        // Synced so the display's readiness readouts see the arrival grace.
+        serializer?.addComponent(HyperspaceArrivalComponent,
+            t.type({ at: t.number }));
         if (serializer) {
             serializer.addEvent(FinishJumpEvent, FinishJumpEventType(serializer));
         }

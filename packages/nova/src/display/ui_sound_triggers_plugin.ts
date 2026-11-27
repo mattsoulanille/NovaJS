@@ -15,8 +15,9 @@ import {
 } from '../nova_plugin/ship/index.js';
 import { selectNearestHostile, styleForTarget } from '../nova_plugin/combat/index.js';
 import {
-    JumpBlocker, JumpComponent, JumpRouteComponent, JUMP_DISTANCE, jumpBlocker,
-    jumpRadiusFor, PlanetTargetComponent,
+    HyperspaceArrivalComponent, inArrivalJumpGrace, JumpBlocker, JumpComponent,
+    JumpRouteComponent, JUMP_DISTANCE, jumpBlocker, jumpRadiusFor,
+    PlanetTargetComponent,
 } from '../nova_plugin/travel/index.js';
 import { JUMP_NO_FUEL_MESSAGE, JUMP_TOO_CLOSE_MESSAGE } from './status_bar_content.js';
 import { showStatusMessage } from './status_line_resource.js';
@@ -109,8 +110,10 @@ const JumpReadyBeepSystem = new System({
     name: 'JumpReadyBeep',
     args: [JumpRouteComponent, MovementStateComponent, ShipPhysicsComponent,
         FuelComponent, Optional(DisabledComponent), Optional(JumpComponent),
+        Optional(HyperspaceArrivalComponent), SimulationTimeResource,
         UiSoundTriggerStateResource, Emit, PlayerShipSelector] as const,
-    step(jumpRoute, movement, shipPhysics, fuel, disabled, jump, state, emit) {
+    step(jumpRoute, movement, shipPhysics, fuel, disabled, jump, arrival,
+        simTime, state, emit) {
         const { beep, next } = jumpReadyEdge(state.jumpReady, {
             hasRoute: jumpRoute.route.length > 0,
             distance: movement.position.length,
@@ -120,6 +123,7 @@ const JumpReadyBeepSystem = new System({
             fuelPerJump: FUEL_PER_JUMP,
             disabled: disabled !== undefined,
             jumping: jump !== undefined,
+            arrivalGrace: inArrivalJumpGrace(arrival, simTime.time),
             routeHead: jumpRoute.route[0],
         });
         if (beep) {
@@ -216,6 +220,10 @@ function playerJumpRefusal(world: World): JumpBlocker | undefined {
             fuelPerJump: FUEL_PER_JUMP,
             disabled: entity.components.has(DisabledComponent),
             jumping: entity.components.has(JumpComponent),
+            arrivalGrace: inArrivalJumpGrace(
+                entity.components.get(HyperspaceArrivalComponent),
+                (world.resources.get(SimulationTimeResource)
+                    ?? defaultSimulationTime()).time),
         });
         // 'noRoute' is a no-op, not a refusal (Matthew, 2026-08-15: the
         // can't-do beep is for "not enough energy / not far enough from

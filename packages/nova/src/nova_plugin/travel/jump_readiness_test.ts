@@ -1,7 +1,9 @@
 import 'jasmine';
 import { canJump, jumpBlocker, jumpRadiusFor } from './jump_readiness.js';
 import { FUEL_PER_JUMP } from '../ship/index.js';
-import { JUMP_DISTANCE } from './jump_plugin.js';
+import {
+    ARRIVAL_JUMP_GRACE_MS, inArrivalJumpGrace, JUMP_DISTANCE,
+} from './jump_plugin.js';
 
 function inputs(overrides: Partial<Parameters<typeof canJump>[0]> = {}) {
     return {
@@ -59,11 +61,40 @@ describe('jumpBlocker', () => {
             .toBe('disabled');
     });
 
+    it('lets a fresh arrival\'s grace waive the no-jump zone, and nothing else', () => {
+        expect(jumpBlocker(inputs({ distance: 0, arrivalGrace: true })))
+            .toBeUndefined();
+        expect(jumpBlocker(inputs({ distance: 0, arrivalGrace: false })))
+            .toBe('tooClose');
+        expect(jumpBlocker(inputs({ arrivalGrace: true, fuel: 0 })))
+            .toBe('noFuel');
+        expect(jumpBlocker(inputs({ arrivalGrace: true, hasRoute: false })))
+            .toBe('noRoute');
+        expect(jumpBlocker(inputs({ arrivalGrace: true, disabled: true })))
+            .toBe('disabled');
+        expect(jumpBlocker(inputs({ arrivalGrace: true, jumping: true })))
+            .toBe('jumping');
+    });
+
     it('respects a ship-specific jump radius', () => {
         const radius = jumpRadiusFor(JUMP_DISTANCE, 500);
         expect(jumpBlocker(inputs({ jumpRadius: radius, distance: 1200 })))
             .toBe('tooClose');
         expect(jumpBlocker(inputs({ jumpRadius: radius, distance: 1600 })))
             .toBeUndefined();
+    });
+});
+
+describe('inArrivalJumpGrace', () => {
+    it('runs from the arrival for ARRIVAL_JUMP_GRACE_MS', () => {
+        const arrival = { at: 1000 };
+        expect(inArrivalJumpGrace(undefined, 1000)).toBeFalse();
+        expect(inArrivalJumpGrace(arrival, 1000)).toBeTrue();
+        expect(inArrivalJumpGrace(arrival, 1000 + ARRIVAL_JUMP_GRACE_MS))
+            .toBeTrue();
+        expect(inArrivalJumpGrace(arrival, 1001 + ARRIVAL_JUMP_GRACE_MS))
+            .toBeFalse();
+        // A clock behind the arrival (a different world's) is no grace.
+        expect(inArrivalJumpGrace(arrival, 999)).toBeFalse();
     });
 });

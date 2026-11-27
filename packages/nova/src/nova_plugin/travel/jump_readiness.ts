@@ -39,7 +39,8 @@ export type JumpBlocker =
     | 'jumping'
     /** No hyperspace route is selected, so there is nowhere to go. */
     | 'noRoute'
-    /** Inside the no-jump zone around the system center. */
+    /** Inside the no-jump zone around the system center (and past a
+     * fresh arrival's grace: jump_plugin.ts ARRIVAL_JUMP_GRACE_MS). */
     | 'tooClose'
     /** Under one jump's worth of fuel. */
     | 'noFuel';
@@ -60,6 +61,10 @@ export interface JumpReadinessInputs {
     disabled?: boolean;
     /** The ship already carries a JumpComponent. Optional, as above. */
     jumping?: boolean;
+    /** The ship came out of hyperspace moments ago and the no-jump zone
+     * does not refuse it yet (jump_plugin.ts ARRIVAL_JUMP_GRACE_MS,
+     * inArrivalJumpGrace). Optional: absent means no grace. */
+    arrivalGrace?: boolean;
 }
 
 /**
@@ -88,7 +93,7 @@ export function jumpBlocker(inputs: JumpReadinessInputs):
     if (!inputs.hasRoute) {
         return 'noRoute';
     }
-    if (inputs.distance < inputs.jumpRadius) {
+    if (inputs.distance < inputs.jumpRadius && !inputs.arrivalGrace) {
         return 'tooClose';
     }
     if (inputs.fuel < inputs.fuelPerJump) {

@@ -958,6 +958,19 @@ export const STATE_HASH_INTERVAL = 60;
 //    changes. The derived wire schema fingerprint changes
 //    (91d46a29ee183365 -> a7b47d05196b53ff), and the join gate keeps older
 //    and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the arrival grace of a hyperspace jump. A new
+//    serializer-registered component, HyperspaceArrival (`{at: number}`,
+//    travel/jump_plugin.ts), set on a ship the tick it comes out of
+//    hyperspace and dropped when it jumps again or ARRIVAL_JUMP_GRACE_MS
+//    (3 s) later; it joins the wire snapshot component registry and the
+//    desync hash input of a ship that just arrived. Sim-rule change
+//    alongside: while it lasts the no-jump zone does not refuse a jump
+//    (route, fuel, disabled and a jump under way still do), so a jump key
+//    held through the arrival still chains once the client has shown the
+//    new system. No input kind or message kind changes. The derived wire
+//    schema fingerprint changes (a7b47d05196b53ff -> FPNEW), and
+//    the join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

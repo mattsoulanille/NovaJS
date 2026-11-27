@@ -1,5 +1,5 @@
 import { StatusBarData } from "novadatainterface/status_bar_data";
-import { RunQuery } from "nova_ecs/arg_types";
+import { GetWorld, RunQuery } from "nova_ecs/arg_types";
 import { Optional } from "nova_ecs/optional";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Query } from "nova_ecs/query";
@@ -14,9 +14,10 @@ import {
 } from '../nova_plugin/player/index.js';
 import { SimulationGameDataResource } from "../nova_plugin/core/index.js";
 import {
-    JumpComponent, JumpRouteComponent, JUMP_DISTANCE, canJump, jumpRadiusFor, PlanetDataComponent,
-    PlanetTargetComponent,
+    HyperspaceArrivalComponent, inArrivalJumpGrace, JumpComponent, JumpRouteComponent,
+    JUMP_DISTANCE, canJump, jumpRadiusFor, PlanetDataComponent, PlanetTargetComponent,
 } from '../nova_plugin/travel/index.js';
+import { defaultSimulationTime, SimulationTimeResource } from "./simulation_time.js";
 import { navReadout, NavReadout } from "./status_bar_content.js";
 import { NAV_HEADER_Y, NAV_VALUE_Y, StatusBarFonts } from "./status_bar_layout.js";
 import { StatusBarResource } from "./status_bar_resource.js";
@@ -126,11 +127,12 @@ export const DrawStatusBarNavigation = new System({
     args: [StatusBarResource, Optional(JumpRouteComponent),
         Optional(PlanetTargetComponent), Optional(JumpComponent),
         Optional(MovementStateComponent), Optional(ShipPhysicsComponent),
-        Optional(FuelComponent), Optional(DisabledComponent), RunQuery,
-        SimulationGameDataResource, DiscoveryLevelResource,
+        Optional(FuelComponent), Optional(DisabledComponent),
+        Optional(HyperspaceArrivalComponent), RunQuery,
+        SimulationGameDataResource, DiscoveryLevelResource, GetWorld,
         PlayerShipSelector] as const,
     step(statusBar, jumpRoute, planetTarget, jump, movement, shipPhysics,
-        fuel, disabled, runQuery, gameData, discoveryOf) {
+        fuel, disabled, arrival, runQuery, gameData, discoveryOf, world) {
         // WHERE THE SHIP IS ACTUALLY HEADED. A jump in progress shows ITS
         // destination, not the route's new head: beginJump (jump_plugin)
         // shifts the hop off the route the instant the sequence starts, so
@@ -193,6 +195,9 @@ export const DrawStatusBarNavigation = new System({
                     fuel: fuel.current,
                     fuelPerJump: FUEL_PER_JUMP,
                     disabled: disabled !== undefined,
+                    arrivalGrace: inArrivalJumpGrace(arrival,
+                        (world.resources.get(SimulationTimeResource)
+                            ?? defaultSimulationTime()).time),
                 })
                 : true);
 
