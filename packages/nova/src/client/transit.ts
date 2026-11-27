@@ -66,14 +66,14 @@ export function followHyperspaceJump(runtime: ClientRuntime,
     // A MULTI-JUMP (ModType 32) passed through these systems without
     // entering them (jump_plugin.ts resolveJumpHops). GUESSES, unmeasured
     // on the original: each still counts as explored on the map (the
-    // pilot flew through it), and each hop costs its days as a separate
-    // jump would. Nothing else happens there: no world is built, so no
-    // traffic, no mission ships, no hails, no arrival.
+    // pilot flew through it). The date advances ONCE, one jump's days, for
+    // the whole multi-jump (Matthew, 2026-11-27). Nothing else happens
+    // there: no world is built, so no traffic, no mission ships, no hails,
+    // no arrival.
     const passedThrough = data.entity.components.get(JumpComponent)?.via ?? [];
     markManyDiscovered(passedThrough, DISCOVERY_ENTERED);
     void runtime.transitions.run(async () => {
-        await advanceDateForJump(runtime, data.entity,
-            passedThrough.length + 1);
+        await advanceDateForJump(runtime, data.entity);
         // A rejection here used to be unobserved: the ship (already
         // deleted sim-side) was simply gone. Recover it into the system it
         // left, the way a failed gate transit recovers to its gate.
@@ -105,11 +105,11 @@ export function followHyperspaceJump(runtime: ClientRuntime,
  * mod" outfits); advance the player's calendar while the entity is
  * between simulations. The date rides to peers with the re-added entity.
  * The derived ShipPhysicsComponent already sums the outfit mods; fall
- * back to the raw ship data if it isn't populated yet. `hops` jumps'
- * worth of days pass: more than one for a multi-jump.
+ * back to the raw ship data if it isn't populated yet. A multi-jump
+ * costs one jump's days, however many hops it takes (Matthew, 2026-11-27).
  */
-async function advanceDateForJump(runtime: ClientRuntime, entity: Entity,
-    hops = 1): Promise<void> {
+async function advanceDateForJump(runtime: ClientRuntime, entity: Entity):
+    Promise<void> {
     const { gameData } = runtime;
     try {
         const derived = entity.components.get(ShipPhysicsComponent);
@@ -123,7 +123,7 @@ async function advanceDateForJump(runtime: ClientRuntime, entity: Entity,
             mass = physics?.mass ?? 100;
             speedMod = physics?.hyperspaceSpeedMod ?? 0;
         }
-        await advanceEntityDate(entity, daysPerJump(mass, speedMod) * hops,
+        await advanceEntityDate(entity, daysPerJump(mass, speedMod),
             MissionUniverse.shared(gameData), gameData);
     } catch (e) {
         // THE DATE COST IS FORFEIT, DELIBERATELY, and the jump still
