@@ -25751,6 +25751,63 @@ would pin it. Confidence: high (one clean run each, every bit read back).
 `pilot-after/`), `nkd_a/fr/leave.png`, `nks_b/fr/leave.png`,
 `nks_b/fr/status.png`; `nks_a/` (the spoiled run).
 
+### The beam Count clock (the hub's item 2, E10), wave 52: only an NPC's TURRETED beam lasts Count / 30 s: a plain (Impact 0) NPC turret beam showed 30 frames like the tractor, while an NPC FIXED beam showed 16-18 and the player's TURRET beam 17, like the player's fixed beam (Count / 56) (2026-11-27)
+
+**Question** (the hub's item 2, from wave 51: the NPC tractor's Count-30
+beam lasts about 1 s, the player's Count-30 fixed beam 16-17 frames): is
+the difference NPC vs player, or turret vs fixed (or the tractor)?
+
+**Rig** (`wave52Resources` "E10"), all at Kit Knock Grid (wave 51's
+system), F12 on (55-56 fps shown), the beam's frames counted on the
+30 fps recording by colour (`tools/beamcount.py`: every recorded frame
+with 8+ px of pure green / red in the play area, episodes by pts):
+- `e10t_a`: the PLAYER's TURRET beam: wëap 331 Kit Plain Beam Turret
+  (wave 40's Kit Plain Beam, Count 30, green, as Guidance 3, 700 px) on
+  the Kit Ring Lancer, wave 50's still cyan on the first moon targeted
+  (mïsn 966), three Space taps 5.7 s apart.
+- `e10n_a`: an NPC's FIXED beam: wëap 332 Kit Fixed Red Beam (the
+  tractor's red art, Impact 0, Count 30, Reload 120, Guidance 0) on shïp
+  614 Kit Fixed Beamer (wave 48's immobile beamer, Turn 60, gövt 362)
+  on the first moon (mïsn 1083), firing at Kit Probe A on the port, 37 s.
+- `e10nt_a`: an NPC's TURRETED plain beam: the same beamer with wëap 333
+  (wëap 332 as Guidance 3), 45 s.
+
+| beam | Count | recorded frames per shot | life |
+|---|---|---|---|
+| player fixed (wave 51 e10g_a / e10p_a) | 30 | 17, 17 / 16, 16 | 0.53-0.57 s (Count / 56) |
+| **player turret** (e10t_a) | 30 | **17, 17, 17** (50.07-50.60, 55.77-56.30, 61.50-62.03) | 0.53 s |
+| **NPC fixed** (e10n_a) | 30 | **16, 17, 16, 17, 18, 16** (six shots 7.2 s apart) | 0.50-0.57 s |
+| **NPC turret, Impact 0** (e10nt_a) | 30 | **30, 30, 30, 30, 30, 30, 30** (seven shots 7.17 s apart) | 0.97 s |
+| NPC turret tractor (waves 50-51) | 30 | 29-31 | about 1 s |
+
+**Findings.**
+1. **Neither "NPC" nor "turret" alone makes the 1 s beam**: the NPC's
+   fixed beam and the player's turret beam both live Count / 56 like the
+   player's fixed beam; only the NPC's TURRETED beam lives Count / 30
+   (30 frames, every shot), tractor or not (Impact 0 here).
+2. So the tractor's 1 s pull (wave 51) is the NPC-turret clock, not a
+   tractor rule: a player-fired turret tractor would pull for about
+   0.54 s (GUESS, not flown).
+3. GUESS for the cause: the original advances an NPC turret beam's life
+   once per 1/30 s AI tick (it re-aims the beam every tick) and every
+   other beam once per drawn frame (56 fps here); a different frame rate
+   would move only the Count / 56 beams. Damage per unit was not read.
+
+**NovaJS (main 14052c16):** every beam lives Count / `BEAM_COUNT_RATE`
+(56) s, its units (damage, push, pull) spread over that
+(`P/parsers/constants.ts:13`, `P/parsers/weapon_parse.ts:349-352`,
+`N/nova_plugin/combat/beam_plugin.ts:195`, `:550-566`): **matches** the
+player's fixed and turret beams and the NPC's fixed beam; **mismatch**
+for an NPC's turreted beam (0.54 s against 1.0 s; wave 51's tractor
+pull). **Proposed:** an NPC (non-player-controlled) turreted beam (Guidance
+3, and GUESS 10 point-defence beams) runs its Count at 30 units a second
+(FPS), every other beam at `BEAM_COUNT_RATE`; the beam entity needs its
+firer's control kind and the weapon's guidance at the shot. Confidence:
+high (seven, six and three shots, each beam on its count every time).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w52/e10t_a/`,
+`e10n_a/`, `e10nt_a/` (`recording.mp4`, the F12 shots), `tools/beamcount.py`.
+
 ### Reliability notes (for anyone running the reference)
 
 - **Stock mission bits live above 9000 too (wave 51 `trb40_a` / `_b`):**
