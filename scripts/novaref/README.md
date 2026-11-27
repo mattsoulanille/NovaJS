@@ -716,6 +716,25 @@ under test. Escort deals: a pilot can hold a CAPTURED escort
 Escort (306, 327), Sell Escort (305, 355), Release (306, 383), Close
 Channel (306, 411). Scenarios `w47_space_interactive.json` /
 `w47_space_early.json` (inbox `w47.jsonl`).
+Wave 48 used sÿst 1486-1489, spöb 1165-1169, shïp 843, düde 548, wëap
+322-324, oütf 510-511 and bits 9306-9318, and RETIRED wave 12's mïsn 1063
+(bit 9113), wave 13's 1064-1067 (bits 9117 / 9121 / 9125 / 9126) and 1073
+(bit 9137), and wave 10's shïp 843 (Kit Sub Target Big) with its düde 328,
+using them for its own. Next free: sÿst 1490, spöb 1170-1399 (and
+518-999), shïp **none** (retire an old kit hull), düde 328 / 550, ränk 205,
+mïsn **none** (retire another old kit mission: wave 13's 1074-1084 are
+one-off rigs), përs: override a stock one, wëap 325, oütf 512, gövt 283 and
+below, flët 324, jünk 205, bits 9319, rlëD 1113. An **in-flight bit
+reader**: sÿst 1488 Kit Bits Person lists the stock përs 225 in its Person
+slot; the run-only `kits/w48_pers225.mjs` makes it an invincible immobile
+hulk whose hail offers mïsn 1066 only while the bits under test are set
+(scenario `w48_pers_interactive.json`). A **rock-push field**: sÿst 1486 /
+1487 Kit Rock Push Small / Huge (16 rocks of one stock röid) with a start
+decoration at the centre; the Kit Plain Ring spins there with a forward
+Kit Rock Knock (`tools/rockpts.mjs`, `tools/kinks.py` in the wave-48
+evidence). `w48_capture_cargo.json` is wave 46's capture rig with a Mission
+BBS job taken first and a hand-driven break for the Leave. Scenarios
+`w48_space_interactive.json` (inbox `w48.jsonl`).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they

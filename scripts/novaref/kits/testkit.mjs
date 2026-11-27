@@ -489,15 +489,16 @@ function wave47Resources() {
  * Wave-48 experiments (docs/reference_experiments.md, "... wave 48"): the
  * wave-47 leftovers. RETIRED: wave 12's mïsn 1063 (bit 9113, S2 cargo
  * plain) and wave 13's 1064 / 1065 (bits 9117 / 9121, X abort escort /
- * raiders) and 1066 / 1067 (bits 9125 / 9126, N disabler / escort ally);
- * their ships and düdes stay. Used: sÿst 1486-1489, spöb 1165-1170, wëap
- * 322-323, oütf 510-511, mïsn 1063-1067, bits 9306-9316. Map row y = -3180
- * (x -800 .. -680). The next free ids: sÿst 1490+, spöb 1171-1399 (and
- * 518-999), shïp NONE (retire an old kit hull: wave 10's 843 Kit Sub Target
- * Big is unused since wave 41), düde 548 / 550+, përs: override a stock one
- * (kits/w48_pers225.mjs), ränk 205+, mïsn: wave 13's 1073 only (then retire
+ * raiders), 1066 / 1067 (bits 9125 / 9126, N disabler / escort ally) and
+ * 1073 (bit 9137, Raczak kit dude no cargo), their ships and düdes
+ * staying; wave 10's shïp 843 (Kit Sub Target Big) and its düde 328. Used:
+ * sÿst 1486-1489, spöb 1165-1169, shïp 843, düde 548, wëap 322-324, oütf
+ * 510-511, mïsn 1063-1067 / 1073, bits 9306-9318. Map row y = -3180 (x
+ * -800 .. -680). The next free ids: sÿst 1490+, spöb 1170-1399 (and
+ * 518-999), shïp NONE (retire an old kit hull), düde 328 / 550+, përs:
+ * override a stock one (kits/w48_pers225.mjs), ränk 205+, mïsn NONE (retire
  * another old kit mission: wave 13's 1074-1084 are one-off rigs), gövt 283
- * and below, flët 324+, wëap 324+, oütf 512+, jünk 205+, bits 9317+, rlëD
+ * and below, flët 324+, wëap 325+, oütf 512+, jünk 205+, bits 9319+, rlëD
  * 1113+.
  *
  *  RP  The asteroid push (a rock's push per Impact / its röid Mass). sÿst
@@ -535,6 +536,11 @@ function wave47Resources() {
  *      9314) puts wave 31's Kit Hulk IR (düde 477: shïp 547, 50 t, DeathDelay
  *      10) on the marker (ShipStart -2), inside the damage square that
  *      wave 29's law gives a 50 t wreck (2 x (25.5 + 0.037 x 50) = 55 px).
+ *  KT  (added during the wave) A tractor beam: wëap 324 Kit Tractor Beam 20
+ *      (wave 46's Kit Knock Beam 20 with Impact -20); shïp 843 Kit Tractor
+ *      Beamer 20 (as wave 46's Kit Knock Beamer 20, an immobile AI 3 of the
+ *      always-hostile gövt 362), düde 548; mïsn 1073 (bit 9318) puts it on
+ *      Kit Knock Pad's marker 250 px west of the port (ShipStart -2).
  */
 function wave48Resources() {
     const out = [];
@@ -571,6 +577,15 @@ function wave48Resources() {
         spob(1169, "Kit Blast Small 40 Mark", 40, 0, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
     out.push(...misn(1067, "Kit KS blast hulk 50 t", 9314, { availStel: 1168, onAccept: "!b9314", shipCount: 1, shipSyst: -1, shipDude: 477,
         shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    // --- KT (added during the wave): wëap 324, shïp 843 (wave 10's, retired), düde 548, mïsn 1073 (wave 13's, retired), bit 9318.
+    out.push(weap(324, "Kit Tractor Beam 20", 170, { reload: 120, duration: 30, speed: 0, armorDamage: 1, shieldDamage: 1, guidance: 3,
+        beamLength: 3000, beamWidth: 2, impact: -20, ionization: 0, flags: 0 }));
+    // As wave 46's Kit Knock Beamer 20 (shïp 419) with the beam's Impact negative.
+    out.push(...ship(843, "Kit Tractor Beamer 20", 136, { armor: 30000, shield: 0, accel: 0, speed: 0, turn: 60, ai: 3, strength: 1, crew: 1,
+        weapons: [324, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
+    out.push(dude(548, "Kit Tractor Beamer 20", 3, 362, 843));
+    out.push(...misn(1073, "Kit KT tractor beamer on the marker", 9318, { availStel: 1144, shipCount: 1, shipDude: 548, shipGoal: -1,
+        shipBehav: -1, shipStart: -2, onAccept: "!b9318" }));
     return out;
 }
 
@@ -4913,7 +4928,10 @@ function wave13Resources() {
     // gövt 360) instead of the stock Raczak düde.
     const noCargo = { cargoType: -1, cargoQty: 0, pickupMode: -1, dropoffMode: -1 };
     // mïsn 1072 (bit 9135, Raczak no cargo) was retired in wave 47 (wave47Resources: SF the in-flight failure).
-    out.push(...misn(1073, "Kit R kit dude no cargo", 9137, { ...raczak, ...noCargo, shipDude: 330, shipStart: -1, onAccept: "!b9137", onSuccess: "b9138" }));
+    // mïsn 1073 (bit 9137, Raczak kit dude no cargo: raczak + noCargo, shipDude 330, ShipStart -1) was retired in wave 48
+    // (wave48Resources: KB the tractor beamer).
+    void raczak;
+    void noCargo;
 
     // --- G: a xenophobe's guided missile at its own govt.
     out.push(govt(344, "Kit Xeno", { flags: 0x0001, classes: [344, -1, -1, -1] }));
@@ -5477,9 +5495,8 @@ function wave10Resources() {
     out.push(weap(274, "Sub Slow Big P0", 130, { ...slow, graphic: 18 }));
     out.push(weap(275, "Sub Slow Big P20", 130, { ...slow, graphic: 18, proxRadius: 20 }));
     out.push(weap(276, "Sub Beam Free", 170, { ...parent, guidance: 3, speed: 0, duration: 8, beamLength: 300, graphic: -1 }));
-    out.push(...shareRled(843, "Kit Sub Target Big", 1979, 96, { ...anchored, ai: 1, turn: 0, armor: 30000, shield: 0, strength: 1, crew: 1 }));
-    out.push(dude(328, "Kit Sub Target Big", 1, 363, 843));
-    // mïsn 1033 (bit 9075) was retired in wave 41 (wave41Resources); shïp 843 and düde 328 stay.
+    // mïsn 1033 (bit 9075) was retired in wave 41 (wave41Resources), and shïp 843 Kit Sub Target Big (the 96 px magenta disc,
+    // rlëD 1979: anchored, AI 1, Turn 0, 30000 armor) and its düde 328 in wave 48 (wave48Resources: KB the tractor beamer).
 
     // --- F: NPC friendly fire.
     out.push(system(2047, "Kit FF Range", -520, -700, 363, [2047, 2048, 2049]));
