@@ -317,8 +317,96 @@ export default {
         ...wave43Resources(),
         ...wave44Resources(),
         ...wave45Resources(),
-    ].map(wave15Patches).map(withoutRunningLights),
+        ...wave46Resources(),
+    ].map(wave15Patches).map(wave46Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-46 experiments (docs/reference_experiments.md, "... wave 46"): the
+ * hub's KNOCKBACK questions and the wave-45 leftovers. RETIRED: wave 12's
+ * mïsn 1059 (bit 9105, Kit H prey), 1061 (bit 9111, Kit H prey anchored)
+ * and 1062 (bit 9112, Kit S2 cargo 0x20), their ships and düdes staying;
+ * wave 10's shïp 846 (Kit Mass Hull 37). Used: sÿst 1482-1483, spöb
+ * 1144-1161, shïp 417-419 / 846, düde 544-547, wëap 316-318, mïsn 1059 /
+ * 1061 / 1062, bits 9293-9295. Map row y = -3060 (x -800 .. -760). The next
+ * free ids: sÿst 1484+, spöb 1162-1399 (and 518-999), shïp NONE (retire an
+ * old kit hull: wave 10's 847 / 848 Kit Mass Hull 155 / 50 are unused
+ * since), düde 548+, përs: override a stock one, ränk 205+, mïsn: wave 12's
+ * 1063 only (then retire another old kit mission), gövt 283 and below, flët
+ * 324+, wëap 319+, oütf 506+, jünk 205+, bits 9296+, rlëD 1113+.
+ *
+ *  KB  sÿst 1482 Kit Knock Pad: port spöb 1144 at the centre (nav default
+ *      1), the marker decoration spöb 1145 at (-250, 0) (nav default 2) and
+ *      14 moon decorations spöb 1146-1159 at (0 .. 3900 every 300, 150): a
+ *      ruler along +x, the way a shooter on the marker pushes a player who
+ *      takes off from the port. mïsn 1059 (bit 9293) / 1061 (bit 9294) /
+ *      1062 (bit 9295) put shïp 417 Kit Knock Shooter 20 / 418 Kit Knock
+ *      Shooter 100 / 419 Kit Knock Beamer 20 (immobile AI 3 of the
+ *      always-hostile gövt 362, düde 544-546; ShipStart -2) ON the marker.
+ *      wëap 316 / 317 Kit Knock 20 / 100: a 1-damage turret bolt of Impact
+ *      20 / 100, Reload 120 (one shot every 4 s), Speed 1500, Count 150.
+ *      wëap 318 Kit Knock Beam 20: a 1-damage turreted beam of Impact 20,
+ *      Count 30, Reload 120, 3,000 px long. Player hulls: Kit Probe A (700,
+ *      Mass 50, Speed 300), Kit Mass Hull 300 (845, the Shuttle at Mass 300)
+ *      and the stock Hyperioid (171, Mass 10, Speed 200, inertialess).
+ *  KC  sÿst 1483 Kit Coast Glide Range (port spöb 1160 at the centre): its
+ *      only traffic, düde 547, is shïp 846 Kit Coast Glide Trader, wave
+ *      25's Kit Coast Trader (the magenta pointer, AI 1, Speed / Accel 100,
+ *      3000 / 3000: one Kit Disable Gun hit disables it) made INERTIALESS
+ *      (shïp Flags2 0x0040): a disabled inertialess hulk's coast.
+ *  JC  spöb 1161 Kit Zone Anchor: a distinct dark 40 px planet decoration
+ *      at (-1200, -160) added to wave 45's Kit Zone Bravo (sÿst 1477, its
+ *      16th stellar; wave46Patches): the absolute arrival distance.
+ */
+function wave46Resources() {
+    const out = [];
+    const Y = -3060;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const decoration = (id, name, x = 0, y = 0) => spob(id, name, x, y, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] });
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const armed = (wid, n = 1) => ({ weapons: [wid, -1, -1, -1], weaponCounts: [n, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] });
+    // --- KB: sÿst 1482, spöb 1144-1159, wëap 316-318, shïp 417-419, düde 544-546, mïsn 1059 / 1061 / 1062 (wave 12's, retired).
+    const moons = Array.from({ length: 14 }, (_, k) => 300 * k);
+    out.push(system(1482, "Kit Knock Pad", nextX(), Y, 363, [1144, 1145, ...moons.map((_, k) => 1146 + k)]),
+        spob(1144, "Kit Knock Pad Port", 0, 0, 138, { flags: 0x43 }), decoration(1145, "Kit Knock Pad Marker", -250, 0),
+        ...moons.map((x, k) => decoration(1146 + k, `Kit Knock Pad ${x},150`, x, 150)));
+    const bolt = { reload: 120, duration: 150, speed: 1500, armorDamage: 1, shieldDamage: 1, guidance: 4, ionization: 0, flags: 0 };
+    out.push(weap(316, "Kit Knock 20", 131, { ...bolt, impact: 20 }), weap(317, "Kit Knock 100", 131, { ...bolt, impact: 100 }));
+    out.push(weap(318, "Kit Knock Beam 20", 170, { reload: 120, duration: 30, speed: 0, armorDamage: 1, shieldDamage: 1, guidance: 3,
+        beamLength: 3000, beamWidth: 2, impact: 20, ionization: 0, flags: 0 }));
+    // Turn 60 (kb20_a: a Turn-0 shooter 250 px away never fired; wave 12's anchored Turn-60 pair traded fire 150 px apart).
+    const still = { armor: 30000, shield: 0, accel: 0, speed: 0, turn: 60, ai: 3, strength: 1, crew: 1 };
+    [[417, "Kit Knock Shooter 20", 316, 544, 1059, 9293], [418, "Kit Knock Shooter 100", 317, 545, 1061, 9294],
+        [419, "Kit Knock Beamer 20", 318, 546, 1062, 9295]].forEach(([sid, name, wid, did, mid, bit]) => {
+        out.push(...ship(sid, name, 136, { ...still, ...armed(wid) }), dude(did, name, 3, 362, sid));
+        out.push(...misn(mid, `Kit KB ${name} on the marker`, bit, { availStel: 1144, shipCount: 1, shipDude: did, shipGoal: -1,
+            shipBehav: -1, shipStart: -2, onAccept: `!b${bit}` }));
+    });
+    // --- KC: sÿst 1483, spöb 1160, shïp 846 (wave 10's, retired), düde 547; the magenta pointer rlëD 1959.
+    out.push(...shareRled(846, "Kit Coast Glide Trader", 1959, 24, { accel: 100, speed: 100, turn: 30, mass: 50, freeMass: 100, cargo: 10,
+        strength: 10, crew: 10, flags: 0, flags2: 0x0040, ai: 1, armor: 3000, shield: 3000 }), dude(547, "Kit Coast Glide Trader", 1, 363, 846));
+    const glide = system(1483, "Kit Coast Glide Range", nextX(), Y, 363, [1160]);
+    glide.set = { ...glide.set, avgShips: 1, dudes: [547, ...none8].slice(0, 8), dudeProbs: [100, ...zero8].slice(0, 8) };
+    out.push(glide, spob(1160, "Kit Coast Glide Range Port", 0, 0, 138, { flags: 0x43 }));
+    // --- JC (the wave-45 leftover: the ABSOLUTE arrival distance with and without a hyperspace dist mod): spöb 1161 Kit Zone
+    // Anchor, a distinct dark 40 px planet decoration (spöb 143's art, flags 0) at (-1200, -160) in wave 45's Kit Zone Bravo
+    // (sÿst 1477, its 16th stellar: wave46Patches), on screen at a standard arrival (about 1,350 px west of the centre).
+    out.push(spob(1161, "Kit Zone Anchor", -1200, -160, 143, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] }));
+    return out;
+}
+
+/** Wave-46 edits to earlier waves' resources: Kit Zone Bravo (sÿst 1477, wave 45) gains the anchor decoration spöb 1161. */
+function wave46Patches(r) {
+    if (r.type === "sÿst" && r.id === 1477) {
+        const l = r.set.spobs.filter((x) => x !== -1);
+        return { ...r, set: { ...r.set, spobs: [...l, 1161, ...none16].slice(0, 16) } };
+    }
+    return r;
+}
 
 /**
  * Wave-45 experiments (docs/reference_experiments.md, "... wave 45"): the
@@ -4849,7 +4937,7 @@ function wave12Resources() {
     // bit 9105), both on the port (ShipStart -1, no goal, own AI).
     out.push(system(2077, "Kit Hunt Arena", -240, -700, 363, [2077]), spob(2077, "Kit Hunt Arena Port", 0, 0, 138, { flags: 0x43 }));
     // mïsn 1054 (bit 9104, the hunter) was retired in wave 45 (wave45Resources: CU prize on the port); düde 342 stays.
-    out.push(...misn(1059, "Kit H prey", 9105, { availStel: 2077, availLoc: 0, shipCount: 1, shipDude: 343, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9105", dispWeight: 30000 }));
+    // mïsn 1059 (bit 9105, the prey BBS job) was retired in wave 46 (wave46Resources: KB knockback shooter 20); düde 343 stays.
     // Added during the wave: in the arena the pair fought on screen for
     // a few seconds, then flew off. ANCHORED copies in Kit FF Range (sÿst
     // 2047): shïp 866 Kit Hunter Anchored (yellow, 30000 / 30000) on the far
@@ -4862,7 +4950,7 @@ function wave12Resources() {
     out.push(dude(352, "Kit Hunter Anchored", 3, 356, 866));
     out.push(dude(353, "Kit Prey Anchored", 3, 357, 867));
     out.push(...misn(1060, "Kit H hunter anchored", 9110, { availStel: 2047, shipCount: 1, shipDude: 352, shipGoal: -1, shipBehav: -1, shipStart: -3, onAccept: "!b9110" }));
-    out.push(...misn(1061, "Kit H prey anchored", 9111, { availStel: 2047, availLoc: 0, shipCount: 1, shipDude: 353, shipGoal: -1, shipBehav: -1, shipStart: -2, onAccept: "!b9111", dispWeight: 30000 }));
+    // mïsn 1061 (bit 9111, the anchored prey BBS job) was retired in wave 46 (wave46Resources: KB shooter 100); düde 353 stays.
 
     // --- S2 (docs/npc_behavior_gaps.md): illegal MISSION cargo. Offered on
     // landing at Kit Scan Port (wave 11's S1 rig: gövt 354 Kit Customs,
@@ -4871,7 +4959,7 @@ function wave12Resources() {
     // mïsn 1062 (bit 9112) with Flags 0x0020 ("fails if you're scanned",
     // OnFailure b9114), 1063 (bit 9113) without (OnFailure b9115).
     const s2 = { availStel: 2069, travelStel: 2068, cargoType: 0, cargoQty: 1, pickupMode: 0, dropoffMode: 0, scanMask: 0x0001, compGovt: 354, compReward: 10 };
-    out.push(...misn(1062, "Kit S2 cargo 0x20", 9112, { ...s2, flags: 0x0020, onAccept: "!b9112", onFailure: "b9114", onSuccess: "b9116" }));
+    // mïsn 1062 (bit 9112, S2 cargo 0x20) was retired in wave 46 (wave46Resources: KB beam shooter); 1063 stays.
     out.push(...misn(1063, "Kit S2 cargo plain", 9113, { ...s2, onAccept: "!b9113", onFailure: "b9115", onSuccess: "b9116" }));
 
     // --- P1 run 1 (docs/npc_behavior_gaps.md): does a police interceptor
@@ -5299,7 +5387,8 @@ function wave10Resources() {
         o.set = { ...o.set, displayWeight: 9993 - i, modType: 12, modVal: 1, max: 20, flags, cost, mass };
         out.push(o);
     });
-    [[844, 100], [845, 300], [846, 37], [847, 155], [848, 50]].forEach(([id, mass]) =>
+    // shïp 846 (Kit Mass Hull 37) was retired in wave 46 (wave46Resources: KB the inertialess coast trader).
+    [[844, 100], [845, 300], [847, 155], [848, 50]].forEach(([id, mass]) =>
         out.push(...ship(id, `Kit Mass Hull ${mass}`, 128, { mass, freeMass: 25, cargo: 20, armor: 300, shield: 300, maxGuns: 4, maxTurrets: 4, ai: 1, strength: 10, cost: 100000 })));
     return out;
 }

@@ -1,0 +1,36 @@
+{
+  "name": "novaref-w46-kc",
+  "edits": {
+    "ship": 497,
+    "stellar": 1160,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1483": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w46-kc",
+    "weapons": {
+      "128": 0,
+      "288": 1
+    },
+    "outfits": {
+      "128": 0,
+      "462": 1
+    },
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6,
+      "1993": 6
+    }
+  }
+}

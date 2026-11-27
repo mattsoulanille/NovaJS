@@ -684,6 +684,20 @@ steps; "Use As My Ship" is at (415, 309), and its rename alert takes
 `text:` and Return. A captured slow inertial hull lands with the evidence
 tool `tools/inertland.mjs`. Scenarios `w45_space_interactive.json` /
 `w45_space_early.json` (inbox `w45.jsonl`).
+Wave 46 used sÿst 1482-1483, spöb 1144-1161 (1161 added to wave 45's
+sÿst 1477 by `wave46Patches`), shïp 417-419, düde 544-547, wëap 316-318 and
+bits 9293-9295, and RETIRED wave 12's mïsn 1059 (bit 9105), 1061 (bit 9111)
+and 1062 (bit 9112) and wave 10's shïp 846 (Kit Mass Hull 37), using them
+for its own. Next free: sÿst 1484, spöb 1162-1399 (and 518-999), shïp
+**none** (retire an old kit hull: wave 10's 847 / 848 are unused), düde 548,
+ränk 205, mïsn: wave 12's 1063 only (then retire another old kit mission),
+përs: override a stock one, wëap 319, oütf 506, gövt 283 and below, flët 324,
+jünk 205, bits 9296, rlëD 1113. A **knockback pad** (sÿst 1482 Kit Knock
+Pad): a mission with ShipStart -2 puts an immobile AI 3 shooter on the
+marker 250 px west of the port, the player takes off at rest and is pushed
+east along a moon ruler; an immobile shooter needs a Turn (a Turn-0 one
+250 px away never fired). Scenarios `w46_space_interactive.json` /
+`w46_space_early.json` / `w46_capture_use.json` (inbox `w46.jsonl`).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they
