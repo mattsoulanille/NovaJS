@@ -27,6 +27,7 @@ import {
 } from '../player/index.js';
 import {
     ArmorComponent, FiringGroupComponent, makeShip, ShieldComponent,
+    ShipDataComponent, ShipPhysicsComponent,
     TargetComponent,
 } from '../ship/index.js';
 import { completeEntity, makeNpcShip } from '../spawn/index.js';
@@ -94,6 +95,17 @@ describe('the special ships of a mission aborted in flight', () => {
         owner.components.set(MissionsComponent,
             new Map([[MISSION, mission(objective(goal, behavior))]]));
         await completeEntity(world, owner);
+        // Unkillable through its ShipData: shipStatSystem re-derives the
+        // Armor / Shield caps from the hull every tick, so raising the
+        // Stats themselves (as this spec used to) was undone at once, and
+        // the raiders disabled and plundered the 25-armor skiff inside 40
+        // s once knockback went to 30 x (reference KB, wave 46).
+        const ownerData = owner.components.get(ShipDataComponent)!;
+        owner.components.set(ShipDataComponent, {
+            ...ownerData,
+            physics: { ...ownerData.physics, armor: 1e9, shield: 1e9 },
+        });
+        owner.components.delete(ShipPhysicsComponent);
         world.entities.set(OWNER, owner);
 
         const corsair = await gameData.data.Ship.get(SYNTHETIC.ships.corsair);
@@ -132,8 +144,7 @@ describe('the special ships of a mission aborted in flight', () => {
         }
         // Unkillable: the raiders fight on for the whole spec.
         for (const component of [ArmorComponent, ShieldComponent]) {
-            const stat = owner.components.get(component)!;
-            stat.max = stat.current = 1e9;
+            expect(owner.components.get(component)!.max).toBe(1e9);
         }
         return { world, gameData };
     }
