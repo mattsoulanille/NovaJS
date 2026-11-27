@@ -2822,6 +2822,43 @@ describe('boarding in a live world', () => {
             expect(events).toEqual([]);
         });
 
+        it('Cancel on the rename abandons the capture: the client\'s '
+            + '`plunderDone` ends the session with nothing changed, and the '
+            + 'hulk cannot be boarded again (reference CU wave 46)',
+            async () => {
+                const { world, boarder, target, events } = await swapWorld();
+                const reasons: string[] = [];
+                world.addSystem(new System({
+                    name: 'CollectBlocked',
+                    events: [BoardingBlockedEvent],
+                    args: [BoardingBlockedEvent] as const,
+                    step: ({ reason }) => { reasons.push(reason); },
+                }));
+                capture(world, boarder);
+                const cargo = new Map(boarder.components.get(CargoComponent));
+                // What display/boarding_plugin.ts useCapturedShip sends on
+                // Cancel.
+                press(world, BOARDER, 'plunderDone');
+                // No swap, no escort: the pilot keeps his hull and hold.
+                expect(world.entities.get(BOARDER)).toBe(boarder);
+                expect(boarder.components.has(BoardingComponent)).toBeFalse();
+                expect(boarder.components.get(CargoComponent)).toEqual(cargo);
+                expect(world.entities.get(TARGET)).toBe(target);
+                expect(target.components.get(ShipComponent)!.id)
+                    .toEqual(SYNTHETIC.ships.corsair);
+                expect(target.components.has(DisabledComponent)).toBeTrue();
+                expect(target.components.has(PlayerEscortComponent))
+                    .toBeFalse();
+                expect(events).toEqual([]);
+                // A record arriving late is refused (no session).
+                useAsMyShip(world);
+                expect(world.entities.get(BOARDER)).toBe(boarder);
+                // "You can't board this ship."
+                press(world, BOARDER, 'board');
+                expect(boarder.components.has(BoardingComponent)).toBeFalse();
+                expect(reasons).toEqual(['alreadyBoarded']);
+            });
+
         it('takes no record from another peer, and applies a duplicate '
             + 'once', async () => {
                 const { world, boarder, events } = await swapWorld();

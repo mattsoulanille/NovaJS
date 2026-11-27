@@ -137,18 +137,18 @@ export const CAPTURED_SHIP_NAME_PROMPT_INDEX = 118;
  * shipyard's are; "Kit Prize Hull 631" for a Kit Prize Hull). It is asked
  * over the plunder dialog in flight, the capture prompt gone.
  *
- * `ask` always resolves with a name: the swap is made either way.
  * - OK gives what was typed, cleaned and cut as the shipyard's OK does
  *   (confirmedShipName); more than {@link SHIP_NAME_FIELD_LENGTH}
  *   characters is refused and the prompt stays up, as there (GUESS: the
  *   same alert, the same limit; unmeasured here).
- * - Cancel: UNMEASURED (both runs meant for it failed the capture roll,
- *   wave 45 finding 4). GUESS: the prefilled default is kept and the swap
- *   still happens — the capture itself is already done, and the prompt
- *   only asks for a name.
+ * - Cancel resolves `undefined`: it CANCELS THE CAPTURE (MEASURED,
+ *   reference "The capture prompt's keys and the rename alert's Cancel
+ *   (CU leftover), wave 46", finding 2: no swap, no escort, the prize
+ *   left a hulk that cannot be boarded again), which the caller does
+ *   (display/boarding_plugin.ts useCapturedShip).
  * The number is a fresh random 100-999, as the shipyard's prefill
- * (prefillShipNumber; one wave-45 run cannot tell a counter from a random
- * draw, so the measured shipyard rule stands in). Client-side and outside
+ * (prefillShipNumber; wave 46's 681 against wave 45's 631 confirms a
+ * draw, not a fixed number). Client-side and outside
  * the simulation: only the name the player confirms crosses the wire, in
  * the `captureShip` record.
  */
@@ -173,16 +173,16 @@ export class CapturedShipNamePrompt {
     /**
      * Asks for the captured `rawShipName` hull's new name (the shïp's name,
      * "; note" and all), with `prompt` (STR# 2002 118 out of the game
-     * data, or the built-in wording).
+     * data, or the built-in wording). Resolves `undefined` on Cancel.
      */
     async ask(rawShipName: string,
         prompt: string = CAPTURED_SHIP_NAME_PROMPT_TEXT,
-        random: () => number = Math.random): Promise<string> {
+        random: () => number = Math.random): Promise<string | undefined> {
         const initial =
             `${displayName(rawShipName)} ${prefillShipNumber(random)}`;
         const entered = await this.dialog.show({
             prompt, confirm: 'OK', initial, selectAll: true,
         });
-        return confirmedShipName(entered ?? initial);
+        return entered === undefined ? undefined : confirmedShipName(entered);
     }
 }

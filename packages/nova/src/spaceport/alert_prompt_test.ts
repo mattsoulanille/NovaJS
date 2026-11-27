@@ -227,14 +227,17 @@ describe('the captured ship rename prompt', () => {
         expect(MenuControls.focused).toBeUndefined();
     });
 
-    it('keeps the prefilled name on Cancel (GUESS: the swap is made '
-        + 'either way)', async () => {
+    it('answers no name on Cancel: the capture is abandoned (reference CU '
+        + 'wave 46, finding 2)', async () => {
         const prompt = new CapturedShipNamePrompt(new Subject<ControlEvent>());
         const answer = prompt.ask('Kit Prize Hull', 'Custom wording:',
             () => 0.5);
+        expect(prompt.alert.value).toEqual(field('Kit Prize Hull 550', true));
         prompt.alert.type('Never kept');
         prompt.alert.cancel();
-        expect(await answer).toBe('Kit Prize Hull 550');
+        expect(await answer).toBeUndefined();
+        expect(prompt.alert.shown).toBeFalse();
+        expect(MenuControls.focused).toBeUndefined();
     });
 
     it('cleans and cuts a name as the shipyard\'s prompt does', async () => {

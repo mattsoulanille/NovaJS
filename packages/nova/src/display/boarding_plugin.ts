@@ -632,7 +632,9 @@ export type CaptureAnswer = 'ship' | 'escort';
  * Both answers send a `captureShip` record (CaptureShipEvent) carrying the
  * prize class's OnCapture deltas: Use As Escort at once (`escort: true`,
  * useCapturedShipAsEscort), Use As My Ship after asking for the new hull's
- * name (BoardingUi's rename) and with the old class's OnRetire too.
+ * name (BoardingUi's rename) and with the old class's OnRetire too. Cancel
+ * on that rename ABANDONS the capture instead: 'plunderDone' ends the
+ * session with nothing changed (useCapturedShip).
  */
 export const CAPTURE_PROMPT_BUTTONS: readonly {
     label: string, answer: CaptureAnswer,
@@ -648,13 +650,16 @@ export const CAPTURE_PROMPT_BUTTONS: readonly {
  * keeps the plunder buttons behind it from being clicked, and its
  * MenuControls, bound on top of the plunder dialog's, take the keyboard.
  *
- * KEYS: Return and `u` do nothing (MEASURED, reference "Capture \"Use As
- * My Ship\" (the hub's CU), wave 45", finding 8), and nor does Escape, so
- * the prompt is only ever closed by one of its two answers. GUESS
- * (unmeasured, `a` was not tried): `accept` (A) answers Use As Escort, the
- * answer that changes least.
+ * KEYS: the buttons' letters, `m` = Use As My Ship and `e` = Use As
+ * Escort (MEASURED, reference "The capture prompt's keys and the rename
+ * alert's Cancel (CU leftover), wave 46", finding 1). Return, `u` (wave
+ * 45, finding 8) and `a` (wave 46) do nothing, and nor does Escape, so the
+ * prompt is only ever closed by one of its two answers. The letters ride
+ * the 'map' and 'escorts' actions (settings/controls.json KeyM / KeyE),
+ * which the in-flight map and escort panel already give up while a menu
+ * owns the keyboard.
  */
-class CaptureAssignmentDialog {
+export class CaptureAssignmentDialog {
     readonly container = new PIXI.Container();
     private controls: MenuControls;
     private question = new PIXI.Text(CAPTURE_PROMPT_TEXT, {
@@ -717,7 +722,8 @@ class CaptureAssignmentDialog {
         });
 
         this.controls = new MenuControls(controlEvents, {
-            accept: () => answer('escort'),
+            map: () => answer('ship'),
+            escorts: () => answer('escort'),
         });
         void this.loadQuestion();
     }
@@ -854,7 +860,8 @@ class BoardingUi {
             present: (targetUuid: string) => Promise<boolean>,
         },
         /** "Use As My Ship": asks for the new hull's name and sends the
-         * `captureShip` record, resolving whether it was sent; `dismiss`
+         * `captureShip` record (or, on Cancel, abandons the capture),
+         * resolving whether anything was sent; `dismiss`
          * takes a rename prompt down when the session ends under it;
          * `escort` is "Use As Escort", which sends the record at once. The
          * plugin wires them to useCapturedShip / useCapturedShipAsEscort.
@@ -1072,15 +1079,26 @@ function localPlayerShip(world: World): Entity | undefined {
  * answered (the session ended under it) — the sim would refuse the record
  * anyway (applyCaptureShip), this only spares the round trip.
  *
+ * CANCEL ABANDONS THE CAPTURE (MEASURED, reference "The capture prompt's
+ * keys and the rename alert's Cancel (CU leftover), wave 46", finding 2):
+ * the alert and the plunder dialog close with no status line, the player
+ * keeps his hull and hold, and the prize stays a disabled hulk that has
+ * had its one board ("You can't board this ship."). That is exactly a
+ * plunder session ended with Done, so Cancel sends `abandon` ('plunderDone'
+ * on the ordinary control-input path: every peer ends the same session on
+ * the same tick, and the hulk's `plundered` record, stamped when the
+ * session opened, refuses the next board). Nothing is sent for a capture
+ * that no longer stands (a prompt dismissed because the session ended).
+ *
  * Read off the display world's mirror, never written; the pilot is read
  * AFTER the prompt, so the set strings run against the state the player
  * is in when they confirm.
  */
-async function useCapturedShip(world: World,
+export async function useCapturedShip(world: World,
     gameData: SimulationGameDataInterface,
     displayAssets: DisplayAssetDataInterface,
     namePrompt: CapturedShipNamePrompt, screen: { x: number, y: number },
-    targetUuid: string): Promise<boolean> {
+    abandon: () => void, targetUuid: string): Promise<boolean> {
     const prizeId = world.entities.get(targetUuid)?.components
         .get(ShipComponent)?.id;
     if (prizeId === undefined) {
@@ -1108,6 +1126,10 @@ async function useCapturedShip(world: World,
     if (!player || oldId === undefined || boarding?.target !== targetUuid
         || boarding.capture !== 'succeeded') {
         return false;
+    }
+    if (name === undefined) {
+        abandon();
+        return true;
     }
     const retired = await gameData.data.Ship.get(oldId);
     const effects = await buildCaptureSetStrings(player, retired, prize,
@@ -1208,7 +1230,15 @@ export const BoardingDisplayPlugin: Plugin = {
             // `captureShip` record.
             gameData ? {
                 ask: targetUuid => useCapturedShip(world, gameData,
-                    displayAssets, namePrompt, screen, targetUuid),
+                    displayAssets, namePrompt, screen, () => {
+                        // Not from a world being torn down (remove()
+                        // cancels the prompt, then drops the resource
+                        // before the answer's continuation runs).
+                        if (world.resources.get(
+                            CapturedShipNamePromptResource) === namePrompt) {
+                            send('plunderDone');
+                        }
+                    }, targetUuid),
                 dismiss: () => namePrompt.alert.cancel(),
                 escort: targetUuid => useCapturedShipAsEscort(world,
                     gameData, targetUuid),
