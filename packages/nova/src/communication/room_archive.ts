@@ -11,6 +11,22 @@ import { applyInputRecords, InputRecord, InputRefusalResource, loadInputRecordsG
 const ARCHIVE_INTERVAL_TICKS = 1800;
 /** How often the archive sim catches up to the relay clock. */
 const UPDATE_INTERVAL_MS = 1000;
+/**
+ * Maximum ticks stepped synchronously per turn in `update()` before
+ * yielding back to the event loop. The archive shares the server's one
+ * event loop with every room's relay: a busy system at 2x (the
+ * 2026-11-27 nova:129 archive, 262 entities: 1.2-1.9 ms a tick on an M1
+ * Max, 120 ticks per update) otherwise blocks it for 150-550 ms each
+ * second, and the relay's clock, tickSyncs and socket relaying all wait.
+ */
+const ARCHIVE_CHUNK_TICKS = 10;
+
+function yieldToEventLoop(): Promise<void> {
+    if (typeof setImmediate === 'function') {
+        return new Promise(resolve => setImmediate(resolve));
+    }
+    return new Promise(resolve => setTimeout(resolve, 0));
+}
 
 /**
  * The server's periodic snapshot archive for one room: a trailing
@@ -40,6 +56,7 @@ export class RoomArchive {
     private world?: World;
     private lastBaselineTick = 0;
     private updating = false;
+    private closed = false;
     /**
      * The archive's world hashes at recent checkpoint ticks. The
      * archive is the log's true simulation, so these break desync
@@ -139,15 +156,27 @@ export class RoomArchive {
      * Steps the archive sim up to the relay's current tick, applying
      * the logged inputs, and captures a baseline when the interval has
      * elapsed. Reentrancy-guarded: updates skip while one is running.
+     *
+     * Stepped in chunks of ARCHIVE_CHUNK_TICKS with a yield to the event
+     * loop between them, which changes nothing about the world it
+     * computes: the target and the records to apply are fixed before
+     * the first step, and a record the relay logs during a yield is
+     * stamped after the relay's clock, which never runs backwards and
+     * already stood at `target` — it belongs to the next update. A
+     * captureState() or hashAt() served mid-update sees the world
+     * between two whole ticks, as at the end of any update.
      */
     async update(): Promise<void> {
-        if (this.updating) {
+        if (this.updating || this.closed) {
             return;
         }
         this.updating = true;
         try {
             if (!this.world) {
                 const world = await this.makeWorld();
+                if (this.closed) {
+                    return;
+                }
                 // The archive applies every logged record exactly once, in
                 // log order: the one world whose authorisation drops are
                 // reported, so the relay can tell the sender (#354).
@@ -164,11 +193,15 @@ export class RoomArchive {
                 // originating peer, not by this world: stage them now
                 // so applying them is synchronous.
                 await loadInputRecordsGameData(world, pending);
+                if (this.closed) {
+                    return;
+                }
                 const byTick = new Map<number, InputRecord[]>();
                 for (const record of pending) {
                     byTick.set(record.tick,
                         [...byTick.get(record.tick) ?? [], record]);
                 }
+                let steppedInChunk = 0;
                 while (this.tick < target) {
                     const records = byTick.get(this.tick + 1);
                     if (records) {
@@ -188,6 +221,14 @@ export class RoomArchive {
                                 this.recentHashes.delete(tick);
                                 this.recentEntityHashes.delete(tick);
                             }
+                        }
+                    }
+                    if (++steppedInChunk >= ARCHIVE_CHUNK_TICKS
+                        && this.tick < target) {
+                        steppedInChunk = 0;
+                        await yieldToEventLoop();
+                        if (this.closed) {
+                            return;
                         }
                     }
                 }
@@ -211,6 +252,7 @@ export class RoomArchive {
     }
 
     close() {
+        this.closed = true;
         if (this.updateInterval !== undefined) {
             clearInterval(this.updateInterval);
         }

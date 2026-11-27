@@ -311,6 +311,7 @@ export class RollbackRelay {
         // record so every peer (and the log) deterministically removes
         // the ship.
         this.leaveSubscription = room.peers.leave.subscribe(peerId => {
+            this.syncWallClock();
             const record: InputRecord = {
                 peerId: this.room.uuid,
                 tick: this.tick + 1,
@@ -337,20 +338,45 @@ export class RollbackRelay {
         });
 
         if (autoClock) {
-            this.lastClockTime = performance.now();
+            this.lastClockTime = this.now();
             this.clockInterval = setInterval(() => {
-                const now = performance.now();
-                const elapsed = now - this.lastClockTime!;
-                this.lastClockTime = now;
-                this.stepClock(elapsed);
+                this.syncWallClock();
             }, stepMs);
             // (Stale and held hash reports are swept by stepClock /
             // advanceTicks, which the clock drives.)
             this.syncInterval = setInterval(() => {
+                this.syncWallClock();
                 this.room.sendMessage(
                     wrapRollbackMessage({ kind: 'tickSync', tick: this.tick }));
             }, TICK_SYNC_INTERVAL_MS);
         }
+    }
+
+    /**
+     * Catches `this.tick` up to wall time when `autoClock` is enabled.
+     * Called from the clock and tickSync timers AND before handling a
+     * room message or a peer leave: after the event loop stalls (a
+     * synchronous archive catch-up, a GC pause), the socket I/O that
+     * queued meanwhile is handled in the same loop iteration's poll phase,
+     * before the timers run again, so without this a `joinRequest` was
+     * answered with a catch-up tick, and a `removePeer` stamped, a whole
+     * stall behind the room (a candidate for the 2026-11-27 nova:129
+     * resync whose catch-up came back at 8377 while the peer's wall-clock
+     * estimate of the room stood at 8671).
+     *
+     * The clock only ever moves forward, so a tickSync still confirms
+     * every record through its tick (simulation_bridge_host.ts
+     * confirmedThrough): every record is stamped after the tick it was
+     * logged at, and that tick is never above a later reading.
+     */
+    private syncWallClock() {
+        if (this.lastClockTime === undefined) {
+            return;
+        }
+        const now = this.now();
+        const elapsed = now - this.lastClockTime;
+        this.lastClockTime = now;
+        this.stepClock(elapsed);
     }
 
     /** The clock speed currently active at `this.tick` (1 or 2). */
@@ -821,6 +847,7 @@ export class RollbackRelay {
     }
 
     private handleMessage(source: string, raw: unknown) {
+        this.syncWallClock();
         // Validated: a malformed envelope is dropped here, never
         // dereferenced (one used to throw inside this subscriber and
         // take the server process down — rxjs rethrows on a macrotask).

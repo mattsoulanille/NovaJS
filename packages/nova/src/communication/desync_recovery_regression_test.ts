@@ -1,0 +1,164 @@
+import 'jasmine';
+import { MockCommunicator } from 'nova_ecs/plugins/mock_communicator';
+import { CommunicatorResource } from 'nova_ecs/plugins/multiplayer_plugin';
+import { SerializerPlugin } from 'nova_ecs/plugins/serializer_plugin';
+import { SnapshotPolicies, SnapshotPoliciesResource } from 'nova_ecs/plugins/snapshot_plugin';
+import { TimePlugin, TimeResource } from 'nova_ecs/plugins/time_plugin';
+import { World } from 'nova_ecs/world';
+import { RollbackRelay } from './rollback_relay.js';
+import { PROTOCOL_VERSION, unwrapRollbackMessage, wrapRollbackMessage } from './rollback_protocol.js';
+import { RoomArchive } from './room_archive.js';
+import { SimulationBridgeHost } from './simulation_bridge_host.js';
+import { liveWireFingerprint } from './wire_schemas.js';
+
+function makeFakeSimulationData() {
+    return {
+        ids: Promise.resolve({} as never),
+        data: {
+            Ship: {
+                getCached: () => undefined,
+            },
+        },
+    } as never;
+}
+
+function makeTimedWorld(communicator: MockCommunicator): World {
+    const world = new World('desync regression test world');
+    world.addPlugin(SerializerPlugin);
+    world.addPlugin(TimePlugin);
+    const policies = new SnapshotPolicies();
+    const time = world.resources.get(TimeResource)!;
+    policies.addResource({
+        name: 'time',
+        save: () => ({ ...time }),
+        restore: saved => Object.assign(time, saved as object),
+    });
+    world.resources.set(SnapshotPoliciesResource, policies);
+    world.resources.set(CommunicatorResource, communicator);
+    return world;
+}
+
+class TrackingResyncHost extends SimulationBridgeHost {
+    resyncStarted = 0;
+    protected override async reconstructFromRoom(): Promise<boolean> {
+        // Hold the resync open briefly (mimicking an async network join).
+        await new Promise(resolve => setTimeout(resolve, 20));
+        return true;
+    }
+    override async resync(force = false): Promise<boolean> {
+        const before = this.lastResyncTime;
+        const promise = super.resync(force);
+        if (this.lastResyncTime !== before) {
+            this.resyncStarted++;
+        }
+        return promise;
+    }
+}
+
+/**
+ * Gemini Neon's review of the 2026-11-27 nova:129 desyncs (after the relay
+ * confirmation fix): the archive's catch-up blocking the server's event
+ * loop, the relay answering on a clock a stall behind, a retimed echo of
+ * a record past the rollback ring going unnoticed, and a resync started
+ * inside step() stepping the genesis world it had just restored.
+ */
+describe('Desync incident 2026-11-27 regressions', () => {
+    it('catches up RollbackRelay wall clock before answering joinRequest or stamping removePeer after a stall', () => {
+        const server = new MockCommunicator('server');
+        const peerA = new MockCommunicator('a');
+        const peerB = new MockCommunicator('b');
+        const peers = new Map([['server', server], ['a', peerA], ['b', peerB]]);
+        for (const p of peers.values()) {
+            p.mockPeers = peers;
+            p.peers.current.next(new Set(peers.keys()));
+        }
+
+        let fakeNow = 10_000;
+        const relay = new RollbackRelay(server, {
+            autoClock: true,
+            now: () => fakeNow,
+        });
+        try {
+            // Put the room at 2x speed (peer A in space with Caps Lock, peer B landed).
+            peerA.sendMessage(wrapRollbackMessage({
+                kind: 'speedVote', wantFast: true, inSpace: true,
+            }) as never, 'server');
+            peerB.sendMessage(wrapRollbackMessage({
+                kind: 'speedVote', wantFast: false, inSpace: false,
+            }) as never, 'server');
+            relay.advanceTicks(1);
+            expect(relay.speed).toBe(2);
+
+            // Simulate a 2-second event-loop stall: wall time advances 2000ms
+            // (240 ticks at 2x), and queued I/O (joinRequest + peer leave) runs
+            // BEFORE clockInterval fires.
+            fakeNow += 2000;
+
+            peerB.allMessages.length = 0;
+            peerB.sendMessage(wrapRollbackMessage({
+                kind: 'joinRequest',
+                protocol: PROTOCOL_VERSION,
+                fresh: true,
+                schema: liveWireFingerprint(),
+                speedVote: { wantFast: false, inSpace: false },
+            }) as never, 'server');
+
+            const catchUp = peerB.allMessages
+                .map(m => unwrapRollbackMessage((m as { message: unknown }).message))
+                .find(m => m?.kind === 'catchUp');
+            expect(catchUp?.kind).toBe('catchUp');
+            if (catchUp?.kind === 'catchUp') {
+                // Must reflect the elapsed 2000ms (~240 ticks at 2x), not the
+                // pre-stall tick 1.
+                expect(catchUp.tick).toBeGreaterThanOrEqual(235);
+            }
+
+            // Another 500ms stall before peer A leaves: removePeer must be
+            // stamped at the caught-up wall-clock tick, not the pre-stall tick.
+            const tickBeforeLeaveStall = relay.tick;
+            fakeNow += 500;
+            server.peers.current.next(new Set(['server', 'b']));
+            const removeRecord = relay.inputLog.find(r =>
+                r.inputs.some(i => i.kind === 'removePeer'));
+            expect(removeRecord).toBeDefined();
+            expect(removeRecord!.tick).toBeGreaterThanOrEqual(tickBeforeLeaveStall + 55);
+        } finally {
+            relay.close();
+        }
+    });
+
+    it('yields between tick chunks in RoomArchive.update() so the event loop is not blocked', async () => {
+        const server = new MockCommunicator('server');
+        const relay = new RollbackRelay(server, { autoClock: false });
+        const archive = new RoomArchive(relay, async () => {
+            const world = new World('chunked archive test');
+            world.addPlugin(SerializerPlugin);
+            world.addPlugin(TimePlugin);
+            return world;
+        }, { autoUpdate: false });
+
+        try {
+            // Initialize archive world at tick 0.
+            await archive.update();
+            expect(archive.tick).toBe(0);
+
+            // Advance relay by 60 ticks and start an archive catch-up.
+            relay.advanceTicks(60);
+            const updatePromise = archive.update();
+
+            // A callback queued on the event loop must run mid-update (after a
+            // chunk, before all 60 ticks finish), proving update() yielded.
+            const tickWhenEventLoopRan = await new Promise<number>(resolve => {
+                setImmediate(() => resolve(archive.tick));
+            });
+            await updatePromise;
+
+            expect(archive.tick).toBe(60);
+            expect(tickWhenEventLoopRan).toBeGreaterThan(0);
+            expect(tickWhenEventLoopRan).toBeLessThan(60);
+        } finally {
+            archive.close();
+            relay.close();
+        }
+    });
+});
