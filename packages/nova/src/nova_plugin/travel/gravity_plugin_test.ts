@@ -12,7 +12,7 @@ import { World } from 'nova_ecs/world';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
 import { makeShip } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
-import { GRAVITY_ACCELERATION, gravityDeltaV } from './gravity_plugin.js';
+import { gravityAcceleration, gravityDeltaV } from './gravity_plugin.js';
 import { JumpComponent } from './jump_state.js';
 import { makePlanet } from './make_planet.js';
 
@@ -64,10 +64,11 @@ function state(ship: Entity) {
 describe('gravityDeltaV', () => {
     it('pulls toward a positive well and pushes from a negative one', () => {
         const pull = gravityDeltaV([{ dx: -300, dy: 0, gravity: 1 }], 1);
-        expect(pull.x).toBeCloseTo(-GRAVITY_ACCELERATION, 9);
+        expect(pull.x).toBeCloseTo(-gravityAcceleration(1), 9);
         expect(pull.y).toBeCloseTo(0, 9);
         const push = gravityDeltaV([{ dx: -300, dy: 0, gravity: -2 }], 1);
-        expect(push.x).toBeCloseTo(2 * GRAVITY_ACCELERATION, 9);
+        expect(push.x).toBeCloseTo(gravityAcceleration(2), 9);
+        expect(gravityAcceleration(-2)).toBe(-gravityAcceleration(2));
     });
 
     it('does not fall off with distance', () => {
@@ -85,8 +86,14 @@ describe('gravityDeltaV', () => {
         });
 
     it('is about 1 px a frame per second at Gravity 1', () => {
-        // 30 fps frames: GRAVITY_ACCELERATION px/s² is 1 px a frame per s.
-        expect(GRAVITY_ACCELERATION / 30).toBe(1);
+        // 30 fps frames: 30 px/s² is 1 px a frame per s (wave 40).
+        expect(gravityAcceleration(1) / 30).toBeCloseTo(1, 0);
+    });
+
+    it('pulls about 39 / 55 px/s² a unit at Gravity 5 / 10 (reference '
+        + '"Gravity damping and strength (U7, ...), wave 41")', () => {
+        expect(gravityAcceleration(5) / 5).toBeCloseTo(39, 9);
+        expect(gravityAcceleration(10) / 10).toBeCloseTo(55, 9);
     });
 });
 
@@ -96,7 +103,7 @@ describe('GravitySystem', () => {
             const { world, ship } = await gravityWorld(1, 300);
             steps(world, STEPS_PER_S);
             const velocity = state(ship).velocity;
-            expect(velocity.x).toBeCloseTo(-GRAVITY_ACCELERATION, 3);
+            expect(velocity.x).toBeCloseTo(-gravityAcceleration(1), 3);
             expect(velocity.y).toBeCloseTo(0, 9);
             expect(state(ship).position.x).toBeLessThan(300);
         });
@@ -124,6 +131,26 @@ describe('GravitySystem', () => {
                 // The original's "few-pixel jitter".
                 expect(Math.hypot(x, y)).withContext(`step ${i}`)
                     .toBeLessThan(5);
+            }
+        });
+
+    it('swings a ship through a weak well with no damping: its peak speed '
+        + 'holds (reference "Gravity damping and strength (U7, ...), wave '
+        + '41": 5-6 px a frame for 75 s at Gravity 5 and 10)', async () => {
+            for (const gravity of [5, 10]) {
+                const { world, ship } = await gravityWorld(gravity, 300,
+                    { speed: 135 });
+                // The peak speed in every 2 s window of 40 s, and the
+                // ship never stops on the well.
+                for (let window = 0; window < 20; window++) {
+                    let peak = 0;
+                    for (let i = 0; i < 2 * STEPS_PER_S; i++) {
+                        world.step();
+                        peak = Math.max(peak, state(ship).velocity.length);
+                    }
+                    expect(peak).withContext(`G${gravity} window ${window}`)
+                        .toBeGreaterThan(0.95 * 135);
+                }
             }
         });
 

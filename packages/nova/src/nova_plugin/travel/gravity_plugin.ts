@@ -28,18 +28,19 @@ import { ControlShipSystem } from './ship_controller_plugin.js';
  *    the cap is reached in a frame or two, so the ship comes in at top
  *    speed and the same pull turns it round within a frame on the far
  *    side: it sits ON the well with a few pixels of jitter. Weak wells
- *    let it swing through and back, damped.
+ *    let it swing through and back, NOT damped (reference "Gravity
+ *    damping and strength (U7, the hub's questions), wave 41": the peak
+ *    speed held 75 s at Gravity 5 and 10; what read as damping was the
+ *    swing turning from one axis into the other).
  * 3. No falloff with distance (300 to 2,000 px alike at Gravity 100 /
  *    1000).
  * 4. A negative Gravity pushes the ship away the same way.
  * 5. An inertialess hull is not moved at all.
  *
- * So each tick an inertial ship's velocity gains GRAVITY_ACCELERATION x
- * Gravity px/s² times the tick toward each well (away from a negative
- * one), and MovementSystem's ordinary top-speed clamp is the cap (and,
- * the section's GUESS, the only brake). The constant is the proposal's
- * GUESS of 30 px/s² per unit (Gravity 1 measured; Gravity 10 came out
- * nearer 45 a unit), linear in the field.
+ * So each tick an inertial ship's velocity gains gravityAcceleration(
+ * Gravity) px/s² times the tick toward each well (away from a negative
+ * one), and MovementSystem's ordinary top-speed clamp is the cap (and the
+ * only brake: no damping, wave 41).
  *
  * Not moved: inertialess ships (measured), ships whose hull sets shïp
  * Flags3 0x0010 "Ship ignores gravity" or that carry a "gravity
@@ -55,7 +56,24 @@ import { ControlShipSystem } from './ship_controller_plugin.js';
  * MovementState and physics, the tick's delta) — no trig, no PRNG, and
  * the velocity is replaced, never mutated in place.
  */
-export const GRAVITY_ACCELERATION = 30;
+export const GRAVITY_LINEAR = 23;
+export const GRAVITY_QUADRATIC = 3.2;
+
+/**
+ * A well's pull, in px/s², from its spöb Gravity (signed: negative
+ * pushes). The per-unit pull GROWS with the field: MEASURED from rest
+ * about 39 px/s² a unit at Gravity 5 and 55 at Gravity 10 (reference
+ * "Gravity damping and strength (U7, the hub's questions), wave 41": 1 ->
+ * 5 px a frame in about 0.7 s and 0.27 s), and about 30 at Gravity 1
+ * (wave 40). GUESS: a quadratic, 23 x G + 3.2 x G x |G|, through the
+ * Gravity-5 and -10 readings exactly (195 and 550 px/s²), 26 at Gravity
+ * 1 (the short ramps read in integer px steps, so the constants are
+ * rough). Was linear, 30 a unit. Arithmetic only (no trig, no PRNG).
+ */
+export function gravityAcceleration(gravity: number): number {
+    return GRAVITY_LINEAR * gravity
+        + GRAVITY_QUADRATIC * gravity * Math.abs(gravity);
+}
 
 /** Planets with a gravity field: their position and strength. */
 const GravityWellQuery = new Query(
@@ -76,7 +94,7 @@ export function gravityDeltaV(
         if (gravity === 0 || !(distance > 0)) {
             continue;
         }
-        const dv = GRAVITY_ACCELERATION * gravity * delta_s / distance;
+        const dv = gravityAcceleration(gravity) * delta_s / distance;
         x += dx * dv;
         y += dy * dv;
     }
