@@ -668,7 +668,8 @@ export function quadrantWeaponRange(
  * its slot heading: measured in E-fight wave 5, escorts with only fixed
  * guns never fired from the slot in 100 s (the raiders kept 98-100%
  * shield while crossing in front of them) and never turned to bring the
- * guns to bear. Bays never fire on their own. Point defense has its own
+ * guns to bear. Bays never fire on their own (a carrier escort launches
+ * only while engaging: fireAt in EscortCommandBehaviorSystem). Point defense has its own
  * system.
  */
 export type FormationTurretKind = 'full' | 'frontQuadrant' | 'rearQuadrant';
@@ -756,10 +757,28 @@ export const EscortCommandBehaviorSystem = new System({
                 distanceSquared <= ESCORT_FIRE_RANGE * ESCORT_FIRE_RANGE;
             for (const [id, weapon] of weapons) {
                 const weaponData = gameData.data.Weapon.getCached(id);
-                if (weaponData == null
-                    || weaponData.type === 'BayWeaponData') {
+                if (weaponData == null) {
                     continue;
                 }
+                // BAYS INCLUDED: a carrier escort ENGAGING (an attack
+                // order on a live victim, or defend with an intruder)
+                // launches its fighters, one per reload while the victim
+                // is within ESCORT_FIRE_RANGE, exactly as an NPC carrier
+                // in 'attack' does (npc_fire_control's BAYS INCLUDED:
+                // the magazine bounds the total, the reload paces it).
+                // Its wings take its order through
+                // EscortCommandPropagationSystem. This used to `continue`
+                // past every bay, and NpcFireControlSystem bails on a
+                // commanded escort, so nothing ever pulled a hired or
+                // captured carrier's bay trigger: Matthew's "escorts
+                // never launch their fighters" (2026-11-26). Unmeasured
+                // on the original for an escort; GUESS, the reading most
+                // consistent with what is measured: the stock Fed
+                // Carrier launches at the ship it fights (B wave 5), the
+                // player's own fighters fight only when ordered (R6), and
+                // only a mission protector keeps its bays shut (Q4; such
+                // ships run the NPC AI and never get here). In formation
+                // (below) the hangar stays shut.
                 weapon.target = victim;
                 // The flat ESCORT_FIRE_RANGE is fine for a weapon whose
                 // wasted shot costs a round of ammo. A SUICIDE weapon

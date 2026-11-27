@@ -86,9 +86,10 @@ function fireAtRock(rockUuid: string | undefined,
  * a player's flock (allegiance.ts's flockPlayer): ShipBehav 1 ships and
  * escort-goal ships, which mission_ship_spawn puts in formation on their
  * owner. Its bays hold; its other weapons fire as usual. Ships in the
- * flock that ARE the player's (hired or captured escorts) are not
- * covered: what they do was not measured, and the ones on the escort
- * command never reach this system anyway.
+ * flock that ARE the player's (hired or captured escorts) never reach
+ * this system (the escort-command bail below): a carrier escort's bays
+ * are pulled by EscortCommandBehaviorSystem's fireAt while it engages
+ * (unmeasured on the original; GUESS, see there).
  *
  * A SHIP IN A JUMP SEQUENCE HOLDS ITS FIRE. NpcDecisionSystem bails on a
  * jumping ship so it cannot talk itself back into a fight, but bailing
