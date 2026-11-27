@@ -885,16 +885,16 @@ function wave51Resources() {
  * the multi-jump outfit. RETIRED: wave 40's shïp 606-614 (Kit E11 A0050
  * T005 .. A0450 T045, the E11 yard's first nine), wave 14's mïsn 1082 (bit
  * 9155, Kit A comp abort 338), 1083 (bit 9160, Kit A comp fail 338) and
- * 1084 (bit 9163, Kit S several finds), using them for its own. Used: sÿst
- * 1494-1499 / 1501, spöb 1216-1243, shïp 606-614, düde 552-554, wëap
- * 331-333, oütf 519-521, mïsn 967 / 1082-1084, bits 9336-9347, dësc
+ * 1084 (bit 9163, Kit S several finds), and (added) wave 5's mïsn 998 / 999 (bits
+ * 9039 / 9040, Kit Static Range / Control J0 targets), using them for its own. Used: sÿst
+ * 1494-1499 / 1501-1503, spöb 1216-1275, shïp 606-614, düde 552-554, wëap
+ * 331-333, oütf 519-521, mïsn 967 / 998-999 / 1082-1084, bits 9336-9349, dësc
  * 11320-11321. Map: the MJ chain at x -840 .. -760, y -3440 .. -3360. The
- * next free ids: sÿst 1502+ (1494-1499 / 1501 used; check 1502-1504,
- * 1513+ against the kit), spöb 1244-1399 (and 518-999), shïp 615-625
- * (retire the rest of the E11 yard, wave 40, first), përs: override a stock
+ * next free ids: sÿst 1504 (then check 1513+ against the kit), spöb 1276-1399 (and 518-999), shïp NONE
+ * (retire the rest of wave 40's E11 yard, 615-625, first), përs: override a stock
  * one (kits/w48_pers225.mjs), ränk 205+, mïsn NONE (retire another old kit
  * mission), düde 555+, gövt 283 and below, flët 324+, wëap 334+, oütf
- * 522+ (and 630 / 631), jünk 205+, bits 9348+ (not a stock bit: 9011-9015,
+ * 522+ (and 630 / 631), jünk 205+, bits 9350+ (not a stock bit: 9011-9015,
  * 9111, 9200-9208, 9215-9216, 9333-9334, 9500-9501, 9666, 9812, 9995,
  * 9998-9999), rlëD 1113+.
  *
@@ -936,6 +936,10 @@ function wave51Resources() {
  *      observed in Bravo (ShipGoal 4: the player merely in its system),
  *      ShipStart -1, OnShipDone b9346, ReturnStel Delta East, OnSuccess
  *      b9347.
+ *  TR  (added) sÿst 1502 / 1503 Kit Tractor Range 450 / 475: wave 50's
+ *      Kit Tractor Range layout with the marker 450 / 475 px west; mïsn 998 /
+ *      999 (bits 9348 / 9349) put the Kit Tractor Beamer 20 on it: the
+ *      pull / brake edge on a still hull (held at 425, pulled at 500).
  */
 function wave52Resources() {
     const out = [];
@@ -993,6 +997,21 @@ function wave52Resources() {
         const s = system(sid, `Kit MJ ${names[k]}`, pos[k][0], pos[k][1], 363, ports);
         s.set = { ...s.set, links: [...[ids[k - 1], ids[k + 1]].filter((v) => v !== undefined), ...none16].slice(0, 16) };
         out.push(s, ...sides.map(([side, x, y], j) => spob(ports[j], `Kit MJ ${names[k]} ${side}`, x, y, 159, { flags: 0x03 })));
+    });
+    // --- TR (added during the wave: the tractor's pull / brake edge between 425 and 500 px): sÿst 1502 / 1503 Kit Tractor Range
+    // 450 / 475 (wave 50's 350 / 425 layout: a port at the centre, the marker 450 / 475 px west, the knock grid's moons but its
+    // (-400, 0) one), spöb 1244-1259 / 1260-1275; mïsn 998 / 999 (wave 5's, retired), bits 9348 / 9349, put wave 48's Kit Tractor
+    // Beamer 20 (düde 548) on the marker.
+    const trGrid = [];
+    for (const y of [-300, 0, 300]) for (const x of [-400, -200, 0, 200, 400]) if ((x || y) && !(x === -400 && y === 0)) trGrid.push([x, y]);
+    [[1502, 1244, 450, 998, 9348], [1503, 1260, 475, 999, 9349]].forEach(([sid, port, d, mid, bit], k) => {
+        out.push(system(sid, `Kit Tractor Range ${d}`, -640 + 40 * k, -3240, 363, [port, port + 1, ...trGrid.map((_, j) => port + 2 + j)]),
+            spob(port, `Kit Tractor Range ${d} Port`, 0, 0, 138, { flags: 0x43 }),
+            spob(port + 1, `Kit Tractor Range ${d} Marker`, -d, 0, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] }),
+            ...trGrid.map(([x, y], j) => spob(port + 2 + j, `Kit Tractor Range ${d} ${x},${y}`, x, y, 132, { flags: 0, techLevel: 0,
+                specialTech: [-1, -1, -1] })));
+        out.push(...misn(mid, `Kit TR tractor beamer ${d} px out`, bit, { availStel: port, shipCount: 1, shipDude: 548, shipGoal: -1,
+            shipBehav: -1, shipStart: -2, onAccept: `!b${bit}` }));
     });
     out.push(...misn(1084, "Kit MJ observe in Bravo", 9345, { availStel: 1216, shipCount: 1, shipSyst: 1495, shipDude: 528, shipGoal: 4,
         shipBehav: -1, shipStart: -1, returnStel: 1228, onAccept: "!b9345", onShipDone: "b9346", onSuccess: "b9347" }));
@@ -6690,7 +6709,7 @@ function jamWave5() {
         s.set = { ...s.set, interference };
         out.push(s, spob(sid, `${name} Port`, 0, 0, 138, { flags: 0x43 }),
             spob(sid + 1, `${name} Marker`, 900, 0, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
-        out.push(...misn(misnId, `Kit ${name} J0 target`, bit, { availStel: sid, shipCount: 1, shipDude: 615, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+        // mïsn 998 / 999 (bits 9039 / 9040) were retired in wave 52 (wave52Resources: TR the tractor range edge at 450 / 475 px).
     };
     range(2007, "Kit Static Range", -1200, 100, 998, 9039);
     range(2009, "Kit Static Control", -1170, 0, 999, 9040);
