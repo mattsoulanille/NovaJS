@@ -25607,7 +25607,7 @@ the total are the readings; the fast hulls' windows sit on the line
    20 (1 - q) in [6, 7) gives q in (0.65, 0.70]) the hold sits in (0.684,
    0.70]: 0.7, the thrust's hold too (wave 51's 0.28-0.32).
 
-**NovaJS (main 07be7182, with wave 51's ion fix 125c551a):** the base
+**NovaJS (main 14052c16, with wave 51's ion fix 125c551a):** the base
 turn rate is still Turn x `ShipTurnRateConversionFactor`, continuous
 (`P/parsers/ship_parse.ts:432`); the ion cut is now wave 51's staircase,
 floor(d x (1 - min(q, ION_CHARGE_HOLD))) / d with d = the uncharged rate
@@ -25670,7 +25670,7 @@ So the original chooses pull or brake when the SHOT starts (by the
 distance then), GUESS: the same per shot for the brake (a shot that starts
 braking inside the range brakes to its end even if the hull leaves it).
 
-**NovaJS (main 07be7182):** per beam unit: each unit tests the current
+**NovaJS (main 14052c16):** per beam unit: each unit tests the current
 distance against `TRACTOR_PULL_RANGE` (450) and pulls beyond it, brakes
 inside (`N/nova_plugin/ship/death_plugin.ts:438`, `:548-555`):
 **mismatch** for a hull that crosses 450 during a pulling shot (NovaJS
