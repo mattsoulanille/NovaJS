@@ -106,6 +106,13 @@ import { TargetComponent } from '../ship/index.js';
  * përs Sol does not list: zero). A system whose listed chances sum to
  * 100 uses the full 5%; sums past 100 saturate it.
  *
+ * A listed person is ALSO rolled once, at their own percent, when the
+ * system is populated (spawnListedPersons), whatever the traffic: the
+ * 5% window rides on spawn draws, so a system with no DudeTypes (stock
+ * S7evyn, sÿst nova:472, whose cast is eight developer përs at 60-80%)
+ * would otherwise never show anyone, where the original shows a 100%
+ * person in a trafficless system every time (reference wave 43).
+ *
  * LinkSyst ("Which systems the person can be created in") is NOT
  * ANDed with an authored list. Stock data forbids it: of the 228
  * Person entries in the 65 systems that have any, 160 name a person
@@ -268,6 +275,13 @@ export const PersSpawnEntry = t.intersection([t.type({
      * 100% over the people the room's bits admit.
      */
     evenShare: t.boolean,
+    /**
+     * Named in the system's own sÿst Person list (never set on a
+     * LinkSyst-pool person): besides the 5% window, this person is
+     * rolled once at `chance`% when the system is populated, whatever
+     * its traffic (spawnListedPersons).
+     */
+    listed: t.boolean,
 })]);
 export type PersSpawnEntry = t.TypeOf<typeof PersSpawnEntry>;
 
@@ -687,7 +701,9 @@ export async function buildPersSpawnTable(world: World, systemId: string,
     let eligible: Eligible[];
     /** A LinkSyst pool that some ActiveOn gates (see evenShare). */
     let evenShare = false;
-    if (systemData.persons.length > 0) {
+    /** The authored cast, rolled on arrival too (spawnListedPersons). */
+    const listed = systemData.persons.length > 0;
+    if (listed) {
         // The authored cast. LinkSyst is deliberately not consulted
         // (see the module comment: 160 of 228 stock entries would die).
         eligible = (await Promise.all(systemData.persons.map(
@@ -784,6 +800,7 @@ export async function buildPersSpawnTable(world: World, systemId: string,
                 ? { holdsForOffer: true } : {}),
             ...(activeOn !== undefined ? { activeOn } : {}),
             ...(evenShare ? { evenShare: true } : {}),
+            ...(listed ? { listed: true } : {}),
         }));
 }
 
@@ -843,6 +860,61 @@ function maybeSpawnPers(world: World,
     if (!pers) {
         return 0;
     }
+    return spawnPers(world, gameData, ids, random, pers, atEdge);
+}
+
+/**
+ * The sÿst Person list's ARRIVAL roll: when a system is populated (at
+ * genesis, or at a seeded room's first entrant: spawnNpcs /
+ * populateForEntrant), each person the system's own Person list names
+ * (and the bits admit) is there with probability `chance`%, scattered
+ * through the system like the initial traffic, WHATEVER the system's
+ * traffic: a system with no DudeTypes or AvgShips 0 still gets its cast.
+ * Returns how many people it created.
+ *
+ * MEASURED (reference "The deferred (përs) auto-abort (R16), wave 43",
+ * r16_b-r16_d): a përs in the Person slot of a system with NO traffic
+ * (AvgShips 0, no DudeTypes) at 100% "was there at once every time"
+ * (three of three Enter Ships). The 5% window alone (maybeSpawnPers)
+ * rides on spawn draws, so it never fires in such a system; it is how
+ * stock sÿst nova:472 S7evyn (no DudeTypes, eight developer përs at
+ * 60-80%) came out empty. The Bible agrees: "Want to make a 'pers' type
+ * ship always appear? Put its ID into one of the Person fields".
+ *
+ * GUESS: the chance is an independent roll per listed person (only
+ * 100% is measured). GUESS: the listed people are not counted against
+ * AvgShips here (they arrive on top of the traffic, as the 100% person
+ * did in a system with none), and they stay in the 5% window as well
+ * (so a person killed or departed can reappear on a later spawn draw).
+ *
+ * Deterministic: exactly one draw per admitted listed person, spawned
+ * or not, then the placement draws of an actual spawn; table order.
+ */
+export function spawnListedPersons(world: World,
+    gameData: SimulationGameDataInterface, ids: IdFactory, random: Random,
+    persCandidates: readonly PersSpawnEntry[],
+    bits: ReadonlySet<number> = NO_SPAWN_BITS): number {
+    let spawned = 0;
+    for (const pers of effectivePersEntries(persCandidates, bits)) {
+        if (!pers.listed) {
+            continue;
+        }
+        if (random.next() * 100 >= pers.chance) {
+            continue;
+        }
+        spawned += spawnPers(world, gameData, ids, random, pers, false);
+    }
+    return spawned;
+}
+
+/**
+ * Creates `pers` (at the system edge, jumping in, or scattered through
+ * the system), unless that person is already alive here. Returns 1 if
+ * it created them.
+ */
+function spawnPers(world: World,
+    gameData: SimulationGameDataInterface, ids: IdFactory, random: Random,
+    pers: PersSpawnEntry, atEdge: boolean): number {
     for (const entity of world.entities.values()) {
         if (entity.components.get(PersComponent)?.id === pers.id) {
             // Only one of each person at a time.
@@ -1309,6 +1381,9 @@ export async function spawnNpcs(world: World, systemId: string,
         population += spawnNpc(world, gameData, ids, random, entries,
             false, persEntries, NO_SPAWN_BITS);
     }
+    // The system's own cast, whatever its traffic.
+    spawnListedPersons(world, gameData, ids, random, persEntries,
+        NO_SPAWN_BITS);
 
     const gated = spawnTableBits({ entries, persEntries }).length > 0;
     const spawner = new Entity('npc spawner')
@@ -1482,6 +1557,8 @@ export function populateForEntrant(world: World,
         population += spawnNpc(world, gameData, ids, random, spawner.entries,
             false, persEntries, bits);
     }
+    // The system's own cast, as at genesis (spawnListedPersons).
+    spawnListedPersons(world, gameData, ids, random, persEntries, bits);
 }
 
 /**

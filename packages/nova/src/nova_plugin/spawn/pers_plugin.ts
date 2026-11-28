@@ -14,7 +14,11 @@ import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
  * (npc_spawn_plugin.ts) implements exactly that: each spawn draw rolls
  * the 5% from the shared seeded Random against the system's genesis
  * përs table (LinkSyst eligibility + staged game data), so every peer
- * spawns the same people at the same ticks. The person's name is shown
+ * spawns the same people at the same ticks. The people a sÿst's own
+ * Person list names are also rolled once at their percent when the
+ * system is populated, traffic or not (spawnListedPersons: the Bible's
+ * "Want to make a 'pers' type ship always appear? Put its ID into one
+ * of the Person fields"). The person's name is shown
  * in place of the ship class name on the target display
  * (status_bar.ts), which is what this component carries.
  *

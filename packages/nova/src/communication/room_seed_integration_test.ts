@@ -262,12 +262,19 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // (unchargedTurnRate), so the synthetic Turn-8 hull turns 1 a
             // frame and every hull's synced MovementPhysics turn is whole
             // degrees. Genesis and both Random states did not move.
+            //
+            // All three columns of both systems were re-pinned for the
+            // sÿst Person list's arrival roll (stock S7evyn; reference wave
+            // 43): both systems list people, and genesis now rolls each
+            // listed person once at their percent after the traffic
+            // (spawnListedPersons), so the genesis draws, the people present
+            // and everything after differ.
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
-                [THESSALY, '27100915', '1b90c3cc',
-                    [2692022053, 1542226132, 2680743810, 396450618]],
-                [SYNTHETIC.systems.kestrel, 'dac4a238', '41f69e57',
-                    [2312166265, 2407210324, 1413610751, 1491742322]],
+                [THESSALY, '7cc57866', '6864107a',
+                    [2371270647, 961659501, 2459625435, 396450625]],
+                [SYNTHETIC.systems.kestrel, 'c6268b6d', '4fea9d70',
+                    [4129999877, 2737187703, 3462068314, 1491742324]],
             ];
             for (const [systemId, genesis, stepped, random] of pins) {
                 const world = await makeSystem(systemId, gameData, 'worker');

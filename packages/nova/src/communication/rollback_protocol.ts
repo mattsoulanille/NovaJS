@@ -1202,6 +1202,19 @@ export const STATE_HASH_INTERVAL = 60;
 //    tick it appears (the original kept, else the lowest uuid). No input or message kind changes. The derived wire schema
 //    fingerprint changes (67ff6c826e092635 -> 3a6d49a035638325), and the
 //    join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the sÿst Person list's arrival roll (stock
+//    S7evyn came out empty; reference wave 43: a 100% person in a
+//    trafficless system is there at once). One new optional field on
+//    the serializer-registered NpcSpawner's PersSpawnEntry, `listed`
+//    (spawn/npc_spawn_plugin.ts: the person is named by the system's own
+//    Person list). Sim-rule change alongside: when a system is populated
+//    (genesis, or a seeded room's first entrant) each listed person the
+//    bits admit is rolled once at their percent, whatever the traffic
+//    (spawnListedPersons). No input or message kind changes. The derived
+//    wire schema fingerprint changes (3a6d49a035638325 ->
+//    5e883b17be46131c), and the join gate keeps older and newer builds
+//    apart.
 
 export const PROTOCOL_VERSION = 8;
 

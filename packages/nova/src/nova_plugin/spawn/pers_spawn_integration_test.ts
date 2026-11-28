@@ -14,9 +14,14 @@ import { ShipDataComponent } from '../ship/index.js';
 import { GOAL_RESCUE } from '../player/index.js';
 import { SystemHoldComponent } from '../npc/index.js';
 import {
+    applyRoomSeed,
     buildPersSpawnTable,
+    NpcSpawnerComponent,
     PersSpawnEntry,
+    populateForEntrant,
+    spawnListedPersons,
     spawnNpc,
+    spawnNpcs,
 } from './npc_spawn_plugin.js';
 import { effectivePersEntries, NO_SPAWN_BITS } from './spawn_bits.js';
 
@@ -393,4 +398,158 @@ describe('përs spawning', () => {
             expect(shield!.current).toBe(shield!.max);
         }
     }, 120_000);
+
+    // The sÿst Person list's arrival roll (spawnListedPersons): measured
+    // in the original (reference wave 43: a 100% person in a system with
+    // no traffic was there at once, three of three).
+    describe('the Person list on arrival', () => {
+        const people = (world: { entities: Map<string, any> }) =>
+            [...world.entities.values()]
+                .map(entity => entity.components.get(PersComponent)?.id)
+                .filter((id): id is string => id !== undefined).sort();
+
+        it('brings a listed person in a system with no traffic', async () => {
+            const harness = await makeSimulationBridgeHarness(
+                getSyntheticGameData());
+            const gameData = await getSyntheticGameData();
+            const thessaly = await gameData.data.System.get(
+                SYNTHETIC.systems.thessaly);
+            // Thessaly with no traffic at all and its two listed people
+            // at 100%: the only way anyone is there is the arrival roll.
+            const quiet = {
+                ...thessaly, dudes: [], fleets: [], avgShips: 0,
+                persons: thessaly.persons.map(p => ({ ...p, chance: 100 })),
+            };
+            await spawnNpcs(harness.world, SYNTHETIC.systems.thessaly, quiet);
+            const spawner = harness.world.entities.get('npc spawner')!
+                .components.get(NpcSpawnerComponent)!;
+            expect(spawner.targetCount).toBe(0);
+            expect(spawner.persEntries!.every(e => e.listed)).toBeTrue();
+            expect(people(harness.world)).toEqual(
+                thessaly.persons.map(p => p.id).sort());
+        }, 120_000);
+
+        it('rolls each listed person at their own chance', async () => {
+            const harness = await makeSimulationBridgeHarness(
+                getSyntheticGameData());
+            const gameData = await getSyntheticGameData();
+            const thessaly = await gameData.data.System.get(
+                SYNTHETIC.systems.thessaly);
+            const table = await buildPersSpawnTable(harness.world,
+                SYNTHETIC.systems.thessaly, thessaly);
+            expect(table.map(e => [e.id, e.chance, e.listed])).toEqual(
+                thessaly.persons.map(p => [p.id, p.chance, true]));
+            const ids = new IdFactory();
+
+            // 0%: nobody, and EXACTLY one draw per listed person.
+            const random = new Random(77);
+            const reference = new Random(77);
+            expect(spawnListedPersons(harness.world, gameData, ids, random,
+                table.map(e => ({ ...e, chance: 0 })))).toBe(0);
+            table.forEach(() => reference.next());
+            expect(random.getState()).toEqual(reference.getState());
+            expect(people(harness.world)).toEqual([]);
+
+            // Old Pell at 100%, the Stranded Courier at 0%.
+            const [pell, courier] = table;
+            expect(spawnListedPersons(harness.world, gameData, ids,
+                new Random(5), [{ ...pell!, chance: 100 },
+                    { ...courier!, chance: 0 }])).toBe(1);
+            expect(people(harness.world)).toEqual([pell!.id]);
+            // Already alive: not duplicated.
+            expect(spawnListedPersons(harness.world, gameData, ids,
+                new Random(6), [{ ...pell!, chance: 100 }])).toBe(0);
+            expect(people(harness.world)).toEqual([pell!.id]);
+
+            // Over many arrivals each person's rate is their own chance
+            // (Old Pell 30%, the Stranded Courier 10%), independently.
+            const removePeople = () => {
+                for (const [uuid, entity] of [...harness.world.entities]) {
+                    if (entity.components.has(PersComponent)) {
+                        harness.world.entities.delete(uuid);
+                    }
+                }
+            };
+            removePeople();
+            const counts = new Map<string, number>();
+            const roller = new Random(31337);
+            const trials = 1_000;
+            for (let i = 0; i < trials; i++) {
+                spawnListedPersons(harness.world, gameData, ids, roller, table);
+                for (const id of people(harness.world)) {
+                    counts.set(id, (counts.get(id) ?? 0) + 1);
+                }
+                removePeople();
+            }
+            expect(counts.get(pell!.id)! / trials).toBeCloseTo(0.30, 1);
+            expect(counts.get(courier!.id)! / trials).toBeCloseTo(0.10, 1);
+        }, 120_000);
+
+        it('leaves a LinkSyst-pool person to the 5% window', async () => {
+            const harness = await makeSimulationBridgeHarness(
+                getSyntheticGameData());
+            const gameData = await getSyntheticGameData();
+            // Vael lists nobody: its table is the LinkSyst pool.
+            const vael = await gameData.data.System.get(SYNTHETIC.systems.vael);
+            expect(vael.persons).toEqual([]);
+            const table = await buildPersSpawnTable(harness.world,
+                SYNTHETIC.systems.vael, vael);
+            expect(table.length).toBeGreaterThan(0);
+            expect(table.some(e => e.listed)).toBeFalse();
+            const random = new Random(8);
+            const before = random.getState();
+            expect(spawnListedPersons(harness.world, gameData, new IdFactory(),
+                random, table.map(e => ({ ...e, chance: 100 })))).toBe(0);
+            expect(random.getState()).toEqual(before);
+        }, 120_000);
+
+        it("rolls the cast again at a seeded room's first entrant",
+            async () => {
+                const harness = await makeSimulationBridgeHarness(
+                    getSyntheticGameData());
+                const gameData = await getSyntheticGameData();
+                const thessaly = await gameData.data.System.get(
+                    SYNTHETIC.systems.thessaly);
+                const quiet = {
+                    ...thessaly, dudes: [], fleets: [], avgShips: 0,
+                    persons: thessaly.persons.map(p => ({ ...p, chance: 100 })),
+                };
+                await spawnNpcs(harness.world, SYNTHETIC.systems.thessaly,
+                    quiet);
+                const cast = thessaly.persons.map(p => p.id).sort();
+                expect(people(harness.world)).toEqual(cast);
+                // The room seed clears the genesis population; the first
+                // entrant's tick rolls it again, the cast included.
+                applyRoomSeed(harness.world, 1234);
+                expect(people(harness.world)).toEqual([]);
+                const spawner = harness.world.entities.get('npc spawner')!
+                    .components.get(NpcSpawnerComponent)!;
+                populateForEntrant(harness.world, gameData, new IdFactory(),
+                    new Random(1234), spawner,
+                    [[undefined, undefined, 'entrant']]);
+                expect(people(harness.world)).toEqual(cast);
+            }, 120_000);
+    });
+
+    // Stays on REAL data: stock S7evyn is the system this was found in
+    // (no DudeTypes, AvgShips 6, eight developer përs at 60-80%).
+    it("brings S7evyn's developers on arrival", async () => {
+        const harness = await makeSimulationBridgeHarness(
+            getIntegrationGameData());
+        const gameData = await getIntegrationGameData();
+        const s7evyn = await gameData.data.System.get('nova:472');
+        expect(s7evyn.name).toBe('S7evyn');
+        expect(s7evyn.dudes).toEqual([]);
+        expect(s7evyn.persons.map(p => p.chance))
+            .toEqual([60, 80, 80, 80, 80, 80, 80, 60]);
+        await spawnNpcs(harness.world, 'nova:472', s7evyn);
+        const listed = new Set(s7evyn.persons.map(p => p.id));
+        const here = [...harness.world.entities.values()]
+            .map(entity => entity.components.get(PersComponent)?.id)
+            .filter((id): id is string => id !== undefined);
+        // Six expected (two at 60%, six at 80%); deterministic seed.
+        expect(here.length).toBeGreaterThanOrEqual(3);
+        expect(here.every(id => listed.has(id))).toBeTrue();
+        expect(new Set(here).size).toBe(here.length);
+    }, 240_000);
 });
