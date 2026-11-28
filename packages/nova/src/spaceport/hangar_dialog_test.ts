@@ -149,15 +149,17 @@ describe('the hangar dialog', () => {
     }
 
     /** A hangar shown over `hull`; the hull follows every adopted swap. */
-    function open(hull: Entity, gameData = simulationData()) {
-        const hangar = new HangarDialog(displayAssets(), gameData,
-            new Subject<ControlEvent>());
+    function open(hull: Entity, gameData = simulationData(),
+        controls = new Subject<ControlEvent>(),
+        extra: Partial<HangarContext> = {}) {
+        const hangar = new HangarDialog(displayAssets(), gameData, controls);
         const state = { hull };
         const context: HangarContext = {
             hull: () => state.hull,
             stellarId: HERE,
             fightersOut: () => false,
             adoptHull: next => { state.hull = next; },
+            ...extra,
         };
         const shown = hangar.show(context);
         return { hangar, state, shown };
@@ -288,6 +290,125 @@ describe('the hangar dialog', () => {
             .toEqual(hangarDescriptionFrame(false));
         click(hangar.buttons.done);
         await shown;
+    });
+
+    describe('keys (Matthew 2026-11-27: e Escort / Store, s Swap)', () => {
+        const label = (button: unknown) =>
+            (button as { text: PIXI.Text }).text.text;
+        /** KeyS's three bindings, in settings/controls.json's order. */
+        const S_KEY = ['resetSecondary', 'shipyard', 'sell'] as const;
+
+        function press(controls: Subject<ControlEvent>,
+            ...actions: ControlEvent['action'][]) {
+            for (const action of actions) {
+                controls.next({ action, state: 'start' });
+            }
+        }
+
+        it('s (every action KeyS is bound to) swaps to the selected ship '
+            + 'once, as the Swap button does', async () => {
+                const controls = new Subject<ControlEvent>();
+                const hull = pilot([stored()]);
+                const { hangar, state, shown } = open(hull, simulationData(),
+                    controls);
+                await settle();
+                internals(hangar).itemGrid.right();
+                await settle();
+                expect(hangar.buttons.swap.state).toBe('normal');
+                press(controls, ...S_KEY);
+                await settle();
+                expect(state.hull.components.get(ShipComponent)?.id)
+                    .toBe(STORED);
+                // Exactly one swap: the old Runabout is the one stored ship.
+                expect(state.hull.components.get(StoredShipsComponent)!
+                    .map(record => record.ship)).toEqual([FLOWN]);
+                click(hangar.buttons.done);
+                await shown;
+            });
+
+        it('e sends a stored ship out as an escort, and e again stores it',
+            async () => {
+                const controls = new Subject<ControlEvent>();
+                const roster: { player: string, uuid: string,
+                    entity: Entity }[] = [];
+                const hull = pilot([stored()]);
+                const { hangar, state, shown } = open(hull, simulationData(),
+                    controls, {
+                        roster: () => roster as never,
+                        playerUuid: 'peer-1',
+                        mintUuid: () => 'escort-1',
+                    });
+                await settle();
+                internals(hangar).itemGrid.right();
+                await settle();
+                expect(label(hangar.buttons.move)).toBe('Escort');
+                press(controls, 'escorts');
+                await settle();
+                expect(roster.map(row => row.uuid)).toEqual(['escort-1']);
+                expect(state.hull.components.get(StoredShipsComponent) ?? [])
+                    .toEqual([]);
+                // The selection follows the ship, and the pill (and its
+                // key) now reads Store.
+                expect(internals(hangar).itemGrid.selection?.kind)
+                    .toBe('escort');
+                expect(label(hangar.buttons.move)).toBe('Store');
+                press(controls, 'escorts');
+                await settle();
+                expect(roster).toEqual([]);
+                expect(state.hull.components.get(StoredShipsComponent)!
+                    .map(record => record.ship)).toEqual([STORED]);
+                click(hangar.buttons.done);
+                await shown;
+            });
+
+        it('a greyed button ignores its key', async () => {
+            const controls = new Subject<ControlEvent>();
+            const hull = pilot([stored({ outfits: [[GONE, 1]] })]);
+            const { hangar, state, shown } = open(hull, simulationData(),
+                controls, { roster: () => [], playerUuid: 'peer-1' });
+            await settle();
+            // The ship being flown: nothing to swap to or move.
+            expect(internals(hangar).itemGrid.selection?.kind)
+                .toBe('current');
+            press(controls, 'escorts', ...S_KEY);
+            await settle();
+            expect(state.hull).toBe(hull);
+            // A stored ship that cannot load: both pills grey, both
+            // keys dead (no refusal message either: a key presses the
+            // button as drawn).
+            internals(hangar).itemGrid.right();
+            await settle();
+            expect(hangar.buttons.swap.state).toBe('grey');
+            expect(hangar.buttons.move.state).toBe('grey');
+            press(controls, 'escorts', ...S_KEY);
+            await settle();
+            expect(state.hull).toBe(hull);
+            expect(internals(hangar).text.message.text).toBe('');
+            click(hangar.buttons.done);
+            await shown;
+        });
+
+        it('only while the hangar holds the keyboard', async () => {
+            const controls = new Subject<ControlEvent>();
+            const hull = pilot([stored()]);
+            const { hangar, state, shown } = open(hull, simulationData(),
+                controls);
+            await settle();
+            internals(hangar).itemGrid.right();
+            await settle();
+            // A surface over it (a prompt, say) takes the keys.
+            const over = new MenuControls(controls, {});
+            over.bind();
+            press(controls, ...S_KEY);
+            await settle();
+            expect(state.hull).toBe(hull);
+            over.unbind();
+            click(hangar.buttons.done);
+            await shown;
+            press(controls, ...S_KEY);
+            await settle();
+            expect(state.hull).toBe(hull);
+        });
     });
 
     it('lists ships under their own names where the caption has room',

@@ -306,6 +306,16 @@ export class Shipyard extends Menu<Entity> {
             down: () => { itemGrid.down(); this.updateArrows(); },
             buy: () => void this.buyShip(),
             map: () => this.onMapKey?.(),
+            // `y` (the 'hail' action, KeyY) presses Your Ships (Matthew
+            // 2026-11-27): ship storage's pill, so nothing while ship
+            // storage is off and the pill hidden. Only while the shipyard
+            // itself holds the keyboard (its info dialog, the hangar and
+            // the search field take it from here).
+            hail: () => {
+                if (this.hangarButton.container.visible) {
+                    this.hangarButton.activate();
+                }
+            },
             depart: this.done.bind(this),
         };
         // Return presses Done, as in the outfitter (it buys nothing).

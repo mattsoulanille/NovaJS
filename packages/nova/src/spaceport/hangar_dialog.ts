@@ -368,6 +368,15 @@ export class HangarDialog {
             right: navigate(grid => grid.right()),
             up: navigate(grid => grid.up()),
             down: navigate(grid => grid.down()),
+            // Matthew 2026-11-27: `e` presses the Escort button (Escort a
+            // stored ship, or Store an escort: the pill's label follows
+            // the selection, and so does the key) and `s` presses Swap.
+            // The 'escorts' action is KeyE; KeyS is bound to 'shipyard',
+            // 'sell' and 'resetSecondary', of which only 'shipyard' is
+            // handled so one press swaps once. Each presses the button as
+            // drawn, so a greyed one ignores its key.
+            escorts: () => this.buttons.move.activate(),
+            shipyard: () => this.buttons.swap.activate(),
             depart: () => this.closed.next(),
         });
         // Return presses Done (MenuControls.defaultButton), as it does in

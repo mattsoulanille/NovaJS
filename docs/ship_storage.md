@@ -227,7 +227,11 @@ next time it goes out as an escort it takes a new one.
 - The outgoing hull's hold could not take what the swap leaves aboard it
   (see Cargo above).
 
-**The dialog.** Return presses Done, as in the shipyard under it. While the
+**The dialog.** `y` in the shipyard presses Your Ships (only while the
+shipyard itself holds the keyboard, and not while ship storage is off). In
+the hangar, `e` presses the Escort pill (which reads Store on an escort, so
+the key stores it), `s` presses Swap, and a greyed pill ignores its key
+(Matthew 2026-11-27). Return presses Done, as in the shipyard under it. While the
 hangar (or the shipyard's ship info or name prompt) is open, the shop
 search's Cmd/Ctrl+F stands down, so it cannot take the dialog's keys. Before
 the first grid is drawn the hangar loads every class and outfit it may need,

@@ -15,6 +15,7 @@ import { OutfitsStateComponent, ShipComponent } from '../nova_plugin/ship/index.
 import { overrideEnhancements } from '../enhancements.js';
 import { Button } from './button.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
+import { MenuControls } from './menu_controls.js';
 import { Shipyard } from './shipyard.js';
 
 /**
@@ -60,8 +61,16 @@ describe('the shipyard\'s ship name prompt', () => {
                 Oops: [], Asteroid: [], SpriteSheet: [], PlayerStart: [],
             }),
             data: {
-                Ship: { get: async (id: string) => ships.get(id) },
-                Outfit: { get: async () => undefined },
+                // getCached: the hangar (the y key's specs) reads names
+                // through the synchronous lookups.
+                Ship: {
+                    get: async (id: string) => ships.get(id),
+                    getCached: (id: string) => ships.get(id),
+                },
+                Outfit: {
+                    get: async () => undefined,
+                    getCached: () => undefined,
+                },
                 Govt: { get: async () => undefined },
             },
         } as unknown as SimulationGameDataInterface;
@@ -251,5 +260,59 @@ describe('the shipyard\'s ship name prompt', () => {
             expect(final.components.get(PlayerNamesComponent))
                 .toEqual({ pilot: 'Matt', ship: 'Shuttle 552' });
         });
+    });
+
+    describe('the y key (Matthew 2026-11-27: y presses Your Ships)', () => {
+        const hangarOf = (shipyard: Shipyard) =>
+            (shipyard as unknown as { hangar: { container: PIXI.Container } })
+                .hangar;
+
+        async function open() {
+            const controls = new Subject<ControlEvent>();
+            const shipyard = new Shipyard(displayAssets(), simulationData(),
+                controls);
+            await shipyard.buildPromise;
+            const shown = shipyard.show(player());
+            await settle();
+            const y = async () => {
+                controls.next({ action: 'hail', state: 'start' });
+                await settle();
+            };
+            return { shipyard, shown, controls, y };
+        }
+
+        afterEach(() => overrideEnhancements({}));
+
+        it('opens the hangar while the shipyard holds the keyboard, and '
+            + 'does nothing over it', async () => {
+                const { shipyard, shown, y } = await open();
+                expect(hangarOf(shipyard).container.visible).toBeFalse();
+                await y();
+                expect(hangarOf(shipyard).container.visible).toBeTrue();
+                // The hangar holds the keys now: y again neither closes
+                // nor reopens it, and Return presses the HANGAR's Done.
+                await y();
+                expect(hangarOf(shipyard).container.visible).toBeTrue();
+                expect(MenuControls.pressDefaultButton({ key: 'Enter' }))
+                    .toBeTrue();
+                await settle();
+                expect(hangarOf(shipyard).container.visible).toBeFalse();
+                expect(shipyard.container.visible).toBeTrue();
+                // Back on the shipyard, y works again.
+                await y();
+                expect(hangarOf(shipyard).container.visible).toBeTrue();
+                shipyard.dismiss();
+                await shown;
+            });
+
+        it('does nothing with ship storage off (the pill is hidden)',
+            async () => {
+                overrideEnhancements({ enhShipStorage: false });
+                const { shipyard, shown, y } = await open();
+                await y();
+                expect(hangarOf(shipyard).container.visible).toBeFalse();
+                shipyard.dismiss();
+                await shown;
+            });
     });
 });
