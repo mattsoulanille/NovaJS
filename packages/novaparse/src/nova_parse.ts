@@ -177,12 +177,19 @@ export class NovaParse implements GameDataInterface {
     public flagNamespaceWarn: (message: string) => void = console.warn;
     // Same for the control bit namespacing diagnostics.
     public controlBitNamespaceWarn: (message: string) => void = console.warn;
-    // The plug-ins' overrides: how many stock resources they replace, and
-    // one line per resource a plug-in replaced after ANOTHER plug-in had
-    // written it (IDSpaceHandler.getOverrideReport). Logged once, when the
-    // load finishes, through pluginOverrideLog (overridable like the
-    // warnings above; the server's copy lands in its log, see
+    // The plug-ins' overrides (IDSpaceHandler.getOverrideReport): how many
+    // stock resources they replace, and what a plug-in replaced after
+    // ANOTHER plug-in had written it. Logged once, when the load finishes,
+    // through pluginOverrideLog (overridable like the warnings above; the
+    // server's copy lands in its log, see
     // nova/src/server/parsing/nova_parse_worker.ts).
+    //
+    // The log is COMPACT by default: one line per (earlier plug-in ->
+    // later plug-in, resource type) with a count and up to three examples
+    // (describePluginOverrideReport). Set the environment variable
+    //     NOVA_PLUGIN_OVERRIDE_LOG=full
+    // (e.g. `NOVA_PLUGIN_OVERRIDE_LOG=full npm start`) for one line per
+    // replaced resource instead.
     public readonly overrideReport: Promise<PluginOverrideReport>;
     public pluginOverrideLog: (message: string) => void = console.log;
 
@@ -249,7 +256,9 @@ export class NovaParse implements GameDataInterface {
 
         this.overrideReport = this.idSpaceHandler.getOverrideReport()
             .then(report => {
-                const lines = describePluginOverrideReport(report);
+                const lines = describePluginOverrideReport(report, {
+                    full: process.env.NOVA_PLUGIN_OVERRIDE_LOG === "full",
+                });
                 if (lines.length > 0) {
                     this.pluginOverrideLog(
                         "NovaParse: " + lines.join("\n    "));

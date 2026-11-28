@@ -11,8 +11,11 @@ const api = {
         // resources, and the one-time Require/Contribute and control-bit
         // namespacing reports (cross-plug-in bits separated, a plug-in
         // Require that nothing contributes), and the plug-in override log
-        // (how many stock resources the plug-ins replace, one line per
-        // resource a plug-in replaced after another plug-in wrote it) —
+        // (how many stock resources the plug-ins replace, and one line per
+        // plug-in pair and resource type where a later plug-in replaced an
+        // earlier one's resources; NOVA_PLUGIN_OVERRIDE_LOG=full in the
+        // server's environment, which the worker inherits, lists every
+        // resource instead) —
         // are written with console.log/warn/error from inside this worker,
         // using NovaParse's defaults (flagNamespaceWarn,
         // controlBitNamespaceWarn, pluginOverrideLog). Nothing

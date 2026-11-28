@@ -285,6 +285,11 @@ export interface PluginOverrideReport {
      * copy is the one the game uses.
      */
     readonly clashes: readonly PluginOverrideClash[];
+    /**
+     * Every plug-in file, relative to Plug-ins, in load order (the order
+     * the compact log is sorted in).
+     */
+    readonly fileOrder: readonly string[];
 }
 
 export interface PluginOverrideClash {
@@ -300,14 +305,29 @@ export interface PluginOverrideClash {
     readonly byFile: string;
 }
 
+/** How many example resources a compact override-log line names. */
+export const OVERRIDE_LOG_EXAMPLES = 3;
+
 /**
- * The load-log lines for a {@link PluginOverrideReport}: one summary line,
- * then one line per clash, e.g. `spöb 516 "Gravit Station" (Planet Rico)
- * replaced by "Wormhole" (singularity/Singularity1.plug)`. Empty when no
- * plug-in replaced anything.
+ * The load-log lines for a {@link PluginOverrideReport}. Empty when no
+ * plug-in replaced anything; otherwise one summary line, then:
+ *
+ * - compact (the default): one line per (earlier plug-in file -> later
+ *   plug-in file, resource type) with the count and up to
+ *   {@link OVERRIDE_LOG_EXAMPLES} examples, sorted by load order (the
+ *   later file, then the earlier one, then the type as first met), e.g.
+ *   `spöb: Planet Rico -> singularity/Singularity1.plug: 1 (516 "Gravit Station" -> "Wormhole")`.
+ *   Clashes between two files of ONE plug-in folder (which share its
+ *   namespace, so they are the plug-in's own business) collapse to one
+ *   line per folder: `arpia/ (between its own files): 13 (shïp 448 "Hayai", ...)`.
+ * - `full`: one line per replaced resource, e.g.
+ *   `spöb 516 "Gravit Station" (Planet Rico) replaced by "Wormhole" (singularity/Singularity1.plug)`.
+ *
+ * NovaParse picks `full` when the environment variable
+ * NOVA_PLUGIN_OVERRIDE_LOG is "full" (nova_parse.ts pluginOverrideLog).
  */
-export function describePluginOverrideReport(
-    report: PluginOverrideReport): string[] {
+export function describePluginOverrideReport(report: PluginOverrideReport,
+    { full = false }: { full?: boolean } = {}): string[] {
     const { stockOverrides, clashes } = report;
     if (stockOverrides === 0 && clashes.length === 0) {
         return [];
@@ -317,9 +337,61 @@ export function describePluginOverrideReport(
     const summary = `plug-ins override ${count(stockOverrides, "stock resource")}`
         + (clashes.length === 0 ? "" : `; ${count(clashes.length, "resource")}`
             + " replaced by a later-loaded plug-in:");
-    return [summary, ...clashes.map(c =>
-        `${c.type} ${c.id} ${JSON.stringify(c.replacedName)} (${c.replacedFile})`
-        + ` replaced by ${JSON.stringify(c.byName)} (${c.byFile})`)];
+    if (full) {
+        return [summary, ...clashes.map(c =>
+            `${c.type} ${c.id} ${JSON.stringify(c.replacedName)} (${c.replacedFile})`
+            + ` replaced by ${JSON.stringify(c.byName)} (${c.byFile})`)];
+    }
+
+    const loadIndex = new Map(report.fileOrder.map((f, i) => [f, i]));
+    const indexOf = (file: string) => loadIndex.get(file) ?? Number.MAX_SAFE_INTEGER;
+    const folderOf = (file: string) =>
+        file.includes("/") ? file.slice(0, file.indexOf("/")) : null;
+    const typeOrder = new Map<string, number>();
+    interface Group {
+        readonly label: string;
+        readonly sortKey: readonly number[];
+        readonly examples: string[];
+        n: number;
+    }
+    const groups = new Map<string, Group>();
+    for (const c of clashes) {
+        if (!typeOrder.has(c.type)) {
+            typeOrder.set(c.type, typeOrder.size);
+        }
+        const folder = folderOf(c.byFile);
+        const ownFolder = folder !== null && folder === folderOf(c.replacedFile);
+        const key = ownFolder ? `folder ${folder}`
+            : JSON.stringify([c.replacedFile, c.byFile, c.type]);
+        let group = groups.get(key);
+        if (group === undefined) {
+            group = {
+                label: ownFolder ? `${folder}/ (between its own files)`
+                    : `${c.type}: ${c.replacedFile} -> ${c.byFile}`,
+                sortKey: [indexOf(c.byFile), indexOf(c.replacedFile),
+                    typeOrder.get(c.type)!],
+                examples: [], n: 0,
+            };
+            groups.set(key, group);
+        }
+        group.n++;
+        if (group.examples.length < OVERRIDE_LOG_EXAMPLES) {
+            const names = c.replacedName === c.byName
+                ? JSON.stringify(c.byName)
+                : `${JSON.stringify(c.replacedName)} -> ${JSON.stringify(c.byName)}`;
+            group.examples.push(`${ownFolder ? c.type + " " : ""}${c.id} ${names}`);
+        }
+    }
+    const sorted = [...groups.values()].sort((a, b) => {
+        for (let i = 0; i < a.sortKey.length; i++) {
+            if (a.sortKey[i] !== b.sortKey[i]) {
+                return a.sortKey[i] - b.sortKey[i];
+            }
+        }
+        return 0;
+    });
+    return [summary, ...sorted.map(g => `${g.label}: ${g.n} (`
+        + g.examples.join(", ") + (g.n > g.examples.length ? ", ..." : "") + ")")];
 }
 
 class IDSpaceHandler {
@@ -353,6 +425,7 @@ class IDSpaceHandler {
     private pluginWriters = new Map<string, string>();
     private stockOverrides = new Set<string>();
     private clashes = new Map<string, PluginOverrideClash>();
+    private pluginFileOrder: string[] = [];
 
     constructor(novaPath: string,
         { novaFiles, novaPlugins }: NovaSubPaths = DEFAULT_SUB_PATHS) {
@@ -446,6 +519,7 @@ class IDSpaceHandler {
         return {
             stockOverrides: this.stockOverrides.size,
             clashes: [...this.clashes.values()],
+            fileOrder: [...this.pluginFileOrder],
         };
     }
 
@@ -720,6 +794,9 @@ class IDSpaceHandler {
             ? undefined
             : path.relative(this.novaPluginsPath, filePath)
                 .split(path.sep).join("/");
+        if (writerFile !== undefined) {
+            this.pluginFileOrder.push(writerFile);
+        }
         const resourceCount = await readNovaFile(filePath,
             this.getIDSpaceUnsafe(prefix, writerFile));
 

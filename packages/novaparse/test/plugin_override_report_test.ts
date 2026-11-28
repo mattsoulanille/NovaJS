@@ -39,7 +39,20 @@ describe("plug-in override report", () => {
             // their own namespaces and never meet.
             const report = await new IDSpaceHandler(FIXTURE).getOverrideReport();
             expect(report.stockOverrides).toBe(2);
+            expect(report.fileOrder).toEqual(["plug pack/pp1.ndat",
+                "plug pack/pp2.ndat", "Plugin 1.ndat", "Z last plug.ndat"]);
+            // Compact: the folder's clash between its own files is one
+            // line for the folder; the cross-plug-in one names the pair.
             expect(describePluginOverrideReport(report)).toEqual([
+                "plug-ins override 2 stock resources; 2 resources replaced by"
+                + " a later-loaded plug-in:",
+                `plug pack/ (between its own files): 1 (wëap 153`
+                + ` "Will be overwritten" -> "Overwritten by pp2")`,
+                `wëap: Plugin 1.ndat -> Z last plug.ndat: 1 (129`
+                + ` "will be overwritten" -> "Overwritten by plugin2")`,
+            ]);
+            // Full: one line per resource.
+            expect(describePluginOverrideReport(report, { full: true })).toEqual([
                 "plug-ins override 2 stock resources; 2 resources replaced by"
                 + " a later-loaded plug-in:",
                 `wëap 153 "Will be overwritten" (plug pack/pp1.ndat) replaced`
@@ -54,27 +67,51 @@ describe("plug-in override report", () => {
         const handler = new IDSpaceHandler(FIXTURE,
             { novaFiles: "Nova Files", novaPlugins: null });
         const report = await handler.getOverrideReport();
-        expect(report).toEqual({ stockOverrides: 0, clashes: [] });
+        expect(report).toEqual({ stockOverrides: 0, clashes: [], fileOrder: [] });
         expect(describePluginOverrideReport(report)).toEqual([]);
     });
 
-    it("formats one summary line and one line per clash", () => {
+    it("compacts to one line per plug-in pair and type, with a count, up"
+        + " to three examples and load order", () => {
+        const clash = (type: string, id: number, replacedFile: string,
+            byFile: string, replacedName: string, byName = replacedName) =>
+            ({ type, id: String(id), replacedName, replacedFile, byName, byFile });
         const report: PluginOverrideReport = {
-            stockOverrides: 1,
-            clashes: [{
-                type: "spöb", id: "516",
-                replacedName: "Gravit Station", replacedFile: "Planet Rico",
-                byName: "Wormhole", byFile: "singularity/Singularity1.plug",
-            }],
+            stockOverrides: 9,
+            // Recorded in load order of the WINNING writes.
+            clashes: [
+                clash("oütf", 140, "Adv", "arpia/Data 1", "Etheric"),
+                clash("vers", 1, "arpia/Data 1", "arpia/Data 2", ""),
+                clash("shïp", 448, "arpia/Data 1", "arpia/Variants", "Hayai"),
+                clash("oütf", 134, "Adv", "extra/Part 1", "IR"),
+                clash("oütf", 132, "arpia/Data 1", "extra/Part 1", "HBT"),
+                clash("oütf", 135, "Adv", "extra/Part 1", "IR M"),
+                clash("oütf", 136, "Adv", "extra/Part 1", "Radar"),
+                clash("oütf", 137, "Adv", "extra/Part 1", "Radar M"),
+                clash("wëap", 9, "Adv", "extra/Part 1", "W"),
+                clash("spöb", 516, "Planet Rico", "singularity/S1.plug",
+                    "Gravit Station", "Wormhole"),
+            ],
+            fileOrder: ["Adv", "arpia/Data 1", "arpia/Data 2",
+                "arpia/Variants", "extra/Part 1", "Planet Rico",
+                "singularity/S1.plug"],
         };
         expect(describePluginOverrideReport(report)).toEqual([
-            "plug-ins override 1 stock resource; 1 resource replaced by a"
+            "plug-ins override 9 stock resources; 10 resources replaced by a"
             + " later-loaded plug-in:",
-            `spöb 516 "Gravit Station" (Planet Rico) replaced by "Wormhole"`
-            + " (singularity/Singularity1.plug)",
+            `oütf: Adv -> arpia/Data 1: 1 (140 "Etheric")`,
+            // Two files of one folder: ONE line for the folder, every type.
+            `arpia/ (between its own files): 2 (vers 1 "", shïp 448 "Hayai")`,
+            // Sorted by the later file, then the earlier, then the type.
+            `oütf: Adv -> extra/Part 1: 4 (134 "IR", 135 "IR M", 136 "Radar", ...)`,
+            `wëap: Adv -> extra/Part 1: 1 (9 "W")`,
+            `oütf: arpia/Data 1 -> extra/Part 1: 1 (132 "HBT")`,
+            `spöb: Planet Rico -> singularity/S1.plug: 1 (516 "Gravit Station"`
+            + ` -> "Wormhole")`,
         ]);
         // Stock overrides alone: the count, no per-resource lines.
-        expect(describePluginOverrideReport({ stockOverrides: 3, clashes: [] }))
+        expect(describePluginOverrideReport(
+            { stockOverrides: 3, clashes: [], fileOrder: ["A"] }))
             .toEqual(["plug-ins override 3 stock resources"]);
     });
 
@@ -117,15 +154,43 @@ describe("plug-in override report", () => {
                 expect(lines).toEqual(["NovaParse: plug-ins override 1 stock"
                     + " resource; 1 resource replaced by a later-loaded"
                     + " plug-in:\n    "
-                    + `wëap 129 "will be overwritten" (Planet Rico.ndat)`
-                    + ` replaced by "Overwritten by plugin2"`
-                    + " (singularity/Singularity1.ndat)"]);
+                    + "wëap: Planet Rico.ndat -> singularity/Singularity1.ndat:"
+                    + ` 1 (129 "will be overwritten" -> "Overwritten by`
+                    + ` plugin2")`]);
                 const idSpace = await np.idSpace;
                 if (idSpace instanceof Error) {
                     throw idSpace;
                 }
                 expect(idSpace.wëap["nova:129"].name)
                     .toBe("Overwritten by plugin2");
+            });
+
+        it("logs every resource when NOVA_PLUGIN_OVERRIDE_LOG=full",
+            async () => {
+                fs.copyFileSync(path.join(FIXTURE_PLUGINS, "Plugin 1.ndat"),
+                    path.join(plugins, "Planet Rico.ndat"));
+                fs.copyFileSync(path.join(FIXTURE_PLUGINS, "Z last plug.ndat"),
+                    path.join(plugins, "singularity", "Singularity1.ndat"));
+                const saved = process.env.NOVA_PLUGIN_OVERRIDE_LOG;
+                process.env.NOVA_PLUGIN_OVERRIDE_LOG = "full";
+                const lines: string[] = [];
+                try {
+                    const np = quietParse(tmpDir);
+                    np.pluginOverrideLog = m => lines.push(m);
+                    await np.overrideReport;
+                } finally {
+                    if (saved === undefined) {
+                        delete process.env.NOVA_PLUGIN_OVERRIDE_LOG;
+                    } else {
+                        process.env.NOVA_PLUGIN_OVERRIDE_LOG = saved;
+                    }
+                }
+                expect(lines).toEqual(["NovaParse: plug-ins override 1 stock"
+                    + " resource; 1 resource replaced by a later-loaded"
+                    + " plug-in:\n    "
+                    + `wëap 129 "will be overwritten" (Planet Rico.ndat)`
+                    + ` replaced by "Overwritten by plugin2"`
+                    + " (singularity/Singularity1.ndat)"]);
             });
 
         it("skips a folder inside a plug-in folder with a plain warning",
@@ -140,7 +205,8 @@ describe("plug-in override report", () => {
                 const error = spyOn(console, "error");
                 const report = await new IDSpaceHandler(tmpDir)
                     .getOverrideReport();
-                expect(report).toEqual({ stockOverrides: 0, clashes: [] });
+                expect(report).toEqual(
+                    { stockOverrides: 0, clashes: [], fileOrder: [] });
                 expect(warn).toHaveBeenCalledOnceWith(jasmine.stringMatching(
                     /skipped the folder .*singularity.deep: only files directly inside a plug-in folder load/));
                 expect(error).not.toHaveBeenCalled();
@@ -159,7 +225,8 @@ describe("plug-in override report", () => {
                 }
                 const report = await new IDSpaceHandler(tmpDir)
                     .getOverrideReport();
-                expect(report).toEqual({ stockOverrides: 0, clashes: [] });
+                expect(report).toEqual({ stockOverrides: 0, clashes: [],
+                    fileOrder: ["A.ndat", "B.ndat"] });
             });
     });
 });
