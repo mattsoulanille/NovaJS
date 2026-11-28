@@ -63,6 +63,33 @@ describe('the `h` hyperspace minimap', () => {
             expect(old.container.destroyed).toBeTrue();
         });
 
+        it('destroys a replaced graph down to its Graphics layers', () => {
+            // A graph that was only removed from its parent kept its dot
+            // layer (two circles per system: ~16,000 vertices for a
+            // mid-game galaxy) alive, and the renderer keeps a rendered
+            // Graphics' geometry until it is destroyed (SystemGraph.destroy).
+            const parent = new PIXI.Container();
+            const old = graph();
+            parent.addChild(old.container);
+            const layers: PIXI.Graphics[] = [];
+            (function walk(node: PIXI.DisplayObject) {
+                if (node instanceof PIXI.Graphics) {
+                    layers.push(node);
+                }
+                for (const child of (node as PIXI.Container).children ?? []) {
+                    walk(child);
+                }
+            })(old.container);
+            expect(layers.length).toBeGreaterThan(0);
+            let completed = false;
+            old.infoSelection.subscribe({ complete: () => completed = true });
+            old.destroy();
+            expect(parent.children.length).toBe(0);
+            expect(old.container.destroyed).toBeTrue();
+            expect(layers.every(g => g.destroyed)).toBeTrue();
+            expect(completed).toBeTrue();
+        });
+
         it('starts hidden and keeps the map inside its outline', () => {
             const miniMap = new MiniMap(() => 0);
             expect(miniMap.container.visible).toBeFalse();

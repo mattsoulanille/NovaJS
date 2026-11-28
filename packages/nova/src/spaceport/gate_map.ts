@@ -687,9 +687,9 @@ export class GateMap extends Menu<GateMapResult> {
         // A fresh graph per showing: the selectable set is per-gate. The
         // heavy pieces (bitmap label font, texture batching) are shared and
         // this only happens when the player lands on a gate.
-        if (this.systemGraph) {
-            this.container.removeChild(this.systemGraph.container);
-        }
+        // The last landing's graph is destroyed, not just removed
+        // (SystemGraph.destroy).
+        this.systemGraph?.destroy();
         this.systemGraph = new SystemGraph(this.systems, input.systemId,
             gateMapGraphOptions(view.gateLinks,
                 new Set(this.selectableSpobs.keys()), input.missionMarks,

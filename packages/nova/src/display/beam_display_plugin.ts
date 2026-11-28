@@ -269,6 +269,9 @@ export const BeamDisplayPlugin: Plugin = {
         if (space && beamGraphics) {
             space.removeChild(beamGraphics);
         }
+        // Per world: removed but not destroyed, every system's beam layer
+        // (and its geometry) outlived the world.
+        beamGraphics?.destroy();
         world.removeSystem(BeamDisplaySystem);
         world.removeSystem(ClearBeams);
         world.resources.delete(BeamGraphicsResource);

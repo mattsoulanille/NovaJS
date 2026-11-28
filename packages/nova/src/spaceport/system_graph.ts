@@ -454,6 +454,25 @@ export class SystemGraph {
         this.nebulae?.update(BASE_SCALE * this.viewport.zoom);
     }
 
+    /**
+     * Frees the graph: its display objects (the dot layer alone is one
+     * Graphics of two circles per drawn system, ~16,000 vertices for a
+     * mid-game galaxy, plus the lane / route / border layers and the
+     * labels) and its subscribers. A graph that is merely removed from its
+     * parent keeps all of that alive for as long as anything still holds
+     * the graph, so every owner that REPLACES its graph (the star map's
+     * re-filter on open, a gate map per landing, the minimap per `h`, the
+     * rollback screen per checkpoint) destroys the old one. Textures are
+     * the asset cache's (nebula PICTs, mission marks, the label font) and
+     * are left alone.
+     */
+    destroy() {
+        this.infoSelection.complete();
+        this.routeChanged.complete();
+        this.container.parent?.removeChild(this.container);
+        this.container.destroy({ children: true });
+    }
+
     /** The map spot each system is drawn on and clicked at: see
      * {@link representativeSystems}. */
     private pickRepresentativeSystems(systems: SystemData[]) {

@@ -493,7 +493,7 @@ export const StarmapPlugin: Plugin = {
             }
             // Superseded or torn down while the data loaded.
             if (disposed || build !== miniMapBuild) {
-                graph?.container.destroy({ children: true });
+                graph?.destroy();
                 return;
             }
             miniMap.setGraph(graph);

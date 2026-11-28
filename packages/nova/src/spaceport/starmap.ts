@@ -576,9 +576,10 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         if (this.systemGraph && key === this.graphBitsKey) {
             return;
         }
-        if (this.systemGraph) {
-            this.container.removeChild(this.systemGraph.container);
-        }
+        // Destroyed, not just removed: the replaced graph (its dot layer
+        // alone ~16,000 vertices) otherwise outlived the map (SystemGraph
+        // .destroy).
+        this.systemGraph?.destroy();
         this.graphBitsKey = key;
         // The regular starmap does NOT show hypergate lanes — the original
         // game only reveals the network on the hypergate transit map

@@ -493,9 +493,8 @@ export class RollbackScreen {
         const key = [...bits].sort((a, b) => a - b).join(',');
         if (!this.graph || key !== this.graphBitsKey
             || !this.graph.hasSystem(system)) {
-            if (this.graph) {
-                this.mapHolder.removeChild(this.graph.container);
-            }
+            // Destroyed, not just removed (SystemGraph.destroy).
+            this.graph?.destroy();
             // DELIBERATELY NOT discovery-filtered (SystemGraph then
             // defaults to "everything known"). This is a history browser,
             // not the pilot's own map: the route overlay below traces where

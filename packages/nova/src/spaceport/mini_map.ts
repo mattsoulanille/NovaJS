@@ -237,10 +237,7 @@ export class MiniMap {
     setGraph(graph: SystemGraph | undefined) {
         this.graphSubscription?.unsubscribe();
         this.graphSubscription = undefined;
-        if (this.graph) {
-            this.container.removeChild(this.graph.container);
-            this.graph.container.destroy({ children: true });
-        }
+        this.graph?.destroy();
         this.graph = graph;
         if (graph) {
             graph.container.position.set(1, 1);
