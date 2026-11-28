@@ -150,7 +150,7 @@ export function applyMissionSetString(world: World,
             return;
         }
         releaseAbortedMissionShips(world, controlled.uuid, record.missionId,
-            active.shipObjective, true);
+            active.shipObjective);
         missions.delete(record.missionId);
     }
     if (record.notices?.length) {

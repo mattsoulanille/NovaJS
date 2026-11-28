@@ -1261,6 +1261,20 @@ export const STATE_HASH_INTERVAL = 60;
 //    changes. The derived wire schema fingerprint changes
 //    (fcce7ad2bfc8f5bf -> 0bacfbdb2cbfd802), and the join gate keeps
 //    older and newer builds apart.
+//    Also under 8, no further bump, and NO schema change: boarding live
+//    mission ships (reference "Boarding live mission ships, wave 61").
+//    Sim-rule changes only (encounters/rescue_board.ts missionShipBoard):
+//    the special ship of a running, unfailed mission is never plundered,
+//    captured or stowed, whatever its ShipGoal; its first board past the
+//    gate is the PickupMode-2 retrieval (any goal now), the deferred
+//    rescue, or a SILENT board that spends it (objective flag plus the
+//    existing Boarded record), and every later press is refused before
+//    the range and alignment gates; a failed mission's ship plunders as
+//    before. An in-flight abort now releases every special ship whatever
+//    its ShipBehav (mission_ship_release.ts). No component, field, input
+//    or message kind changes: the derived wire schema fingerprint is
+//    unchanged (0bacfbdb2cbfd802), so only the build stamp keeps the
+//    builds on either side of it apart.
 
 export const PROTOCOL_VERSION = 8;
 

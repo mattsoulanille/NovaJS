@@ -271,15 +271,18 @@ describe('the special ships of a mission aborted in flight', () => {
     });
 
     for (const behavior of [-1, 2]) {
-        it(`deletes the ShipBehav ${behavior} ships, as before (not `
-            + 'measured)', async () => {
+        it(`keeps the ShipBehav ${behavior} ships, released, and deletes `
+            + 'only the aux ship (reference "Boarding live mission ships, '
+            + 'wave 61": a disabled ShipBehav -1 ship stayed)', async () => {
                 const { world } = await flying(behavior);
                 await abort(world);
                 world.step();
-                for (const uuid of ['special 1', 'special 2', 'aux']) {
-                    expect(world.entities.has(uuid)).withContext(uuid)
-                        .toBeFalse();
+                for (const uuid of ['special 1', 'special 2']) {
+                    expect(world.entities.get(uuid)?.components
+                        .get(MissionShipComponent)?.untethered)
+                        .withContext(uuid).toBeTrue();
                 }
+                expect(world.entities.has('aux')).toBeFalse();
             });
     }
 

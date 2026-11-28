@@ -152,9 +152,13 @@ describe('aborting a mission in flight', () => {
         expect(ship.components.get(LegalRecordsComponent)!.get(THESSALY)).toBe(30);
         expect(world.entities.has('special')).toBeTrue();
         world.step();
-        expect(world.entities.has('special'))
-            .withContext('the special ship follows its mission out')
-            .toBeFalse();
+        // The special ship stays, released from its mission (reference
+        // "Boarding live mission ships, wave 61": the original keeps every
+        // special ship of an aborted mission, whatever its ShipBehav).
+        expect(world.entities.get('special')?.components
+            .get(MissionShipComponent)?.untethered)
+            .withContext('the special ship is released, not deleted')
+            .toBeTrue();
         // Pilot B's courier run is untouched.
         expect(world.entities.get('ship b')!.components.get(MissionsComponent)!
             .has(COURIER)).toBeTrue();

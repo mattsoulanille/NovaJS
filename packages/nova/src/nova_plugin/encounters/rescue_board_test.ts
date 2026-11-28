@@ -308,7 +308,10 @@ describe('boarding a rescue ship', () => {
             expect(blocked).toEqual([]);
             expect(retrieved).toEqual([]);
             expect(owner.components.has(BoardingComponent)).toBeFalse();
-            expect(hulk.components.has(BoardedComponent)).toBeFalse();
+            // The spend is durable on the hull too (it outlives the
+            // mission: reference "Boarding live mission ships, wave 61").
+            expect(hulk.components.get(BoardedComponent))
+                .toEqual({ boarder: OWNER, plundered: true });
             expect(goal().live.get(HULK)?.boarded).toBeTrue();
             press(world, OWNER);
             press(world, OWNER);
@@ -488,13 +491,17 @@ describe('boarding a rescue ship', () => {
         });
     });
 
-    it('leaves every other goal on the ordinary rules', async () => {
-        const { world, owner, retrieved } = await rescueWorld(
-            rescueMission({ shipObjective: objective(GOAL_BOARD) }));
-        press(world, OWNER);
-        expect(retrieved).toEqual([]);
-        expect(owner.components.get(BoardingComponent)?.target).toBe(HULK);
-    });
+    it('retrieves a BOARD goal\'s PickupMode-2 cargo the same way, and '
+        + 'credits it (the original tests the PickupMode before the goal: '
+        + 'reference "Boarding live mission ships, wave 61")', async () => {
+            const { world, owner, retrieved } = await rescueWorld(
+                rescueMission({ shipObjective: objective(GOAL_BOARD) }));
+            press(world, OWNER);
+            expect(retrieved).toEqual([CARGO_TYPE]);
+            expect(owner.components.has(BoardingComponent)).toBeFalse();
+            expect(active(owner).cargoLoaded).toBeTrue();
+            expect(active(owner).shipObjective!.complete).toBeTrue();
+        });
 
     it('treats a ship whose mission is over (untethered) as an ordinary '
         + 'hulk', async () => {

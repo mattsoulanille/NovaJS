@@ -4,7 +4,7 @@ import { EntityMap } from 'nova_ecs/entity_map';
 import { EcsEvent } from 'nova_ecs/events';
 import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
 import {
-    ActiveMission, GOAL_RESCUE, missionCargoKey, MissionsComponent,
+    ActiveMission, missionCargoKey, MissionsComponent,
     MissionShipComponent, shipBoarded, ShipObjective,
 } from '../player/index.js';
 import {
@@ -16,69 +16,74 @@ import {
 
 /**
  * ============================================================================
- * Boarding a RESCUE ship (mïsn ShipGoal 5) only picks up its cargo
+ * Boarding a LIVE mission's special ship: never a plunder
  * ============================================================================
  *
- * The Bible's ShipGoal 5 is "Rescue them (they start out disabled and stay
- * that way until you board them)", but the original does not let the
- * player board a live rescue ship at all, except to take its mission cargo
- * (reference "Boarding a rescue ship: stock \"Rescue Raczak\" (nova:394),
- * wave 13"):
+ * The original never plunders, captures or stows the special ship of a
+ * mission that is still running and has not failed, whatever its ShipGoal
+ * (reference "Boarding live mission ships, wave 61", read off the
+ * original's HandlePlayerBoardAttempt and measured on several goals). Past
+ * the ordinary range / speed / alignment gate, its board is one of:
  *
- *  - WITH PickupMode-2 cargo not yet aboard, the board (past the ordinary
- *    range / speed / alignment gate — 16 silent misaligned presses, then
- *    the 17th) loads the cargo with the status line "You retrieved Admiral
- *    Raczak from this ship." and NOTHING ELSE: no plunder dialog, and the
- *    hulk stays Disabled. Every later press is "You can't board this
- *    ship.". The mission completes when the cargo is dropped off.
- *  - WITHOUT it, the FIRST press past the gate is a SILENT board: nothing
- *    on the status line, and it uses up the hulk's one board; every later
- *    press is "You can't board this ship." (reference "H1 / rescue
- *    leftovers, wave 21", finding 5: a misaligned press silent, the first
- *    aligned one silent too, then the refusal twice; wave 19's single
- *    silent press at 10 deg apart fits). Nothing is retrieved and the
- *    goal is NOT credited, so the mission can never be completed by
- *    boarding (the hulk stayed "Disabled" and the mission active; wave
- *    11's kit refusals, and wave 13's stock mïsn 1072, were the later
- *    presses).
+ *  - THE RETRIEVAL, when the mission carries PickupMode-2 cargo not yet
+ *    aboard: the status line "You retrieved Admiral Raczak from this
+ *    ship." and NOTHING ELSE: no plunder dialog, and the hulk stays
+ *    Disabled (reference "Boarding a rescue ship: stock \"Rescue Raczak\"
+ *    (nova:394), wave 13"). It credits a board / rescue goal; the mission
+ *    completes when the cargo is dropped off. Any goal: the original
+ *    tests the PickupMode before the goal.
+ *  - THE DEFERRED AUTO-ABORT RESCUE (mïsn Flags 0x0001 with a përs
+ *    replacement: the four stock Refuel Traders, `autoAbortOnBoard`): the
+ *    owner's first board is the rescue itself, with NO dialog, only a
+ *    status line (RescueBoardedEvent: the stock Refuel Trader's
+ *    "Valkyrie:  Energy transfer complete, rescue-a.", a mission that
+ *    takes no fuel's "Target ship has been boarded."; reference "The
+ *    Refuel Trader rescue", 2026-11-27, and "The deferred (përs)
+ *    auto-abort (R16), wave 43"). It spends the hull's one board through
+ *    the durable BoardedComponent record, which is what
+ *    MissionShipTrackSystem's rescueBoarded reads to pay, take the fuel,
+ *    release the ship and mark the mission's abort pending.
+ *  - otherwise a SILENT board: nothing on the status line, and it uses up
+ *    the hull's one board WITHOUT crediting anything (the original's board
+ *    counter moves only on the two boards above, so a board or rescue
+ *    goal without PickupMode-2 cargo can never be completed by boarding).
+ *    Every later press is "You can't board this ship." (reference "H1 /
+ *    rescue leftovers, wave 21", finding 5, for a no-cargo rescue; wave 61
+ *    for the other goals, the RAGE Gunboats of "Destroy Bureau Cell"
+ *    among them: no plunder dialog, ever).
  *
- * So for the ship of a LIVE rescue mission the board is never a plunder,
- * a capture, a bay stow or an escort repair: it is the retrieval, the
- * silent no-cargo board, or a refusal. The retrieval credits the rescue goal on the spot (shipBoarded,
- * the same transition a plunder board used to make), which is what lets
- * the drop-off complete the mission; the cargo's DropOffMode then does
- * the rest at landing, as for any mission cargo.
+ * A live special ship whose one board is spent answers every press with
+ * "You can't board this ship." BEFORE the range and alignment gates
+ * (missionShipBoardSpent: the original tests its boarded flag first, so
+ * wave 61's sweeps read the line at every heading).
  *
- * THE DEFERRED AUTO-ABORT RESCUE (mïsn Flags 0x0001 with a përs
- * replacement: the four stock Refuel Traders, `autoAbortOnBoard`) is the
- * third kind of board, 'deferred': the owner's first board is the rescue
- * itself, with NO dialog, only a status line (RescueBoardedEvent: the
- * stock Refuel Trader's "Valkyrie:  Energy transfer complete, rescue-a.",
- * a mission that takes no fuel's "Target ship has been boarded."; reference
- * "The Refuel Trader rescue", 2026-11-27, and "The deferred (përs)
- * auto-abort (R16), wave 43"). It spends the hull's one
- * board through the durable BoardedComponent record, which is what
- * MissionShipTrackSystem's rescueBoarded reads to pay, take the fuel,
- * release the ship and mark the mission's abort pending. No plunder
- * session opens, so the plunder dialog can never flash up. Every later
- * press is refused.
+ * WHEN THE SHIP IS ORDINARY AGAIN (kind 'none': plunder, capture):
+ *  - its mission has FAILED in flight (a disabled escort ally, a disable
+ *    target destroyed, any sim-marked failure): the original's failed flag
+ *    sends the board to the plunder dialog (reference "Reviving a disabled
+ *    ally, wave 11") — though a PickupMode-2 retrieval and the deferred
+ *    rescue still come first, as there;
+ *  - its mission is over: an in-flight abort clears the original's
+ *    mission index on every special ship (AbortMission), so an UNBOARDED
+ *    ship of an aborted mission is an ordinary ship; NovaJS's `untethered`
+ *    marks it (missions/mission_ship_release.ts), and the auto-abort
+ *    ambushes are untethered from birth (wave 11's auto-aborting goal-5
+ *    ship opened the plunder dialog);
+ *  - its owner is not in the world (a departed peer's), and aux ships
+ *    (GUESS: not measured).
  *
- * NOT COVERED, and so left on the ordinary boarding rules:
- *  - a ship whose owner is not in the world (a departed peer's), an
- *    untethered one, and an aux ship: none is a live rescue target.
- *
- * Only the mission's OWNER retrieves. Anybody else — a rival player — is
+ * Only the mission's OWNER boards. Anybody else — a rival player — is
  * refused while the mission runs, as the original refuses everyone but
  * the one pilot it has.
  */
 
 /** What a board of this hull is, under the rule above. */
-export type RescueBoard =
-    /** Not a live rescue ship: the ordinary boarding rules apply. */
+export type MissionShipBoard =
+    /** Not a live mission ship: the ordinary boarding rules apply. */
     | { kind: 'none' }
-    /** A live rescue ship that cannot be boarded now. */
+    /** A live mission ship that cannot be boarded now. */
     | { kind: 'refuse' }
-    /** The owner's first board of a live rescue ship with no mission
+    /** The owner's first board of a live mission ship with no mission
      * cargo to take: silent, and it spends the hull's one board
      * ({@link spendRescueBoard}). */
     | { kind: 'silent', objective: ShipObjective }
@@ -102,8 +107,8 @@ export type RescueBoard =
  * Classifies the board of `target` (uuid `targetUuid`) by the ship
  * `boarderUuid`. Pure: reads synced state only.
  */
-export function rescueBoard(target: Entity, targetUuid: string,
-    boarderUuid: string, entities: EntityMap): RescueBoard {
+export function missionShipBoard(target: Entity, targetUuid: string,
+    boarderUuid: string, entities: EntityMap): MissionShipBoard {
     const missionShip = target.components.get(MissionShipComponent);
     if (!missionShip || missionShip.aux || missionShip.untethered) {
         return { kind: 'none' };
@@ -112,7 +117,7 @@ export function rescueBoard(target: Entity, targetUuid: string,
     const active = owner?.components.get(MissionsComponent)
         ?.get(missionShip.mission);
     const objective = active?.shipObjective;
-    if (!owner || !active || !objective || objective.goal !== GOAL_RESCUE) {
+    if (!owner || !active || !objective) {
         return { kind: 'none' };
     }
     const flags = objective.live.get(targetUuid);
@@ -130,26 +135,51 @@ export function rescueBoard(target: Entity, targetUuid: string,
                 energyTransfer: (active.autoAbortFuel ?? 0) > 0,
             };
     }
-    // Nothing aboard to take (no PickupMode-2 cargo; GUESS: cargo loaded
-    // at the spaceport reads the same): the one board is spent silently.
+    // PickupMode 2, whatever the quantity: the original's pickup succeeds
+    // outright for a quantity of 0 (DoMissionCargoPickup), so stock mïsn
+    // 710 "Set and Launch Trap" (PickupMode 2, CargoQty 0) is completed by
+    // this board too.
+    if (active.pickupOnBoard) {
+        if (active.cargoLoaded) {
+            return { kind: 'refuse' };
+        }
+        // The cargo must fit. The original refuses such a board too, after
+        // a text dialog saying the hold is too small (STR# 2002; not
+        // shown here): the cargo stays aboard the hulk for later.
+        const cargo = owner.components.get(CargoComponent);
+        const physics = owner.components.get(ShipPhysicsComponent);
+        if (active.cargoQty > 0 && (!cargo || !physics
+            || active.cargoQty > physics.freeCargo - cargoUsed(cargo))) {
+            return { kind: 'refuse' };
+        }
+        return { kind: 'retrieve', owner, active, objective };
+    }
+    // A failed mission's ship is an ordinary hulk again: plunder.
+    if (objective.failed || active.failed) {
+        return { kind: 'none' };
+    }
+    // Nothing aboard to take (no PickupMode 2; GUESS: cargo loaded at the
+    // spaceport reads the same): the one board is spent silently.
     // A hull not yet registered on the objective has no flag to spend it
     // on, so it is refused as before.
-    if (!active.pickupOnBoard || active.cargoQty <= 0) {
-        return flags ? { kind: 'silent', objective } : { kind: 'refuse' };
+    return flags ? { kind: 'silent', objective } : { kind: 'refuse' };
+}
+
+/**
+ * Whether a press on `target` by `boarderUuid` is refused before the range
+ * and alignment gates: a live special ship whose one board is spent. The
+ * original tests its boarded flag first, so the line comes at any
+ * distance and heading (wave 61). Pure: reads synced state only.
+ */
+export function missionShipBoardSpent(target: Entity, targetUuid: string,
+    entities: EntityMap): boolean {
+    const missionShip = target.components.get(MissionShipComponent);
+    if (!missionShip || missionShip.aux || missionShip.untethered) {
+        return false;
     }
-    if (active.cargoLoaded) {
-        return { kind: 'refuse' };
-    }
-    // The cargo must fit. Not measured on the original (the reference
-    // pilot had room): a full hold is refused like any other board that
-    // cannot happen, and the cargo stays aboard the hulk for later.
-    const cargo = owner.components.get(CargoComponent);
-    const physics = owner.components.get(ShipPhysicsComponent);
-    if (!cargo || !physics
-        || active.cargoQty > physics.freeCargo - cargoUsed(cargo)) {
-        return { kind: 'refuse' };
-    }
-    return { kind: 'retrieve', owner, active, objective };
+    const active = entities.get(missionShip.owner)
+        ?.components.get(MissionsComponent)?.get(missionShip.mission);
+    return !!active?.shipObjective?.live.get(targetUuid)?.boarded;
 }
 
 /**
@@ -164,11 +194,13 @@ export function rescueBoard(target: Entity, targetUuid: string,
  * the first seconds).
  */
 export function retrieveRescueCargo(
-    retrieve: Extract<RescueBoard, { kind: 'retrieve' }>,
+    retrieve: Extract<MissionShipBoard, { kind: 'retrieve' }>,
     targetUuid: string, target?: Entity): void {
     const { owner, active, objective } = retrieve;
-    owner.components.get(CargoComponent)!
-        .set(missionCargoKey(active.id), active.cargoQty);
+    if (active.cargoQty > 0) {
+        owner.components.get(CargoComponent)!
+            .set(missionCargoKey(active.id), active.cargoQty);
+    }
     active.cargoLoaded = true;
     shipBoarded(objective, targetUuid);
     if (target && waitingForRescue(target)) {
@@ -181,19 +213,33 @@ export function retrieveRescueCargo(
 }
 
 /**
- * The silent no-cargo board: marks the hull boarded (its one board is
- * spent, so every later press is refused) WITHOUT crediting the rescue
- * goal (shipBoarded would count it, and the original's mission stayed
- * active). Nothing else changes: the hulk stays disabled and held, and a
- * WAITING ShipStart-2 ship stays where it waits (GUESS: the measured run
- * was a hulk; only the retrieval was seen to release a waiting ship).
+ * The silent board: marks the hull boarded (its one board is spent, so
+ * every later press is refused) WITHOUT crediting the goal (shipBoarded
+ * would count it, and the original's mission stayed active). Nothing else
+ * changes: the hulk stays disabled and held, and a WAITING ShipStart-2
+ * ship stays where it waits (GUESS: the measured run was a hulk; only the
+ * retrieval was seen to release a waiting ship).
+ *
+ * The spend is ALSO written to the hull's durable boarding record, spent
+ * by the boarder, because it outlives the mission: on the original a ship
+ * boarded this way still answered "You can't board this ship." after its
+ * mission was aborted in flight (reference "Boarding live mission ships,
+ * wave 61": the ship's own boarded flag, which the abort leaves alone),
+ * where an aborted mission's UNBOARDED ship is an ordinary one. The
+ * record is what the ordinary one-plunder rule reads once the ship is
+ * untethered. MissionShipTrackSystem reads it too, but finds the hull's
+ * objective flag already set, so nothing is credited or picked up.
  */
 export function spendRescueBoard(
-    silent: Extract<RescueBoard, { kind: 'silent' }>,
-    targetUuid: string): void {
+    silent: Extract<MissionShipBoard, { kind: 'silent' }>,
+    targetUuid: string, target: Entity, boarderUuid: string): void {
     const flags = silent.objective.live.get(targetUuid);
     if (flags) {
         flags.boarded = true;
+    }
+    if (!target.components.has(BoardedComponent)) {
+        target.components.set(BoardedComponent,
+            { boarder: boarderUuid, plundered: true });
     }
 }
 

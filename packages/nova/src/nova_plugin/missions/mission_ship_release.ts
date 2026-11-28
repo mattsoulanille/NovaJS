@@ -22,10 +22,17 @@ import { MissionShipComponent, ShipObjective } from '../player/index.js';
  *    shooting at the player 3, 8, 21 and 40 s after the abort, and were
  *    gone only once the player had landed and taken off again.
  *
- * Every other ShipBehav — -1 (standard AI) and 2 (bombard enemy stellars),
- * and aux ships, which have none — was not measured, so those ships keep
- * the deletion they had before: MissionShipCleanupSystem sweeps a mission
- * ship whose owner no longer holds its mission.
+ *  - -1 (standard AI): a DISABLED ship of a destroy and of a disable goal
+ *    stayed where it was, still "Disabled", for the rest of the watch
+ *    (reference "Boarding live mission ships, wave 61"). The original's
+ *    AbortMission clears the mission index on every special ship of the
+ *    mission whatever its ShipBehav, so 2 (bombard enemy stellars, not
+ *    measured) is released the same way: each ship carries on under its
+ *    own AI and government.
+ *
+ * Aux ships (not measured) keep the deletion they had before:
+ * MissionShipCleanupSystem sweeps a mission ship whose owner no longer
+ * holds its mission.
  *
  * WHAT "RELEASED" MEANS IN THE SIMULATION. The ship keeps its
  * MissionShipComponent (its name stays on the target pane) but turns
@@ -56,33 +63,24 @@ import { MissionShipComponent, ShipObjective } from '../player/index.js';
  */
 export const ABORTED_ESCORT_DEPART_MS = 11_000;
 
-/** ShipBehav 0: "Special ships will always attack the player". */
-const BEHAV_ATTACK_PLAYER = 0;
 /** ShipBehav 1: "Special ships will protect the player". */
 const BEHAV_PROTECT_PLAYER = 1;
 
 /**
- * Releases the special ships of `missionId`, owned by `ownerUuid`, that
- * the mission's ShipBehav says outlive an abort (see the module note).
- * Call BEFORE the mission leaves the owner's list: `objective` is the
- * aborted mission's own, and nothing else records the ShipBehav.
+ * Releases every special ship of `missionId`, owned by `ownerUuid`, from
+ * its mission (see the module note), whatever its ShipBehav. Call BEFORE
+ * the mission leaves the owner's list: `objective` is the aborted
+ * mission's own, and nothing else records the ShipBehav.
  *
- * `all` releases EVERY special ship of the mission whatever its ShipBehav:
- * a deferred auto-abort ending at the board (applyAbortMission, when the
- * mission is `autoAbortPending`). The original's boarded "Kit Pers Hulk"
- * stayed where it was, an ordinary ship ("No Shields", no longer
- * boardable), after the mission ended in flight (reference "The deferred
- * (përs) auto-abort (R16), wave 43"); deleting it with the mission would
- * make it vanish from under the player.
+ * The deferred auto-abort ending at the board (applyAbortMission, when the
+ * mission is `autoAbortPending`) releases the same way: the original's
+ * boarded "Kit Pers Hulk" stayed where it was, an ordinary ship ("No
+ * Shields", no longer boardable), after the mission ended in flight
+ * (reference "The deferred (përs) auto-abort (R16), wave 43").
  */
 export function releaseAbortedMissionShips(world: World, ownerUuid: string,
-    missionId: string, objective: ShipObjective | undefined,
-    all = false): void {
+    missionId: string, objective: ShipObjective | undefined): void {
     const behavior = objective?.behavior;
-    if (!all && behavior !== BEHAV_ATTACK_PLAYER
-        && behavior !== BEHAV_PROTECT_PLAYER) {
-        return;
-    }
     const now = world.resources.get(TimeResource)?.time ?? 0;
     for (const entity of world.entities.values()) {
         const missionShip = entity.components.get(MissionShipComponent);
@@ -101,7 +99,7 @@ export function releaseAbortedMissionShips(world: World, ownerUuid: string,
         if (behavior !== BEHAV_PROTECT_PLAYER) {
             // ShipBehav 0: still aggressed at the owner
             // (mission_ship_spawn), so it keeps fighting; nothing to
-            // change. Any other (an `all` release): its own AI already.
+            // change. Any other: its own AI already.
             continue;
         }
         // ShipBehav 1: out of the owner's flock — no formation, no shared

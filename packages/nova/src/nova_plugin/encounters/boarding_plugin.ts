@@ -30,8 +30,9 @@ import { endPlanetBribes, GateDepartureSystem, LandEvent } from '../travel/index
 import { SelfDestructSystem } from './disabled_plugin.js';
 import {
     boardDeferredRescue, MissionCargoRetrievedEvent,
-    MissionCargoRetrievedEventType, rescueBoard, RescueBoardedEvent,
-    RescueBoardedEventType, retrieveRescueCargo, spendRescueBoard,
+    MissionCargoRetrievedEventType, missionShipBoard, missionShipBoardSpent,
+    RescueBoardedEvent, RescueBoardedEventType, retrieveRescueCargo,
+    spendRescueBoard,
 } from './rescue_board.js';
 import { MissionShipComponent } from '../player/index.js';
 import { CargoComponent, cargoUsed } from '../ship/index.js';
@@ -491,8 +492,9 @@ function stowCaptureIntoBay(targetUuid: string, bayWeaponId: string,
  * The 'board' key. With a disabled ship selected and the boarder pulled
  * alongside (close, matched speed, axis-aligned), one of three things
  * happens, in this precedence order — unless the hulk is a live mission's
- * RESCUE ship, whose board only ever retrieves its mission cargo or is
- * refused (rescue_board.ts):
+ * special ship (any ShipGoal, its mission running and not failed), whose
+ * board only ever retrieves its mission cargo, is the deferred rescue, is
+ * a silent board that spends it, or is refused (rescue_board.ts):
  *
  *  1. BAY CAPTURE (Matthew's item 6). The hulk is a ship class one of the
  *     boarder's bays launches, and that bay has room: it is captured
@@ -578,10 +580,19 @@ const BoardingGateSystem = new System({
         // adrift; npc/system_hold.ts's waitingForRescue) is boarded where
         // it sits, as a hulk is (reference "Contraband / rescue / A14,
         // wave 19": one `b` at 8 px retrieved the cargo). Only as a live
-        // rescue ship (rescueBoard below), never for a plunder.
+        // rescue ship (missionShipBoard below), never for a plunder.
         const waitingRescue = !!targetEntity && waitingForRescue(targetEntity)
-            && rescueBoard(targetEntity, targetUuid!, uuid, entities).kind
-            !== 'none';
+            && missionShipBoard(targetEntity, targetUuid!, uuid, entities)
+                .kind !== 'none';
+        // A live mission ship whose one board is spent: "You can't board
+        // this ship." at any distance and heading, before the gate below
+        // (the original tests its boarded flag first; reference "Boarding
+        // live mission ships, wave 61").
+        if (targetEntity && targetShipData && targetMovement
+            && missionShipBoardSpent(targetEntity, targetUuid!, entities)) {
+            emit(BoardingBlockedEvent, { reason: 'alreadyBoarded' }, [uuid]);
+            return;
+        }
         const reason = boardingBlockedReason({
             hasTarget: !!targetEntity && !!targetShipData && !!targetMovement,
             targetDisabled: !!targetEntity?.components.has(DisabledComponent)
@@ -604,12 +615,15 @@ const BoardingGateSystem = new System({
         const matchVelocity = () =>
             matchBoardedVelocity(movement, targetMovement!);
 
-        // 0. A LIVE RESCUE SHIP (mïsn ShipGoal 5) is never plundered,
-        // captured, stowed or repaired: its board only retrieves the
-        // mission cargo, and is otherwise refused with the catch-all line
-        // (rescue_board.ts). Past the gate above, as on the original: its
-        // misaligned presses were silent like any other.
-        const rescue = rescueBoard(targetEntity!, targetUuid!, uuid,
+        // 0. A LIVE MISSION SHIP (any ShipGoal, its mission running and
+        // not failed) is never plundered, captured, stowed or repaired:
+        // its board retrieves the mission cargo, is the deferred rescue,
+        // or is a SILENT board that spends it (rescue_board.ts; reference
+        // "Boarding live mission ships, wave 61": the RAGE Gunboats of
+        // "Destroy Bureau Cell" gave no plunder dialog). Past the gate
+        // above, as on the original: its misaligned presses were silent
+        // like any other.
+        const rescue = missionShipBoard(targetEntity!, targetUuid!, uuid,
             entities);
         if (rescue.kind === 'refuse') {
             emit(BoardingBlockedEvent, { reason: 'alreadyBoarded' }, [uuid]);
@@ -618,8 +632,8 @@ const BoardingGateSystem = new System({
         if (rescue.kind === 'silent') {
             // No cargo to take: the first board says nothing and spends
             // the hull's one board (reference "H1 / rescue leftovers,
-            // wave 21", finding 5).
-            spendRescueBoard(rescue, targetUuid!);
+            // wave 21", finding 5; wave 61 for every other goal).
+            spendRescueBoard(rescue, targetUuid!, targetEntity!, uuid);
             matchVelocity();
             return;
         }
@@ -752,25 +766,13 @@ const BoardingGateSystem = new System({
         // patch up your own hulk, and still scoop a fitting hull into a
         // bay, after somebody has stripped it.
         //
-        // MISSION BOARDING IS THE SAME CHANNEL, NOT A SEPARATE ONE — the
-        // rule chosen for mïsn ShipGoal 2 ("Board them"), where the
-        // alternative was a parallel mission-only board that ignored the
-        // record. One boarding does everything: it spends the ship's one
-        // plunder, credits the goal (MissionShipTrackSystem), and loads
-        // mïsn PickupMode 2 cargo. One channel is right because the Bible
-        // describes no second one — the goal is literally "board them",
-        // the same verb — and because two channels would mean the player
-        // boarding a mission ship twice, taking its booty on the second
-        // pass after the first was "only for the mission".
-        //
-        // That cannot lock a mission out. The refusal only ever fires for
-        // a ship SOMEBODY ELSE spent, and the only somebody else who can
-        // is a rival player: NPC pirates skip mission ships outright
-        // (gövt Flags 0x1000 is "non-mission", enforced in
-        // npcPlunderEligible). A ship a rival stole never incremented the
-        // objective's `satisfied`, so the mission simply spawns its
-        // replacement on the next system entry (shipsToSpawn is
-        // total - satisfied) and the goal stays achievable.
+        // A LIVE MISSION SHIP never reaches this point (step 0 above): the
+        // ships that do are ordinary ones, a failed mission's and an
+        // aborted mission's among them (rescue_board.ts). A plunder of a
+        // failed mission's ship still spends the one record, and
+        // MissionShipTrackSystem still reads it, but its goal is already
+        // lost. NPC pirates skip mission ships outright (gövt Flags 0x1000
+        // is "non-mission", enforced in npcPlunderEligible).
         if (plunderSpent(boarded)) {
             emit(BoardingBlockedEvent, { reason: 'alreadyBoarded' }, [uuid]);
             return;

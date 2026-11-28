@@ -259,17 +259,15 @@ function rescueBoarded(active: ActiveMission, owner: Entity,
  * per-ship conditions that come from co-existence in the sim:
  * registration, disabling, boarding, and observation.
  *
- * MISSION SHIPS ARE BOARDABLE, per the Bible, and two of its seven ship
- * goals are ABOUT boarding them: ShipGoal 2 is "Board them" and ShipGoal
- * 5 is "Rescue them (they start out disabled and stay that way until you
- * board them)". mïsn Flags 0x0001 confirms the mechanic from the other
- * side — "the mission will auto-abort after the special ship is boarded"
- * — and mïsn PickupMode 2 is "Pick up when boarding special ship". So
- * nothing here refuses a boarding; instead a boarding by the OWNER is
- * credited to the goal, closing the shipBoarded seam that
- * mission_ship_state.ts documents. (A live RESCUE ship is the exception
- * the original makes: its board only retrieves the mission cargo, and
- * the boarding gate credits that itself — encounters/rescue_board.ts.)
+ * BOARDING a live mission ship is settled by the boarding gate itself
+ * (encounters/rescue_board.ts): the original never plunders one (reference
+ * "Boarding live mission ships, wave 61"); its board retrieves the
+ * PickupMode-2 cargo (credited there), is the deferred auto-abort rescue
+ * (whose durable record is read below), or is a silent board that spends
+ * it and credits nothing. A plunder record by the OWNER reaches the goal
+ * code below only for the deferred rescue, a failed mission's ship (whose
+ * goal is already lost) and the silent board (whose objective flag is
+ * already set, so nothing is credited twice or picked up).
  *
  * `boarder === owner` is checked because the durable record names
  * whoever spent the hulk's one plunder, and that can be somebody else: a
