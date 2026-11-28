@@ -26569,6 +26569,133 @@ Confidence: high (each a single unambiguous comm box, both controls).
 `14-left2.png`, `pilot-after/`), `pilotspecs/`, `scen/`, `tools/`
 (`w57_valk291.mjs`, `run.sh`, `send.sh`), `recover.json`.
 
+### The Refuel Trader rescue, stock përs 225 / mïsn 141: the target is KEPT through the swap; the special ship reads "Waiting" (grey brackets) from the accept and sits still; the accept says "Valkyrie: Ready for docking, rescue-a." (OnAccept Q25057); one board, NO dialog, says "Valkyrie:  Energy transfer complete, rescue-a.", pays 2,000 and takes 100 fuel, ends the mission; the ship is an ordinary "Shield: 100%" trader again and was gone about 35 s later (2026-11-27)
+
+**Question** (Matthew's playtest): "When helping refuel someone (via a
+mission), it de-targets them as they 'disable' themselves. When you select
+them again, it shows 'disabled' instead of, I think, 'waiting', and when
+you board them, it shows a brief flash of the ship boarding UI." What does
+the original do with the stock Refuel Trader, from the hail to after the
+board?
+
+**Stock data.** The 63 "Refuel Trader" përs (225 "Valkyrie", shïp 137,
+gövt 157, AI 2, Flags 0x0040 "replace with the mission's special ship",
+Flags2 0x0001 no fuel) link mïsn 141 / 650 / 651 / 652 "Refuel Trader":
+AvailLoc 2 (in flight), Flags 0x0001 (auto-abort) + 0x0008 (take 100
+fuel) + 0x0400 (invisible), Flags2 0x0002 (Pay on auto-abort), PayVal
+2,000, ShipCount 1, ShipSyst -6, ShipStart 0, ShipGoal 5 (rescue), düde
+212 (shïp 137 only, so the special ship keeps the person's hull), OnAccept
+`Q25057`, no texts after the offer. STR# 25057 is the one line "<OSN>:
+Ready for docking, <PSN>."
+
+**Rig.** A run-only plug-in (`plugins/pers225_stock.mjs`) overrides përs
+225 with ONE field changed, LinkSyst 1468 (the kit's Kit Pers Big, which
+lists 225 in its Person slot at 100%); everything else is stock, mïsn 141
+included. Pilot `rescue_a` (the Kit Lancer at Kit Pers Big Port, 10,000
+credits, 300 fuel). Driver `tools/rescue.mjs`: Tab until the person is on
+screen, two shots 1 s apart, hail (`y`), Return (Yes), ten shots 0.4 s
+apart with NO key, the mission list; then the board loop (`tools/
+board3.mjs`: `loops/board.mjs` with a three-corner bracket locator, since
+the grey bottom-left glyph was lost over the port's planet art in run 1),
+then shots after the board, the list, a landing and the Leave (the pilot
+written there). Run 1 found the person and accepted but its board loop
+lost the target (the planet); run 2 is the whole flow.
+
+| moment (run 2) | target pane | brackets | status line | other |
+|---|---|---|---|---|
+| Tab, before the hail | "Valkyrie, Class I", **Shield: 100%**, Trader | yellow | | the ship sits still over the port (the same place 1 s apart) |
+| the hail | (unchanged) | yellow | | the offer: "I was just recently attacked by pirates ..." with No / Yes |
+| Yes, the first shot (0.3 s) | **"Valkyrie, Class I", "Waiting"**, Trader | **grey** (123,115,115) | **"Valkyrie: Ready for docking, rescue-a."** | the target was never dropped: no key was pressed between the hail and these shots |
+| 4 s later, and while the player approached | "Waiting" | grey | | the ship never moved; `i`: "You have no active missions." (mïsn Flags 0x0400, invisible) |
+| the board (the 13th press of the walk, about 10 px out) | **"Shield: 100%"** | **yellow** | **"Valkyrie:  Energy transfer complete, rescue-a."** (two spaces after the colon) | **no dialog**; credits 10,000 -> **12,000** |
+| every later press | Shield: 100% | yellow | "You can't board this ship." | |
+| about 35 s after the board | **No Target** | | | the ship gone (it sat over the port: most likely landed; not resolved) |
+| afterwards | | | `i`: "You have no active missions." | the pilot after the landing: **fuel 300 -> 200**, credits 12,000, no active missions |
+
+**Findings.**
+1. **The target is kept through the swap.** The special ship takes the
+   person's place and the player's selection with it: the pane changes
+   from the person's line to the special ship's in the same frame, with
+   no key pressed (run 2; wave 43's kit run, `14-accepted.png`, too).
+2. **The special ship is "Waiting", not "Disabled"**, from the accept
+   to the board, with GREY brackets (the disabled colour) and its full
+   shield; it does not move. The stock trader was already sitting still
+   before the accept (no fuel), so whether a moving person stops is not
+   shown.
+3. **The OnAccept's Q25057 is shown in flight**: "Valkyrie: Ready for
+   docking, rescue-a." (<OSN> the person's name, <PSN> the player's ship
+   name). There is no stellar to leave.
+4. **The board is one press with NO dialog**: the status line is the
+   ship's "Valkyrie:  Energy transfer complete, rescue-a." (STR# 2002
+   index 2, "Energy transfer complete", with the ship's name, two spaces,
+   the player's ship name and a full stop). The mission pays 2,000 (Flags2
+   0x0002) and takes 100 fuel (Flags 0x0008) at once and is over (wave
+   44: OnAbort). Wave 43's kit mission 1044 (no Flags 0x0008, no Q) said
+   "Target ship has been boarded." instead, so the energy line is
+   presumably tied to the fuel transfer (GUESS: one mission each).
+5. **Afterwards the ship is an ordinary trader** (Shield: 100%, yellow
+   brackets, "You can't board this ship.") and left within about 35 s.
+
+**NovaJS (main a1b07bc6): mismatch on 1-4.** The swap deleted the përs
+hull (`N/nova_plugin/missions/mission_accept.ts` applyOfferingShipFate), so
+TargetRemovedSystem dropped the lock; the replacement spawned as a
+ShipGoal-5 hulk (`N/nova_plugin/missions/mission_ship_spawn.ts` buildShip,
+`makeHulk`), so the pane read "Disabled"; the board opened a plunder
+session (`rescueBoard` returned 'none' for `autoAbortOnBoard`), and the
+plunder dialog showed until the deferred abort ended the mission; the Q
+was an unimplemented NCB hook.
+
+**Applied 2026-11-27 (this branch)**, measured in a headless browser on
+an own server (the stock data plus a run-only sÿst 402 override with
+përs 225 in its Person slot; a Raven hailing, accepting, flying to and
+boarding the Valkyrie):
+- `applyOfferingShipFate` (`N/nova_plugin/missions/mission_accept.ts:797`)
+  moves every target lock on the përs hull to its replacement before the
+  delete (`:828`);
+- buildShip's rescue branch (`N/nova_plugin/missions/mission_ship_spawn.ts:416`)
+  makes a përs replacement, or any deferred auto-abort mission's ship, WAIT
+  (live, held still: `waitingForRescue`) as a ShipStart-2 ship does, so
+  the pane reads "Waiting" (`N/display/status_bar_target.ts:539`), and
+  `styleForTarget` (`N/nova_plugin/combat/hostility.ts:161`) draws a
+  waiting rescue ship with the grey corners (wave 19's ShipStart-2 ship
+  had them too);
+- the owner's board of a deferred auto-abort rescue ship is `rescueBoard`
+  kind 'deferred' (`N/nova_plugin/encounters/rescue_board.ts:127`,
+  `boardDeferredRescue` `:203`, the gate `N/nova_plugin/encounters/boarding_plugin.ts:633`):
+  no plunder session, the boarded record written directly (so
+  `rescueBoarded` pays, takes the fuel and marks the abort as before),
+  and `RescueBoardedEvent` puts "<ship>:  Energy transfer complete,
+  <PSN>." (`energyTransferMessage`, `N/display/status_bar_content.ts:366`)
+  or, without Flags 0x0008, "Target ship has been boarded." on the status
+  line;
+- the in-flight accept wires `Qxxx` (`machinery.leaveStellar`,
+  `N/spaceport/ship_mission_accept.ts:483`) and the display shows the line
+  (`N/display/ship_mission_offer_plugin.ts:445`). Q at a spaceport (leave
+  the stellar) is still unimplemented.
+The browser run (scratchpad `rescue/shots7/`): the target stayed on the
+replacement through the accept (sampled every 150 ms), the pane read
+"Waiting" under grey corners, the accept printed "Valkyrie: Ready for
+docking, Raven 1.", and the board printed "Valkyrie:  Energy transfer
+complete, Raven 1." with credits 25,000 -> 27,000, the mission gone, and
+the plunder dialog visible in 0 of the 217 frames after the press; no
+console errors.
+Not matched: what the released ship does next (NovaJS: its own trader
+AI; it jumped out of the empty test system about 7 s after the board, the
+original's left within about 35 s, most likely by landing). Confidence:
+high for 1-4 (one complete stock run, the explicit lines, the pilot read
+back; findings 1 and 2 also in wave 43's kit run), low for where the ship
+went.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-rescue/`:
+`run2/20261127-211721-rescue_stock/` (`03-pre1.png`, `05-hail.png`,
+`06-acc0.png` .. `15-acc9.png`, `16-info1.png`, `41-step-23.png` the last
+"Waiting", `42-b-24.png` the board, `51-sw-33.png` No Target,
+`106-info2.png`, `pilot-after/`, `recording.mp4`), `run1/` (the accept,
+the board loop lost over the planet), `status_board_zoom.png`,
+`status_accept_zoom.png`, `after_board_montage.png`, `plugins/`,
+`pilotspecs/`, `scen/`, `tools/` (`rescue.mjs`, `board3.mjs`,
+`statusall.mjs`), `recover.json`.
+
 ### Reliability notes (for anyone running the reference)
 
 - **A stock hypergate rig (wave 56):** stock gates refuse a fresh pilot
@@ -26582,7 +26709,14 @@ Confidence: high (each a single unambiguous comm box, both controls).
   route by shift-clicking each hop in turn (README "route"): the first
   lone shift-click on Heraan Cov, two jumps out, registered nothing at
   all (not even a selection; an unexplained miss, not a rule).
-
+- **A stock person, unchanged, in a kit system (refuel rescue,
+  2026-11-27):** a run-only override of the përs with ONLY its LinkSyst
+  changed to sÿst 1468 Kit Pers Big (which lists përs 225 in a Person
+  slot) put the stock Refuel Trader on screen at the first Tab in both
+  runs, sitting over the port. Grey ("Waiting") brackets over the port's
+  planet art lose a corner glyph, so `loops/board.mjs`'s four-corner
+  bracket locator fails there; the evidence's `tools/board3.mjs` adds a
+  three-corner fallback.
 - **A dësc probe needs no kit (wave 54):** override the stock dëscs of
   Snowmelt's outfitter items (oütf 184-188 and 433 -> dësc 3056-3060 and
   3305; cells at window (84 / 167 / 250 / 333, 180) and (84 / 167, 234))
