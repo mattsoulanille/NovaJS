@@ -1,0 +1,59 @@
+{
+ "name": "w60_sc_b",
+ "_comment": "Ship cap B (kits/w60_shipcap.mjs, pilot pilots/w60_sc_b.json): a Shuttle at rest in Kit Sub Range (no traffic) with wëap 345 SC Bay, 100 Kit Bay Discs; `w`, then 90 Ctrl taps 0.3 s apart (one launch a tap); shots of the secondary panel (fighters left) during and after.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs",
+  "../kits/w60_shipcap.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "keys": "F12 wait 500 w wait 1000 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150"
+  },
+  {
+   "shot": "bay45",
+   "window": true
+  },
+  {
+   "keys": "down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 wait 2000"
+  },
+  {
+   "shot": "bay90",
+   "window": true
+  },
+  {
+   "keys": "wait 5000"
+  },
+  {
+   "shot": "later",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": false
+}

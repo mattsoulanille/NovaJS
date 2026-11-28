@@ -27803,6 +27803,228 @@ the key relay in `N/client/game_session.ts`), behind the default-on
 enhancement `enhYesNoKeys` until this is measured: if the original takes
 the keys, the toggle can go.
 
+### The beam cap, beamcap (wave 60): at most 64 beams alive in a system, on screen or off, the player's and NPCs' in one table; a full table refuses the NEW beam and never cuts an old one; a refused beam costs its weapon's reload (2026-11-27)
+
+**Question** (the hub's BEAM_LIMIT; Matthew: a friend's Vell-os Javelin
+bay launched about 100 fighters with 3 beams each). The Bible's engine
+table says "Max Beams On Screen 64". Past 64, (a) is the cap per system
+or on screen only, (b) does the NEW beam fail (and does its weapon then
+fire at the first free slot or wait out its reload), or does an OLD beam
+end early, (c) do NPC and player beams share the table, and (d) does a
+beam hold its slot for its whole Count, and is the number exactly 64?
+
+**Rig.** Run-only plug-in `kits/w60_beamcap.mjs` (with the test kit;
+installed as `w60_beamcap`, after `testkit`). The player is a stock
+Shuttle at rest by Kit Sub Port (sÿst 2045, no traffic), F12 on.
+- wëap 336 **BC Spray**, a primary fixed beam from the ship's centre,
+  Reload 6, Count 2000, **Inaccuracy 180**, 230 px, pure green 1 px
+  core: a new spoke at a random angle about 4.5 times a second.
+- wëap 337 **BC Probe**, a secondary fixed beam straight ahead, Reload
+  600 (20 s), Count 2000, 300 px, red: tapped while the table is full.
+- wëap 338 / 343 **BC Hidden** / **BC Hidden Volley**, secondary fixed
+  beams from BeamPos (ExitType 3), which the run-only shän 128 override
+  puts **360 px ahead of the ship**, 100 px long, blue: entirely off the
+  636 x 604 play area (the play area reaches 302 px up, 318 px across;
+  only a diagonal heading shows them, the witness turn). 338 fires one
+  beam a tap (Reload 3, BurstCount 20); 343 is ONE simultaneous volley
+  (Flags 0x0040 | 0x0002, Reload 30000) of as many beams as the pilot
+  holds copies: 60.
+- wëap 333 (the kit's E10 turret beam on shïp 614 Kit Fixed Beamer,
+  wave 52) overridden for `w60_bc_n`: magenta, Count 150, 3,000 px; the
+  immobile NPC on Kit Knock Grid's first moon fires it at the player
+  every 7.2 s.
+
+Pilots `pilots/w60_bc_a.json` (336 + 337), `w60_bc_c.json` (336 + 338),
+`w60_bc_v.json` (336 + 60 x 343), `w60_bc_n.json` (Kit Probe A with 336
+on Kit Knock Grid Port, mïsn 1083's bit). Scenarios
+`scenarios/w60_bc_a.json`, `w60_bc_a2.json`, `w60_bc_a3.json`,
+`w60_bc_c.json`, `w60_bc_v.json`, `w60_bc_n.json`. Analysis
+`analysis/beampx.mjs`: per recorded frame, the green core pixels in the
+annulus 60-225 px round the ship, the number of distinct spokes crossing
+the circles r = 140 and r = 200 (0.25 deg bins), and the red, blue and
+magenta pixels (colour DOMINANCE, not purity: h264's 4:2:0 chroma
+smears a 1 px pure-green core). `analysis/beamcap.mjs` is the first
+tracker (useless here: see finding 6).
+
+| run | what | recorded |
+|---|---|---|
+| `w60_bc_a` | Space held 18 s (5.2-23.3 s), nothing else firing | spokes from 5.2 s, about 4.5 a second (one every 6.6 recorded frames); the green rises linearly to about **18.5 s and then stays flat** (annulus 12,200-13,400 px, 52 spokes a frame on average, up to 60 distinct, the rest merged) for 55 s although Space was held 5 s longer; the spokes die from **73 s to 87 s** (as long as they took to fill, 13-14 s): each lived about 68 s; the game showed **28 fps** with the spokes up, 56 fps without |
+| `w60_bc_c` | 25 Ctrl taps fire about 20 HIDDEN beams (5-14 s), then Space 18 s | the visible plateau is a quarter LOWER: 9,700 px / 38 spokes on average (fill 14.9-25 s, 10 s instead of 13.3); turning (36.7-44.9 s) shows the blue hidden beams in the top-left corner (`frames/t37.png`) |
+| **`w60_bc_v`** | one tap: **60** hidden beams in one volley (5.2 s), then Space held **10 s** | **exactly 4 green spokes**, in every frame from 8 s to the end (max 4 on both circles, never 5; `02-spokes.png`); the turn (23.8 s) shows the blue hidden beams; the game showed 50 fps (the 60 off-screen beams are not drawn) |
+| `w60_bc_a2` | the table filled as in `a`, then the red probe tapped once every 1.13 s from 27.4 s | the spokes expire from about 73 s to 87.5 s; **the probe fires at 88.4 s** (the tap at 88.38 s), not at the first free slot near 73 s: 88.38 = 27.38 + 3 x 20.3 s, its reload, with taps at 47.7 s and 68.1 s falling inside the still-full table |
+| `w60_bc_a3` | as `a2`, but the probe taps start at 38.2 s | the spokes expire from about 70 s to 88 s; **the probe fires at 79.0 s** (the tap at 78.90 s), with about 40% of the spokes still alive: 78.9 = 38.2 + 2 x 20.3 s (the tap at 58.5 s fell in the still-full table) |
+| `w60_bc_n` | the NPC's magenta beam alone, then Space held 60 s (18.5-78.6 s) | magenta every 7.2 s, 5 s each (0-4.8, 7.1-12.0, 14.2-19.2, 21.4-26.5, 28.6-36.2 s, the last stretched while the frame rate fell); the player's spokes fill to the plateau by about 34 s; **no magenta at all from 36.2 s to 121.5 s** while the player's 64 lived (held Space or not); the spokes start dying at about 115 s (a ~96 s life in this busier system), and **magenta returns at 121.5 s** |
+
+**Findings.**
+
+1. **The cap is 64, exactly** (the Bible's number): with 60 beams
+   already alive, held fire put exactly 4 more on screen and never a
+   fifth (`w60_bc_v`, 10 s of Space, thousands of frames); a lone spray
+   plateaus at 64 (`w60_bc_a`: filled at 4.5 a second in 13.3 s, held
+   flat although the trigger stayed down, emptied in the same 13-14 s).
+2. **Off-screen beams count; the cap is per system, not "on screen".**
+   Beams 360-460 px ahead of the ship, never drawn (the frame rate stayed
+   at 50 fps) took 60 of the 64 slots (`w60_bc_v`) and about 20 of them
+   in `w60_bc_c`; turning the ship through a diagonal showed them.
+3. **A full table refuses the NEW beam; nothing alive is cut.** Every
+   spoke lived its whole Count (the plateau never thinned while the
+   trigger was down; deaths came one Count after births, in birth order);
+   the refused probe and the refused NPC beams never displaced a spoke.
+4. **A refused beam costs its weapon's reload.** The probe tapped every
+   1.13 s against a full table fired only at the tap 3 x 20.3 s after the
+   first refused tap, 15 s after slots began to free (`w60_bc_a2`);
+   `w60_bc_a3` moved the first refused tap to 38.2 s and the probe fired
+   at 79.0 s, two reloads later, while spokes were still dying round it:
+   not at the first free slot (near 70 s), not at the empty table (88 s).
+   So a weapon refused by the beam table waits out a whole reload before
+   it tries again. (The shot
+   cap, wave 58, could not tell: its Reload-30 gun was held continuously.)
+5. **One table for every ship, first come first served.** The NPC's turret
+   beam (fired every 7.2 s) never appeared during the 80 s the player's
+   64 beams lived, and came back as soon as they began to expire; the
+   player's 64 were never cut for it (`w60_bc_n`). With the NPC's beam
+   alive while the player filled the table, the player got 63 (not read
+   exactly here; GUESS from finding 1). Turret vs fixed: both kinds
+   (the player's fixed spray, the NPC's turret) sit in the same table.
+6. **Side findings.** (a) A beam's Inaccuracy is applied to beams and is
+   **RE-ROLLED EVERY DRAWN FRAME**: the spray's 64 spokes took 64 new
+   random angles every frame (the angle lists of consecutive frames share
+   nothing), so a beam with Inaccuracy is a flickering fan, not a fixed
+   misaimed line. (b) A beam's Count runs at the DRAWN frame rate, which
+   the beams themselves pull down: Count 2000 lived about 68 s at
+   28-29 fps (`a`, `a2`) and about 96 s in the busier Kit Knock Grid
+   (`n`), not 2000 / 56 = 36 s; the NPC turret beam's Count 150 (5 s at
+   30 a second, wave 52) stretched to 7.6 s while the frame rate fell.
+   (c) A HELD Ctrl does not repeat a secondary: `w60_bc_a` held Ctrl 68 s
+   and the probe did not fire while it was held, not even after the
+   table emptied at 87 s; it fired at 97 s, after the release (use taps,
+   `down:ctrl wait 150 up:ctrl`).
+
+**NovaJS today (main 7948ba08): mismatch.** No beam cap at all:
+`BeamWeaponEntry.fire` (`N/nova_plugin/combat/beam_plugin.ts:166`)
+always spawns a beam entity, and the shot cap
+(`N/nova_plugin/combat/shot_cap.ts:41`, checked only in
+`ProjectileWeaponEntry.fire`, `N/nova_plugin/combat/projectile_plugin.ts:200`)
+excludes beams by design. A refused shot keeps its weapon ready
+(`N/nova_plugin/combat/weapon_plugin.ts:473-515`: `lastFired` is stamped
+only when a shot comes back), which matches the original for the shot
+cap as far as wave 58 saw but NOT for beams (finding 4). Every beam's
+Count runs at `BEAM_COUNT_RATE` 56 a second (NPC turret beams 30;
+`P/parsers/constants.ts:13`, `:27`), a fixed clock, where the original
+ties it to its own drawn frames (finding 6b; wave 52's 56 was the
+unloaded frame rate). Beam inaccuracy is drawn once at the shot and kept
+(`aimOffset`, `N/nova_plugin/combat/fire_weapon_plugin.ts:379-385`); the
+original re-rolls it every frame (finding 6a). **Proposed:** a
+`MAX_BEAMS` 64 per system over every live beam entity (player, NPC,
+turret, fixed, point defense, tractor), checked in
+`BeamWeaponEntry.fire`; a refused beam is a refused shot (no ammo
+taken) that DOES restart the reload (GUESS that ammo is not taken: not
+measured). Keep `BEAM_COUNT_RATE` (a deterministic sim cannot follow a
+frame rate). Confidence: high for 1-3 and 5 (the 4-of-60 count is
+exact), high for 4 (two runs' timing agree to a tap).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-beamcap/`:
+`20261127-230642-w60_bc_a/` (`recording.mp4`, `px.tsv`, `frames/t20.png`
+the full fan, `t98.png` the late probe), `20261127-232104-w60_bc_c/`
+(`frames/t37.png`: the hidden beams in the corner),
+`20261127-233947-w60_bc_v/` (`02-spokes.png`: the four spokes),
+`20261127-232351-w60_bc_a2/`, `20261128-012256-w60_bc_a3/`,
+`20261127-233027-w60_bc_n/` (`frames/t24.png`, `t60.png`, `t122.png`),
+each with `px.tsv`;
+`build/` the built plug-ins; `tools/queue.sh`.
+
+### The ship cap, beamcap (wave 60): bay launches and mission ships stop at 55 ships besides the player; a refused launch keeps its fighter and the next press after a slot frees launches; a planet's defence fleet still launched past 55 (to 61), so filling a system with fighters does NOT stop it (2026-11-28)
+
+**Question** (the hub's scope change; Matthew: "There's a cap for this
+but not for fighters a bay can launch, I think. Bay ammo is not consumed
+when the system ship limit is reached and a spawn is refused. One tactic
+for dominating planets is to fill the system with escorts and launched
+fighters so none of the defense fleet can be spawned."). The Bible's
+Part I says "Max Ships In System 64". (a) What is the exact count, and
+what counts toward it? (b) At a full system, is a bay launch refused,
+is the fighter (bay ammo) kept, and does it launch at the first chance
+once a slot frees? (c) Does a planet's defence fleet launch into a full
+system, and does a demand then dominate? (d) Are mission ships, traffic
+and arrivals refused when full, or does someone get evicted?
+
+**Rig.** Run-only plug-in `kits/w60_shipcap.mjs` (with the test kit;
+installed as `w60_shipcap`, after `testkit`): wëap 345 **SC Bay**, a
+secondary bay of Kit Bay Disc (shïp 602, green 24 px discs), Reload 1,
+100 carried; wëap 346 **SC Killer**, a primary turret, 32,000 damage (one
+hit kills one Kit Sub Target); the kit's mïsn 1023 / 1083 / 1052
+overridden to place **31 immobile Kit Sub Targets each** (düde 319,
+magenta disc) on Kit Sub Mark, 150 px north of Kit Sub Port (sÿst 2045,
+no traffic), 1023 offered on landing and starting the other two
+(OnAccept `S1083 S1052`): 93 asked for. `kits/w60_shipcap31.mjs` (loads
+after it) makes 1023 start nothing: 31 asked for. The player is a
+Shuttle (pilots `w60_sc_b.json`, `w60_sc_m.json`) or, for the tribute
+run, the Kit Lancer at wave 39's Kit Tribute Plain Six (spöb 1955,
+DefCount 6, 6 left in the pilot, rating 12,800; `w60_sc_t.json`). The
+bay fires on Ctrl TAPS (a 150 ms tap launched 4-5 fighters: Reload 1);
+the secondary panel ("SC Bay - N") is the fighter count, read on the
+shots and per frame by `analysis/panelchanges.mjs`. Targets were killed
+by `Tab` + one Space (`r` selects nothing here: `w60_sc_m`).
+
+| run | system before the bay | what happened | fighters launched |
+|---|---|---|---|
+| `w60_sc_b` (and `sc_t`) | the player alone | 45 taps: launches from 5.1 s to 10.5 s, then none for the remaining 40 taps; the panel "SC Bay - 45" from then to the end (and again in `sc_t`) | **55** |
+| `w60_sc_m31` | the player + **31** targets | the first 25 taps: "SC Bay - 76" (launches stopped at 7.9 s); then 6 cycles of kill one target + one tap: a launch in EVERY cycle (25.6, 29.6, 33.8, 37.9, 42.0, 46.1 s), "70"; after the other 25 targets died, 40 taps: "45" | **24** (= 55 - 31), then +6, then +25: 55 in all |
+| `w60_sc_m` / **`w60_sc_m2`** | the player + the 93 asked for | 10 taps: none ("SC Bay - 100", ammo kept); 6 kill + tap cycles: a launch in EVERY cycle from the first ("94"); 80 more kill cycles, then 40 taps: "45" | 0, then 6, then 49: 55 in all, so the system held exactly **55 targets** (no launch at 55, a launch at 54) |
+| `w60_sc_t` | the player + 55 fighters at Kit Tribute Plain Six | demand: "We're sending out our defense fleet. In a few minutes you'll be begging for mercy." (STR# 3002 #14, as wave 39), Status: Hostile; **all six red defenders** up within about 2 s of Close Channel (five to six red blobs, 1,900-2,200 px of red, on every shot for 20 s) | the system held 1 + 55 + 6 = **62** |
+
+**Findings.**
+
+1. **Bay launches and mission ships stop at 55 ships besides the
+   player** (56 in the system), not the Bible's 64: an empty system took
+   55 fighters (twice), a system with 31 targets took 24 more, and three
+   31-ship missions put exactly 55 targets in the system (93 asked) and
+   left no room for a fighter. NPC mission ships and the player's bay
+   fighters fill the same count; the extra 38 mission ships were simply
+   never placed (nobody was evicted, the bay was refused instead).
+2. **A refused launch keeps its fighter, and the next press after a slot
+   frees launches.** The panel stood still through every refused tap
+   (100 / 76 / 45: no ammo taken), and after each single kill the next
+   tap (1.2-1.5 s later) launched exactly one fighter, in all 12 cycles.
+   (The bay's Reload 1 can't show whether a refusal costs the reload, as
+   the beam table's does.)
+3. **A planet's defence fleet launches PAST the 55** (`w60_sc_t`): with
+   55 fighters out (the most a bay can put up), the demand's six
+   defenders all came out (62 ships). So the domination tactic of
+   Matthew's friend, filling the system with fighters, does NOT keep the
+   defenders in on the original. Whether defenders are capped at 64 (the
+   Bible's number: 8 slots above the 56 kept free for them) was not
+   reached (a 30-ship fleet would test it: spöb 1952 Kit Tribute Thirty);
+   so whether "no defender could launch" counts as a beaten fleet was not
+   reachable either. The second demand was lost: its `l` landed the
+   Lancer, which sat slow on the planet (keep `l` out of a re-demand on
+   the planet; select it with a click).
+4. Not reached: hired / captured escorts (they very likely count with
+   the fighters), disabled ships, traffic arrival at 55, a përs, ships
+   mid-jump, the player's own arrival in a full system.
+
+**NovaJS today (main 7948ba08): mismatch.** No ship cap anywhere:
+`BayWeaponEntry.fire` (`N/nova_plugin/escorts/bay_plugin.ts:411`)
+always launches (ammo spent per launch), mission ships are all placed,
+and only traffic has a ceiling, `MAX_NPC_POPULATION` 12 for AvgShips
+(`N/nova_plugin/spawn/npc_spawn_plugin.ts:140`, `:906-911`); defence
+fleets launch from `DefenseFleetSystem`
+(`N/nova_plugin/spawn/defense_fleet_system.ts:186`, `:230`) with no count
+check. **Proposed:** a `MAX_SHIPS_BESIDES_PLAYERS` 55 (GUESS: per system,
+counting every non-player ship) checked before a bay launch (refused:
+no ammo taken, no reload restart), a mission ship placement and a
+traffic spawn; defence fleets exempt up to 64 in all (GUESS). In
+multiplayer each player's ship presumably takes one of the 64 (GUESS: the
+original has one player). Confidence: high for 1-2 (exact panel counts,
+four runs), medium for 3 (one run, but six defenders on every shot).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-beamcap/`:
+`20261128-010231-w60_sc_b/` (`03-bay90.png`, `panel.txt`; the first
+attempt `20261127-235809-w60_sc_b/` failed at open_pilot),
+`20261128-011420-w60_sc_m31/`, `20261128-003113-w60_sc_m/`,
+`20261128-011846-w60_sc_m2/` (`04-full-bay.png` .. `07-bay-after.png`,
+`panel.txt`), `20261128-010500-w60_sc_t/` (`04-demand1.png`,
+`09-w1-3.png`: the six red defenders among the green fighters).
+
 ### Reliability notes (for anyone running the reference)
 
 - **A map purchase is read from the pilot, not the screen (2026-11-28):**
@@ -27859,6 +28081,25 @@ the keys, the toggle can go.
   wait 100 <key>` in ONE keys step (`wait 450` landed after it). A click
   step cannot follow a key that closely through the terrapin jump (about
   1.2 s between steps).
+
+- **Driving secondaries and many waiters (beamcap, wave 60):** a HELD
+  Ctrl fires a secondary once at most (`w60_bc_a` held it 68 s against a
+  full beam table and the probe never fired, even after the table
+  emptied); tap it (`down:ctrl wait 150 up:ctrl`), and note a 150 ms tap
+  on a Reload-1 bay launches 4-5 fighters. A plug-in is installed under
+  its FILE's basename (`kits/w60_beamcap.mjs` -> `w60_beamcap`), not the
+  spec's `name`, so a run-only override of a kit resource needs a file
+  name that sorts after `testkit`. With five or more agents queued on the
+  lock (all polling every second) a waiter can sit 30-40 minutes; gate a
+  chained queue on a pid (`while kill -0 PID`) or on a line in a log,
+  never on `pgrep -f "<text>"` that also appears in the gating command
+  itself (it matches its own shell and waits forever), and in zsh
+  `set -- $r` does not split words (use a bash script). For counting thin
+  beams in recordings, test colour DOMINANCE (G > 90, G > R + 50,
+  G > B + 50): h264's 4:2:0 chroma smears a 1 px pure-green core below a
+  purity threshold. A beam with Inaccuracy is re-aimed at random EVERY
+  frame (spokes can't be tracked), and the frame rate falls with many
+  beams on screen (28 fps at 64), which lengthens every beam's Count.
 
 - **Plug-ins in folders are inert on the original (wave 58):** a rig
   must install every test plug-in at the TOP of Plug-ins; novaref's

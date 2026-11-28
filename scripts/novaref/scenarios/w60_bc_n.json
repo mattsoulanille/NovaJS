@@ -1,0 +1,22 @@
+{
+ "name": "w60_bc_n",
+ "_comment": "Beam cap N, an NPC's beams (kits/w60_beamcap.mjs, pilot pilots/w60_bc_n.json): Kit Probe A on Kit Knock Grid Port; land, accept mïsn 1083 (the kit's wave-52 E10 immobile Kit Fixed Beamer on the first moon, 500 px out), Leave. The beamer's turret beam (wëap 333, overridden: magenta, Count 150 = 5 s at the NPC-turret clock) fires at the player about every 7 s. Recorded: 15 s of NPC beams alone, then Space held 60 s (the player's green spokes fill the table and keep it full), then 45 s more. Does the NPC's beam appear while the table is full, and how many player spokes fit while an NPC beam lives?",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs", "../kits/w60_beamcap.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "keys": "l wait 1500 l wait 9000" },
+  { "shot": "landed", "window": true },
+  { "keys": "Return wait 2500" },
+  { "shot": "acc", "window": true },
+  { "keys": "Return wait 3000" },
+  { "shot": "space", "window": true },
+  { "record": "start", "window": true },
+  { "wait": 1000 },
+  { "keys": "F12 wait 15000 down:Space wait 60000 up:Space wait 45000" },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ],
+ "pull": false
+}

@@ -1,0 +1,41 @@
+{
+ "name": "w60_bc_c",
+ "_comment": "Beam cap C, off-screen beams (kits/w60_beamcap.mjs, pilot pilots/w60_bc_c.json): a Shuttle at rest by Kit Sub Port, its shän BeamPos 360 px ahead; F12 on; `w` selects wëap 338 BC Hidden; 25 Ctrl taps 0.25 s apart fire its 20-beam burst from 360 px ahead (off the play area, blue); then Space held 18 s fires the green spokes (wëap 336); then the ship turns Left 3 s and Right 3 s (the hidden beams show through the diagonals). Count the spokes born before the births stop: 64 if off-screen beams do not count, 44 if they do.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs",
+  "../kits/w60_beamcap.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "keys": "F12 wait 500 w wait 1000 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 down:ctrl wait 120 up:ctrl wait 130 wait 1000 down:Space wait 18000 up:Space wait 3000 down:Left wait 3000 up:Left wait 2000 down:Right wait 3000 up:Right wait 4000"
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": false
+}

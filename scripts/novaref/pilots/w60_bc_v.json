@@ -1,0 +1,17 @@
+{
+  "name": "novaref-w60-bc-v",
+  "edits": {
+    "ship": 128,
+    "stellar": 2045,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": { "2045": 2 },
+    "weapons": { "128": 0, "336": 1, "343": 60 },
+    "outfits": { "128": 0 },
+    "nickname": "Probe",
+    "shipName": "w60-bc-v"
+  }
+}

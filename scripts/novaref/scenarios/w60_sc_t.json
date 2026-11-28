@@ -1,0 +1,331 @@
+{
+ "name": "w60_sc_t",
+ "_comment": "Ship cap T, the domination tactic (kits/w60_shipcap.mjs, pilot pilots/w60_sc_t.json): wave 39 Kit Tribute Plain (sÿst 1400), the player on Plain Six (spöb 1955, DefCount 6, the pilot holding 6 left, rating 12,800) with SC Bay (100 Kit Bay Discs). `w`, 70 Ctrl taps fill the system with fighters; demand tribute (l, y, Demand at (246,382), Close at (246,412), wave 39 tools/tribute.sh) and watch 12 s for defenders; demand again; then `c` (recall the fighters, wave 47) and watch 30 s (do defenders launch as slots free?); demand a third time.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs",
+  "../kits/w60_shipcap.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "keys": "F12 wait 500 w wait 1000 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 down:ctrl wait 150 up:ctrl wait 150 wait 2000"
+  },
+  {
+   "shot": "full",
+   "window": true
+  },
+  {
+   "keys": "l wait 1500"
+  },
+  {
+   "keys": "y wait 1500"
+  },
+  {
+   "shot": "hail1",
+   "window": true
+  },
+  {
+   "click": [
+    246,
+    382
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "demand1",
+   "window": true
+  },
+  {
+   "click": [
+    246,
+    412
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 800
+  },
+  {
+   "shot": "closed1",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w1-0",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w1-1",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w1-2",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w1-3",
+   "window": true
+  },
+  {
+   "keys": "l wait 1500"
+  },
+  {
+   "keys": "y wait 1500"
+  },
+  {
+   "shot": "hail2",
+   "window": true
+  },
+  {
+   "click": [
+    246,
+    382
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "demand2",
+   "window": true
+  },
+  {
+   "click": [
+    246,
+    412
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 800
+  },
+  {
+   "shot": "closed2",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w2-0",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w2-1",
+   "window": true
+  },
+  {
+   "keys": "c wait 1000"
+  },
+  {
+   "shot": "recall",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w3-0",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w3-1",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w3-2",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w3-3",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w3-4",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w3-5",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w3-6",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w3-7",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w3-8",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w3-9",
+   "window": true
+  },
+  {
+   "keys": "l wait 1500"
+  },
+  {
+   "keys": "y wait 1500"
+  },
+  {
+   "shot": "hail3",
+   "window": true
+  },
+  {
+   "click": [
+    246,
+    382
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "demand3",
+   "window": true
+  },
+  {
+   "click": [
+    246,
+    412
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 800
+  },
+  {
+   "shot": "closed3",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w4-0",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w4-1",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "w4-2",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 700"
+  },
+  {
+   "shot": "tab1",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 700"
+  },
+  {
+   "shot": "tab2",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": false
+}

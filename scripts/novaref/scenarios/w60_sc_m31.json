@@ -1,0 +1,84 @@
+{
+ "name": "w60_sc_m31",
+ "_comment": "Ship cap M31 (kits/w60_shipcap.mjs + w60_shipcap31.mjs, pilot pilots/w60_sc_m.json): as w60_sc_m2 but only mïsn 1023's 31 Kit Sub Targets (no S1083 S1052): the player + 31 NPCs, then the bay: does it launch 64 - 1 - 31 = 32 (a system cap) or 55 (w60_sc_b's count, a carrier limit)? Then Tab + SC Killer cycles kill targets with bay taps between.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs",
+  "../kits/w60_shipcap.mjs",
+  "../kits/w60_shipcap31.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "landed",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "acc",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3000"
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "keys": "F12 wait 500 w wait 1000 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 down:ctrl wait 150 up:ctrl wait 300 wait 1000"
+  },
+  {
+   "shot": "full-bay",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 400 Space@200 wait 1500 down:ctrl wait 150 up:ctrl wait 1500 Tab wait 400 Space@200 wait 1500 down:ctrl wait 150 up:ctrl wait 1500 Tab wait 400 Space@200 wait 1500 down:ctrl wait 150 up:ctrl wait 1500 Tab wait 400 Space@200 wait 1500 down:ctrl wait 150 up:ctrl wait 1500 Tab wait 400 Space@200 wait 1500 down:ctrl wait 150 up:ctrl wait 1500 Tab wait 400 Space@200 wait 1500 down:ctrl wait 150 up:ctrl wait 1500"
+  },
+  {
+   "shot": "cycles",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 Tab wait 250 Space@200 wait 300 wait 1000"
+  },
+  {
+   "shot": "killed",
+   "window": true
+  },
+  {
+   "keys": "down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 down:ctrl wait 150 up:ctrl wait 200 wait 2000"
+  },
+  {
+   "shot": "bay-after",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": false
+}

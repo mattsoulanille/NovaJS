@@ -1,0 +1,41 @@
+{
+ "name": "w60_bc_a2",
+ "_comment": "Beam cap A2 (kits/w60_beamcap.mjs, pilot pilots/w60_bc_a.json): as w60_bc_a, but the red BC Probe (wëap 337, Reload 600) is fired by Ctrl TAPS, one a second from 4 s after the spray stops until 100 s (a held Ctrl fired nothing in w60_bc_a): with the table full of spokes, does the probe fire at the first tap after the first spoke expires (a refused shot keeps the weapon ready) or only 20 s after a refused tap (a refusal costs the reload)?",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs",
+  "../kits/w60_beamcap.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "keys": "F12 wait 500 w wait 1000 down:Space wait 18000 up:Space wait 4000 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 down:ctrl wait 150 up:ctrl wait 850 wait 2000"
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": false
+}
