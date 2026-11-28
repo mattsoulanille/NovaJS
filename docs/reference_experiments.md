@@ -26227,6 +26227,26 @@ blend (pixel values), ActiveOn and OnExplore (pilot bits), whole-image
 reveal at level 1 or 2 (four pilots); medium for the strict edges beyond
 the top one (unread), and for when exactly OnExplore runs.
 
+**Applied 2026-11-27, the zoom levels and the pan (Matthew: "Keep smooth
+zoom. We could add the original behavior as an option if you toggle off
+the enhancement we made."):** NovaJS's continuous zoom, 40 px arrows and
+clamped pan stay the default behind the "Smooth map zoom" NovaJS
+enhancement (`enhSmoothMapZoom`, `N/enhancements.ts`); off, the star map
+and the hypergate map take the original's controls
+(`N/spaceport/system_graph.ts` `smoothMapControls`, `zoomStep`,
+`panStep`, `wheelZoom`): the seven levels
+(`N/spaceport/starmap_viewport.ts` `ORIGINAL_MAP_SCALES`, the opening one
+the measured 1.77), one level a - / + click, `-` / `=` press or wheel
+detent and one per x 4/3 of a pinch (`PinchLevelStepper`), about the
+view's centre, nothing past the ends where the button greys out
+(`Starmap.refreshZoomButtons`); 10 map units an arrow press
+(`ORIGINAL_KEY_PAN_UNITS`); no pan clamp (`MapViewport` `bounded`). Both
+open at 177.7 %. The `h` minimap neither zooms nor pans either way. A
+drag and a trackpad scroll still pan with the toggle off (the original's
+drag selects instead; not part of the ruling). Specs:
+`starmap_keys_test.ts` ("with smooth map zoom off (the original)",
+"originalZoomStep and PinchLevelStepper").
+
 **Evidence:** `~/.local/share/novaref/evidence/20261127-w53/`: `all_b/`
 (the capture table above), `explore_a/`, `vis_fresh/`, `vis_nibos/`,
 `vis_k003/`, `vis_foma/`, `vis_holpa2/`, `vis_nibtocc/`, `vis_tichel/`,

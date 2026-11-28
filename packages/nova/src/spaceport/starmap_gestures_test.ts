@@ -147,16 +147,16 @@ describe('WheelMapper (wheel events to map actions)', () => {
     it('keeps a notched wheel at one zoom step per event, in for deltaY < 0', () => {
         const mapper = new WheelMapper();
         expect(mapper.action(sample({ deltaY: -3, deltaMode: DOM_DELTA_LINE })))
-            .toEqual({ kind: 'zoom', factor: ZOOM_STEP });
+            .toEqual({ kind: 'zoom', factor: ZOOM_STEP, notched: true });
         expect(mapper.action(sample({ deltaY: MAC_WHEEL_NOTCH, timeStamp: 500 })))
-            .toEqual({ kind: 'zoom', factor: 1 / ZOOM_STEP });
+            .toEqual({ kind: 'zoom', factor: 1 / ZOOM_STEP, notched: true });
     });
 
     it('steps a notched wheel the same with ctrl held', () => {
         const mapper = new WheelMapper();
         expect(mapper.action(sample({
             deltaY: -100, wheelDeltaY: 120, ctrlKey: true,
-        }))).toEqual({ kind: 'zoom', factor: ZOOM_STEP });
+        }))).toEqual({ kind: 'zoom', factor: ZOOM_STEP, notched: true });
     });
 
     it('pans sideways for a tilt-wheel notch', () => {
@@ -179,6 +179,8 @@ describe('WheelMapper (wheel events to map actions)', () => {
         const mapper = new WheelMapper();
         const inward = mapper.action(sample({ deltaY: -4.3, ctrlKey: true }));
         expect(inward.kind).toBe('zoom');
+        // Not a detent: the original-zoom mode steps it by accumulation.
+        expect((inward as { notched: boolean }).notched).toBeFalse();
         expect((inward as { factor: number }).factor)
             .toBeCloseTo(Math.exp(4.3 * PINCH_ZOOM_RATE), 12);
         const outward = mapper.action(sample({
@@ -202,7 +204,7 @@ describe('WheelMapper (wheel events to map actions)', () => {
         // Long after the gesture, the same delta is a wheel again.
         expect(mapper.action(sample({
             deltaY: MAC_WHEEL_NOTCH, timeStamp: 1016 + TRACKPAD_LATCH_MS + 1,
-        }))).toEqual({ kind: 'zoom', factor: 1 / ZOOM_STEP });
+        }))).toEqual({ kind: 'zoom', factor: 1 / ZOOM_STEP, notched: true });
     });
 
     it('never reads line-mode deltas as a trackpad, even mid-gesture', () => {
@@ -210,7 +212,7 @@ describe('WheelMapper (wheel events to map actions)', () => {
         mapper.action(sample({ deltaY: 2.5, timeStamp: 1000 }));
         expect(mapper.action(sample({
             deltaY: -3, deltaMode: DOM_DELTA_LINE, timeStamp: 1010,
-        }))).toEqual({ kind: 'zoom', factor: ZOOM_STEP });
+        }))).toEqual({ kind: 'zoom', factor: ZOOM_STEP, notched: true });
     });
 
     it('does nothing for an empty delta', () => {

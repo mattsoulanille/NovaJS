@@ -15,8 +15,9 @@ export interface MapPointerHandlers {
      * pane-local units. */
     pan(dx: number, dy: number): void;
     /** The wheel or a pinch zoomed by `factor` around the pane-local point
-     * (x, y). */
-    zoomAt(factor: number, x: number, y: number): void;
+     * (x, y). `notched`: one detent of a classic wheel; false for a pinch's
+     * continuous share. */
+    zoomAt(factor: number, x: number, y: number, notched: boolean): void;
     /** A click (not the end of a drag) at the pane-local point (x, y). */
     tap(x: number, y: number, shiftKey: boolean): void;
     /** A gesture became a drag; (x, y) is where it was pressed, pane-local.
@@ -33,7 +34,7 @@ interface HoveredPane {
     container: PIXI.Container;
     x: number;
     y: number;
-    zoomAt(factor: number, x: number, y: number): void;
+    zoomAt: MapPointerHandlers['zoomAt'];
     /** {@link pointerMoves} when this was recorded. */
     seq: number;
 }
@@ -99,7 +100,7 @@ function installPageListeners() {
         event.preventDefault();
         const factor = pinch.change((event as Event & { scale: number }).scale);
         if (factor !== 1) {
-            pane.zoomAt(factor, pane.x, pane.y);
+            pane.zoomAt(factor, pane.x, pane.y, false);
         }
     }, { passive: false });
     window.addEventListener('gestureend', event => {
@@ -211,7 +212,7 @@ export function bindMapPointer(container: PIXI.Container,
         hoveredPane = { container, x: local.x, y: local.y,
             zoomAt: handlers.zoomAt, seq: pointerMoves };
         if (action.kind === 'zoom') {
-            handlers.zoomAt(action.factor, local.x, local.y);
+            handlers.zoomAt(action.factor, local.x, local.y, action.notched);
             return;
         }
         // Deltas are CSS px; the content moves exactly as far on screen.

@@ -31,13 +31,28 @@ import { buildMissionMarks, MissionMarkTextures } from "./starmap_marks.js";
 import {
     boundsWithNebulae, NebulaLayer, visibleNebulae,
 } from "./starmap_nebulae.js";
+import { PinchLevelStepper } from "./starmap_gestures.js";
 import {
-    BASE_SCALE, MapViewport, scalePos, worldBoundsOf,
+    BASE_SCALE, KEY_PAN_STEP, MapViewport, ORIGINAL_KEY_PAN_UNITS,
+    originalZoomStep, scalePos, worldBoundsOf, ZOOM_STEP,
 } from "./starmap_viewport.js";
 import {
     knownLinks, placeKey, reachablePaths, representativeSystems,
     resolveGateLinks, systemVisible,
 } from "./system_graph_data.js";
+
+/**
+ * The "Smooth map zoom" NovaJS enhancement, read live: on, the maps zoom
+ * continuously (x 1.3225 a button, the wheel and a pinch about the
+ * pointer), an arrow pans 40 screen px and the pan stays near the galaxy;
+ * off, the original's controls (reference "Star-map nebulae (nëbu), wave
+ * 53", items 1 and 4): seven fixed zoom levels, one a button, key or
+ * wheel detent, about the view's centre; an arrow pans 10 map units at
+ * every zoom; the pan has no limit. Both open at the original's 177.7 %.
+ */
+function smoothMapControls(): boolean {
+    return enhancementEnabled('enhSmoothMapZoom');
+}
 
 export interface SystemGraphOptions {
     /**
@@ -191,6 +206,11 @@ export class SystemGraph {
     readonly infoSelection = new Subject<string>();
     /** Emits whenever the pinned/single route state changes (route mode). */
     readonly routeChanged = new Subject<void>();
+    /** Emits whenever the view's zoom changes (the star map's - / +
+     * buttons grey out at the original's last levels). */
+    readonly zoomChanged = new Subject<void>();
+    /** A pinch's progress towards the next original zoom level. */
+    private readonly pinchSteps = new PinchLevelStepper();
 
     // Links and the highlighted route live on separate graphics so that
     // selecting a route only redraws the route, not the whole galaxy.
@@ -343,7 +363,9 @@ export class SystemGraph {
         this.viewport = new MapViewport(this.container, size,
             boundsWithNebulae(
                 worldBoundsOf(visibleSystems.map(s => s.position)),
-                shownNebulae));
+                shownNebulae),
+            // The original's pan is unbounded (wave 53).
+            smoothMapControls);
         const mapContainer = this.viewport.mapContainer;
         // Borders sit under everything else; the route overlays the links.
         mapContainer.addChild(this.borderGraphics);
@@ -365,9 +387,9 @@ export class SystemGraph {
                     this.pan(dx, dy);
                 }
             },
-            zoomAt: (factor, x, y) => {
+            zoomAt: (factor, x, y, notched) => {
                 if (!this.miniMap) {
-                    this.zoomBy(factor, x, y);
+                    this.wheelZoom(factor, x, y, notched);
                 }
             },
             tap: (x, y, shiftKey) => this.onTap(x, y, shiftKey),
@@ -641,19 +663,85 @@ export class SystemGraph {
         this.borderGraphics.visible = shown;
     }
 
-    /** Pans the map by a screen-space delta (used by the arrow keys). */
+    /** Pans the map by a screen-space delta (a drag, a trackpad scroll). */
     pan(dx: number, dy: number) {
         this.viewport.pan(dx, dy);
     }
 
     /**
+     * One arrow-key press: pans the view by one step in direction (dx,
+     * dy) (each -1, 0 or 1; +1 moves the CONTENT right / down, i.e. looks
+     * left / up). With the "Smooth map zoom" enhancement on, a step is
+     * {@link KEY_PAN_STEP} screen px; off, the original's 10 map units at
+     * every zoom (reference "Star-map nebulae (nëbu), wave 53", item 1).
+     */
+    panStep(dx: number, dy: number) {
+        const step = smoothMapControls() ? KEY_PAN_STEP
+            : ORIGINAL_KEY_PAN_UNITS * BASE_SCALE * this.viewport.zoom;
+        this.viewport.pan(dx * step, dy * step);
+    }
+
+    /**
      * Zooms by `factor`, keeping the point at (centerX, centerY) in the
      * viewport fixed. If no center is given, zooms around the viewport center.
+     * Continuous whatever the enhancement says: the maps' opening scales
+     * go through here.
      */
     zoomBy(factor: number, centerX?: number, centerY?: number) {
         this.viewport.zoomBy(factor, centerX, centerY);
+        this.zoomed();
+    }
+
+    /**
+     * One zoom step of the - / + buttons and the `-` / `=` keys (+1 in, -1
+     * out). With the "Smooth map zoom" enhancement on, x 1.3225 about the
+     * view's centre; off, the original's next fixed level (one of seven,
+     * {@link ORIGINAL_ZOOM_LEVELS}), keeping the view's centre, and nothing
+     * past the last one (wave 53, item 1).
+     */
+    zoomStep(direction: 1 | -1) {
+        if (smoothMapControls()) {
+            this.zoomBy(direction > 0 ? ZOOM_STEP ** 2 : 1 / ZOOM_STEP ** 2);
+            return;
+        }
+        const level = originalZoomStep(this.viewport.zoom, direction);
+        if (level !== undefined) {
+            this.viewport.zoomTo(level);
+            this.zoomed();
+        }
+    }
+
+    /** Whether {@link zoomStep} in `direction` would change anything: false
+     * at the original's last level that way (the original greys that
+     * button out). Always true with smooth zoom. */
+    canZoomStep(direction: 1 | -1): boolean {
+        return smoothMapControls()
+            || originalZoomStep(this.viewport.zoom, direction) !== undefined;
+    }
+
+    /**
+     * The wheel or a pinch over the map. Smooth zoom: by `factor` about the
+     * pointer. The original's stepped zoom: one level a wheel detent, and a
+     * level for each x 4/3 a pinch gathers, about the view's centre (the
+     * original's zooms keep the centre).
+     */
+    private wheelZoom(factor: number, x: number, y: number,
+        notched: boolean) {
+        if (smoothMapControls()) {
+            this.zoomBy(factor, x, y);
+            return;
+        }
+        const steps = notched ? Math.sign(Math.log(factor))
+            : this.pinchSteps.steps(factor);
+        for (let i = 0; i < Math.abs(steps); i++) {
+            this.zoomStep(steps > 0 ? 1 : -1);
+        }
+    }
+
+    private zoomed() {
         // A nebula's picture is chosen per map scale.
         this.nebulae?.update(BASE_SCALE * this.viewport.zoom);
+        this.zoomChanged.next();
     }
 
     /** The view's zoom over the laid-out map (BASE_SCALE px per unit). */

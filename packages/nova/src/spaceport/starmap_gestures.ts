@@ -100,8 +100,10 @@ export interface WheelSample {
 export type MapWheelAction =
     /** Move the map content by (dx, dy) CSS px. */
     | { kind: 'pan', dx: number, dy: number }
-    /** Zoom by `factor` about the pointer. */
-    | { kind: 'zoom', factor: number }
+    /** Zoom by `factor` about the pointer. `notched`: one detent of a
+     * classic wheel (one level of the original's stepped zoom), not a
+     * pinch's continuous share. */
+    | { kind: 'zoom', factor: number, notched: boolean }
     | { kind: 'none' };
 
 /** Whether a sample, on its own, looks like a detent of a classic wheel. */
@@ -155,6 +157,7 @@ export class WheelMapper {
                 return {
                     kind: 'zoom',
                     factor: sample.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP,
+                    notched: true,
                 };
             }
             if (sample.deltaX !== 0) {
@@ -171,6 +174,7 @@ export class WheelMapper {
             return {
                 kind: 'zoom',
                 factor: Math.exp(-sample.deltaY * PINCH_ZOOM_RATE),
+                notched: false,
             };
         }
         if (sample.deltaX === 0 && sample.deltaY === 0) {
@@ -178,6 +182,40 @@ export class WheelMapper {
         }
         // `|| 0`: no negative zeros for a still axis.
         return { kind: 'pan', dx: -sample.deltaX || 0, dy: -sample.deltaY || 0 };
+    }
+}
+
+/** How far apart the original's seven map zoom levels are: x 4/3 each
+ * (42.1, 56.2, 75, 100, 133.3, 177.7, 237 %; starmap_viewport.ts
+ * ORIGINAL_MAP_SCALES). */
+export const ORIGINAL_LEVEL_RATIO = 4 / 3;
+
+/**
+ * Turns a pinch's continuous zoom factors into whole level steps for the
+ * original's stepped zoom (the "Smooth map zoom" enhancement off): a step
+ * each time the pinch has zoomed by one level's ratio
+ * ({@link ORIGINAL_LEVEL_RATIO}) the same way. Reversing the pinch drops
+ * whatever was left over the old way.
+ */
+export class PinchLevelStepper {
+    private accumulated = 0;
+
+    /** The whole levels to step for one more pinch `factor` (+ in, - out;
+     * usually 0). */
+    steps(factor: number): number {
+        const log = Math.log(factor);
+        if (!Number.isFinite(log) || log === 0) {
+            return 0;
+        }
+        if (this.accumulated !== 0
+            && Math.sign(log) !== Math.sign(this.accumulated)) {
+            this.accumulated = 0;
+        }
+        this.accumulated += log;
+        const level = Math.log(ORIGINAL_LEVEL_RATIO);
+        const steps = Math.trunc(this.accumulated / level);
+        this.accumulated -= steps * level;
+        return steps;
     }
 }
 

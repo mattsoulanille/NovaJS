@@ -35,6 +35,7 @@ export type EnhancementKey =
     | 'enhShopSearch'
     | 'enhMiniMapHiddenNoClicks'
     | 'enhGateMapLanes'
+    | 'enhSmoothMapZoom'
     | 'enhShipStorage'
     | 'enhAccurateTurretAim';
 
@@ -108,6 +109,16 @@ export const ENHANCEMENTS: readonly EnhancementSpec[] = [
         novajs: 'The hypergate map draws the hyperspace lanes in the '
             + 'star map\'s grey.',
         original: 'The lanes are drawn nearly black, all but invisible.',
+    },
+    {
+        // spaceport/system_graph.ts smoothMapControls: the star map and
+        // the hypergate map (the h minimap neither zooms nor pans).
+        key: 'enhSmoothMapZoom',
+        label: 'Smooth map zoom',
+        novajs: 'The map zooms smoothly (the wheel and a pinch about the '
+            + 'pointer); arrows pan 40 px, kept near the galaxy.',
+        original: 'Seven fixed zoom levels, one a click, key or wheel '
+            + 'notch; arrows pan 10 map units, with no limit.',
     },
     {
         // Hides the UI only: the stored ships stay stored, and the

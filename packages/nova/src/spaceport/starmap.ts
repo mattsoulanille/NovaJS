@@ -42,7 +42,7 @@ import {
     renderPropertyLines, systemProperties,
 } from "./starmap_properties.js";
 import {
-    DEFAULT_ZOOM, KEY_PAN_STEP, ZOOM_STEP,
+    DEFAULT_ZOOM,
 } from "./starmap_viewport.js";
 import { MapRefusal } from "./starmap_draw.js";
 import { SystemGraph, SystemGraphOptions } from "./system_graph.js";
@@ -337,11 +337,12 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             nextTarget: () => this.systemGraph?.cycleSingleRoute(1),
             // Space re-centers the view on the current system.
             firePrimary: () => this.systemGraph?.center(),
-            // Arrow keys pan the map.
-            up: () => this.systemGraph?.pan(0, KEY_PAN_STEP),
-            down: () => this.systemGraph?.pan(0, -KEY_PAN_STEP),
-            left: () => this.systemGraph?.pan(KEY_PAN_STEP, 0),
-            right: () => this.systemGraph?.pan(-KEY_PAN_STEP, 0),
+            // Arrow keys pan the map (system_graph.ts panStep: 40 px, or
+            // the original's 10 map units with smooth zoom off).
+            up: () => this.systemGraph?.panStep(0, 1),
+            down: () => this.systemGraph?.panStep(0, -1),
+            left: () => this.systemGraph?.panStep(1, 0),
+            right: () => this.systemGraph?.panStep(-1, 0),
             // `=` and `-` zoom one step, the - / + buttons' step, and `f`
             // opens Find (reference "Map keys, minimap routes and
             // ctrl-clicks (K4, M2, M3), wave 41"). They ride the actions
@@ -356,14 +357,26 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         });
     }
 
-    /** One zoom step in: the + button and `=`. */
+    /** One zoom step in: the + button and `=` (system_graph.ts zoomStep:
+     * smooth, or the original's next level). */
     private zoomIn() {
-        this.systemGraph?.zoomBy(ZOOM_STEP ** 2);
+        this.systemGraph?.zoomStep(1);
     }
 
     /** One zoom step out: the - button and `-`. */
     private zoomOut() {
-        this.systemGraph?.zoomBy(1 / ZOOM_STEP ** 2);
+        this.systemGraph?.zoomStep(-1);
+    }
+
+    /** Greys the - / + button at the original's last level that way, as
+     * the original does (wave 53: "the - button greys out"); smooth zoom
+     * keeps both live. */
+    private refreshZoomButtons() {
+        const graph = this.systemGraph;
+        this.buttons.zoomIn.state =
+            !graph || graph.canZoomStep(1) ? 'normal' : 'grey';
+        this.buttons.zoomOut.state =
+            !graph || graph.canZoomStep(-1) ? 'normal' : 'grey';
     }
 
     override async build() {
@@ -587,6 +600,8 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             id => this.showProperties(id));
         this.systemGraph.routeChanged.subscribe(
             () => this.refreshClearButton());
+        this.systemGraph.zoomChanged.subscribe(
+            () => this.refreshZoomButtons());
     }
 
     /**
@@ -689,6 +704,8 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         this.reconcileRoute(this.systemGraph, route);
         this.systemGraph.center();
         this.refreshClearButton();
+        // The enhancement may have been switched since the last showing.
+        this.refreshZoomButtons();
         this.showProperties(this.systemId);
         const date = this.openOptions.date ?? this.getDate();
         this.dateText.text = date ? formatMapDate(date) : '';
