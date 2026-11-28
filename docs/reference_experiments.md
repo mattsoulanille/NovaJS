@@ -27335,6 +27335,158 @@ f143-188, returns f1539-1560 and f2143-2165), `runs/...-232841-titleroll_r2/`,
 `bin/dis.txt` (the disassembly; the binary itself is not in git),
 `side_by_side.png`, `browser/` (NovaJS tick frames).
 
+### NPC hypergate traffic, wave 60: ships of a gövt Flags2 0x0040 govt (stock: Sigma Shipyards, Rebellion, ATMOS, Ambrosia) ARRIVE through a working gate and fly straight on out (no port visit) to jump away, and the ones already in the system fly INTO it and are gone; a govt with neither flag uses the gate both ways now and then; a 0x0020 govt (every other stock govt) never goes near it; the gate's govt / MinStatus (which lock the player out) stop no NPC, and the AI type does not matter (2026-11-28)
+
+**Question** (Matthew: "Are govt Sigma ships able to use hypergates? I
+remember them doing that in the original game."). Do NPCs fly into a
+hypergate and leave, or come out of one? Which governments, tied to what
+(gate govt / MinStatus, gövt flags, AI type)? How often, against landing
+and jumping?
+
+**The data.** EVN Bible gövt Flags2 (B:1101-1103): 0x0020 "don't use
+hypergates", 0x0040 "prefer to use hypergates instead of jumping out",
+0x0080 "prefer wormholes". Stock: 0x0040 on Rebellion (141), ATMOS (161),
+Ambrosia (167) and **Sigma Shipyards (172)**; neither flag on Nil'kemorya
+(147), Mu'Hari (168), the gate govt Hypergate (183) and 190; 0x0020 on
+every other govt (Pirates, Wraith, Hyperioid etc. also 0x0080). The Sigma
+govt is stock gövt 172 "Sigma Shipyards" (the Sigma Expansion plug-in in
+Matthew's data adds none): düde 211 "Sigma Shipyards" (AI 1: Leviathans,
+Pegasi, Mod Starbridges, a Cargo Drone) and düde 248 "Sigma shuttle craft"
+(AI 1, the shuttle hulls 391-393). **Every system with a working stock gate
+lists düde 211 in its traffic** (Kania, Tichel, Alphara, Nesre Primus /
+Secundus, Kerella, Gateway, South Manchester, Tekel, Dani, Aurora, Heraan,
+Moash, Vella, Korell, VNP-001/002, Koria; weights 2-20), and the Rebels
+(düdes 170 / 171 / 274, AI 3) fly in Koria with HG-Koria. The 18 working
+stock gates are all govt 183 / MinStatus 32767 (usable by the player only
+with ränk 147); CustSndID 120 (the emergence angle) on all of them.
+
+**Rig** (run-only plug-in, no kit ids: `tools/w60_rig.mjs`, variants by
+`VARIANT`). Stock HG-Tichel (spöb 1405) MOVED to (125, 300), 200 px straight
+below Spacedock II (125, 100), so the gate, Spacedock and Viking are all on
+screen; everything else about the gate stock (govt 183, MinStatus 32767,
+links, CustSndID 120). Tichel's traffic replaced by düde 211 (Sigma, gövt
+172 0x0046) flying ONLY the Mod Starbridge (shïp 165, white) and düde 129
+(Trader, gövt 157 Civvies 0x0022) flying ONLY the Shuttle (shïp 128,
+small, yellow engines), 50 / 50, avgShips 8, no përs. Pilot `w60_a`: a
+Leviathan at Spacedock II, every system explored. Enter Ship, sit still
+for 11 minutes recorded at 10 fps, a Tab census (10 presses) every ~110 s
+(`scen/<variant>.json`). Variants: **base**; **swap** (gövt 172 Flags2
+0x0006: neither flag; gövt 157 0x0042: prefers gates); **ai3** (düde 211
+AI 3). Read with `tools/gatescan.mjs` (the open gate's blue lightning
+around the gate: every opening), `tools/annulus.mjs` / `approach.mjs`
+(white hull pixels around the gate before / after each opening),
+`tools/radarline.mjs` (radar blips along the emergence line), contact
+sheets (`tools/sheet.sh`, `spellrows_full.sh`) and the Tab panels.
+
+**Result.**
+
+| rig | gate openings after launch (670 s) | out of the gate | into the gate | Tab census |
+|---|---|---|---|---|
+| base (Sigma 0x0040, Civvies 0x0020) | 38 (31 of 2.4-2.6 s, the rest 2-3 back to back) | **every one**: a Mod Starbridge each (38) | **none** after the first 4.4 s; in those, the Sigma ships already in the system at launch flew in (3-4) | 0-4 Mod Starbridges ("Sigma"), 3-6 Shuttles ("Trader") |
+| swap (Sigma neither, Civvies 0x0040) | 58 (39 short, 7 mid, 12 of 8.6-13.5 s) | the short ones: Shuttles (about 3 in 4 of 19 sampled) and Mod Starbridges (about 1 in 4) | the long ones: **Mod Starbridges**, each after a landing-like approach (12) | Mod Starbridges, Shuttles, a Fed Destroyer early; Shuttles only at the end |
+| ai3 (Sigma 0x0040 as AI 3) | 28 | Mod Starbridges, as in base | the AI 3 ships in the system at launch flew in within 8 s | |
+
+The Civvies Shuttles of the base rig (0x0020) came by jump, parked at Viking
+and Spacedock (wave 15's traders), and never went near the gate: no opening
+of base is theirs.
+
+**What an arrival looks like** (base 23.2-29.2 s, `base/sheet_24f.png`,
+`emerge_zoom.png`): the gate opens (its 42-frame sprite, about 1.9 s);
+a flat grey silhouette of the hull fades in AT the gate's centre over 0.3-0.5
+s (`f25_3.png`); the ship appears there in colour and flies out along
+**120 degrees** (screen: down and to the right, 30 degrees below the +x
+axis: the gate's CustSndID), 40-60 px per 1/10 s in its first frames
+(about 400-600 px/s, twice the Mod Starbridge's 202.5 px/s top speed); the
+gate closes about 0.6 s after the last ship. Three came out of one
+opening 1.3-1.8 s apart. On the radar (`radar_540.png`, `radarline.mjs`)
+each flies STRAIGHT on along the line to about 29 radar px (about 1,000
+px), stops there 4-5 s (AI 1; AI 3: no stop, gone at once), and is gone
+with a short burst along the same line: a jump. None stopped at a port.
+
+**What a departure looks like** (swap 72-84 s, `swap/s74.png`): a Mod
+Starbridge came down from Spacedock, the gate opened while it was still
+about 250 px out, it overshot, circled under the gate (8 s of manoeuvring
+like a landing approach) and flew up into it; at the centre it turned into
+the grey silhouette, faded within about 0.3 s and the gate closed. Base and
+ai3's first seconds (`base/s0.png`, `ai3/s0.png`): two to four Sigma ships
+converging on the gate from above and below and fading at its centre one
+after another.
+
+**Findings.**
+1. **Yes, Sigma ships use the gates**, and Matthew's memory is the stock
+   design: every working gate's system has Sigma traffic. They come OUT of
+   the gate (all 38 Sigma arrivals of base; none by jump that could be
+   seen) and pass straight through to a jump, and the ones in the system
+   at launch go INTO it.
+2. **It is the gövt flag, not the ship or the gate:** with the flags swapped
+   the Civvies Shuttles came out of the gate and the Sigma ships (neither
+   flag) used it both ways about as often as each other (about 10 out, 12
+   in); a 0x0020 govt never used it; the AI 3 Sigma warships behaved like
+   the AI 1 traders.
+3. **The gate's access does not apply to NPCs:** the stock gate (govt 183,
+   MinStatus 32767, which refuses the player without ränk 147) let every
+   Sigma ship through both ways.
+4. **Frequency:** with 0x0040 traffic, a gate system's arrivals are mostly
+   gate arrivals (base: about 3.5 a minute at avgShips 8, half the draws
+   Sigma: the pass-through ships turn the slots over fast); departures into
+   the gate happen only for the ships that did NOT come out of it.
+
+**NovaJS (main dd4769f0, before this wave's change).** The gövt flags were
+parsed (`novaparse/src/parsers/govt_parse.ts:84-86`) and read by nothing.
+No NPC ever came out of a gate (every respawn jumped in,
+`N/nova_plugin/spawn/npc_spawn_plugin.ts` `jumpInState`) or went into one.
+Worse, a working gate counted as an ordinary trader stop
+(`N/nova_plugin/npc/npc_decision.ts` `traderDestinations` over
+`landingDestinations`, landable gates included; gate govt 183 is never an
+enemy), so traders of EVERY govt, 0x0020 ones included, parked beside the
+gates for 15 s: **mismatch** on all counts.
+
+**Applied 2026-11-28 (this branch).** `N/nova_plugin/npc/npc_hypergate.ts`
+(`gateUse`: 'never' 0x0020 / 'prefer' 0x0040 / 'may'; `isWorkingHypergate`;
+`gateEmergenceState`: at the gate's centre, heading the emergence angle,
+at `GATE_EMERGENCE_SPEED_FACTOR` 2 times top speed).
+`N/nova_plugin/spawn/npc_spawn_plugin.ts` `gateArrivalState`: a traffic
+respawn (düde or fleet lead) of a 'prefer' govt in a system with a working
+gate comes out of it, a 'may' govt's with `MAY_GATE_ARRIVAL_CHANCE` 0.5
+(GUESS: swap's out / in counts, the jump-ins were not counted), and leaves
+at once (mode 'depart', the new NpcState `departHeading` = the emergence
+angle: `npc_steering.ts`'s 'depart' arm flies along it and jumps past the
+no-jump zone; its fleet escorts go with it). `npc_decision.ts`
+`traderDestinations`: 0x0020 govts and held ships leave working gates out,
+a 0x0040 govt's trader goes to the gate and nowhere else, a 'may' govt
+keeps it among its stops; a stop at a gate is the new mode 'gate'
+(`npc_steering.ts`: fly to the centre, within `GATE_ENTER_RADIUS` 40 px
+and under 80 px/s the ship leaves the world); a 0x0040 warship (AI 3)
+takes it whenever it has nothing to fight; a fleet escort follows its
+leader in. `N/display/gate_animation_plugin.ts`: the gate opens for an NPC
+in mode 'gate' once it is within `GATE_NPC_OPEN_RANGE` 300 px (an arrival
+already opened it: `ShipArrivedAtGateSystem`). Schema: NpcMode 'gate' and
+`departHeading` (fingerprint 3a6d49a035638325 -> 6ecdc6658e9d09da, under
+protocol 8). Specs: `N/nova_plugin/npc/npc_hypergate_test.ts` (the flag
+reading, the stops, the emergence state, a 0x0040 trader flying in and
+gone, an arrival flying out along 120 degrees and jumping past the no-jump
+zone, a 0x0040 warship and its escort going in, and a traffic census:
+every respawn of a 0x0040 govt at the gate, of a 0x0020 govt by jump).
+**Not modelled:** the ~1.9 s the gate stands open before a ship comes out,
+and the grey silhouette fading in / out (the NPC simply appears at / leaves
+from the centre); the gate govt's enemies (no stock gate has any); 0x0080
+wormhole preference (not measured).
+
+Confidence: high for the qualitative rule (38 / 0 in base, both
+directions in swap, the AI 3 repeat); medium for the 'may' rate (counts
+from contact sheets, jump-ins not counted) and the emergence speed (a few
+frames of two ships).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w60/` (`base/`,
+`swap/`, `ai3/`: each run dir's `recording.mp4`, window shots
+`NN-w-NN.png`, `spells.jsonl` (gate openings); `base/sheet_24f.png`,
+`emerge_zoom.png`, `f25_3.png`, `radar_540.png`, `s0.png`, `tab-N.png`;
+`swap/s74.png`, `s101.png`, `shortsil.png`, `tabs.png`; `ai3/s0.png`),
+`tools/` (the plug-in spec, `build.sh`, `mkscen.py`, `run.sh` and the
+readers), `pilotspecs/`, `scen/`, `recover.log`. (The `open` variant, the
+gate opened to all with govt -1 / MinStatus -32767, was built but not run:
+base already showed the stock lock stops no NPC.)
+
 ### Reliability notes (for anyone running the reference)
 
 - **Chaining hypergate transits (wave 59):** an arrival coasts out at half
