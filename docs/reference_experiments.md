@@ -26391,6 +26391,72 @@ specs, `sheet.sh`, the queues), `pilotspecs/`, `scen/`, `recover.log`.
   STR# carries a block); a b number past 9999; whether a mission
   briefing's text is expanded before or after its wildcards.
 
+### Escort upgrade gates, wave 57: only the target hull's Availability gates an escort's Upgrade ("This ship class cannot be upgraded.", the button greyed); Require, AppearOn and TechLevel do not, and the ungated upgrades settle at the next shipyard (2026-11-27)
+
+**Question** (the hub's brief, from Matthew's playtest): his captured
+Pirate Valkyrie Class III (shïp 289, UpgradeTo 291) is not offered the
+Class IV upgrade with the Singularity plug-in installed, which overrides
+shïp 291 with Availability `b9999` (a bit nothing sets). NovaJS's
+`escortUpgradeOffer` applied the shipyard's Require + Availability gates
+to the TARGET hull (b8256847, by analogy, never measured). Does the
+original gate the offer on the target's Availability, Require, AppearOn or
+TechLevel?
+
+**Rig.** No kit ids: the test kit only for the Kit Lancer (703) at Kit
+Port (sÿst / spöb 2100, a shipyard), stock hulls as CAPTURED escorts
+(pilot-make `escorts`), 50M credits, no outfits (nothing contributes the
+license bits), and one run-only plug-in `novaref-w57-valk291` (stock shïp
+291 cloned with Availability `b9999`, as Singularity has it). Enter Ship,
+click an escort, `y`, read the comm box; Upgrade Escort (window 306, 327)
+where offered, Close Channel (306, 411); land at Kit Port, Leave, Okay,
+land and Leave again, pull the pilot.
+
+| run | escort (shïp) | -> target | target gate | the comm box |
+|---|---|---|---|---|
+| ug1_a | Pirate Valkyrie Class II (149) | 289 | none (control) | **Upgrade Cost: 50,000 credits**, Upgrade Escort live |
+| ug1_a | Pirate Valkyrie Class III (289) | 291, **overridden** | Availability `b9999` | **"This ship class cannot be upgraded."**, Upgrade Escort greyed |
+| ug1_a | Rebel IDA Frigate, Rebel Upgrade I (412) | 413 | stock Availability `b9999` | **"This ship class cannot be upgraded."**, greyed |
+| ug2_a | Pirate Valkyrie Class III (289) | 291, stock | none (control for the override) | **Upgrade Cost: 70,000 credits** |
+| ug2_a | Valkyrie Class I (371, Second-Hand - poor) | 137 | Require `0x300000000` (the weapons licenses; the player has none) | **Upgrade Cost: 175,000 credits**, upgraded |
+| ug2_a | Arachnid (158) | 311 (Nil'kimas) | AppearOn `!b1303`, b1303 SET | **Upgrade Cost: 1.00M credits**, upgraded |
+| ug2_a | Lightning, Civilian Heavy Fighter (135) | 191 (Wild Geese) | TechLevel 100 | **Upgrade Cost: 50,000 credits** |
+
+At the Leave of ug2_a: **"Two escorts were upgraded at a cost of 1.17M
+credits."**; credits 48.82M; the pilot after holds escort classes 137 and
+311 where 371 and 158 were (bit 1303 still set, no outfits).
+
+**Findings.**
+1. **The target hull's Availability gates the offer**: failing it reads
+   "This ship class cannot be upgraded." (the same line as a hull with no
+   UpgradeTo, wave 23) with Upgrade Escort greyed. The override alone made
+   the difference (the same 289 -> 291 is offered without it). So
+   Matthew's Valkyrie is refused by the original too, with Singularity
+   installed, and so is the stock Rebel IDA Frigate's 412 -> 413.
+2. **Require is NOT a gate**: an upgrade to a hull whose Require the
+   player lacks is offered and settles.
+3. **AppearOn and TechLevel are not gates** either (tested at the hail;
+   the AppearOn one also settled).
+
+**NovaJS (main 14dd27b9):** `escortUpgradeOffer`
+(`N/display/hail_dialog_plugin.ts:837`) ran `shipStockGatesPass` (Require
++ Availability, no tech level): **matches** findings 1 and 3, **mismatch**
+on finding 2 (it refused the 371 -> 137 upgrade). **Applied 2026-11-27
+(this branch):** the offer tests only `shipAvailabilityPasses` against the
+player's control bits; real-data specs in
+`N/display/escort_upgrade_gate_integration_test.ts` (Valkyrie 289 -> 291
+offered on stock data and refused with Singularity, pending without it;
+Rebel IDA 412 -> 413 -> 414 refused; 371 -> 137, 158 -> 311 with b1303,
+135 -> 191 offered). Not measured: a HIRED escort (the same code path in
+NovaJS), and whether the Availability test reads P / other NCB terms.
+Confidence: high (each a single unambiguous comm box, both controls).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w57upg/`:
+`ug1_a/` (`02-hail-ida.png`, `04-hail-v1.png`, `06-hail-v2.png`),
+`ug2_a/` (`03-hail-a.png`, `04-upg-a.png`, `06-hail-b.png`,
+`07-hail-c.png`, `08-upg-c.png`, `09-hail-d.png`, `11-left.png`,
+`14-left2.png`, `pilot-after/`), `pilotspecs/`, `scen/`, `tools/`
+(`w57_valk291.mjs`, `run.sh`, `send.sh`), `recover.json`.
+
 ### Reliability notes (for anyone running the reference)
 
 - **A dësc probe needs no kit (wave 54):** override the stock dëscs of
