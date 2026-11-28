@@ -1,35 +1,45 @@
+import { MovementPhysicsComponent, MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
+import { MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { RandomResource } from "nova_ecs/plugins/random_plugin";
 import { SnapshotPolicies, SnapshotPoliciesResource } from "nova_ecs/plugins/snapshot_plugin";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { DefaultMap } from "nova_ecs/utils";
 import { World } from "nova_ecs/world";
-import { AnimationComponent } from "./core/index.js";
-import { AsteroidDataComponent } from "./combat/index.js";
-import { BlastDamageComponent, BlastIgnoreComponent } from "./ship/index.js";
-import { BlastDoneComponent } from "./combat/index.js";
-import { CloakComponent, CloakScannerComponent } from "./ship/index.js";
-import { RepairComponent } from "./ship/index.js";
+import {
+    AnimationComponent, AsteroidComponent, CollisionHitterComponent,
+    CollisionVulnerabilityComponent, ControlState, CreateTime, DebrisComponent,
+    decodeHull, encodeHull, GovtComponent, HitboxHullComponent,
+    HurtboxHullComponent, IdFactoryResource, ProjectileBlastHull,
+    ProjectileComponent, ProjectileDataComponent, Stat,
+    TumbleAnimationComponent,
+} from "./core/index.js";
+import {
+    AsteroidDataComponent, BlastDoneComponent, DecoyTargetComponent,
+    defaultWeaponLocalState, GuidanceComponent, JamDecisionComponent,
+    JammingComponent, SubCounts, TargetIndexComponent, WeaponsComponent,
+} from "./combat/index.js";
+import {
+    ArmorComponent, BlastDamageComponent, BlastIgnoreComponent,
+    CloakComponent, CloakScannerComponent, ExplodingComponent,
+    FiringGroupComponent, FuelComponent, IonizationColorComponent,
+    IonizationComponent, IsIonizedComponent, OwnerComponent, RepairComponent,
+    ShieldComponent, ShipComponent, ShipDataComponent, ShipExplosionComponent,
+    ShipPhysicsComponent, SourceComponent, TargetComponent,
+    VulnerableToPD, WeaponsState, WeaponsStateComponent,
+} from "./ship/index.js";
 import { IffComponent } from "./reputation/index.js";
-import { CollisionHitterComponent, CollisionVulnerabilityComponent } from "./core/index.js";
-import { decodeHull, encodeHull, HitboxHullComponent, HurtboxHullComponent } from "./core/index.js";
-import { CreateTime } from "./core/index.js";
-import { AnalogControlComponent, ShipControlStateComponent } from "./player/index.js";
-import { ControlState } from "./core/index.js";
-import { defaultWeaponLocalState, SubCounts, WeaponsComponent } from "./combat/index.js";
-import { SourceComponent } from "./ship/index.js";
-import { IdFactoryResource } from "./core/index.js";
-import { PlanetDataComponent } from "./travel/index.js";
-import { ProjectileBlastHull, ProjectileDataComponent } from "./core/index.js";
-import { ShipDataComponent } from "./ship/index.js";
-import { ShipExplosionComponent } from "./ship/index.js";
+import {
+    AnalogControlComponent, EscortCommandComponent, ShipControlStateComponent,
+} from "./player/index.js";
+import {
+    PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
+} from "./travel/index.js";
 import { BayFighterComponent, ReturnWhenTargetRemovedComponent } from "./escorts/index.js";
-import { ExplodingComponent } from "./ship/index.js";
-import { ChooseRandomTargetComponent, DeathAIComponent, FollowComponent, ShootAllWeaponsComponent } from "./npc/index.js";
+import {
+    ChooseRandomTargetComponent, DeathAIComponent, FollowComponent,
+    FormationComponent, ShootAllWeaponsComponent,
+} from "./npc/index.js";
 import { ReturnToQueueComponent } from "./core/index.js";
-import { GuidanceComponent } from "./combat/index.js";
-import { DecoyTargetComponent } from "./combat/index.js";
-import { TargetIndexComponent } from "./combat/index.js";
-import { ShipPhysicsComponent } from "./ship/index.js";
 import { SingletonComponent } from "nova_ecs/world";
 
 /**
@@ -172,6 +182,67 @@ export function configureSnapshotPolicies(world: World) {
     policies.set(AnalogControlComponent, {
         policy: 'clone',
         clone: data => ({ ...data }),
+    });
+
+    // Fast in-memory rollback policies for hot serializer-registered
+    // components. Without these, every rollback tick pays an io-ts encode
+    // plus cloneEncoded on every entity (and io-ts decode on restore).
+    // wireComponentsOfStored still routes 'value' entries through the
+    // serializer for wire snapshots, so wire encoding is unchanged.
+    const shallowClone = {
+        policy: 'clone' as const,
+        clone: <T extends object>(data: T): T => ({ ...data }),
+    };
+    const cloneStat = {
+        policy: 'clone' as const,
+        clone: (s: Stat) => new Stat({
+            current: s.current,
+            max: s.max,
+            min: s.min,
+            recharge: s.recharge,
+        }),
+    };
+    // Position, Vector, and Angle are immutable value objects (readonly
+    // coordinates/angle, never mutated in place), so a shallow copy of
+    // MovementState detaches the record while preserving bit-exact values
+    // (including -0 and non-finite numbers) with zero codec overhead.
+    policies.set(MovementStateComponent, shallowClone);
+    policies.set(MovementPhysicsComponent, shallowClone);
+    policies.set(ShieldComponent, cloneStat);
+    policies.set(ArmorComponent, cloneStat);
+    policies.set(FuelComponent, cloneStat);
+    policies.set(IonizationComponent, cloneStat);
+    policies.set(VulnerableToPD, { policy: 'share' });
+    policies.set(IsIonizedComponent, { policy: 'share' });
+    policies.set(IonizationColorComponent, shallowClone);
+    policies.set(TumbleAnimationComponent, shallowClone);
+    policies.set(AsteroidComponent, shallowClone);
+    policies.set(DebrisComponent, shallowClone);
+    policies.set(TargetComponent, shallowClone);
+    policies.set(PlanetTargetComponent, shallowClone);
+    policies.set(ProjectileComponent, shallowClone);
+    policies.set(FiringGroupComponent, shallowClone);
+    policies.set(OwnerComponent, shallowClone);
+    policies.set(JamDecisionComponent, shallowClone);
+    policies.set(JammingComponent, {
+        policy: 'clone',
+        clone: d => [d[0], d[1], d[2], d[3]] as [number, number, number, number],
+    });
+    policies.set(GovtComponent, shallowClone);
+    policies.set(ShipComponent, shallowClone);
+    policies.set(PlanetComponent, shallowClone);
+    policies.set(MultiplayerData, shallowClone);
+    policies.set(EscortCommandComponent, shallowClone);
+    policies.set(FormationComponent, shallowClone);
+    policies.set(WeaponsStateComponent, {
+        policy: 'clone',
+        clone: map => {
+            const copy: WeaponsState = new Map();
+            for (const [id, state] of map) {
+                copy.set(id, { ...state });
+            }
+            return copy;
+        },
     });
 
     // --- Wire snapshots (server archive, late join, desync resync) ---

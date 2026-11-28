@@ -163,6 +163,12 @@ describe('cloneEncoded', () => {
         expect(1 in sparse).toBeFalse();
         const extra = cloneEncoded(Object.assign([1], { tag: 't' })) as number[] & { tag: string };
         expect(extra.tag).toBe('t');
+        // A sparse array whose extra property keeps Object.keys(a).length === a.length
+        // must still fall back to structuredClone so the hole is preserved.
+        const sparseWithExtra = Object.assign([1, , 3], { tag: 't' }) as (number | undefined)[] & { tag: string }; // eslint-disable-line no-sparse-arrays
+        const cloned = cloneEncoded(sparseWithExtra);
+        expect(1 in cloned).toBeFalse();
+        expect(cloned.tag).toBe('t');
     });
 
     it('preserves shared references and cycles like structuredClone', () => {

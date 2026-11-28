@@ -6,7 +6,7 @@ import { Entity } from '../entity.js';
 import { AsyncProviderResource } from '../provide_async.js';
 import { Resource } from '../resource.js';
 import { World } from '../world.js';
-import { SerializerResource } from './serializer_plugin.js';
+import { Serializer, SerializerResource } from './serializer_plugin.js';
 import { TimeResource } from './time_plugin.js';
 
 /**
@@ -109,28 +109,58 @@ export function cloneEncoded<T>(value: T,
      * two places in the input is shared between the same two places in
      * the copy (and a cycle terminates) — exactly structuredClone's graph
      * semantics, which the fast path must not weaken (review r12 M-1).
+     * Lazily allocated on the first nested object so primitives and flat
+     * records avoid per-call Map allocations.
      */
-    seen: Map<object, unknown> = new Map()): T {
+    seen?: Map<object, unknown>): T {
     if (typeof value !== 'object' || value === null) {
         if (typeof value === 'function' || typeof value === 'symbol') {
             return structuredClone(value);
         }
         return value;
     }
-    const already = seen.get(value);
-    if (already !== undefined) {
-        return already as T;
+    if (seen !== undefined) {
+        const already = seen.get(value);
+        if (already !== undefined) {
+            return already as T;
+        }
     }
     if (Array.isArray(value)) {
         const length = value.length;
         // Only dense arrays with no extra properties take the fast path.
-        if (Object.keys(value).length !== length) {
+        // Avoid Object.keys(value) allocation by counting own keys and
+        // checking for holes directly.
+        let keyCount = 0;
+        for (const key in value) {
+            if (Object.prototype.hasOwnProperty.call(value, key)) {
+                keyCount++;
+            }
+        }
+        if (keyCount !== length) {
             return structuredClone(value);
         }
-        const copy = new Array(length);
-        seen.set(value, copy);
         for (let i = 0; i < length; i++) {
-            copy[i] = cloneEncoded(value[i], seen);
+            if (!(i in value)) {
+                return structuredClone(value);
+            }
+        }
+        const copy = new Array(length);
+        if (seen !== undefined) {
+            seen.set(value, copy);
+        }
+        for (let i = 0; i < length; i++) {
+            const item = value[i];
+            if (typeof item === 'object' && item !== null) {
+                if (seen === undefined) {
+                    seen = new Map();
+                    seen.set(value, copy);
+                }
+                copy[i] = cloneEncoded(item, seen);
+            } else if (typeof item === 'function' || typeof item === 'symbol') {
+                return structuredClone(value);
+            } else {
+                copy[i] = item;
+            }
         }
         return copy as T;
     }
@@ -139,10 +169,24 @@ export function cloneEncoded<T>(value: T,
         return structuredClone(value);
     }
     const copy: Record<string, unknown> = {};
-    seen.set(value, copy);
-    for (const key in value) {
-        if (Object.prototype.hasOwnProperty.call(value, key)) {
-            copy[key] = cloneEncoded((value as Record<string, unknown>)[key], seen);
+    if (seen !== undefined) {
+        seen.set(value, copy);
+    }
+    const record = value as Record<string, unknown>;
+    for (const key in record) {
+        if (Object.prototype.hasOwnProperty.call(record, key)) {
+            const prop = record[key];
+            if (typeof prop === 'object' && prop !== null) {
+                if (seen === undefined) {
+                    seen = new Map();
+                    seen.set(value, copy);
+                }
+                copy[key] = cloneEncoded(prop, seen);
+            } else if (typeof prop === 'function' || typeof prop === 'symbol') {
+                return structuredClone(value);
+            } else {
+                copy[key] = prop;
+            }
         }
     }
     return copy as T;
@@ -176,9 +220,8 @@ export interface WorldSnapshot {
 const CODEC_POLICY: ComponentSnapshotPolicy = { policy: 'codec' };
 const SKIP_POLICY: ComponentSnapshotPolicy = { policy: 'skip' };
 
-function snapshotComponents(world: World, entity: Entity,
+function snapshotComponents(serializer: Serializer | undefined, entity: Entity,
     policies: SnapshotPolicies): StoredComponent[] {
-    const serializer = world.resources.get(SerializerResource);
     const stored: StoredComponent[] = [];
     for (const [component, data] of entity.components) {
         let policy = policies.components.get(component);
@@ -336,17 +379,18 @@ export function snapshotWorld(world: World): WorldSnapshot {
     }
     checkEventQueueEmpty(world);
 
+    const serializer = world.resources.get(SerializerResource);
     const entities: SnapshotEntity[] = [];
     let singleton: StoredComponent[] = [];
     for (const [uuid, entity] of world.entities) {
         if (uuid === 'singleton') {
-            singleton = snapshotComponents(world, entity, policies);
+            singleton = snapshotComponents(serializer, entity, policies);
             continue;
         }
         entities.push({
             uuid,
             name: entity.name,
-            components: snapshotComponents(world, entity, policies),
+            components: snapshotComponents(serializer, entity, policies),
         });
     }
 
