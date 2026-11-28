@@ -1,73 +1,59 @@
 // The star map's nebulae (nëbu): which ones the player sees, which of a
-// nebula's pictures is drawn at the map's current scale, and where. Every
-// rule that is not measured on the original yet lives here, marked GUESS,
-// so matching the reference is an edit to this one file.
+// nebula's pictures is drawn at the map's current scale, where, and how it
+// combines with the rest of the map. Measured on the original:
+// docs/reference_experiments.md "Star-map nebulae (nëbu), wave 53" (the
+// one rule still a GUESS is marked so).
 import { NebulaData, NebulaImage } from "novadatainterface/nebula_data";
 import { SystemData } from "novadatainterface/system_data";
 import * as PIXI from 'pixi.js';
+import { MAX_BLEND_MODE } from "../display/max_blend.js";
 import { evaluateNCBTest } from "../nova_plugin/ncb/index.js";
 import { DISCOVERY_ENTERED, DiscoveryLevel } from "../nova_plugin/player/index.js";
-import { BASE_SCALE } from "./starmap_viewport.js";
+import { BASE_SCALE, WorldBounds } from "./starmap_viewport.js";
 
 /**
  * "The map scales used in Nova are 42.1%, 56.2%, 75.0%, 100.0%, 133.3%,
- * 177.7%, and 237.0%" (EVN Bible, nëbu). A scale is screen pixels per
- * map unit: the original opens its map at 177.7% (starmap_viewport.ts
- * DEFAULT_PX_PER_UNIT, measured at 1.77), and the stock nebulae's largest
- * pictures are exactly their XSize/YSize, the 100% size.
+ * 177.7%, and 237.0%" (EVN Bible, nëbu; the reference's seven zoom
+ * levels, wave 53). A scale is screen pixels per map unit. NovaJS zooms
+ * continuously, so these are only where the original's measurements were
+ * taken: {@link nebulaImageFor} applies its rule at whatever scale the
+ * view is at.
  */
 export const NEBULA_MAP_SCALES =
     [0.421, 0.562, 0.75, 1, 1.333, 1.777, 2.37] as const;
 
-/**
- * The original scale nearest `pxPerUnit` (by ratio). NovaJS zooms
- * continuously (a wheel or pinch lands anywhere between MIN_ZOOM and
- * MAX_ZOOM), the original in those seven steps, so a picture is chosen
- * for the step the view is closest to and then stretched to the exact
- * zoom like any other map element.
- */
-export function nearestMapScale(pxPerUnit: number): number {
-    let best: number = NEBULA_MAP_SCALES[0];
-    for (const scale of NEBULA_MAP_SCALES) {
-        if (Math.abs(Math.log(scale / pxPerUnit))
-            < Math.abs(Math.log(best / pxPerUnit))) {
-            best = scale;
-        }
-    }
-    return best;
-}
+/** Slack for a picture that fits its target exactly (251 px at 100%). */
+const FIT_EPSILON = 1e-6;
 
 /**
- * The picture to draw at `pxPerUnit`: of the nebula's existing pictures,
- * the one whose width is closest (by ratio) to the nebula's width at the
- * nearest original scale; ties go to the larger picture. Undefined when
- * the nebula has none.
+ * The picture to draw at `pxPerUnit` screen pixels per map unit: the
+ * LARGEST of the nebula's pictures that fits inside the nebula's size at
+ * that scale in BOTH dimensions (width <= XSize x s and height <= YSize x
+ * s), or the first picture when none fits; undefined when it has none.
+ * Whichever is picked is then stretched to exactly that size
+ * ({@link NebulaLayer}).
  *
- * GUESS (reference pending). The Bible: "The engine will pick the best
- * nebula image to display for a given map scale ... If a nebula image of
- * the proper size for the current map scale isn't available, Nova will
- * pick the closest one and stretch it as necessary." Read here as
- * closest IN SIZE, because the stock data cannot mean slot = scale: every
- * stock nebula fills slots 0-2 only, Holpa at 1/4, 1/2 and 1x its size and
- * L-1551 at 1/2, 1x and 2x, so "slot 3 is 100%" would stretch Holpa's
- * full-size picture down at 75% while L-1551 drew its double-size one.
- * The two readings differ only at the small scales.
+ * Measured (wave 53, all 28 nebula-zoom pairs of the stock four): Holpa
+ * at 42.1% draws its 63-wide picture, not the nearer 126; L-1551 at 177.7%
+ * draws 146x71, not 292x141; Obatta at 100% draws 33x49 because its 65x98
+ * is taller than 90; and a size plug-in showed a picture too wide OR too
+ * tall is skipped. "Largest" is by area, ties to the later slot: the
+ * Bible asks for pictures sorted by size, the stock sets are, and an
+ * unsorted set was not tried on the original.
  */
 export function nebulaImageFor(nebula: Pick<NebulaData, 'size' | 'images'>,
     pxPerUnit: number): NebulaImage | undefined {
-    const wanted = Math.max(1, nebula.size[0]) * nearestMapScale(pxPerUnit);
+    const maxWidth = nebula.size[0] * pxPerUnit + FIT_EPSILON;
+    const maxHeight = nebula.size[1] * pxPerUnit + FIT_EPSILON;
     let best: NebulaImage | undefined;
-    let bestError = Infinity;
     for (const image of nebula.images) {
-        const error = Math.abs(Math.log(Math.max(1, image.width) / wanted));
-        if (error < bestError - 1e-9
-            || (Math.abs(error - bestError) <= 1e-9
-                && best !== undefined && image.width > best.width)) {
+        if (image.width <= maxWidth && image.height <= maxHeight
+            && (!best || image.width * image.height
+                >= best.width * best.height)) {
             best = image;
-            bestError = error;
         }
     }
-    return best;
+    return best ?? nebula.images[0];
 }
 
 /**
@@ -91,13 +77,11 @@ export function nebulaActive(nebula: Pick<NebulaData, 'id' | 'activeOn'>,
  * Whether a map position lies INSIDE the nebula's picture (upper-left
  * anchored, normal-zoom units), its edges excluded.
  *
- * Edges excluded on the one piece of evidence there is: the reference
- * capture map/map_zoomed_out_showing_far_away_mission.png (100% scale) is a
- * pilot who has explored Tichel (110, 40), which sits exactly on the top
- * edge of Obatta Nebula (nova:129, 60..125 x 40..130), and the nebula's
- * rectangle there is pure black. (SPC-050 (118, 78), strictly inside, is
- * only the dim unexplored ring in that capture, so the ring does not
- * reveal a nebula either.)
+ * The TOP edge is measured (wave 53): Tichel (110, 40) sits exactly on
+ * Obatta Nebula's top edge (YPos 40) and K-018 (-15, -226) on L-1551's
+ * (YPos -226), and neither reveals its nebula, explored at level 1 or 2.
+ * The LEFT, RIGHT and BOTTOM edges are a GUESS (no stock system sits on
+ * one): strict like the top.
  */
 export function nebulaCovers(nebula: Pick<NebulaData, 'position' | 'size'>,
     [x, y]: readonly [number, number]): boolean {
@@ -107,17 +91,18 @@ export function nebulaCovers(nebula: Pick<NebulaData, 'position' | 'size'>,
 }
 
 /**
- * Whether the player sees the nebula: its ActiveOn passes, and it is
- * EXPLORED — at least one system the player has explored lies on it.
+ * Whether the player sees the nebula: its ActiveOn passes (a pilot
+ * without the bit does not see it, explored or not), and at least one
+ * system the player has explored lies inside its rectangle
+ * ({@link nebulaCovers}). Then the WHOLE picture shows, never a piece of
+ * it, however far its rectangle runs past that system's links.
  *
- * GUESS (reference pending) for the second half. The Bible says only that
- * the nebulae's "explored state ... is recalculated every time based on
- * the systems the player has explored", and that OnExplore runs when a
- * nebula "is tested for visibility and found to be visible" — so a nebula
- * is visible exactly when explored, and explored is a function of the
- * explored systems. Which systems count (inside the picture's rectangle?
- * near it? only the dim ring around it?) and whether a nebula is revealed
- * whole or in pieces is what the reference agent is measuring.
+ * Measured (wave 53): Holpa alone at level 2, in the top-left corner of
+ * Holpa Nebula, reveals all 251 x 298 of it; Tocc at level 1 (visited)
+ * reveals it as well as level 2 (landed) does; Nibos, explored 8 units
+ * outside the rectangle, does not, nor does Tocc inside it while only an
+ * unexplored dim ring; ActiveOn naming a bit no pilot holds hides Obatta
+ * Nebula on a fully explored map.
  */
 export function nebulaVisible(nebula: NebulaData, bits: ReadonlySet<number>,
     exploredPositions: Iterable<readonly [number, number]>): boolean {
@@ -136,7 +121,8 @@ export function nebulaVisible(nebula: NebulaData, bits: ReadonlySet<number>,
  * The nebulae the player sees ({@link nebulaVisible}), given every system
  * and how much the player knows about each. Explored = entered (discovery
  * level 1+), the set the Bible's "systems the player has explored" names
- * (discovery.ts), plus wherever the player stands.
+ * (discovery.ts), plus wherever the player stands. The sÿst positions
+ * decide, not whether a system is drawn.
  */
 export function visibleNebulae(nebulae: readonly NebulaData[],
     systems: readonly SystemData[], currentSystem: string,
@@ -160,18 +146,43 @@ export function nebulaRect(nebula: Pick<NebulaData, 'position' | 'size'>) {
 }
 
 /**
- * The drawn nebulae: one sprite per visible nebula, stretched over its
- * rectangle, re-pointed at the right picture whenever the zoom changes.
+ * `bounds` grown to take in every one of `nebulae`'s rectangles, so the
+ * map's pan clamp (starmap_viewport.ts) can reach all of each. The
+ * original's pan is unbounded (wave 53: ~800 units each way), and a
+ * nebula may run past every system: Holpa Nebula's lower right (681,
+ * 343) lies beyond the eastmost and southmost systems (587, 300).
+ */
+export function boundsWithNebulae(bounds: WorldBounds,
+    nebulae: readonly Pick<NebulaData, 'position' | 'size'>[]): WorldBounds {
+    let { minX, minY, maxX, maxY } = bounds;
+    for (const nebula of nebulae) {
+        const rect = nebulaRect(nebula);
+        minX = Math.min(minX, rect.x);
+        minY = Math.min(minY, rect.y);
+        maxX = Math.max(maxX, rect.x + rect.width);
+        maxY = Math.max(maxY, rect.y + rect.height);
+    }
+    return { minX, minY, maxX, maxY };
+}
+
+/**
+ * The drawn nebulae: one sprite per visible nebula, stretched
+ * (nearest-neighbour: whole source pixels as blocks, as measured) over
+ * exactly its rectangle, re-pointed at the right picture
+ * ({@link nebulaImageFor}) whenever the zoom changes.
  *
- * DRAW ORDER, GUESS (reference pending): beneath everything else on the
- * map — the Show Borders territory, the links and the dots are all drawn
- * over it — and opaque, with the normal blend: the stock pictures are
- * clouds on black, and the map is black.
+ * LAYERING (measured, wave 53): over the map's black background and
+ * under everything else: the links (opaque lane grey across it), the
+ * system rings (their black interiors black it out), the names, the route
+ * and the bracket. With Show Borders the territory and the nebula combine
+ * by a PER-CHANNEL MAX, neither covering the other, black in the picture
+ * being transparent. So the layer is drawn just ABOVE the (opaque)
+ * borders with the MAX blend (display/max_blend.ts), which over the black
+ * background without borders is the picture itself.
  */
 export class NebulaLayer {
     readonly container = new PIXI.Container();
     private readonly sprites: { nebula: NebulaData, sprite: PIXI.Sprite }[] = [];
-    private shownFor?: number;
 
     constructor(nebulae: readonly NebulaData[],
         private readonly textureOf: (pictId: string) => PIXI.Texture) {
@@ -184,6 +195,7 @@ export class NebulaLayer {
             const sprite = new PIXI.Sprite(PIXI.Texture.EMPTY);
             sprite.name = nebula.id;
             sprite.position.set(rect.x, rect.y);
+            sprite.blendMode = MAX_BLEND_MODE;
             this.sprites.push({ nebula, sprite });
             this.container.addChild(sprite);
         }
@@ -202,20 +214,18 @@ export class NebulaLayer {
     private readonly picked = new Map<string, string>();
 
     /** Points every sprite at its picture for `pxPerUnit` screen pixels per
-     * map unit. Cheap when the chosen scale has not changed. */
+     * map unit (the view's scale, continuous). Cheap when no pick moves. */
     update(pxPerUnit: number) {
-        const scale = nearestMapScale(pxPerUnit);
-        if (scale === this.shownFor) {
-            return;
-        }
-        this.shownFor = scale;
         for (const { nebula, sprite } of this.sprites) {
             const image = nebulaImageFor(nebula, pxPerUnit);
             if (!image || this.picked.get(nebula.id) === image.id) {
                 continue;
             }
             this.picked.set(nebula.id, image.id);
-            sprite.texture = this.textureOf(image.id);
+            const texture = this.textureOf(image.id);
+            // The PICT is the nebula's own: nothing else draws it smoothed.
+            texture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+            sprite.texture = texture;
             // Set after the texture: a Sprite keeps its asked-for size
             // through a texture that is still loading.
             const rect = nebulaRect(nebula);

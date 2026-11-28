@@ -28,7 +28,9 @@ import {
 import { drawTerritory, TerritoryOwner, TerritorySite } from "./starmap_borders.js";
 import { bindMapPointer } from "./starmap_input.js";
 import { buildMissionMarks, MissionMarkTextures } from "./starmap_marks.js";
-import { NebulaLayer, visibleNebulae } from "./starmap_nebulae.js";
+import {
+    boundsWithNebulae, NebulaLayer, visibleNebulae,
+} from "./starmap_nebulae.js";
 import {
     BASE_SCALE, MapViewport, scalePos, worldBoundsOf,
 } from "./starmap_viewport.js";
@@ -164,9 +166,10 @@ export interface SystemGraphOptions {
     laneColor?: number;
     /**
      * The nebulae (nëbu) to draw under the map, with the picture loader
-     * they are drawn through. Only the full star map passes them (GUESS,
-     * reference pending: whether the `h` minimap and the hypergate map
-     * draw them too); the graph shows the ones the player sees
+     * they are drawn through. Only the full star map passes them: the `h`
+     * minimap draws none (measured, reference wave 53, at Holpa Station
+     * inside Holpa Nebula); the hypergate map is not measured and passes
+     * none either. The graph shows the ones the player sees
      * (starmap_nebulae.ts nebulaVisible) against {@link playerBits} and
      * {@link discoveryOf}.
      */
@@ -319,19 +322,26 @@ export class SystemGraph {
         this.borderGraphics = new PIXI.Graphics();
         this.borderGraphics.visible = false;
 
-        // Bounding box of all systems in laid-out (BASE_SCALE) coordinates.
+        const shownNebulae = options.nebulae && options.nebulaTexture
+            ? visibleNebulae(options.nebulae, systems, currentSystem,
+                playerBits, this.discoveryOf)
+            : [];
+        // Bounding box of all systems in laid-out (BASE_SCALE) coordinates,
+        // and of the nebulae the player sees: the pan reaches all of each.
         this.viewport = new MapViewport(this.container, size,
-            worldBoundsOf(visibleSystems.map(s => s.position)));
+            boundsWithNebulae(
+                worldBoundsOf(visibleSystems.map(s => s.position)),
+                shownNebulae));
         const mapContainer = this.viewport.mapContainer;
-        if (options.nebulae && options.nebulaTexture) {
-            this.nebulae = new NebulaLayer(visibleNebulae(options.nebulae,
-                systems, currentSystem, playerBits, this.discoveryOf),
-                options.nebulaTexture);
-            // Beneath everything, borders included (starmap_nebulae.ts).
-            mapContainer.addChild(this.nebulae.container);
-        }
         // Borders sit under everything else; the route overlays the links.
         mapContainer.addChild(this.borderGraphics);
+        if (options.nebulaTexture && options.nebulae) {
+            this.nebulae = new NebulaLayer(shownNebulae,
+                options.nebulaTexture);
+            // Over the borders, MAX-blended with them, and under the rest
+            // (starmap_nebulae.ts NebulaLayer).
+            mapContainer.addChild(this.nebulae.container);
+        }
         mapContainer.addChild(this.linkGraphics);
         mapContainer.addChild(this.routeGraphics);
 

@@ -54,6 +54,7 @@ import {
 import {
     DisplayScaleResource, ResizeEvent,
 } from "./display/screen_size_plugin.js";
+import { installMaxBlend } from "./display/max_blend.js";
 import { installNoLigatures } from "./display/no_ligatures.js";
 import { Stage } from "./display/stage_resource.js";
 import { showStatusMessage } from "./display/status_message_plugin.js";
@@ -120,6 +121,11 @@ const app = new PIXI.Application({
     height: scaleLayout.worldHeight,
     autoDensity: true
 });
+// The star map's nebulae combine with Show Borders by a per-channel max
+// (display/max_blend.ts, spaceport/starmap_nebulae.ts).
+if (!installMaxBlend(app.renderer)) {
+    console.warn('No MAX blend equation: nebulae draw over Show Borders.');
+}
 
 window.app = app;
 document.body.appendChild(app.view as any);

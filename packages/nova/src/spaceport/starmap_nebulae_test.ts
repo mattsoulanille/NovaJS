@@ -11,12 +11,13 @@ import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import {
-    DISCOVERY_ENTERED, DISCOVERY_UNKNOWN, DiscoveryLevel,
+    DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN, DiscoveryLevel,
 } from '../nova_plugin/player/index.js';
+import { MAX_BLEND_MODE } from '../display/max_blend.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import {
-    NEBULA_MAP_SCALES, nearestMapScale, nebulaImageFor, nebulaRect,
-    nebulaVisible,
+    boundsWithNebulae, NEBULA_MAP_SCALES, nebulaImageFor, nebulaRect,
+    nebulaVisible, visibleNebulae,
 } from './starmap_nebulae.js';
 import { Starmap } from './starmap.js';
 import { BASE_SCALE, DEFAULT_ZOOM } from './starmap_viewport.js';
@@ -55,39 +56,86 @@ const syntheticSystems: SystemData[] = SYSTS.map(def => ({
 const entered = (...ids: string[]) => (id: string): DiscoveryLevel =>
     ids.includes(id) ? DISCOVERY_ENTERED : DISCOVERY_UNKNOWN;
 
+/** The stock four as the parser reads them (reference_experiments.md
+ * "Star-map nebulae (nëbu), wave 53": stock data table). */
+function stock(id: number, position: [number, number],
+    size: [number, number], images: [number, number][]): NebulaData {
+    const first = 9500 + 7 * (id - 128);
+    return {
+        ...getDefaultNebulaData(),
+        id: `nova:${id}`, position, size,
+        images: images.map(([width, height], slot) =>
+            ({ id: `nova:${first + slot}`, width, height })),
+    };
+}
+const HOLPA = stock(128, [430, 45], [251, 298],
+    [[63, 75], [126, 149], [251, 298]]);
+const OBATTA = stock(129, [60, 40], [65, 90],
+    [[17, 25], [33, 49], [65, 98]]);
+const ROCHAK = stock(130, [263, 145], [109, 95],
+    [[28, 24], [55, 48], [109, 95]]);
+const L1551 = stock(131, [-138, -226], [146, 71],
+    [[73, 36], [146, 71], [292, 141]]);
+
 describe('the star map\'s nebula picture choice', () => {
-    it('snaps a zoom to the nearest of the original\'s seven map scales', () => {
-        expect(NEBULA_MAP_SCALES.length).toBe(7);
-        // The map opens at the original's 177.7% (DEFAULT_PX_PER_UNIT).
-        expect(nearestMapScale(BASE_SCALE * DEFAULT_ZOOM)).toBe(1.777);
-        expect(nearestMapScale(1)).toBe(1);
-        expect(nearestMapScale(1.16)).toBe(1.333);
-        // NovaJS zooms past both ends; the end scales cover them.
-        expect(nearestMapScale(0.1)).toBe(0.421);
-        expect(nearestMapScale(8)).toBe(2.37);
+    const pict = (n: NebulaData, scale: number) =>
+        nebulaImageFor(n, scale)?.id.replace('nova:', '');
+
+    it('matches the original\'s pick for every stock nebula at all seven '
+        + 'of its zoom levels (wave 53, 28 fits)', () => {
+            // [scale, Holpa, Obatta, Rochak, L-1551], the measured table.
+            const measured: [number, ...string[]][] = [
+                [2.37, '9502', '9509', '9516', '9523'],
+                [1.777, '9502', '9509', '9516', '9522'],
+                [1.333, '9502', '9509', '9516', '9522'],
+                [1, '9502', '9508', '9516', '9522'],
+                [0.75, '9501', '9508', '9515', '9521'],
+                [0.562, '9501', '9508', '9515', '9521'],
+                [0.421, '9500', '9507', '9514', '9521'],
+            ];
+            expect(measured.map(([scale]) => scale))
+                .toEqual([...NEBULA_MAP_SCALES].reverse());
+            for (const [scale, ...picts] of measured) {
+                expect([HOLPA, OBATTA, ROCHAK, L1551].map(n => pict(n, scale)))
+                    .withContext(`${scale * 100}%`).toEqual(picts);
+            }
+        });
+
+    it('takes the largest picture that fits, not the nearest in size', () => {
+        // Holpa at 42.1%: 106 px wide; 126 is nearer, but only 63 fits.
+        expect(nebulaImageFor(HOLPA, 0.421)?.width).toBe(63);
+        // L-1551 at 177.7%: 259 px wide; 292 is nearer, but 146 fits.
+        expect(nebulaImageFor(L1551, 1.777)?.width).toBe(146);
+        // And at NovaJS's own opening scale (DEFAULT_PX_PER_UNIT 1.77).
+        expect(nebulaImageFor(L1551, BASE_SCALE * DEFAULT_ZOOM)?.width)
+            .toBe(146);
+        // A picture exactly the target's size fits (Holpa at 100%).
+        expect(nebulaImageFor(HOLPA, 1)?.width).toBe(251);
     });
 
-    // Holpa Nebula (stock nova:128): 251x298, pictures 63, 126 and 251 wide.
-    const holpa = nebula([251, 298], [63, 126, 251]);
+    it('needs the picture to fit in BOTH dimensions (Obatta\'s 98-tall '
+        + 'picture at 100%, and the wave-53 size plug-in)', () => {
+            expect(nebulaImageFor(OBATTA, 1)?.height).toBe(49);
+            expect(nebulaImageFor(OBATTA, 1.333)?.height).toBe(98);
+            // size_a: Obatta 60 x 200 (65x98 too wide, short enough) and
+            // Rochak 200 x 90 (109x95 narrow enough, too tall) skip their
+            // labelled pictures at 100% and use them again at 177.7%.
+            const narrow = { ...OBATTA, size: [60, 200] as [number, number] };
+            const short = { ...ROCHAK, size: [200, 90] as [number, number] };
+            expect(pict(narrow, 1)).toBe('9508');
+            expect(pict(short, 1)).toBe('9515');
+            expect(pict(narrow, 1.777)).toBe('9509');
+            expect(pict(short, 1.777)).toBe('9516');
+        });
 
-    it('picks the picture closest in size to the nebula at that scale', () => {
-        const at = (scale: number) => nebulaImageFor(holpa, scale)?.width;
-        // 100% and up: the full-size picture, stretched above 100%.
-        expect(at(2.37)).toBe(251);
-        expect(at(1.777)).toBe(251);
-        expect(at(1)).toBe(251);
-        // 75%: 188 px wanted; 251 is nearer by ratio than 126.
-        expect(at(0.75)).toBe(251);
-        // 56.2% and 42.1%: the half-size picture (141 / 106 px wanted).
-        expect(at(0.562)).toBe(126);
-        expect(at(0.421)).toBe(126);
-    });
-
-    it('uses a double-size picture when a nebula has one (stock L-1551)', () => {
-        const l1551 = nebula([146, 71], [73, 146, 292]);
-        expect(nebulaImageFor(l1551, 1.777)?.width).toBe(292);
-        expect(nebulaImageFor(l1551, 1)?.width).toBe(146);
-        expect(nebulaImageFor(l1551, 0.421)?.width).toBe(73);
+    it('applies the rule at any scale in between (continuous zoom)', () => {
+        // Holpa's 126x149 fits from 126/251 = 50.2% up to just under 100%.
+        expect(nebulaImageFor(HOLPA, 0.5)?.width).toBe(63);
+        expect(nebulaImageFor(HOLPA, 0.51)?.width).toBe(126);
+        expect(nebulaImageFor(HOLPA, 0.99)?.width).toBe(126);
+        // Past the original's 237% the double-size picture stays.
+        expect(nebulaImageFor(L1551, 8)?.width).toBe(292);
+        expect(nebulaImageFor(L1551, 0.1)?.width).toBe(73);
     });
 
     it('stretches a lone picture at every scale, and has none to draw '
@@ -136,6 +184,41 @@ describe('which nebulae the star map shows', () => {
         expect(nebulaVisible(veil, new Set([BITS.veilCharted]),
             [thessaly.position])).toBeFalse();
     });
+
+    it('matches the wave-53 visibility pilots on the stock nebulae', () => {
+        const at = (id: string, position: [number, number]): SystemData =>
+            ({ ...getDefaultSystemData(), id, position });
+        const systems = [
+            at('tichel', [110, 40]), at('obatta', [80, 80]),
+            at('nibos', [422, 170]), at('tocc', [461, 152]),
+            at('holpa', [486, 120]), at('k003', [-56, -218]),
+            at('k018', [-15, -226]), at('away', [1000, 1000]),
+        ];
+        const nebulae = [HOLPA, OBATTA, L1551];
+        const seen = (levels: { [id: string]: DiscoveryLevel },
+            bits: number[] = []) => visibleNebulae(nebulae, systems, 'away',
+                new Set(bits), id => levels[id] ?? DISCOVERY_UNKNOWN)
+            .map(n => n.id);
+        // w53_holpa: Holpa alone, in the corner, reveals all of Holpa.
+        expect(seen({ holpa: DISCOVERY_LANDED })).toEqual(['nova:128']);
+        // w53_nibtocc: Tocc only VISITED (level 1) reveals it too.
+        expect(seen({ nibos: DISCOVERY_LANDED, tocc: DISCOVERY_ENTERED }))
+            .toEqual(['nova:128']);
+        // w53_nibos: Nibos 8 units outside; Tocc inside but unexplored.
+        expect(seen({ nibos: DISCOVERY_LANDED })).toEqual([]);
+        // w53_k003: inside L-1551.
+        expect(seen({ k003: DISCOVERY_LANDED })).toEqual(['nova:131']);
+        // w53_tichel / w53_k018 / w53_fresh: ON the top edge, either level.
+        expect(seen({ tichel: DISCOVERY_LANDED })).toEqual([]);
+        expect(seen({ tichel: DISCOVERY_ENTERED })).toEqual([]);
+        expect(seen({ k018: DISCOVERY_LANDED })).toEqual([]);
+        // ncb_a: ActiveOn on a bit the pilot lacks hides it, explored.
+        const gated = { ...OBATTA, activeOn: 'b9351' };
+        expect(visibleNebulae([gated], systems, 'obatta', new Set(),
+            () => DISCOVERY_LANDED)).toEqual([]);
+        expect(visibleNebulae([gated], systems, 'obatta', new Set([9351]),
+            () => DISCOVERY_LANDED)).toEqual([gated]);
+    });
 });
 
 describe('the star map\'s nebula layer', () => {
@@ -169,37 +252,45 @@ describe('the star map\'s nebula layer', () => {
         expect(g.nebulae?.shown).toEqual([]);
     });
 
-    it('draws a visible nebula beneath every other layer, over its '
-        + 'rectangle', () => {
+    it('draws a visible nebula over the borders, MAX-blended, and under '
+        + 'everything else, over its rectangle', () => {
             const g = graph([SYNTHETIC.systems.thessaly,
                 SYNTHETIC.systems.kestrel]);
             expect(g.nebulae?.shown).toEqual([SYNTHETIC.nebulae.haze]);
             const layers = mapLayers(g);
-            expect(layers[0]).toBe(g.nebulae!.container);
+            const borders = (g as unknown as { borderGraphics: PIXI.Graphics })
+                .borderGraphics;
+            // Black background, borders, nebula, then links, dots, names...
+            expect(layers[0]).toBe(borders);
+            expect(layers[1]).toBe(g.nebulae!.container);
             const sprite = g.nebulae!.container.children[0] as PIXI.Sprite;
+            expect(sprite.blendMode).toBe(MAX_BLEND_MODE);
             const rect = nebulaRect(syntheticNebulae[0]);
             expect([sprite.x, sprite.y, sprite.width, sprite.height])
                 .toEqual([rect.x, rect.y, rect.width, rect.height]);
+            // Whole source pixels as blocks, as the original draws them.
+            expect(sprite.texture.baseTexture.scaleMode)
+                .toBe(PIXI.SCALE_MODES.NEAREST);
         });
 
     it('re-picks the picture as the map zooms', () => {
         const g = graph([SYNTHETIC.systems.kestrel]);
         const haze = SYNTHETIC.nebulae.haze;
         const slot = (n: number) => sid(nebulaPict(NEBULAE[0].id, n));
-        // The opening 177.7%: the largest of 40/80/160.
+        // The opening 177.7%: 283 x 212 px, the largest (160x120) fits.
         g.zoomBy(DEFAULT_ZOOM);
         expect(g.nebulae?.pictures.get(haze)).toBe(slot(2));
-        // Three steps out (~75%): 120 px wanted, 160 is nearer than 80.
+        // Three button steps out (~76%): 122 x 92 px, so 80x60.
         const step = 1.15 ** 2;
         g.zoomBy(1 / step ** 3);
-        expect(g.nebulae?.pictures.get(haze)).toBe(slot(2));
-        // Two more (~42%): 67 px wanted, the 80 px picture.
-        g.zoomBy(1 / step ** 2);
         expect(g.nebulae?.pictures.get(haze)).toBe(slot(1));
         const sprite = g.nebulae!.container.children[0] as PIXI.Sprite;
         expect(sprite.texture).toBe(textureOf(slot(1)));
         // The sprite still spans the nebula's rectangle.
         expect(sprite.width).toBe(nebulaRect(syntheticNebulae[0]).width);
+        // Back in: the largest again.
+        g.zoomBy(step ** 3);
+        expect(g.nebulae?.pictures.get(haze)).toBe(slot(2));
     });
 
     it('is not drawn by a graph that is not handed nebulae (the minimap, '
@@ -208,6 +299,93 @@ describe('the star map\'s nebula layer', () => {
                 SYNTHETIC.systems.kestrel, { miniMap: true });
             expect(g.nebulae).toBeUndefined();
         });
+});
+
+describe('the star map\'s stock nebulae against the reference', () => {
+    beforeAll(() => installHeadlessPixi());
+
+    const system = (id: string, position: [number, number]): SystemData =>
+        ({ ...getDefaultSystemData(), id, name: id, position });
+    // Obatta 80,80 inside Obatta Nebula; Holpa 486,120 in Holpa Nebula's
+    // top-left corner; nothing east of 587 or south of 300, as in stock.
+    const systems = [
+        system('nova:obatta', [80, 80]),
+        system('nova:holpa', [486, 120]),
+        system('nova:east', [587, 100]),
+        system('nova:south', [300, 300]),
+    ];
+    const mapOf = (g: SystemGraph) => (g as unknown as {
+        viewport: { mapContainer: PIXI.Container, size: PIXI.IPointData },
+    }).viewport;
+
+    function stockGraph() {
+        return new SystemGraph(systems, 'nova:holpa', {
+            discoveryOf: () => DISCOVERY_ENTERED,
+            nebulae: [HOLPA, OBATTA],
+            nebulaTexture: () => new PIXI.Texture(PIXI.Texture.WHITE.baseTexture),
+        });
+    }
+
+    /** `graph` zoomed to `pxPerUnit` screen pixels per map unit. */
+    function zoomTo(g: SystemGraph, pxPerUnit: number) {
+        g.zoomBy(pxPerUnit / (BASE_SCALE * g.zoom));
+        expect(BASE_SCALE * g.zoom).toBeCloseTo(pxPerUnit, 9);
+    }
+
+    it('stretches Obatta\'s 65x98 picture to 90 units tall: 213 px at '
+        + '237% (measured 212), not 232', () => {
+            const g = stockGraph();
+            zoomTo(g, 2.37);
+            expect(g.nebulae?.pictures.get('nova:129')).toBe('nova:9509');
+            const sprite = g.nebulae!.container.children
+                .find(c => c.name === 'nova:129') as PIXI.Sprite;
+            const onScreen = sprite.height * mapOf(g).mapContainer.scale.y;
+            expect(onScreen).toBeCloseTo(90 * 2.37, 6);
+            expect(Math.abs(onScreen - 212)).toBeLessThan(1.5);
+            expect(sprite.width * mapOf(g).mapContainer.scale.x)
+                .toBeCloseTo(65 * 2.37, 6);
+            // Its placement: (XPos, YPos) in system coordinates.
+            expect([sprite.x, sprite.y])
+                .toEqual([60 * BASE_SCALE, 40 * BASE_SCALE]);
+        });
+
+    it('lets the pan reach Holpa Nebula\'s lower right, past every system, '
+        + 'at the closest zoom', () => {
+            const g = stockGraph();
+            zoomTo(g, 8);
+            // Pan as far right and down as the clamp allows.
+            g.pan(-1e6, -1e6);
+            const view = mapOf(g);
+            const corner = [(430 + 251) * BASE_SCALE, (45 + 298) * BASE_SCALE];
+            const screen = corner.map((c, i) => c * g.zoom
+                + [view.mapContainer.x, view.mapContainer.y][i]);
+            expect(screen[0]).toBeLessThan(view.size.x);
+            expect(screen[1]).toBeLessThan(view.size.y);
+            expect(screen[0]).toBeGreaterThan(0);
+            expect(screen[1]).toBeGreaterThan(0);
+        });
+
+    it('widens the pan bounds by the visible nebulae only', () => {
+        const bounds = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
+        expect(boundsWithNebulae(bounds, [])).toEqual(bounds);
+        expect(boundsWithNebulae(bounds, [HOLPA, L1551])).toEqual({
+            minX: -138 * BASE_SCALE, minY: -226 * BASE_SCALE,
+            maxX: 681 * BASE_SCALE, maxY: 343 * BASE_SCALE,
+        });
+    });
+});
+
+describe('the MAX blend the nebulae are drawn with', () => {
+    it('is PIXI\'s LIGHTEN, which needs no premultiplied twin', () => {
+        // The batcher maps a sprite's blend mode through this table
+        // before the renderer looks it up; LIGHTEN must map to itself for
+        // both alpha modes, or the installed MAX would be bypassed.
+        expect(MAX_BLEND_MODE).toBe(PIXI.BLEND_MODES.LIGHTEN);
+        expect(PIXI.utils.premultiplyBlendMode[0][MAX_BLEND_MODE])
+            .toBe(MAX_BLEND_MODE);
+        expect(PIXI.utils.premultiplyBlendMode[1][MAX_BLEND_MODE])
+            .toBe(MAX_BLEND_MODE);
+    });
 });
 
 describe('the star map dialog\'s nebulae', () => {
