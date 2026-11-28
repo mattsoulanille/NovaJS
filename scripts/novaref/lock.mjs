@@ -51,6 +51,9 @@ export function lockVerdict(record, { isAlive = pidAlive, commandOf = pidCommand
     return "held";
 }
 
+/** How long an unreadable lock record is treated as held before it is stale. */
+const UNREADABLE_GRACE_MS = 10_000;
+
 function readRecord(lockPath) {
     let text;
     try {
@@ -83,16 +86,32 @@ export async function acquireLock({
     const deadline = Date.now() + waitMs;
     let tookOverStale = null;
     for (;;) {
+        // Write the whole record to a private temp file, then hard-link it
+        // into place: link() fails with EEXIST if the lock exists, and a
+        // contender can never read a half-written (empty) lock file. The
+        // old open("wx")-then-write left an empty file for a moment, which
+        // a contender read as an unreadable, so "stale", record and took
+        // over (2026-11-28: two runs on the old Mac at once).
+        const tmp = `${lockPath}.tmp-${pid}-${Date.now()}`;
+        fs.writeFileSync(tmp, JSON.stringify(record) + "\n", { mode: 0o644 });
         try {
-            const fd = fs.openSync(lockPath, "wx", 0o644);
-            fs.writeSync(fd, JSON.stringify(record) + "\n");
-            fs.closeSync(fd);
+            fs.linkSync(tmp, lockPath);
+            fs.rmSync(tmp, { force: true });
             break;
         } catch (e) {
+            fs.rmSync(tmp, { force: true });
             if (e.code !== "EEXIST") throw e;
         }
         const existing = readRecord(lockPath);
-        const verdict = lockVerdict(existing, { isAlive, commandOf, hostname });
+        let verdict = lockVerdict(existing, { isAlive, commandOf, hostname });
+        // An unreadable record may still be one being written by an older
+        // novaref (open + write): only call it stale once it has sat
+        // unreadable for a while.
+        if (verdict === "stale" && existing && existing.unreadable !== undefined) {
+            let ageMs = Infinity;
+            try { ageMs = Date.now() - fs.statSync(lockPath).mtimeMs; } catch { /* gone */ }
+            if (ageMs < UNREADABLE_GRACE_MS) verdict = "held";
+        }
         if (verdict === "free") continue; // released between open and read
         if (verdict === "stale") {
             // Rename-then-remove so two contenders can't both delete a
@@ -106,7 +125,7 @@ export async function acquireLock({
             continue;
         }
         if (Date.now() >= deadline) {
-            const err = new Error(`the old Mac is locked by pid ${existing.pid} (${existing.owner ?? "?"}, ` +
+            const err = new Error(`the old Mac is locked by pid ${existing.pid ?? "?"} (${existing.owner ?? "?"}, ` +
                 `${existing.cmd ?? "?"}, since ${existing.start ?? "?"})`);
             err.holder = existing;
             throw err;

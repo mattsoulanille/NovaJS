@@ -477,3 +477,24 @@ test("brackets: a grey (disabled) box is found for board.mjs locateBy bracket", 
     assert.ok(b, "found the grey box");
     assert.ok(Math.abs(b.cx - 400) <= 1 && Math.abs(b.cy - 200) <= 1, `centre ${b.cx},${b.cy}`);
 });
+
+test("acquireLock treats a freshly written, still-empty lock as held, not stale (2026-11-28 race)", async () => {
+    const lockPath = tmpLock();
+    fs.writeFileSync(lockPath, ""); // an older novaref between open("wx") and write
+    await assert.rejects(acquireLock({ lockPath, owner: "t", waitMs: 0 }), /locked/);
+    // Once it has sat unreadable past the grace period it is stale.
+    const old = new Date(Date.now() - 60_000);
+    fs.utimesSync(lockPath, old, old);
+    const got = await acquireLock({ lockPath, owner: "t", waitMs: 0 });
+    assert.ok(got.tookOverStale);
+    got.release();
+    assert.equal(fs.existsSync(lockPath), false);
+});
+
+test("acquireLock never leaves a temp file behind", async () => {
+    const lockPath = tmpLock();
+    const got = await acquireLock({ lockPath, owner: "t", waitMs: 0 });
+    assert.deepEqual(fs.readdirSync(path.dirname(lockPath)), ["lock"]);
+    assert.equal(JSON.parse(fs.readFileSync(lockPath, "utf8")).owner, "t");
+    got.release();
+});
