@@ -373,8 +373,9 @@ way.
   menu, f/d/v/c escort orders (attack, defend, hold, formation), b board,
   h hyperspace minimap, `\` select hyperspace destination, j jump,
   r nearest target, w next secondary, s weapon safe, z afterburner,
-  u cloak, y hail, k dump cargo, x eject, a autopilot (untested),
-  Control = secondary fire, Space = primary fire.
+  u cloak, y hail, k dump cargo (does nothing in flight, wave 55),
+  x eject, a autopilot (untested), Control = secondary fire, Space =
+  primary fire.
 - A mission with AvailLoc 3 is offered as soon as you land, in a dialog
   with **No / Yes**. `Return` presses Yes. In the spaceport, `Return` presses
   Leave. The spaceport buttons are Bar, Mission BBS, Trade Center,

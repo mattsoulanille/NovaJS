@@ -26758,6 +26758,115 @@ for 2 (inferred from the 3 t sale leaving 0).
 `09-outfitter2-cf.png`, `12-sold-blaster.png`, `16-outfitter3-cf.png`,
 `19-cloak-u.png`, `20-thrust.png`, `pilot-after-hs/`).
 
+### Jettison cargo, wave 55: the player-info dialog's Jettison Cargo asks "Are you sure you want to jettison your cargo?" (Cancel / OK), then empties the WHOLE hold, commodities and every mission's cargo, in flight and docked alike; every mission whose cargo was aboard fails at once (OnFailure runs, no record change, no FailText), the others are untouched; in flight one cargo box tumbles away and fades after about 6 s, and the status line says "Cargo jettisoned." or "Mission failed."; the `k` dump-cargo key does nothing (2026-11-27)
+
+**Question** (the hub's brief, Matthew: "In base nova, it just dumps
+everything from your cargo, failing any missions that had cargo. Worth
+checking, though."). NovaJS drew the Cargo page's Jettison Cargo greyed.
+Is there a confirmation; does it dump all cargo at once, mission cargo
+included; which missions fail and how (OnFailure, record, rating); does
+anything appear in space and can it be picked up; any message or sound;
+when is the button live (docked, empty hold, only mission cargo); and the
+Mission Info dialog's note about jettisoning.
+
+**Rig.** Stock data, no kit (its name list is full). One run-only
+plug-in, `novaref-w55-jet` (`tools/w55_jet.mjs`), overrides stock mïsn
+251 (the intro job Snowmelt offers a bare pilot on landing, AvailLoc 3)
+as **A** (3 t Medical, picked up at accept, CompGovt 128 / CompReward
+20) whose OnAccept `S630 S631 S632 S633` starts four more stock-id
+overrides: **B** 630 (2 t Industrial, mïsn Flags 0x0080 "global penalty
+when jettisoning mission cargo", CompGovt 129 / CompReward 40), **C** 631
+(no cargo), **D** 632 (1 t Metal to be picked up at Port Kane, never
+visited) and **E** 633 (0 t of cargo type 73, the tutorial's own
+"Barry Fletcher" passenger). All return to Earth; bits: OnAccept
+9375-9379, OnFailure 9360-9364, OnAbort 9365-9369, OnSuccess 9370-9374;
+QuickBrief / FailText / CompText are new dësc 4900-4924 ("FAILTEXT A"
+...). A first version returning to Snowmelt itself was never offered
+there (run 2; reliability note). Pilots (pilot-make from the game-made
+base, at Snowmelt, Shuttle 10 t): `jet_a` (2 t Food + 1 t Luxury Goods),
+`jet_s` (the same plus an Asteroid Scoop, oütf 271). Hand-driven
+(`scen/jet_landed_interactive.json`: Enter Ship, `l l`, recording,
+`loops/interactive.mjs`). Runs 1-7 in
+`~/.local/share/novaref/evidence/20261127-w55jet/run<N>/`.
+
+**Results.**
+
+| # | what | evidence |
+|---|---|---|
+| 1 | In flight with 3 t of commodities the Cargo page ("Two tons of food and one ton of luxury goods.") shows Jettison Cargo **live** beside Done. | run1 `03-p_flight_cargo.png` |
+| 2 | Docked it is live too. Clicking it opens a native Aqua alert, the EV Nova icon and **"Are you sure you want to jettison your cargo?"** with **Cancel** and a blue default **OK** (panel x 239-593, y 248-356 of the 832x604 window, centred; Cancel x 420-489, OK x 502-571, both y 323-343). Cancel leaves the dialog as it was; OK **closes the player-info dialog** and the hold is empty ("Free: 10"). Docked: no status line, nothing else. | run2 `04-landed_jet_click.png`, `05-landed_cancel.png`, `06-landed_ok.png` |
+| 3 | With nothing aboard the Cargo page reads "You don't have any cargo aboard your ship" and has **no** Jettison Cargo button. | run2 `07-p_landed_empty.png` |
+| 4 | With A-E accepted the page lists "Two tons of food, two tons of industrial goods, three tons of medical supplies, one ton of luxury goods, and Barry Fletcher." (mission cargo merged into the commodity words by type; the 0-ton passenger by name). | run3 `05-p_docked_cargo_missions.png` |
+| 5 | In flight, OK: the hold empties at once (all 8 t), the status line shows **"Mission failed."** about 5 frames after the click and holds about 4 s; one shot later `i` lists only **C** and **D**: A, B and **E** (the 0-ton passenger) are gone. No FailText, no dialog. | run4 `03-j1.png`, `05-i_after.png`, `run4_status_strip.png` |
+| 6 | The pilot after (landed back at Snowmelt, Left): OnFailure bits **9360, 9361, 9364** set (A, B, E), no OnAbort or OnSuccess bit, C and D still active; **no legal record changed anywhere** (A's CompReward 20 with gövt 128, B's 40 with 129), credits and combat rating unchanged. B's Flags 0x0080 made no difference. | run4 `pilot-left/`, `run4_left_summary.json` vs `jet_a_summary.json` |
+| 7 | Landing back at Snowmelt (not the ReturnStel) showed no FailText; mïsn 251 (A) was simply offered again. | run4 `07-relanded.png` |
+| 8 | Docked with A-E aboard: the same as in flight: hold empty, A / B / E gone, C / D left, no message. | run5 `11-landed2_ok.png`, `13-landed2_i.png` |
+| 9 | Commodities only, in flight: the status line says **"Cargo jettisoned."** (STR# 2002 0-based 288). "Non-mission cargo jettisoned." (289) was never seen. | run6 `03-s1.png`, run7 `03-b1.png` |
+| 10 | **One cargo box** (spïn 500 "Boxes", 8x8, tumbling) appears 15-20 px from the ship's centre at the OK and drifts away at **10-20 px/s relative to the ship**, in a different direction every run (up-left, up-right, up, left); it keeps the ship's own velocity (a ship coasting at 88 px/s left it trailing at 18 px/s). One box for 3 t and for 8 t. It **fades out** about 6 s later (run 7, ship at rest: full until 5.8 s, gone by 6.9 s); run 6's was still bright 8 s on when it left the screen, so the life varies. | run3 `frames/crops.png`, run4 `run4_ship_strip.png`, run6 `track/` + `tools/boxtrack.mjs`, run7 `run7_vanish.png`, `run7_fade.png` |
+| 11 | The `jet_s` Shuttle with an Asteroid Scoop did **not** pick up its own box beside it (Free stayed 10); chasing a box was not tried. | run6, run7 |
+| 12 | The original's key set binds `k` to "dumpCargo" (prefs `ShortcutRecorder dumpCargo`, keyCode 40). In flight with cargo and missions aboard, `k` (80 ms and 600 ms) did **nothing**: no prompt, no message, cargo kept. With an empty hold, nothing either. | run5 `04-k1.png`, `07-k4.png`; run4 `run4_k_status.png` |
+| 13 | Sound: not checked (the recordings carry no audio). Illegal cargo dumped before a police scan: not tried. | |
+
+Run 3's pilot was disabled and destroyed by a pirate seconds after its
+jettison (its `i` shot shows the title screen); its jettison frames (box,
+"Mission failed.") are still good.
+
+**Finding.**
+1. Jettison Cargo is live wherever the Cargo page has something to show
+   (flight and docked), asks the stock STR# 2002 #290 question in a native
+   Cancel / OK alert, and on OK closes the dialog and empties the whole
+   hold: commodities, junk and every mission's cargo, the 0-ton passenger
+   kind included.
+2. Every mission whose cargo was aboard fails on the spot: OnFailure runs,
+   it leaves the list, nothing else (no record change despite a
+   CompGovt / CompReward, no FailText, no dialog). Missions without cargo
+   or whose cargo is not yet aboard are untouched; Flags 0x0080 is inert.
+3. In flight: "Cargo jettisoned." on the status line, or "Mission
+   failed." when a mission failed; one tumbling cargo box drifts off and
+   fades after about 6 s. Docked: no message, no box.
+4. The `k` dump-cargo binding does nothing.
+5. The Mission Info dialog's comment (`N/spaceport/mission_info.ts:106`)
+   holds: the stock strings confirm a jettison and not an abort.
+
+**NovaJS before (base 14dd27b9).** `N/spaceport/player_info.ts:432-439`
+drew the button greyed and the dialog read-only; nothing could jettison.
+
+**Applied (this branch).** The `jettisonCargo` input kind
+(`N/nova_plugin/ship/jettison_cargo.ts` `applyJettisonCargo`): the
+sender's hold empties and each mission whose cargo was aboard is marked
+`failed` with the new failCause `'jettison'`; the owner's client runs the
+OnFailure at once through the existing `missionSetString` record, and the
+new outcome `'jettisoned'` costs no record (`compRewardDelta`) and shows
+no FailText (`failMission`). Docked, `jettisonDockedCargo`
+(`N/nova_plugin/missions/mission_transitions.ts`) does the same on the
+landing's working copy. The button is live with something aboard and
+opens `N/spaceport/alert_confirm.ts` (the measured layout); the status
+line and the box are display effects of the sim's `CargoJettisonedEvent`
+(`N/display/cargo_box_plugin.ts`: 16 px out, 15 px/s relative drift,
+6 s + 1 s fade). Not modelled: the 0-ton passenger (NovaJS's offer turns
+0 tons into no cargo, `N/nova_plugin/missions/mission_offer.ts:222`, so a
+jettison leaves such a mission alone); no hotkey (the original's does
+nothing). Schema: protocol 8, fingerprint 012d2e220f2f71b8 ->
+67ff6c826e092635.
+
+Confidence: high for 1-4 (five runs agree, pilot diff); medium for the
+box's life (two measurements, 6.9 s and more than 8 s).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w55jet/`
+(`run2/*/04-landed_jet_click.png` the alert, `run4/*/05-i_after.png` the
+mission list after, `run4_ship_strip.png` the box, `run4_left_summary.json`
+the pilot; plug-in `plugins/novaref-w55-jet`, tools in `tools/`,
+`recover.log`).
+
+### Not reached in wave 55 (2026-11-27)
+
+- Whether a scoop (or a tractor beam) can collect the box by flying over
+  it later; a jettison's sound; dumping illegal cargo before a police
+  scan; when "Non-mission cargo jettisoned." (STR# 2002 #289) is used
+  (never seen: perhaps escorts' holds); whether the button shows with ONLY
+  a 0-ton passenger aboard; a FailText at the ReturnStel later (the
+  missions left the list at once, so presumably none).
+
 ### Reliability notes (for anyone running the reference)
 
 - **A stock hypergate rig (wave 56):** stock gates refuse a fresh pilot
@@ -26779,6 +26888,25 @@ for 2 (inferred from the 3 t sale leaving 0).
   planet art lose a corner glyph, so `loops/board.mjs`'s four-corner
   bracket locator fails there; the evidence's `tools/board3.mjs` adds a
   three-corner fallback.
+- **An AvailLoc-3 override whose ReturnStel is the landing stellar is
+  never offered there (wave 55 run 2):** stock mïsn 251 rewritten to
+  return to Snowmelt was not offered at Snowmelt; returning to Earth it
+  was. Its OnAccept `Sxxx` list starts any number of other overridden
+  stock ids at once (AvailRandom 0 keeps them off every board), a cheap
+  way to hold several test missions without the kit.
+- **Land at once after Enter Ship, and keep in-flight work short
+  (wave 55 runs 1 and 3):** a `jet_a` Shuttle left drifting through a
+  minute of `p` dialog shots coasted out of Snowmelt's landing range,
+  and in Fomalhaut a pirate disabled and destroyed a fresh Shuttle within
+  a minute of its takeoff. Use `e wait 9000` then `l wait 1500 l wait
+  12000` (`scen/jet_landed_interactive.json`) and act right after the
+  Leave.
+- **Chaining hand-driven runs: the previous run's outbox still holds its
+  "ready" line (wave 55):** a waiter started before the next run's
+  `fresh-inbox` deleted it returned at once with the OLD run's dir. Wait
+  for the new run's directory first, then `waitready.mjs`. And never
+  `pgrep -f` a pattern your own wait loop's command line contains.
+
 - **A dësc probe needs no kit (wave 54):** override the stock dëscs of
   Snowmelt's outfitter items (oütf 184-188 and 433 -> dësc 3056-3060 and
   3305; cells at window (84 / 167 / 250 / 333, 180) and (84 / 167, 234))
