@@ -7,7 +7,7 @@ import {
 } from '../nova_plugin/missions/index.js';
 import { makeDescTextContext, playerGender } from '../nova_plugin/ncb/index.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
-import { Button } from './button.js';
+import { Button, buttonLabelWidth } from './button.js';
 import { MenuControls } from './menu_controls.js';
 import { ScrollArrow } from './scroll_arrow.js';
 import { TextWheelScroller } from './grid_wheel.js';
@@ -21,7 +21,11 @@ import { PlayerNamesComponent } from '../nova_plugin/player/index.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 import {
+    ButtonBox,
     clampScroll,
+    OFFER_BUTTON_MIN_WIDTH,
+    offerButtonBoxes,
+    offerButtonWidth,
     PICT_BUTTON_BOTTOM_GAP,
     PICT_FRAME_HEIGHT,
     PICT_FRAME_WIDTH,
@@ -29,8 +33,9 @@ import {
     PICT_TEXT_TOP,
     PICT_TEXT_WELL,
     POPUP_BUTTON_BOTTOM_GAP,
-    POPUP_BUTTON_WIDTH,
+    POPUP_BUTTON_CAP_WIDTH,
     POPUP_BUTTON_X,
+    POPUP_OKAY_WIDTH,
     POPUP_LINE_HEIGHT,
     POPUP_SCROLL_DY,
     POPUP_SCROLL_KEY_STEP,
@@ -105,6 +110,19 @@ export function popupDepartChoice(hasRefuse: boolean):
  * A withdrawn offer is neither accepted nor refused.
  */
 export type PopupChoice = 'accept' | 'refuse' | 'withdrawn';
+
+/**
+ * A popup's buttons: Accept (the default; "Okay" on a notice) and an
+ * optional Refuse. `fitTo` makes them a mission OFFER's buttons, sized to
+ * those labels (popup_layout.ts offerButtonWidth: the mïsn's accept and
+ * refuse labels, the refuse one even when no refuse button is shown);
+ * without it a lone button is the fixed 99 px Okay of a briefing / notice.
+ */
+export interface PopupButtons {
+    accept: string;
+    refuse?: string | null;
+    fitTo?: readonly string[];
+}
 
 /** Optional rendering choices for a mission-text popup. */
 export interface PopupOptions {
@@ -297,10 +315,8 @@ export class OfferPopup {
      */
     withdrawnWhen?: () => boolean;
 
-    async show(text: string, buttons: {
-        accept: string,
-        refuse?: string | null,
-    }, options: PopupOptions = {}): Promise<PopupChoice> {
+    async show(text: string, buttons: PopupButtons,
+        options: PopupOptions = {}): Promise<PopupChoice> {
         if (this.withdrawnWhen?.()) {
             return 'withdrawn';
         }
@@ -347,22 +363,38 @@ export class OfferPopup {
         };
     }
 
-    /** The Accept (and optional Refuse) buttons, laid out in the footer
-     * band: a lone button centred, a pair at the original's offsets. */
-    private addButtons(buttons: { accept: string, refuse?: string | null },
-        originX: number, buttonY: number) {
-        const acceptX = originX + (buttons.refuse
-            ? POPUP_BUTTON_X.accept : POPUP_BUTTON_X.single);
-        const accept = new Button(this.displayAssets, buttons.accept,
-            POPUP_BUTTON_WIDTH, { x: acceptX, y: buttonY });
-        accept.click.subscribe(() => this.choice.next('accept'));
-        this.container.addChild(accept.container);
-        if (buttons.refuse) {
-            const refuse = new Button(this.displayAssets, buttons.refuse,
-                POPUP_BUTTON_WIDTH,
-                { x: originX + POPUP_BUTTON_X.refuse, y: buttonY });
-            refuse.click.subscribe(() => this.choice.next('refuse'));
-            this.container.addChild(refuse.container);
+    /**
+     * The Accept (and optional Refuse) buttons, laid out in the footer
+     * band (popupButtonBoxes). An offer sized to a long label can run
+     * past the frame: the original draws its buttons inside the dialog
+     * window, so they are cut at the frame's edges (reference "Offer
+     * buttons fit their labels, 2026-11-28").
+     */
+    private addButtons(buttons: PopupButtons, frame: PIXI.Rectangle,
+        buttonY: number) {
+        const originX = frame.x;
+        const boxes = popupButtonBoxes(buttons);
+        const row = new PIXI.Container();
+        this.container.addChild(row);
+        const spill = [boxes.accept, boxes.refuse].some((box) => box
+            && (box.x < 0 || box.x + box.width > frame.width));
+        if (spill) {
+            const clip = new PIXI.Graphics().beginFill(0xffffff)
+                .drawRect(frame.x, frame.y, frame.width, frame.height)
+                .endFill();
+            this.container.addChild(clip);
+            row.mask = clip;
+        }
+        const add = (label: string, box: ButtonBox, choice: PopupChoice) => {
+            const button = new Button(this.displayAssets, label,
+                box.width - 2 * POPUP_BUTTON_CAP_WIDTH,
+                { x: originX + box.x, y: buttonY });
+            button.click.subscribe(() => this.choice.next(choice));
+            row.addChild(button.container);
+        };
+        add(buttons.accept, boxes.accept, 'accept');
+        if (buttons.refuse && boxes.refuse) {
+            add(buttons.refuse, boxes.refuse, 'refuse');
         }
     }
 
@@ -535,9 +567,8 @@ export class OfferPopup {
 
     /** Three-part frame (offer 8521-3 or briefing 8524-6), middle tiled
      * to the text's height; overlong text scrolls with the arrows. */
-    private buildTiled(text: string, buttons: {
-        accept: string, refuse?: string | null,
-    }, style: PopupStyle) {
+    private buildTiled(text: string, buttons: PopupButtons,
+        style: PopupStyle) {
         const [topId, middleId, bottomId] = POPUP_FRAMES[style];
         const { sprite, lineCount } = this.textSprite(text, POPUP_WRAP_WIDTH);
         const layout = tiledPopupLayout(lineCount);
@@ -571,7 +602,8 @@ export class OfferPopup {
 
         const buttonY =
             originY + layout.totalHeight - POPUP_BUTTON_BOTTOM_GAP;
-        this.addButtons(buttons, originX, buttonY);
+        this.addButtons(buttons, new PIXI.Rectangle(originX, originY,
+            POPUP_WIDTH, layout.totalHeight), buttonY);
         if (layout.maxScroll > 0) {
             this.addScrollButtons(sprite, textTop, layout.maxScroll,
                 originX, buttonY);
@@ -579,9 +611,8 @@ export class OfferPopup {
     }
 
     /** The fixed-size desc+pict frame (8527): text left, picture right. */
-    private buildWithPict(text: string, buttons: {
-        accept: string, refuse?: string | null,
-    }, pict: string) {
+    private buildWithPict(text: string, buttons: PopupButtons,
+        pict: string) {
         const originX = -Math.floor(PICT_FRAME_WIDTH / 2);
         const originY = -Math.floor(PICT_FRAME_HEIGHT / 2);
 
@@ -629,7 +660,8 @@ export class OfferPopup {
 
         const buttonY =
             originY + PICT_FRAME_HEIGHT - PICT_BUTTON_BOTTOM_GAP;
-        this.addButtons(buttons, originX, buttonY);
+        this.addButtons(buttons, new PIXI.Rectangle(originX, originY,
+            PICT_FRAME_WIDTH, PICT_FRAME_HEIGHT), buttonY);
         if (lineCount > visibleLines) {
             this.addScrollButtons(sprite, textTop,
                 (lineCount - visibleLines) * POPUP_LINE_HEIGHT,
@@ -659,11 +691,35 @@ function isPopupScrollKey(key: string): key is PopupScrollKey {
 export const POPUP_OKAY = 'Okay';
 
 /**
+ * Where a popup's buttons go, from the frame's left edge. An offer
+ * (`fitTo` set) sizes both to the widest of those labels
+ * (offerButtonWidth) and lays them out by offerButtonBoxes; any other
+ * pair takes the offers' minimum width; a lone notice button is the fixed
+ * briefing Okay. `measure` is the caption width in the buttons' face
+ * (injectable for specs, which have no canvas).
+ */
+export function popupButtonBoxes(buttons: PopupButtons,
+    measure: (label: string) => number = buttonLabelWidth)
+    : { accept: ButtonBox, refuse?: ButtonBox } {
+    const refusable = Boolean(buttons.refuse);
+    if (buttons.fitTo) {
+        return offerButtonBoxes(
+            offerButtonWidth(buttons.fitTo.map(measure)), refusable);
+    }
+    if (refusable) {
+        return offerButtonBoxes(OFFER_BUTTON_MIN_WIDTH, true);
+    }
+    return { accept: { x: POPUP_BUTTON_X.single, width: POPUP_OKAY_WIDTH } };
+}
+
+/**
  * The buttons a mission offer is asked with: the mïsn's own labels, or
  * Yes / No; no refuse button at all under mïsn Flags 0x0004 cantRefuse,
- * where the lone default button reads Okay. Shared by the spaceport
- * offers (presentOffers) and the in-flight ship offers
- * (ship_mission_offer_plugin.ts).
+ * where a blank accept label reads Okay. Shared by the spaceport offers
+ * (presentOffers) and the in-flight ship offers
+ * (ship_mission_offer_plugin.ts). `fitTo` holds both labels as the
+ * original holds them, the hidden refuse one too: the buttons' width
+ * comes from the wider (popup_layout.ts offerButtonWidth).
  *
  * The defaults are the original's: the wave-40 kit's text-less mïsn 1024,
  * with blank AcceptButton / RefuseButton, came up as an empty dialog with
@@ -673,24 +729,35 @@ export const POPUP_OKAY = 'Okay';
  * offer with a blank AcceptButton shows one "Okay" instead of "Yes": stock
  * mïsn 394 "Rescue Raczak" (Flags 0x1214, blank buttons) at Heraan's bar,
  * wave 13 (`20261124-w13/raczak/.../03-bar.png`), and wave 18's kit copy
- * of it. A can't-refuse mïsn WITH its own AcceptButton (stock 878 "Put
- * Down Uprising", "Go after them"; many ARPIA ones) has not been seen in
- * the original; its own label is kept (GUESS).
+ * of it. A can't-refuse mïsn WITH its own AcceptButton keeps it, alone:
+ * stock 878 "Put Down Uprising" asks with one "Go after them" and no
+ * "Let it go" (reference "Offer buttons fit their labels, 2026-11-28").
+ *
+ * A label that does not start with a letter (A-Z, a-z) counts as blank
+ * and takes the default (the original's OfferOneMission blanks it; same
+ * reference).
  */
-export const OFFER_ACCEPT_DEFAULT = 'Yes';
-export const OFFER_REFUSE_DEFAULT = 'No';
-
-export function offerButtons(offer: MissionOffer):
-    { accept: string, refuse: string | null } {
+export function offerButtons(offer: MissionOffer): PopupButtons
+    & { refuse: string | null, fitTo: readonly string[] } {
     const { acceptButton, refuseButton, flags } = offer.data;
-    if (flags.cantRefuse) {
-        return { accept: acceptButton || POPUP_OKAY, refuse: null };
-    }
+    const accept = offerLabel(acceptButton)
+        || (flags.cantRefuse ? POPUP_OKAY : OFFER_ACCEPT_DEFAULT);
+    const refuse = offerLabel(refuseButton) || OFFER_REFUSE_DEFAULT;
     return {
-        accept: acceptButton || OFFER_ACCEPT_DEFAULT,
-        refuse: refuseButton || OFFER_REFUSE_DEFAULT,
+        accept,
+        refuse: flags.cantRefuse ? null : refuse,
+        fitTo: [accept, refuse],
     };
 }
+
+/** A mïsn button label as the original keeps it: blank unless it starts
+ * with a letter. */
+function offerLabel(label: string | undefined): string {
+    return label && /^[A-Za-z]/.test(label) ? label : '';
+}
+
+export const OFFER_ACCEPT_DEFAULT = 'Yes';
+export const OFFER_REFUSE_DEFAULT = 'No';
 
 /**
  * Presents a pre-rolled list of mission offers one popup at a time (the

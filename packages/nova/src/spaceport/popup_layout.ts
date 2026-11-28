@@ -59,9 +59,10 @@ export const PICT_TEXT_TOP = 8;
 
 // ── Buttons ────────────────────────────────────────────────────────────────
 /**
- * Button middle-strip width. The end caps (PICT 7500/7502) draw ~10.5px of
- * pill each, so this makes the 94px pill every reference shows (No spans
- * x=856..950 on 1_sigma_1_offer.png).
+ * The middle strip of a briefing / notice popup's lone Okay: with the two
+ * 13 px caps, the 99 px pill of 2_sigma_1_accept.png (x=913..1011; the caps'
+ * masks are opaque edge to edge at mid-height, so the pill IS the sprite).
+ * Offer buttons are sized to their labels instead (offerButtonWidth).
  */
 export const POPUP_BUTTON_WIDTH = 73;
 /** Sprite height of a button (PICT 7500-7502 are 13x25 / 2x25). */
@@ -73,6 +74,65 @@ export const POPUP_BUTTON_CAP_WIDTH = 13;
  * a lone Okay at 173, a No/Yes pair at 116 and 225.
  */
 export const POPUP_BUTTON_X = { single: 173, refuse: 116, accept: 225 };
+/**
+ * A mission OFFER's buttons are sized to their labels (reference "Offer
+ * buttons fit their labels, 2026-11-28"; the original's OfferOneMission,
+ * read from its executable and measured on the reference Mac). Both
+ * buttons take ONE width: the wider of the two labels plus
+ * OFFER_BUTTON_LABEL_PAD, never under OFFER_BUTTON_MIN_WIDTH (the No / Yes
+ * pills of every stock offer, 100 px: No spans x=856..955 on
+ * 1_sigma_1_offer.png), and never capped: a label longer than the dialog
+ * runs the pair past the frame's edges. The refuse button keeps its right
+ * edge and grows to the left, the accept button keeps its left edge and
+ * grows to the right, and a can't-refuse offer's lone button keeps its
+ * centre. The width counts the refuse label even when no refuse button is
+ * shown (the original measures both of the mïsn's labels).
+ *
+ * The briefing / notice popups' lone Okay is NOT an offer button: a fixed
+ * 99 px pill at POPUP_BUTTON_X.single (2_sigma_1_accept.png, x=913..1011).
+ */
+export const OFFER_BUTTON_MIN_WIDTH = 100;
+export const OFFER_BUTTON_LABEL_PAD = 40;
+/** The lone Okay of a briefing or notice: a fixed 99 px pill. */
+export const POPUP_OKAY_WIDTH = POPUP_BUTTON_WIDTH + 2 * POPUP_BUTTON_CAP_WIDTH;
+/**
+ * The centre of a can't-refuse offer's lone button, from the frame's left
+ * edge (its pill is centred here at every width).
+ */
+export const OFFER_SINGLE_CENTER = 222;
+
+/** One button's sprite box: left edge from the frame's left edge, and its
+ * whole width (both caps included). */
+export interface ButtonBox {
+    x: number;
+    width: number;
+}
+
+/** The width both of an offer's buttons take, from its labels' widths. */
+export function offerButtonWidth(labelWidths: readonly number[]): number {
+    const widest = Math.max(0, ...labelWidths);
+    return Math.max(OFFER_BUTTON_MIN_WIDTH,
+        Math.round(widest) + OFFER_BUTTON_LABEL_PAD);
+}
+
+/**
+ * Where an offer's buttons go: the accept button (and the refuse button,
+ * when the offer can be refused), at `width` from offerButtonWidth. A lone
+ * button's box is the width rounded down to even, centred on
+ * OFFER_SINGLE_CENTER (the original insets its centre by half the width).
+ */
+export function offerButtonBoxes(width: number, refusable: boolean)
+    : { accept: ButtonBox, refuse?: ButtonBox } {
+    if (!refusable) {
+        const half = Math.floor(width / 2);
+        return { accept: { x: OFFER_SINGLE_CENTER - half, width: 2 * half } };
+    }
+    const refuseRight = POPUP_BUTTON_X.refuse + OFFER_BUTTON_MIN_WIDTH;
+    return {
+        accept: { x: POPUP_BUTTON_X.accept, width },
+        refuse: { x: refuseRight - width, width },
+    };
+}
 /** Frame bottom to the button sprite's top, per frame kind. */
 export const POPUP_BUTTON_BOTTOM_GAP = 32;
 export const PICT_BUTTON_BOTTOM_GAP = 30;

@@ -44,6 +44,15 @@ export const BUTTON_PICTS: readonly string[] = [...BUTTON_IDS.values()]
 // textures instead of constants (mirrored as shipyard_content.ts
 // BUTTON_CAP_WIDTH).
 const LEFT_POS = 13;
+/** A button's sprite height (the 25 px cap and middle PICTs; see the
+ * LEFT_POS note). */
+const BUTTON_HEIGHT = 25;
+/**
+ * The widest a button draws: the original's button buffer is 200 x 50
+ * (InitButtons' SetRect), and a wider button shows only its leftmost
+ * 200 px (refreshClip).
+ */
+export const BUTTON_DRAW_LIMIT = 200;
 
 /** Modifier state of a button click. `option` is the option/alt key,
  * which the original uses for bulk buy/sell quantity entry. */
@@ -108,6 +117,21 @@ export function pressTransition(currentState: ButtonState,
     }
 }
 
+/** The caption face of an enabled button (the cölr button font). */
+const NORMAL_FONT: Partial<PIXI.ITextStyle> = {
+    fontFamily: "Geneva", fontSize: 12, fill: 0xffffff, align: 'center',
+};
+
+/**
+ * How wide a caption draws in the buttons' face: what a dialog that sizes
+ * its buttons to their labels measures (the mission offer:
+ * popup_layout.ts offerButtonWidth).
+ */
+export function buttonLabelWidth(text: string): number {
+    return PIXI.TextMetrics.measureText(text,
+        new PIXI.TextStyle(NORMAL_FONT)).width;
+}
+
 export class Button {
     container = new PIXI.Container();
     private states = new Map<ButtonState, PIXI.Container>();
@@ -124,6 +148,8 @@ export class Button {
      */
     readonly press = new Subject<void>();
     private text: PIXI.Text;
+    /** The draw-box mask, when the button would show outside it. */
+    private clip?: PIXI.Graphics;
     private wrappedState: ButtonState = 'normal';
     /** The state to restore if this press is cancelled off the button. */
     private pressedFrom?: ButtonState;
@@ -140,7 +166,7 @@ export class Button {
 
     // See colr resource                                                              
     private font = new Map<ButtonState, Partial<PIXI.ITextStyle>>([
-        ["normal", { fontFamily: "Geneva", fontSize: 12, fill: 0xffffff, align: 'center' } as const],
+        ["normal", NORMAL_FONT],
         ["clicked", { fontFamily: "Geneva", fontSize: 12, fill: 0x808080, align: 'center' } as const],
         ["grey", { fontFamily: "Geneva", fontSize: 12, fill: 0x262626, align: 'center' } as const],
     ]);
@@ -164,7 +190,7 @@ export class Button {
         // A whole pixel too, so the right cap lands on the grid.
         this.width = width ?? Math.round(textMetrics.width);
 
-        const height = 25; // See the LEFT_POS note (tracker issue).
+        const height = BUTTON_HEIGHT;
         this.text.position.x = LEFT_POS + this.width / 2;
         this.text.position.y = height / 2;
 
@@ -211,6 +237,12 @@ export class Button {
                 this.wrappedState, this.pressedFrom, 'upoutside'));
         });
 
+        // The button's rect is what it answers to, overflowing caption or
+        // not (the original tracks a click by the dialog item's rect). A
+        // button cut by refreshClip's mask answers only where it draws.
+        this.container.hitArea = new PIXI.Rectangle(0, 0,
+            this.totalWidth, BUTTON_HEIGHT);
+
         for (const [name, { left, middle, right }] of this.buttonIds) {
             const stateContainer = this.states.get(name);
             if (!stateContainer) {
@@ -224,7 +256,8 @@ export class Button {
             stateContainer.addChild(leftSprite);
 
             const middleSprite = new PIXI.TilingSprite(
-                this.displayAssets.textureFromPict(middle), this.width, 25);
+                this.displayAssets.textureFromPict(middle), this.width,
+                BUTTON_HEIGHT);
             middleSprite.position.x = LEFT_POS;
             stateContainer.addChild(middleSprite);
 
@@ -235,6 +268,43 @@ export class Button {
             this.states.set(name, stateContainer);
         }
         this.container.addChild(this.text);
+        this.refreshClip();
+    }
+
+    /** The whole button, both caps included: its rect's width. */
+    private get totalWidth(): number {
+        return this.width + 2 * LEFT_POS;
+    }
+
+    /**
+     * The original draws every button into a 200 x 50 offscreen buffer
+     * (InitButtons) and copies the button's rect out of it (DrawButton),
+     * so a button shows only inside its rect, and only its leftmost
+     * BUTTON_DRAW_LIMIT px: a caption wider than the rect is cut at the
+     * rect's edges, and a button wider than 200 px (an offer sized to a
+     * long label) loses its right end, cap and all (reference "Offer
+     * buttons fit their labels, 2026-11-28": 200 px pills cut flat). The
+     * mask is only built when something would show outside that box.
+     */
+    private refreshClip() {
+        const clipWidth = Math.min(this.totalWidth, BUTTON_DRAW_LIMIT);
+        const needed = this.totalWidth > BUTTON_DRAW_LIMIT
+            || this.text.width > clipWidth;
+        if (!needed) {
+            if (this.clip) {
+                this.container.mask = null;
+                this.clip.destroy();
+                this.clip = undefined;
+            }
+            return;
+        }
+        if (!this.clip) {
+            this.clip = new PIXI.Graphics();
+            this.container.addChild(this.clip);
+            this.container.mask = this.clip;
+        }
+        this.clip.clear().beginFill(0xffffff)
+            .drawRect(0, 0, clipWidth, BUTTON_HEIGHT).endFill();
     }
 
     /**
@@ -258,6 +328,7 @@ export class Button {
      */
     setLabel(label: string) {
         this.text.text = label;
+        this.refreshClip();
     }
 
     /** The button's caption as drawn. */
@@ -276,6 +347,7 @@ export class Button {
             this.font.set(state, { ...font, ...style });
         }
         this.state = this.wrappedState;
+        this.refreshClip();
     }
 
     set state(state: ButtonState) {
