@@ -197,7 +197,7 @@ const peakShips = Math.max(...samples.map(s => s.ships));
 const fired = samples.some(s => s.dvrg > 0 || s.beams > 0);
 const growth = samples[samples.length - 1].heapMB - samples[0].heapMB;
 const ok = fired && peak <= LIMITS.shots.hard + 8
-    && peakBeams <= LIMITS.beams.hard + 8 && peakShips <= LIMITS.ships + 2
+    && peakBeams <= LIMITS.beams.hard + 8 && peakShips <= LIMITS.ships.total + 2
     && growth < HEAP_SLACK_MB && errors.length === 0;
 console.log(JSON.stringify({
     ok, rule: RULE, fired, peakProjectiles: peak, peakBeams, peakShips,
