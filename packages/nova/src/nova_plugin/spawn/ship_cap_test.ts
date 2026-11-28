@@ -20,7 +20,9 @@ import {
 } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
 import { completeEntity } from './entity_data_loader.js';
-import { insertNpc, makeNpcShip, spawnFleet } from './npc_spawn_plugin.js';
+import {
+    insertNpc, makeNpcShip, spawnFleet, spawnListedPersons,
+} from './npc_spawn_plugin.js';
 
 /**
  * Max Ships In System (ship/ship_cap.ts; EVN Bible Part I: 64): while the
@@ -180,6 +182,25 @@ describe('the system ship cap', () => {
                             velocity: new Vector(0, 0),
                         });
                     expect(fleet).toEqual([]);
+                    expect(ships(world)).toBe(cap);
+                });
+
+            it('refuses a listed person\'s arrival roll while full, and '
+                + 'lets it in with a slot free', async () => {
+                    const { world, gameData } = await makeTestWorld(rule);
+                    const fillers = await fillTo(world, gameData, cap);
+                    const listed = [{
+                        id: 'test:pers', name: 'Kit Person', subtitle: '',
+                        ship: FILLER_ID, govt: null, aiType: 1, chance: 100,
+                        listed: true,
+                    }];
+                    const ids = new IdFactory('test');
+                    expect(spawnListedPersons(world, gameData, ids,
+                        new Random(1), listed)).toBe(0);
+                    expect(ships(world)).toBe(cap);
+                    world.entities.delete(fillers[0]);
+                    expect(spawnListedPersons(world, gameData, ids,
+                        new Random(1), listed)).toBe(1);
                     expect(ships(world)).toBe(cap);
                 });
 

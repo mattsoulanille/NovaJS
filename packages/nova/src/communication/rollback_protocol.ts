@@ -1191,6 +1191,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    the derived wire schema fingerprint changes (012d2e220f2f71b8 ->
 //    67ff6c826e092635), and the join gate keeps older and newer builds
 //    apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
 //    schema-only changes): one escort, one live copy (the escort double of
 //    2026-11-27). One new serializer-registered component, EscortIdentity
 //    (`{id}`, player/player_escort.ts: the uuid a player escort had the

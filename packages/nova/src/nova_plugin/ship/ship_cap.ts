@@ -21,11 +21,16 @@ import { ShipComponent } from './ship_plugin.js';
  *
  * So two numbers per room rule (core/engine_limits.ts ShipCaps):
  *  - `others`: ships that are not a pilot's own (NPCs, escorts, bay
- *    fighters, defenders, hulks) at which a new NPC arrival (traffic, a
- *    fleet, reinforcements, a person; spawn/npc_spawn_plugin.ts) and a bay
- *    launch (escorts/bay_plugin.ts) are refused. The bay keeps its
- *    fighter: a refused launch is a refused shot, and the firing loop
- *    takes no ammo for it.
+ *    fighters, defenders, hulks) at which a new NPC arrival (traffic from
+ *    the edge or through a hypergate, a fleet, reinforcements, a person
+ *    from the 5% window or the sÿst Person list's arrival roll;
+ *    spawn/npc_spawn_plugin.ts) and a bay launch (escorts/bay_plugin.ts)
+ *    are refused. The bay keeps its fighter: a refused launch is a refused
+ *    shot, and the firing loop takes no ammo for it. MEASURED for bay
+ *    launches and mission ships only; GUESS for traffic, hypergate
+ *    arrivals and persons, which are the same kind of NPC arrival as the
+ *    mission ships the original held at 55 (a refused arrival simply does
+ *    not appear: nobody was ever evicted for a mission ship).
  *  - `total`: every ship in the system, at which a planet's defender
  *    (spawn/defense_fleet_system.ts launchDefender) is refused, as is any
  *    other spawn: it does not launch, and the fleet tries again at its
