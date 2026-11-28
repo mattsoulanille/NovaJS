@@ -28108,7 +28108,202 @@ MaxOdds 1000 tickle control (`odds1000_retal`) was not run: wave 3's
 (`runs/<variant>/2*/`: `recording.mp4`, `*-watch-*.png`; `plugins/`
 `govt363.mjs` + `zz_*.mjs`; `scen/`; `pilots/scourge_ai3.json`).
 
+### Boarding live mission ships, wave 61: the special ship of a running, unfailed mission is NEVER plundered, whatever its ShipGoal: its first in-range board is silent and spends it, every later press is "You can't board this ship."; a failed mission's ship plunders; an in-flight abort makes an unboarded special ship ordinary again but a boarded one keeps refusing (2026-11-28)
+
+**Question** (Matthew, playtest screenshot `img/mission_878_active_1128.png`:
+active "Destroy Bureau Cell"): "I don't think I should be able to board
+this mission-created ship." NovaJS let him board (plunder) a disabled RAGE
+Gunboat. Which live mission ships can be boarded, per ShipGoal and
+ShipBehav, and what about after the goal is met or the mission has ended?
+
+**The mission.** The screenshot's "Destroy Bureau Cell" is stock mïsn
+877 / 910 / 911 (ShipGoal 0, ShipBehav 0, 10 x düde 273 "RAGE Gunboat",
+shïp 373, ShipSyst -6, Accept "Go after them"), not 878: mïsn 878 is "Put
+Down Uprising" (the same ShipGoal 0 / ShipBehav 0, 6 x düde 270, ShipSyst
+-3; its Accept button is also "Go after them"). Both are destroy goals that
+attack the player.
+
+**Rig** (no kit ids; the kit plus one run-only plug-in per run,
+`evidence/20261128-w61/plugins/w61_<label>.mjs`, built by `plugins/gen.mjs`).
+The plug-in overrides wave 45's CU mission, kit mïsn 1054 (offered on
+landing at Kit Prize Port, spöb 1102, while bit 9292 is set; one düde 540
+Kit Prize Hull: the 24 px magenta pointer, armor 300, shield 0, crew 1, AI
+4 of the neutral gövt 363, ShipStart -1 on the port), changing only
+ShipGoal / ShipBehav (ReturnStel the port itself, so the mission stays
+active after its goal is met; OnShipDone / OnSuccess / OnFailure / OnAbort
+b9351-9354, run-only; a goal-2 variant adds a run-only ShipDoneText, dësc
+23061). Its file name sorts after `testkit`, so it wins (wave 58). Pilot:
+a copy of wave 45's `w45_cu` (Kit Capture Boarder, the Kit Escort Gun
+turret). Every run (`scen/w61_<label>.json`, `scen/gen.mjs`): land,
+accept, Leave, Tab, disable with the turret (`loops/disable.mjs`), `i`,
+a 40-press board sweep (`loops/board.mjs`, sweep mode, Abort on a dialog),
+then `i` and a click on Abort (the in-flight abort, wave 13), a 30-press
+sweep, `i`. Status lines read off `tools/statusstrip.sh` strips of every
+`b-`/`sw-` shot.
+
+| run | ShipGoal / ShipBehav | after the disable | the board presses | after the in-flight Abort |
+|---|---|---|---|---|
+| `g0bm1` | 0 destroy / -1 | mission active | walk presses "not close enough" until in range, then **"You can't board this ship."** at every one of the 40 sweep presses (every heading) | "You have no active missions."; the hulk stays, Disabled; 30 more presses: all "You can't board this ship." |
+| `g1bm1` | 1 disable / -1 | mission active (goal met) | the same: no dialog, every in-range press refused | the same |
+| `g3bm1` | 3 escort / -1 | **"Mission failed."**, `i`: "You have no active missions." | **the plunder dialog** (Cargo 27 t food, Credits 1,250, Energy 230, Capture Odds 75%; `37-b-25`), left with Abort | every press "You can't board this ship." (its one board spent) |
+| `g4bm1` | 4 observe / -1 | mission active | one in-range press answered with a BLANK status line (`39-b-27`), then every press refused | the same |
+| `g6bm1` | 6 chase off / -1 | mission active | every in-range press refused, no dialog | the same |
+| `gm1bm1` | -1 none / -1 | mission active | every in-range press refused, no dialog | the same |
+| `g0b0` | 0 destroy / 0 (the "Destroy Bureau Cell" case) | mission active | every in-range press refused, no dialog | the hulk stays, Disabled; every press refused |
+| `g2bm1` | 2 board / -1, no cargo (+ a ShipDoneText) | mission active | every in-range press refused; **no ShipDoneText, no dialog**; `i` still lists the mission | every press refused |
+| `g0bm1_af` | 0 destroy / -1, the Abort BEFORE any board press | mission active, then aborted ("You have no active missions.") | **the plunder dialog** (19 t food, 1,250, Energy 240, Capture Odds 75%; `41-b-27`) | (aborted first) |
+
+**The original's code.** The i386 executable keeps its symbols (title
+roll-in note): `_HandlePlayerBoardAttempt` (0x65000, read from
+`evidence/20261127-titleroll/bin/dis.txt`) settles the press in this order:
+
+1. The target ship's BOARDED flag (ship +0xb9) set and the ship carries a
+   mission index (+0xc8d2 != -1), or +0xc8de < 0 (GUESS: no person): "You
+   can't board this ship." (STR# 2002, the catch-all) — before any range
+   or alignment test.
+2. Not disabled / not boardable / dying: the same line. Then "too fast",
+   "not close enough" (the square of the sprite sizes), and the alignment
+   window: |angle difference| <= 30 degrees, parallel or anti-parallel
+   (`cmpl $0x1e`), else the press ends silently.
+3. A mission index whose mission slot is ACTIVE: mïsn PickupMode 2 ->
+   `_DoMissionCargoPickup` (any ShipGoal; a quantity of 0 always succeeds,
+   too little hold space shows a text dialog and refuses), which prints
+   "You retrieved ...", counts the ship for the board goal (mission +0x2a)
+   and sets the boarded flag; else ShipGoal 2 or 5 with the auto-abort
+   flag and a përs replacement -> the deferred rescue (+0x2a, boarded,
+   shield to 100).
+4. Otherwise, for a ship with a mission index: unless the mission slot is
+   active AND its FAILED byte is set (written by `_QuickMissionFailure`,
+   and by `_MissionObjectivesCheck` when a disable or escort goal is lost),
+   the press is a SILENT board: the boarded flag set, nothing printed,
+   nothing counted. A failed mission's ship (and any ship without a
+   mission index) goes on to the plunder dialog.
+5. `_AbortMission` clears the mission index of every special ship of that
+   mission (`movw $0xffff, 0xc8d2`), whatever its ShipBehav, and leaves
+   the ship in place.
+
+`_MissionObjectivesCheck` completes a ShipGoal 2 / 5 only when the board
+counter (+0x2a) reaches ShipCount; nothing but step 3 moves it.
+
+**Finding.**
+1. **A live special ship (mission running, not failed) is never
+   plundered, captured or stowed, whatever its ShipGoal** (-1, 0, 1, 2, 4
+   and 6 measured; ShipBehav -1 and 0): its first in-range, aligned press
+   is a SILENT board that spends its one board and credits nothing, and
+   every later press is "You can't board this ship." at any distance and
+   heading. The silent press shows nothing new on the status line (g4's
+   blank `39-b-27`; in the other runs the previous "not close enough" was
+   still up). Matthew's RAGE Gunboat must answer this way.
+2. **A goal met in flight changes nothing** (g1: the disable met the goal,
+   the mission stayed active, every press refused).
+3. **A failed mission's ship is an ordinary hulk**: g3's escort, disabled
+   by the player ("Mission failed."), opened the plunder dialog with 75%
+   capture odds (wave 11's ShipBehav-1 escort did the same).
+4. **An in-flight abort leaves every special ship where it is** (ShipBehav
+   -1 hulks too, g0/g1/g4/g6/gm1: still Disabled after the abort) and
+   makes it an ordinary ship: one the player had NOT boarded opened the
+   plunder dialog with capture odds (`g0bm1_af`), one he had already
+   boarded keeps refusing (its boarded flag).
+5. **A board goal without PickupMode-2 cargo cannot be completed by
+   boarding** (the counter moves only on a pickup): every stock ShipGoal-2
+   mission has PickupMode 2 (mïsn 155, 264/265/274/275, 350, 384, 639,
+   664, 710 with CargoQty 0, 729, 741, 832, 850/852). `g2bm1` without
+   cargo: refused after the silent board, no ShipDoneText, the mission
+   still listed.
+6. Side finding: the alignment window is 30 degrees inclusive (NovaJS
+   `AXIS_ALIGN_TOLERANCE_RAD` 29, fitted to wave 8's 28-board / 30-silent
+   reads, which a one-frame heading error explains).
+
+**NovaJS before (main fb9a4151): mismatch.** `N/nova_plugin/encounters/boarding_plugin.ts:612`
+treated only a live RESCUE ship specially (`rescueBoard`); every other
+mission ship went on to the bay stow, the plunder session and capture
+(`:774` and on), so a disabled RAGE Gunboat opened the plunder dialog
+(browser, below). An in-flight abort DELETED ShipBehav -1 / 2 special ships
+(`N/nova_plugin/missions/mission_ship_release.ts`, "not measured").
+
+**Applied** (85cdad19):
+- `N/nova_plugin/encounters/rescue_board.ts:110` `missionShipBoard` (was
+  `rescueBoard`) classifies the board of ANY live special ship: rival
+  refused; the deferred rescue; PickupMode 2 -> the retrieval, any goal,
+  0 tons included (a too-small hold is refused, without the original's
+  dialog); a failed mission (`shipObjective.failed` or the sim's
+  `failed`) -> ordinary rules (plunder); else the SILENT board
+  (`spendRescueBoard :233`, which now also writes the hull's Boarded
+  record, so the spend outlives an abort).
+- `boarding_plugin.ts:592` `missionShipBoardSpent` (`rescue_board.ts:174`): a spent live special
+  ship is refused before the range and alignment gates.
+- `mission_ship_release.ts:81`: an in-flight abort releases (untethers)
+  every special ship whatever its ShipBehav; aux ships are still deleted
+  (not measured).
+- Specs: `encounters/mission_ship_board_test.ts` (per goal: silent then
+  refused at any heading / distance; the gate in front; a rival; the
+  failed escort and a sim-failed mission plunder; an unboarded aborted
+  ship plunders, a boarded one refuses; mïsn 710's 0-ton pickup),
+  `rescue_board_test.ts` (a board goal's PickupMode-2 retrieval),
+  `mission_ship_release_test.ts`, `spaceport/mission_abort_in_flight_test.ts`.
+- Not changed: the display's ShipDoneText-on-board path
+  (`N/display/boarding_plugin.ts`, `missionWait`) is now reached only by a
+  failed mission's plunder; the non-disabled target's NovaJS line ("You
+  can only board a disabled ship.", the original's catch-all) and the
+  29-degree window.
+
+**Browser check** (headless Chrome, own server on stock data only,
+`scratchpad/w61_browser.mjs`): a crafted save with mïsn 877 active
+(ShipSyst -6) and a Raven with 8 Light Blaster Turrets; one RAGE Gunboat
+jumps in, is disabled in short bursts, the Raven flies onto it and presses
+`b`. Before (b840d896, the same boarding code as fb9a4151): the plunder dialog ("Select what to plunder from
+this ship", Credits 89,500, Capture Odds 75%, `w61_before/3-dialog.png`).
+After: press 1 nothing, presses 2 and 3 "You can't board this ship.", the
+gunboat still "Disabled", no dialog (`w61_after/4-end.png`); no console
+errors.
+
+Confidence: high for 1 (six goals, every in-range press of every sweep,
+and the code), high for 3 (one run plus wave 11), high for 4's "stays" and
+"boarded keeps refusing" (seven runs), high for the unboarded aborted
+ship's plunder (one run, and the code); medium for the silent
+first board as a separate press (the code; g4 is the only run whose shot
+caught it).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261128-w61/` (`runs/<label>/`,
+`plugins/`, `scen/`, `tools/`; `runs/g0b0_pushfail`, `g2bm1_leftover` and
+`g3bm1_disturbed` are invalid attempts: another agent's leftover game and
+plug-ins, and a lock race that moved this run's plug-ins mid-run).
+
+### Not reached in wave 61 (2026-11-28)
+
+- ShipBehav 1 and 2 under the new rule (the code reads no ShipBehav);
+  goal 5 (waves 11, 13, 19, 21 and the Refuel Trader rescue stand); a
+  PickupMode-2 board with too little hold space (the code's text dialog);
+  aux ships; a live special ship that is NOT disabled (the code's
+  catch-all line, NovaJS's own wording).
+
 ### Reliability notes (for anyone running the reference)
+
+- **The board routine is readable (wave 61):** `_HandlePlayerBoardAttempt`
+  (0x65000 in `evidence/20261127-titleroll/bin/dis.txt`) holds the whole
+  gate order, the 30-degree alignment window, the mission-ship branches
+  and the silent board; `_MissionObjectivesCheck` (0x9e79e) the goal
+  completion; `_AbortMission` / `_QuickMissionFailure` what an abort or a
+  failure does to the ships. Read them before designing a rig: wave 61's
+  "can a goal-2 ship be completed without cargo?" and "is an aborted
+  ship plunderable?" were answered there first and only confirmed by runs.
+- **A silent board is invisible in step shots (wave 61):** the status line
+  keeps the previous answer ("You're not close enough ...") or goes blank
+  (g4's `39-b-27`), so the spending press is the last walk press before the
+  first "You can't board this ship.". Read `tools/statusstrip.sh` strips
+  (every `b-`/`sw-` shot's status line, stacked) rather than single shots;
+  ffmpeg here has no `drawtext`, so the strip lists file names on stdout.
+- **board.mjs's `-dialog-` shot is AFTER the click (again, wave 61):** the
+  plunder dialog itself is in the `b-NN` shot just before it.
+- **Other agents' leftovers on seal (wave 61):** with several queues on
+  the lock, a run found EV Nova still running with another agent's
+  plug-in (`pilot push failed`) and another found a foreign kit in
+  Plug-ins (`quit EV Nova first`); a lock race also let a retry move this
+  wave's plug-ins out mid-run (fixed on main in e91dd34c). Check every
+  run's `plugin-install` lines (`replaced: false`, the right names) and its
+  offer shot's mission name, and rerun anything disturbed; chain reruns
+  behind the running queue (a waiter on its log) instead of a second
+  `--lock-wait` queue.
 
 - **A map purchase is read from the pilot, not the screen (2026-11-28):**
   Leave after the buy (the pilot is written then), `{"pull": ...}`, and
