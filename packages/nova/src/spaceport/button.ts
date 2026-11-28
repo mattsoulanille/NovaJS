@@ -1,6 +1,7 @@
 import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
+import { BUTTON_MASK_PICTS, maskedCapSprite } from './button_mask.js';
 
 /**
  * A button's visual state: enabled, held down (pressed sprite, grey text),
@@ -28,9 +29,11 @@ const BUTTON_IDS = new Map<ButtonState, {
     }],
 ]);
 
-/** Every button PICT (caps and middles, all three states). */
+/** Every button PICT (caps and middles, all three states, and the caps'
+ * masks: button_mask.ts). */
 export const BUTTON_PICTS: readonly string[] = [...BUTTON_IDS.values()]
-    .flatMap(({ left, middle, right }) => [left, middle, right]);
+    .flatMap(({ left, middle, right }) => [left, middle, right])
+    .concat(BUTTON_MASK_PICTS);
 
 // The cap sprites' inset. Tracker issue: derive this and the button
 // height below from the cap textures instead of constants (mirrored
@@ -207,7 +210,9 @@ export class Button {
             if (!stateContainer) {
                 throw new Error('Button missing state container');
             }
-            const leftSprite = this.displayAssets.spriteFromPict(left);
+            // The caps go through their masks (button_mask.ts), so the
+            // panel shows around the rounded ends as in the original.
+            const leftSprite = maskedCapSprite(this.displayAssets, left);
             leftSprite.anchor.x = 1;
             leftSprite.position.x = LEFT_POS;
             stateContainer.addChild(leftSprite);
@@ -217,7 +222,7 @@ export class Button {
             middleSprite.position.x = LEFT_POS;
             stateContainer.addChild(middleSprite);
 
-            const rightSprite = this.displayAssets.spriteFromPict(right);
+            const rightSprite = maskedCapSprite(this.displayAssets, right);
             rightSprite.position.x = LEFT_POS + this.width;
             stateContainer.addChild(rightSprite);
 
