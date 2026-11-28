@@ -593,7 +593,13 @@ async function cmdPluginInstall(args) {
     if (!local) throw new NovarefError("usage: novaref plugin install <local plug-in> [as <name>]");
     let name = path.basename(local);
     if (args[1] === "as" && args[2]) name = args[2];
-    if (/[/\n]/.test(name) || name.startsWith(".")) throw new NovarefError(`bad plug-in name ${JSON.stringify(name)}`);
+    // "Folder/Sub/File" installs inside (new) sub-folders of Plug-ins
+    // (wave 58: plug-ins in folders). The TOP-LEVEL entry is what novaref
+    // tracks and later moves out whole, so it must be absent or one novaref
+    // made; every component is a plain name.
+    const parts = name.split("/");
+    if (parts.some((p) => !p || p.startsWith(".") || /\n/.test(p))) throw new NovarefError(`bad plug-in name ${JSON.stringify(name)}`);
+    const top = parts[0];
     ensureHelper();
     if (novaPids().length) throw new NovarefError("quit EV Nova first (plug-ins load at launch)");
     const rsrcPath = local + "/..namedfork/rsrc";
@@ -601,8 +607,9 @@ async function cmdPluginInstall(args) {
     const finder = spawnSync("xattr", ["-px", "com.apple.FinderInfo", local], { encoding: "utf8" });
     const finderHex = finder.status === 0 ? finder.stdout.replace(/\s+/g, "") : null;
     const remoteFinal = `${cfg.pluginsDir}/${name}`;
-    const exists = ssh(`[ -e ${rq(remoteFinal)} ] && (grep -qxF ${shq(name)} ${INSTALLED()} 2>/dev/null && echo managed || echo REAL) || echo absent`).stdout.trim();
-    if (exists === "REAL") throw new NovarefError(`refusing: ${name} is in Plug-ins and novaref did not install it`);
+    const remoteTop = `${cfg.pluginsDir}/${top}`;
+    const exists = ssh(`[ -e ${rq(remoteTop)} ] && (grep -qxF ${shq(top)} ${INSTALLED()} 2>/dev/null && echo managed || echo REAL) || echo absent`).stdout.trim();
+    if (exists === "REAL") throw new NovarefError(`refusing: ${top} is in Plug-ins and novaref did not install it`);
     const stage = `${cfg.remoteDir}/tmp/plugin-${process.pid}`;
     let script;
     let input;
@@ -614,11 +621,13 @@ async function cmdPluginInstall(args) {
         script = `rm -f ${rq(stage)} && cat > ${rq(stage)}`;
     }
     if (finderHex) script += ` && xattr -wx com.apple.FinderInfo ${shq(finderHex)} ${rq(stage)}`;
-    script += ` && mkdir -p ${rq(cfg.pluginsDir)} && mv -f ${rq(stage)} ${rq(remoteFinal)} && ` +
-        `(grep -qxF ${shq(name)} ${INSTALLED()} 2>/dev/null || echo ${shq(name)} >> ${INSTALLED()})`;
+    // The top-level entry is recorded BEFORE anything is created under it,
+    // so a failure half-way still leaves it for uninstall / recover.
+    script += ` && (grep -qxF ${shq(top)} ${INSTALLED()} 2>/dev/null || echo ${shq(top)} >> ${INSTALLED()})` +
+        ` && mkdir -p ${rq(path.posix.dirname(remoteFinal))} && mv -f ${rq(stage)} ${rq(remoteFinal)}`;
     ssh(script, { input });
     const size = ssh(`stat -f %z ${rq(remoteFinal)}${fork.length ? "/..namedfork/rsrc" : ""}`).stdout.trim();
-    return { ok: Number(size) === input.length, cmd: "plugin install", name, remote: "~/" + remoteFinal,
+    return { ok: Number(size) === input.length, cmd: "plugin install", name: top, path: name, remote: "~/" + remoteFinal,
         bytes: Number(size), layout: fork.length ? "resource-fork" : "data-fork", finder_info: finderHex?.slice(0, 16) ?? null,
         replaced: exists === "managed" };
 }
@@ -1272,7 +1281,11 @@ async function runOnce(file, sc, { outRoot, pilotOverride, attempt }) {
     fs.copyFileSync(file, path.join(dir, "scenario.json"));
     const logPath = path.join(dir, "log.jsonl");
     const record = (obj) => fs.appendFileSync(logPath, JSON.stringify({ t: new Date().toISOString(), ...obj }) + "\n");
-    const plugins = (sc.plugins ?? []).map((p) => path.resolve(path.dirname(file), expandHome(p)));
+    // An entry is a path, or {"path": ..., "as": "Folder/Name"} to install
+    // it under another name, possibly inside sub-folders of Plug-ins.
+    const plugins = (sc.plugins ?? []).map((p) => typeof p === "string"
+        ? { path: path.resolve(path.dirname(file), expandHome(p)) }
+        : { path: path.resolve(path.dirname(file), expandHome(p.path)), as: p.as });
     const appName = sc.app ?? "stock";
     // Test plug-ins and the minimal app must never meet Matthew's pilot:
     // the title screen is made to load nothing (Last Pilot parked), and
@@ -1320,7 +1333,7 @@ async function runOnce(file, sc, { outRoot, pilotOverride, attempt }) {
         }
         const leftovers = listPluginFiles();
         if (leftovers.length) throw new NovarefError("Plug-ins is not empty before the run", { plugins: leftovers });
-        for (const p of plugins) {
+        for (const { path: p, as } of plugins) {
             let local = p;
             if (/\.(json|mjs)$/.test(p)) {
                 const { pluginMake } = await import("./plugin_make.mjs");
@@ -1328,7 +1341,7 @@ async function runOnce(file, sc, { outRoot, pilotOverride, attempt }) {
                 record({ phase: "plugin-make", result: made });
                 local = made.path;
             }
-            const r = await cmdPluginInstall([local]);
+            const r = await cmdPluginInstall([local, ...(as ? ["as", as] : [])]);
             record({ phase: "plugin-install", result: r });
             installedNames.push(r.name);
             if (!r.ok) throw new NovarefError("plug-in install failed", r);

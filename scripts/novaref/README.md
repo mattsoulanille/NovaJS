@@ -255,7 +255,12 @@ Scenario keys added for experiments:
 - `"plugins": ["../kits/testkit.mjs", "some-built-plugin"]`. A `.json`
   or `.mjs` spec is built with `plugin-make` into `<run dir>/plugins/`
   first. Built plug-ins are installed as they are. All of them come out
-  again at the end.
+  again at the end. An entry may also be `{"path": "<local>", "as":
+  "Folder/Sub/Name"}` (wave 58): it is installed under that name, inside
+  new sub-folders of Plug-ins if the name has `/`s; the top-level folder
+  is what novaref tracks and moves out whole (`plugin install <local> as
+  "Folder/Name"` does the same by hand). The original loads NO plug-in
+  inside a folder (wave 58), so this is only for load-order rigs.
 - `"app": "minimal"` launches the minimal copy instead of the real game.
 - `"park_last_pilot": true` parks `Last Pilot` even without plug-ins.
 - `"prefs": {"RunInAWindow": 0}` writes EV Nova's own prefs for this run
