@@ -1225,7 +1225,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    once; traders of a 0x0020 govt no longer stop at gates, a 0x0040
 //    govt's go into them, and a 0x0040 warship leaves by one. No input or
 //    message kind changes. The derived wire schema fingerprint changes
-//    (5e883b17be46131c -> NEWFP), and the join gate keeps
+//    (5e883b17be46131c -> 5228b7f1a5a94f40), and the join gate keeps
 //    older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
