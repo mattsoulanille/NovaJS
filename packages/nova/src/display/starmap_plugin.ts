@@ -56,6 +56,38 @@ export const SetJumpRouteEvent = new EcsEvent<{ route: string[] }>('SetJumpRoute
 export const NebulaExploredEvent =
     new EcsEvent<{ record: NebulaExplored }>('NebulaExploredEvent');
 
+/**
+ * When the nebulae's OnExplore test runs (StarmapPlugin exploreNebulae),
+ * stepped once a frame: on arrival in a system, and again on every launch
+ * from a spaceport, each as soon as the player's ship is in flight to
+ * apply the bits to (docked, it is out of the simulation). Never because
+ * the map opened: the original set the bits with the map never opened
+ * (reference_experiments.md "Star-map nebulae (nëbu), wave 53").
+ */
+export class NebulaTestSchedule {
+    private due = true;
+    private wasDocked = false;
+
+    /** Whether to test now, given this frame's docked state and whether
+     * the player's ship (its control bits) is reachable. */
+    step(docked: boolean, playerHere: boolean): boolean {
+        if (docked) {
+            this.wasDocked = true;
+            return false;
+        }
+        if (this.wasDocked) {
+            // Launch: the landing may have moved bits or discovery.
+            this.wasDocked = false;
+            this.due = true;
+        }
+        if (this.due && playerHere) {
+            this.due = false;
+            return true;
+        }
+        return false;
+    }
+}
+
 /** The `window.novaDiscovery` levers (see window_hooks.ts). */
 export interface DiscoveryHooks {
     level(id: string): DiscoveryLevel;
@@ -314,10 +346,16 @@ export const StarmapPlugin: Plugin = {
          * the pilot is not in the simulation to apply them to, and the
          * next test after lift-off finds the same nebulae visible.
          *
-         * WHEN, GUESS (reference pending): the Bible says only "whenever
-         * the nebula is tested for visibility". Tested here on arrival in
-         * a system (exploring is what reveals a nebula) and whenever the
-         * full map opens (drawing it is testing it).
+         * WHEN: NOT tied to the map. Measured (reference wave 53): with
+         * the map never opened, a land + Leave left the pilot holding the
+         * OnExplore bits of every nebula that passed ActiveOn and its
+         * explored test, Holpa's included though it was never on screen.
+         * The original ran its test "at least at a landing / launch"; the
+         * exact moment was not read. Tested here on every arrival in a
+         * system (exploring is what reveals a nebula) and on every launch
+         * (a landing's missions and map outfits move the bits and the
+         * discovery record; docked, there is no ship to apply them to).
+         * Opening the map does not test them.
          */
         const exploreNebulae = () => {
             if (disposed
@@ -375,7 +413,6 @@ export const StarmapPlugin: Plugin = {
                 return jumpRoute?.route ?? [];
             }
             opening = true;
-            exploreNebulaeWhenBuilt();
             try {
                 // Re-adding moves the map to the top of the stage: the
                 // spaceport's container is added after the starmap's,
@@ -470,18 +507,21 @@ export const StarmapPlugin: Plugin = {
         // its links (Starmap.miniMapGraph), which could drop a pick that
         // only the player's real bits make adjacent.
         let builtForPlayer = false;
+        const nebulaTests = new NebulaTestSchedule();
         world.resources.set(MiniMapResource, {
             miniMap,
             update() {
-                if (!builtForPlayer
-                    && playerComponent(world, ControlBitsComponent)) {
+                const playerHere =
+                    playerComponent(world, ControlBitsComponent) !== undefined;
+                if (!builtForPlayer && playerHere) {
                     builtForPlayer = true;
                     void refreshMiniMap();
-                    // Arrival: the system just entered may reveal one.
-                    exploreNebulaeWhenBuilt();
                 }
                 const docked = world.resources.get(DockedShipResource)
                     ?.current !== undefined;
+                if (nebulaTests.step(docked, playerHere)) {
+                    exploreNebulaeWhenBuilt();
+                }
                 const active = MenuControls.focused === undefined && !docked;
                 miniMap.update(active);
                 // Placed whenever it may be used, hidden or not, so it is

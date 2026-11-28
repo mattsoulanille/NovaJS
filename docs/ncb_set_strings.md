@@ -49,10 +49,12 @@ string: their NCB fields are tests.
   parsed only). Once stellar destruction exists, the strings are an hour's
   work on the OnDominate pattern (queue on the pilots it concerns, pay by
   record). The destruction itself is the large part (#353 section 2).
-- **nëbu OnExplore.** nëbu is parsed by novaparse's resource parser but has
-  no NovaDataInterface type. Needs a NebulaData type, a parser, and a
-  "visible" test on the explored-systems set (the Bible: re-evaluated every
-  time, bits-only). About half a day.
+- **nëbu OnExplore: now run** (missions/nebula_explored_record.ts, the
+  `nebulaExplored` input record), for every visible nebula on each arrival
+  and each launch, never because the map opened (reference wave 53: a
+  land + Leave set the bits with the map never opened;
+  display/starmap_plugin.ts NebulaTestSchedule). Bits only, as the Bible
+  asks. When exactly the original tests within a landing is unread.
 - **OnShipDone and an in-flight OnFailure: measured, now run at once.**
   Reference wave 48 ("OnShipDone and an in-flight OnFailure, read by a
   person's hail ..."): a përs whose hail offers a mission only while the

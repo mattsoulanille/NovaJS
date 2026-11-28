@@ -12,7 +12,9 @@ import {
 import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { DockedShip, DockedShipResource } from './docked_ship.js';
-import { playerComponent, playerMissionMarks } from './starmap_plugin.js';
+import {
+    NebulaTestSchedule, playerComponent, playerMissionMarks,
+} from './starmap_plugin.js';
 
 /**
  * Review findings #29 and #65: what the in-flight starmap plugin knows
@@ -137,4 +139,42 @@ describe('the starmap plugin\'s view of the player', () => {
                 .toEqual(['nova:765']);
         });
     });
+});
+
+/**
+ * When a nëbu's OnExplore runs (reference_experiments.md "Star-map nebulae
+ * (nëbu), wave 53"): with the map NEVER opened, a land + Leave left the
+ * pilot holding every visible nebula's OnExplore bit. So the test rides
+ * arrival and launch, not the map.
+ */
+describe('the nebulae\'s OnExplore schedule', () => {
+    it('tests once on arrival, as soon as the player\'s ship is here', () => {
+        const schedule = new NebulaTestSchedule();
+        expect(schedule.step(false, false)).toBeFalse();
+        expect(schedule.step(false, true)).toBeTrue();
+        expect(schedule.step(false, true)).toBeFalse();
+        expect(schedule.step(false, true)).toBeFalse();
+    });
+
+    it('tests again on every launch, never while docked', () => {
+        const schedule = new NebulaTestSchedule();
+        expect(schedule.step(false, true)).toBeTrue();
+        // Landed: the ship is out of the simulation.
+        expect(schedule.step(true, true)).toBeFalse();
+        expect(schedule.step(true, true)).toBeFalse();
+        // Leave: due, but only once the ship is back in flight.
+        expect(schedule.step(false, false)).toBeFalse();
+        expect(schedule.step(false, true)).toBeTrue();
+        expect(schedule.step(false, true)).toBeFalse();
+        expect(schedule.step(true, true)).toBeFalse();
+        expect(schedule.step(false, true)).toBeTrue();
+    });
+
+    it('waits for the launch when the world starts docked (a landed '
+        + 'pilot loaded)', () => {
+            const schedule = new NebulaTestSchedule();
+            expect(schedule.step(true, true)).toBeFalse();
+            expect(schedule.step(false, true)).toBeTrue();
+            expect(schedule.step(false, true)).toBeFalse();
+        });
 });
