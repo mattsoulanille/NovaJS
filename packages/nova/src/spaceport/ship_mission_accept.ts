@@ -605,9 +605,9 @@ export interface ShipMissionRefusal {
  * Refuses `offer` against a detached copy of the player's state — its
  * OnRefuse set string, run by the same machinery the landed boards run it
  * with (refuseOffer) — and returns the input record that reproduces the
- * result in the simulation. Null when there is nothing to carry: an empty
- * OnRefuse (every stock AvailLoc 2 mission's), or one whose every operation
- * is one the simulation cannot carry (a `Txxx`, say).
+ * result in the simulation. Null when there is nothing to carry or show: an
+ * empty OnRefuse (every stock AvailLoc 2 mission's), or one that changed
+ * nothing and asked for no line, sound or name (set_string_requests.ts).
  *
  * The motivating case is plug-in arpia's mïsn 1112, whose REFUSE button is
  * the one reading "I accept gladly." (see RefusedMissionType).
