@@ -26934,10 +26934,12 @@ to load plug-in" banner. **Not changed to match** (a maintainer ruling:
 matching means dropping every folder plug-in, which today loads Matthew's
 `arpia`, `extra-outfits` and `singularity`); this branch documents the
 folder load as a NovaJS extension in the `resolvePluginEntries` comment,
-skips a nested folder with a plain warning (`:677`), and logs the clash
-Matthew hit at load: `spöb 516 "Gravit Station" (Planet Rico) replaced
-by "Wormhole" (singularity/Singularity1.plug)`
-(`getOverrideReport`, `:441`; NovaParse `pluginOverrideLog`). On the
+skips a nested folder with a plain warning (`:751`), and logs the clash
+Matthew hit at load, one line per plug-in pair and type: `spöb: Planet
+Rico -> singularity/Singularity1.plug: 1 (516 "Gravit Station" ->
+"Wormhole")` (`getOverrideReport`, `:514`; NovaParse `pluginOverrideLog`;
+54 lines for his Plug-ins set, `NOVA_PLUGIN_OVERRIDE_LOG=full` lists
+every resource). On the
 original's rules Planet Rico would win only because Singularity is never
 loaded; moving `Singularity1.plug` to top level would make it win there
 too (`singularity...` sorts after `Planet Rico`). Confidence: high (24
