@@ -3,7 +3,6 @@ import { enhancementEnabled } from '../enhancements.js';
 import { TextWheelScroller } from './grid_wheel.js';
 import { MenuControls } from './menu_controls.js';
 import { popupKeyScroll, PopupScrollKey } from './popup_layout.js';
-import { SCROLL_ARROW } from './scroll_arrow.js';
 import { WheelSample } from './starmap_gestures.js';
 
 /**
@@ -28,8 +27,8 @@ import { WheelSample } from './starmap_gestures.js';
  *
  * The bar is NovaJS's own (the original has no scroll bar in any of these
  * panes; its mission-text popup scrolls by the round arrows of
- * scroll_arrow.ts): a near-black well with the arrows' dark-red sphere
- * colours on the thumb, so it reads as one of the landed UI's controls.
+ * scroll_arrow.ts): a near-black well with a dark-red thumb in the
+ * button discs' colours, so it reads as one of the landed UI's controls.
  *
  * {@link setText} puts the pane back at the top: a different item's text
  * starts at its own first line.
@@ -51,8 +50,10 @@ export const SCROLL_BAR = {
     minThumb: 16,
     track: 0x141414,
     trackEdge: 0x303030,
-    thumb: SCROLL_ARROW.enabled.sphere,
-    thumbCore: SCROLL_ARROW.enabled.core,
+    // The red of the button caps' discs (PICT 7500/7502), as the drawn
+    // scroll arrows used before they became the caps themselves.
+    thumb: 0x6e0000,
+    thumbCore: 0x960a0a,
 } as const;
 
 /**

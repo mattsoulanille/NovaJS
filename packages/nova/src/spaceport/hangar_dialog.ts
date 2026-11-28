@@ -269,8 +269,8 @@ export class HangarDialog {
     private itemGrid?: ItemGrid<HangarEntry>;
     private gridContainer = new PIXI.Container();
     private pictContainer = new PIXI.Container();
-    private scrollUpArrow = new ScrollArrow('up');
-    private scrollDownArrow = new ScrollArrow('down');
+    private scrollUpArrow = new ScrollArrow(this.displayAssets, 'up');
+    private scrollDownArrow = new ScrollArrow(this.displayAssets, 'down');
     private text = {
         description: new PIXI.Text('',
             { ...FONT.normal, wordWrapWidth: HANGAR_DESCRIPTION_WRAP }),

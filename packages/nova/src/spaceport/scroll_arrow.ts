@@ -1,39 +1,22 @@
 import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
+import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
+import { RoundButton } from './round_button.js';
 
 /**
- * The geometry of one scroll arrow, read off the original's outfitter
- * (outfitter/earth_outfitter_cant_have_any.png has both arrows enabled,
- * the R8 wave-5 fullscreen 03-outfitter.png and 05-shipyard.png show the
- * disabled ones):
- *
- * - a 15px SPHERE (x731..745 / x761..775 on the outfitter), dark red with
- *   a white chevron when the grid can scroll that way, near-black with a
- *   dark chevron when it can't, both with a specular glint at the upper
- *   left;
- * - sunk in a SOCKET whose rim catches the light on its lower right (the
- *   bright arc runs from the sphere's right round to its bottom, about
- *   11px out) and is in shadow on its upper left;
- * - a chevron about 10px wide and 5px tall whose stroke is ~2px, sitting
- *   a pixel right of and below the sphere's centre.
- *
- * None of this is in the frame PICT (8502): with no arrows drawn, our
- * shipyard showed plain metal where the original has two dark spheres.
- * The original's is shaded artwork we have no resource for, so this is a
- * drawn approximation of its silhouette, colours and glint.
+ * Where an arrow's position sits on its round button: callers place an
+ * arrow by its disc's centre, and the button is drawn from its caps'
+ * top-left this far up and left of it. Measured on
+ * outfitter/earth_outfitter_cant_have_any.png: the up arrow's caps start at
+ * (725, 668) — the same bezel pixels the star map's zoom buttons show at
+ * their own button origin — for the centre (738, 679.5) the outfitter
+ * places it at; the mission popup's pair on
+ * spaceport/kiniké_kont_probe_mission_offer_in_spaceport.png agrees.
  */
-export const SCROLL_ARROW = {
-    sphereRadius: 7.5,
-    socketRadius: 10.5,
-    /** The chevron's points relative to the sphere centre, pointing up;
-     * the down chevron is the same mirrored about y = 1.75. */
-    chevronUp: [-4, 4, 0.5, -0.5, 5, 4],
-    chevronWidth: 2,
-    enabled: { sphere: 0x6e0000, core: 0x960a0a, glint: 0xff8a8a, chevron: 0xffffff },
-    disabled: { sphere: 0x080808, core: 0x141414, glint: 0x8a8a8a, chevron: 0x303030 },
-    rimLight: 0x9a9a9a,
-    rimShadow: 0x101010,
-} as const;
+export const SCROLL_ARROW_PIVOT = { x: 13, y: 11.5 } as const;
+
+/** The disc's radius for hit testing, socket included. */
+const HIT_RADIUS = 10.5;
 
 /**
  * A round scroll-arrow button: the outfitter, shipyard and hire-escort
@@ -41,40 +24,44 @@ export const SCROLL_ARROW = {
  * popup too long for its frame has one right of its buttons. A grid's
  * pair is ALWAYS shown, greyed at either end of the list — the shipyard
  * capture shows both arrows disabled over a list that fits on one page.
+ *
+ * It is the original's construction (round_button.ts): the button caps
+ * without a middle, in their normal / pressed / grey states, with a
+ * chevron on the disc.
  */
 export class ScrollArrow {
-    container = new PIXI.Container();
+    readonly container: PIXI.Container;
     /** Fires on release over an enabled arrow (a grid's one row). */
     readonly click = new Subject<void>();
     /** Fires on press-down over an enabled arrow, for owners that scroll
      * while the arrow is HELD (the mission-text popup). A greyed arrow
      * ignores the press entirely. */
     readonly press = new Subject<void>();
-    private socket = new PIXI.Graphics();
-    private sphere = new PIXI.Graphics();
-    private glyph = new PIXI.Graphics();
+    private button: RoundButton;
     private wrappedEnabled = true;
 
-    constructor(private direction: 'up' | 'down') {
-        this.container.addChild(this.socket, this.sphere, this.glyph);
-        this.container.interactive = true;
-        this.container.cursor = 'pointer';
+    constructor(displayAssets: DisplayAssetDataInterface,
+        direction: 'up' | 'down') {
+        this.button = new RoundButton(displayAssets, direction);
+        // The button's own container, so pointer events reach its press
+        // state machine directly.
+        this.container = this.button.container;
+        this.container.name = `ScrollArrow:${direction}`;
+        this.container.pivot.set(SCROLL_ARROW_PIVOT.x, SCROLL_ARROW_PIVOT.y);
         // An explicit hit area so the whole socket is reliably clickable
-        // (graphics-only children can hit-test inconsistently).
-        this.container.hitArea = new PIXI.Circle(0, 0,
-            SCROLL_ARROW.socketRadius);
-        this.container.on('pointerup', () => {
+        // (and the caps' transparent corners are not).
+        this.container.hitArea = new PIXI.Circle(SCROLL_ARROW_PIVOT.x,
+            SCROLL_ARROW_PIVOT.y, HIT_RADIUS);
+        this.button.press.subscribe(() => this.press.next());
+        this.button.click.subscribe(() => {
             if (this.wrappedEnabled) {
                 this.click.next();
             }
+            this.showEnabled();
         });
-        this.container.on('pointerdown', () => {
-            if (this.wrappedEnabled) {
-                this.press.next();
-            }
-        });
-        this.drawSocket();
-        this.draw();
+        // A press greyed mid-hold (the popup reaching its end) comes back
+        // grey, not to the state it was pressed from.
+        this.container.on('pointerupoutside', () => this.showEnabled());
     }
 
     get enabled() {
@@ -86,43 +73,14 @@ export class ScrollArrow {
             return;
         }
         this.wrappedEnabled = value;
-        this.draw();
+        this.showEnabled();
     }
 
-    private drawSocket() {
-        const r = SCROLL_ARROW.socketRadius;
-        this.socket.clear()
-            // The recess: in shadow all round...
-            .lineStyle(2, SCROLL_ARROW.rimShadow, 0.8)
-            .drawCircle(0, 0, r - 1)
-            // ...with the rim lit from the lower right. (moveTo first, or
-            // the arc is joined to the pen's last point by a stray line.)
-            .lineStyle(2, SCROLL_ARROW.rimLight, 1)
-            .moveTo(r * Math.cos(-Math.PI / 3), r * Math.sin(-Math.PI / 3))
-            .arc(0, 0, r, -Math.PI / 3, Math.PI * 5 / 6);
-    }
-
-    private draw() {
-        const look = this.wrappedEnabled
-            ? SCROLL_ARROW.enabled : SCROLL_ARROW.disabled;
-        const r = SCROLL_ARROW.sphereRadius;
-        this.sphere.clear()
-            .beginFill(look.sphere).drawCircle(0, 0, r).endFill()
-            .beginFill(look.core).drawCircle(-0.5, -0.5, r - 2).endFill()
-            .beginFill(look.glint, 0.9).drawCircle(-3, -3.5, 1.6).endFill();
-
-        const [x0, y0, x1, y1, x2, y2] = SCROLL_ARROW.chevronUp;
-        // Mirror the up chevron about its own vertical middle for "down".
-        const mid = (y0 + y1) / 2;
-        const fy = (y: number) =>
-            this.direction === 'up' ? y : 2 * mid - y;
-        this.glyph.clear()
-            .lineStyle({
-                width: SCROLL_ARROW.chevronWidth, color: look.chevron,
-                join: PIXI.LINE_JOIN.MITER, cap: PIXI.LINE_CAP.BUTT,
-            })
-            .moveTo(x0, fy(y0))
-            .lineTo(x1, fy(y1))
-            .lineTo(x2, fy(y2));
+    /** The button's look for `enabled`; a held press keeps its pressed
+     * look until the release. */
+    private showEnabled() {
+        if (this.button.state !== 'clicked') {
+            this.button.state = this.wrappedEnabled ? 'normal' : 'grey';
+        }
     }
 }

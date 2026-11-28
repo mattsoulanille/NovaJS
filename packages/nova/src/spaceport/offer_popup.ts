@@ -377,7 +377,7 @@ export class OfferPopup {
     private addScrollButtons(text: PIXI.Text, top: number,
         maxOffset: number, originX: number, buttonY: number) {
         const arrow = (direction: 'up' | 'down', x: number) => {
-            const a = new ScrollArrow(direction);
+            const a = new ScrollArrow(this.displayAssets, direction);
             a.container.position.set(originX + x,
                 buttonY + POPUP_SCROLL_DY);
             return a;

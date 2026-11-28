@@ -1,4 +1,6 @@
 import 'jasmine';
+import * as PIXI from 'pixi.js';
+import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { overrideEnhancements } from '../enhancements.js';
 import { GRID_ROW_PX, TextWheelScroller, WheelRowStepper } from './grid_wheel.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
@@ -185,7 +187,11 @@ describe('ItemGrid scroll arrows (reference "Scrolling ... wave 12")', () => {
     });
 
     it('fires an arrow once, on the RELEASE, however long it is held', () => {
-        const arrow = new ScrollArrow('down');
+        const arrow = new ScrollArrow({
+            spriteFromPict: () => new PIXI.Sprite(),
+            textureFromPict: () => PIXI.Texture.EMPTY,
+            textureFromPictAsync: async () => PIXI.Texture.EMPTY,
+        } as unknown as DisplayAssetDataInterface, 'down');
         let clicks = 0;
         arrow.click.subscribe(() => clicks++);
         arrow.container.emit('pointerdown', {} as never);

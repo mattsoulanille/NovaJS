@@ -245,8 +245,8 @@ export class HireEscortDialog {
     /** The grid's scroll arrows, where the shipyard has its own: the
      * hire frame's sockets sit at exactly the shipyard's spheres'
      * centres on bar/hire_escort/select_escort.png. */
-    private scrollUpArrow = new ScrollArrow('up');
-    private scrollDownArrow = new ScrollArrow('down');
+    private scrollUpArrow = new ScrollArrow(this.displayAssets, 'up');
+    private scrollDownArrow = new ScrollArrow(this.displayAssets, 'down');
 
     constructor(private displayAssets: DisplayAssetDataInterface,
         private simulationData: SimulationGameDataInterface,

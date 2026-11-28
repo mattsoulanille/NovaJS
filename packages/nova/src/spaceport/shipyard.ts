@@ -172,8 +172,8 @@ export class Shipyard extends Menu<Entity> {
     readonly namePrompt: ShipNamePrompt;
     /** A purchase is waiting on the name prompt. */
     private naming = false;
-    private scrollUpArrow = new ScrollArrow('up');
-    private scrollDownArrow = new ScrollArrow('down');
+    private scrollUpArrow = new ScrollArrow(this.displayAssets, 'up');
+    private scrollDownArrow = new ScrollArrow(this.displayAssets, 'down');
     /** The search field over the grid (shop_search.ts). */
     private search = new ShopSearchField();
 

@@ -290,8 +290,8 @@ export class Outfitter extends Menu<Entity> {
     private buttons: { buy: Button, sell: Button, done: Button };
     // The item-grid scroll arrows, at the grid's bottom-left, greyed at
     // either end of the list (scroll_arrow.ts).
-    private scrollUpArrow = new ScrollArrow('up');
-    private scrollDownArrow = new ScrollArrow('down');
+    private scrollUpArrow = new ScrollArrow(this.displayAssets, 'up');
+    private scrollDownArrow = new ScrollArrow(this.displayAssets, 'down');
     /** The search field over the grid (shop_search.ts). */
     private search = new ShopSearchField();
 
