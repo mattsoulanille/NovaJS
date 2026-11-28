@@ -133,6 +133,23 @@ describe('playerContribute', () => {
 });
 
 describe('canBuyOutfit', () => {
+    it('sells one map a visit, and only maps are held back', () => {
+        // Reference "Map outfits ... two maps at Kel'ar Iy" (2026-11-28):
+        // after one Map was bought, both Maps greyed (the 1-jump and the
+        // 3-jump, either way round) while Auto-eject stayed buyable.
+        const oneJump = makeOutfit('nova:204', { map: 1, max: 1 });
+        const threeJump = makeOutfit('nova:434', { map: 3, max: 1 });
+        const autoEject = makeOutfit('nova:187', { max: 1 });
+        const fresh = makeContext({ outfits: [oneJump, threeJump, autoEject] });
+        const bought = { ...fresh, mapBoughtThisVisit: true };
+        for (const map of [oneJump, threeJump]) {
+            expect(canBuyOutfit(map, fresh)).toEqual({ allowed: true });
+            expect(canBuyOutfit(map, bought)).toEqual(jasmine.objectContaining(
+                { allowed: false, reason: 'mapBoughtThisVisit' }));
+        }
+        expect(canBuyOutfit(autoEject, bought)).toEqual({ allowed: true });
+    });
+
     it('allows a plain affordable outfit', () => {
         const outfit = makeOutfit('nova:200', {}, { freeMass: 10 });
         expect(canBuyOutfit(outfit, makeContext()))

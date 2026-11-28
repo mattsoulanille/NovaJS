@@ -174,6 +174,12 @@ export class Outfitter extends Menu<Entity> {
      * Taken in setInput, with visitPurchases.
      */
     private countOnEntry = new Map<string, number>();
+    /**
+     * Whether a ModType 16 map was bought this visit: the original sells
+     * one map a visit (OutfitterContext.mapBoughtThisVisit). Reset with
+     * visitPurchases in setInput.
+     */
+    private mapBoughtThisVisit = false;
     /** Every govt, sorted by id, loaded in build() for ModType 21. */
     private govts: (readonly [string, GovtData])[] = [];
     private shipData?: ShipData;
@@ -693,6 +699,7 @@ export class Outfitter extends Menu<Entity> {
                 return a !== undefined && b !== undefined && govtsAllied(a, b);
             },
             ammoSellStrings: this.ammoSellStrings,
+            mapBoughtThisVisit: this.mapBoughtThisVisit,
             // `Exxx` in an Availability: the local pilot's map knowledge,
             // read straight from the store (the shop is a player-local
             // screen; see OutfitterContext.discovery).
@@ -839,6 +846,7 @@ export class Outfitter extends Menu<Entity> {
         // player is charged once and can buy it again later somewhere
         // else. See map_outfit.ts for the whole rule and its evidence.
         if (outfit.map !== null) {
+            this.mapBoughtThisVisit = true;
             this.applyMapPurchase(outfit.map);
             this.outfits.set(outfit.id,
                 Math.max(0, this.owned(outfit.id) - units));
@@ -904,7 +912,8 @@ export class Outfitter extends Menu<Entity> {
         if (systemId === undefined) {
             return;
         }
-        applyMapOutfit(modVal, systemId, universe);
+        applyMapOutfit(modVal, systemId, universe, undefined,
+            this.controlBits);
     }
 
     /**
@@ -977,6 +986,11 @@ export class Outfitter extends Menu<Entity> {
                 return owned > 0
                     ? "Can't hold any more!"
                     : "Can't hold any of this item!";
+            // The original greys Buy on every map after one is bought this
+            // visit and shows no caption at all (reference "Map outfits
+            // ... two maps at Kel'ar Iy", 2026-11-28).
+            case 'mapBoughtThisVisit':
+                return '';
             case 'credits':
                 // The Bible/STR# have no dedicated outfitter money
                 // caption; this matches the existing captions' style.
@@ -1342,6 +1356,7 @@ export class Outfitter extends Menu<Entity> {
         // count on entry the full refund is judged against (GUESS: the
         // outfitter's opening, not the landing; wave 36).
         this.visitPurchases.clear();
+        this.mapBoughtThisVisit = false;
         this.countOnEntry = new Map(this.outfits);
         this.updateCreditsText();
         this.shipData = undefined;

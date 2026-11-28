@@ -146,6 +146,16 @@ export interface OutfitterContext {
      * no gövt data gets, and never widens a requirement's reach.
      */
     govtAllied?(govt: string, stellarGovt: string): boolean;
+    /**
+     * Whether a ModType 16 map was bought earlier in this outfitter visit.
+     * The original sells ONE map a visit: after any map purchase every map
+     * on the shelf greys (the one bought, and a different one that would
+     * still reveal new systems), while other items stay buyable; the next
+     * visit offers them again, even a map that would reveal nothing new
+     * (reference "Map outfits ... two maps at Kel'ar Iy", 2026-11-28).
+     * Absent means none was.
+     */
+    mapBoughtThisVisit?: boolean;
 }
 
 /**
@@ -384,6 +394,8 @@ export type BuyDenialReason =
     | 'notAvailableToday'
     | 'availability'
     | 'require'
+    /** A map was already bought this visit (see mapBoughtThisVisit). */
+    | 'mapBoughtThisVisit'
     | 'maxCount'
     | 'needsLauncher'
     | 'gunHardpoints'
@@ -962,6 +974,11 @@ export function canBuyOutfit(outfit: OutfitData,
 
     if (!requirementsMet(outfit, context)) {
         return denied('require', 'You lack something this requires.');
+    }
+
+    if (outfit.map !== null && context.mapBoughtThisVisit) {
+        return denied('mapBoughtThisVisit',
+            'You have already bought a map on this visit.');
     }
 
     // Deployed units (fighters still in flight) count as owned: they
