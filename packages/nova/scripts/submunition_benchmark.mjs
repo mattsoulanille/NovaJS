@@ -14,6 +14,14 @@
  * is a pure function of the code. Run before and after an optimization;
  * identical hashes prove the optimization is behavior-preserving.
  *
+ * It also takes a CENSUS: the projectiles alive after each step (peak) and
+ * every projectile ever seen per weapon id (what the shots expanded to).
+ * With the original's 128-shot cap (combat/shot_cap.ts) the peak never
+ * passes 128, e.g. the Alternate Missles "DVrger missile" (one shot = 1 +
+ * 36 x wëap 303 + 72 x wëap 299) held down:
+ *   node scripts/submunition_benchmark.mjs --weapon 'Alternate Missles:298' \
+ *       --steps 600 --fire-every 2 --shots 300 --quiet
+ *
  * Usage (from packages/nova, after `npm run build`):
  *   node scripts/submunition_benchmark.mjs
  *   node scripts/submunition_benchmark.mjs --weapon 'Gravitron Weapons:359' \
@@ -33,10 +41,11 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { GameDataAggregator } from '../dist/src/server/parsing/game_data_aggregator.js';
 import { FilesystemData } from '../dist/src/server/parsing/filesystem_data.js';
-import { completeEntity } from '../dist/src/nova_plugin/spawn/entity_data_loader.js';
+import { completeEntity, loadWeaponsGameData } from '../dist/src/nova_plugin/spawn/entity_data_loader.js';
 import { makeShip } from '../dist/src/nova_plugin/ship/make_ship.js';
 import { makeSystem } from '../dist/src/nova_plugin/make_system.js';
 import { WeaponEntries } from '../dist/src/nova_plugin/combat/fire_weapon_plugin.js';
+import { ProjectileComponent } from '../dist/src/nova_plugin/core/projectile_data.js';
 import { TargetComponent } from '../dist/src/nova_plugin/ship/target_component.js';
 import { ArmorComponent, ShieldComponent } from '../dist/src/nova_plugin/ship/health_plugin.js';
 
@@ -72,19 +81,6 @@ async function getGameData() {
     aggregator.getSettings = async (file) => JSON.parse(
         await fs.promises.readFile(path.join(packageRoot, 'settings', file), 'utf8'));
     return aggregator;
-}
-
-/** Await the WeaponEntry for `id` and its whole submunition tree so
- * getCached hits during the run (the sim never loads mid-step). */
-async function prefetchWeaponTree(world, gameData, id, seen = new Set()) {
-    if (seen.has(id)) return;
-    seen.add(id);
-    const entries = world.resources.get(WeaponEntries);
-    await entries.get(id);
-    const data = await gameData.data.Weapon.get(id);
-    for (const sub of data.submunitions ?? []) {
-        await prefetchWeaponTree(world, gameData, sub.id, seen);
-    }
 }
 
 function quantile(sorted, q) {
@@ -138,7 +134,10 @@ async function main() {
     }
     pinVictim();
 
-    await prefetchWeaponTree(world, gameData, WEAPON_ID);
+    // Staged, not bare-got: the whole submunition closure (shot sprites,
+    // hurtboxes) must be cached before the sim spawns any of it — a
+    // simulation world throws CacheMissError on an unstaged projectile.
+    await loadWeaponsGameData(world, [WEAPON_ID]);
     const weapon = world.resources.get(WeaponEntries).getCached(WEAPON_ID);
     if (!weapon) throw new Error(`No weapon entry for ${WEAPON_ID}`);
 
@@ -149,6 +148,11 @@ async function main() {
     const entityCounts = new Array(STEPS);
     const hashes = [];
     let shotsFired = 0;
+    // Census: projectiles alive per step (peak), and every projectile
+    // ever seen per weapon id (spawned) — what one shot expands to.
+    const projectileCounts = new Array(STEPS);
+    const seen = new Set();
+    const spawnedById = new Map();
 
     const t0 = performance.now();
     for (let i = 0; i < STEPS; i++) {
@@ -163,6 +167,18 @@ async function main() {
         world.step();
         stepMs[i] = performance.now() - a;
         entityCounts[i] = world.entities.size;
+        let live = 0;
+        for (const [uuid, entity] of world.entities) {
+            const projectile = entity.components.get(ProjectileComponent);
+            if (!projectile) continue;
+            live++;
+            if (!seen.has(uuid)) {
+                seen.add(uuid);
+                spawnedById.set(projectile.id,
+                    (spawnedById.get(projectile.id) ?? 0) + 1);
+            }
+        }
+        projectileCounts[i] = live;
         if ((i + 1) % HASH_EVERY === 0) {
             hashes.push(`${i + 1}:${hashWorld(world).hash}`);
         }
@@ -187,6 +203,8 @@ async function main() {
         maxMs: +sorted[sorted.length - 1].toFixed(3),
         peakEntities: Math.max(...entityCounts),
         endEntities: entityCounts[STEPS - 1],
+        peakProjectiles: Math.max(...projectileCounts),
+        spawned: Object.fromEntries([...spawnedById].sort()),
         goldenHash,
     };
 
@@ -197,7 +215,9 @@ async function main() {
         console.log(`total=${stats.totalMs}ms mean=${stats.meanMs}ms ` +
             `p50=${stats.p50Ms}ms p90=${stats.p90Ms}ms p95=${stats.p95Ms}ms ` +
             `p99=${stats.p99Ms}ms max=${stats.maxMs}ms`);
-        console.log(`peakEntities=${stats.peakEntities} endEntities=${stats.endEntities}`);
+        console.log(`peakEntities=${stats.peakEntities} endEntities=${stats.endEntities} ` +
+            `peakProjectiles=${stats.peakProjectiles}`);
+        console.log(`spawned=${JSON.stringify(stats.spawned)}`);
         console.log(`goldenHash=${stats.goldenHash}`);
         if (!QUIET) {
             // Worst 10 steps with entity counts: where the spikes are.
