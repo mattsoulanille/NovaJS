@@ -4,6 +4,7 @@
 // selected; the geometry lives in starmap_viewport.ts, the painters in
 // starmap_draw.ts / starmap_marks.ts, the pointer wiring in
 // starmap_input.ts and the pure data rules in system_graph_data.ts.
+import { NebulaData } from "novadatainterface/nebula_data";
 import { SystemData } from "novadatainterface/system_data";
 import * as PIXI from 'pixi.js';
 import { Subject } from "rxjs";
@@ -26,7 +27,10 @@ import {
 import { drawTerritory, TerritoryOwner, TerritorySite } from "./starmap_borders.js";
 import { bindMapPointer } from "./starmap_input.js";
 import { buildMissionMarks, MissionMarkTextures } from "./starmap_marks.js";
-import { MapViewport, scalePos, worldBoundsOf } from "./starmap_viewport.js";
+import { NebulaLayer, nebulaVisible } from "./starmap_nebulae.js";
+import {
+    BASE_SCALE, MapViewport, scalePos, worldBoundsOf,
+} from "./starmap_viewport.js";
 import {
     knownLinks, placeKey, reachablePaths, representativeSystems,
     resolveGateLinks, systemVisible,
@@ -157,6 +161,16 @@ export interface SystemGraphOptions {
      * player turned the `enhGateMapLanes` enhancement off.
      */
     laneColor?: number;
+    /**
+     * The nebulae (nëbu) to draw under the map, with the picture loader
+     * they are drawn through. Only the full star map passes them (GUESS,
+     * reference pending: whether the `h` minimap and the hypergate map
+     * draw them too); the graph shows the ones the player sees
+     * (starmap_nebulae.ts nebulaVisible) against {@link playerBits} and
+     * {@link discoveryOf}.
+     */
+    nebulae?: readonly NebulaData[];
+    nebulaTexture?: (pictId: string) => PIXI.Texture;
 }
 
 export class SystemGraph {
@@ -228,6 +242,9 @@ export class SystemGraph {
     /** The colour the ordinary hyperspace lanes are drawn in
      * ({@link SystemGraphOptions.laneColor}). */
     readonly laneColor: number;
+    /** The drawn nebulae, when the caller passed any
+     * ({@link SystemGraphOptions.nebulae}). */
+    readonly nebulae?: NebulaLayer;
 
     constructor(systems: SystemData[], private currentSystem: string,
         options: SystemGraphOptions = {}) {
@@ -302,7 +319,21 @@ export class SystemGraph {
         this.viewport = new MapViewport(this.container, size,
             worldBoundsOf(visibleSystems.map(s => s.position)));
         const mapContainer = this.viewport.mapContainer;
-        // Borders sit under everything; the route overlays the links.
+        if (options.nebulae && options.nebulaTexture) {
+            // Explored = entered (discovery level 1+), the set the Bible's
+            // "systems the player has explored" names (discovery.ts), plus
+            // where the player stands.
+            const explored = systems
+                .filter(s => s.id === currentSystem
+                    || this.discoveryOf(s.id) >= DISCOVERY_ENTERED)
+                .map(s => s.position);
+            this.nebulae = new NebulaLayer(options.nebulae.filter(
+                n => nebulaVisible(n, playerBits, explored)),
+                options.nebulaTexture);
+            // Beneath everything, borders included (starmap_nebulae.ts).
+            mapContainer.addChild(this.nebulae.container);
+        }
+        // Borders sit under everything else; the route overlays the links.
         mapContainer.addChild(this.borderGraphics);
         mapContainer.addChild(this.linkGraphics);
         mapContainer.addChild(this.routeGraphics);
@@ -379,6 +410,7 @@ export class SystemGraph {
             }
         }
         this.viewport.applyZoom();
+        this.nebulae?.update(BASE_SCALE * this.viewport.zoom);
     }
 
     /** The map spot each system is drawn on and clicked at: see
@@ -576,6 +608,8 @@ export class SystemGraph {
      */
     zoomBy(factor: number, centerX?: number, centerY?: number) {
         this.viewport.zoomBy(factor, centerX, centerY);
+        // A nebula's picture is chosen per map scale.
+        this.nebulae?.update(BASE_SCALE * this.viewport.zoom);
     }
 
     /** The view's zoom over the laid-out map (BASE_SCALE px per unit). */

@@ -2,6 +2,7 @@
 // (system_graph.ts) of the player's galaxy, the properties panel beside it
 // (starmap_properties.ts), the button row and the keyboard controls, and
 // hands the plotted route back to the plugin when the player presses Done.
+import { NebulaData } from "novadatainterface/nebula_data";
 import { GameDate } from "novadatainterface/player_start_data";
 import { SystemData } from "novadatainterface/system_data";
 import * as PIXI from 'pixi.js';
@@ -241,6 +242,8 @@ export const STARMAP_BUTTONS = {
 export class Starmap extends Menu<string[] /* route list of systems */> {
     private systemGraph?: SystemGraph;
     private allSystems?: SystemData[];
+    /** Every nëbu, drawn under the full map (starmap_nebulae.ts). */
+    private nebulae: NebulaData[] = [];
     private graphBitsKey?: string;
     // The original game's mission-mark icons (cicn 15000 orange active /
     // 15001 green BBS-viewed), loaded once in build() and handed to each
@@ -387,6 +390,7 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             this.displayAssets.textureFromCicn(MISSION_MARK_VIEWED_CICN),
         ]);
         this.missionMarkTextures = { active, viewed };
+        this.nebulae = await this.loadNebulae();
         // The map is built in the background with its display world, and
         // that world can be torn down while the loads above are in
         // flight — an exit to the title, or a jump, within a second of
@@ -409,6 +413,22 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         this.container.addChild(this.portsLabel, this.portsValue,
             this.hazardsLabel, this.hazardsValue, this.dateText);
         this.container.addChild(this.findDialog.container);
+    }
+
+    /**
+     * Every nëbu the data defines, for the full map's background. A
+     * nebula that fails to load is left off (and logged) like a system;
+     * a data source with no nebulae at all (an older server, a spec's
+     * stand-in assets) just draws none.
+     */
+    private async loadNebulae(): Promise<NebulaData[]> {
+        const nebulae = this.displayAssets.data?.Nebula;
+        const ids = (await this.simulationData.ids).Nebula ?? [];
+        if (!nebulae || ids.length === 0) {
+            return [];
+        }
+        return loadEachOrSkip('Starmap', 'nebula', ids,
+            id => nebulae.get(id));
     }
 
     /**
@@ -535,8 +555,11 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         // game only reveals the network on the hypergate transit map
         // (GateMap), which is where the lanes are drawn (via
         // SystemGraphOptions.gateLinks).
-        this.systemGraph = new SystemGraph(this.allSystems, this.systemId,
-            this.graphOptions(bits, missionMarks, viewedMarks, refusing));
+        this.systemGraph = new SystemGraph(this.allSystems, this.systemId, {
+            ...this.graphOptions(bits, missionMarks, viewedMarks, refusing),
+            nebulae: this.nebulae,
+            nebulaTexture: id => this.displayAssets.textureFromPict(id),
+        });
         // The original's opening scale (starmap_viewport.ts).
         this.systemGraph.zoomBy(DEFAULT_ZOOM);
         this.systemGraph.container.position.set(MAP_POS.x, MAP_POS.y);
