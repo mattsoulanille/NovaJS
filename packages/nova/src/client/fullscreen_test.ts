@@ -14,8 +14,9 @@ import {
     createPilot, loadPilotControls, savePilotControls,
 } from '../title/pilot_registry.js';
 import {
-    FullscreenButton, FullscreenEventDocument, fullscreenShortcutLabel,
-    handleFullscreenKey, isMacPlatform, toggleFullscreen, wireFullscreenButton,
+    browserKeyboardLock, FullscreenButton, FullscreenEventDocument,
+    fullscreenShortcutLabel, handleFullscreenKey, installEscapeKeyLock,
+    isMacPlatform, toggleFullscreen, wireFullscreenButton,
 } from './fullscreen.js';
 
 /**
@@ -269,6 +270,86 @@ describe('fullscreen', () => {
             expect(fullscreenShortcutLabel('Win32')).toBe('Alt+Enter');
             expect(fullscreenShortcutLabel('Linux x86_64')).toBe('Alt+Enter');
             expect(isMacPlatform(undefined)).toBeFalse();
+        });
+
+        describe('the Escape key lock (Matthew 2026-11-27)', () => {
+            function fakeKeyboard() {
+                return {
+                    lock: jasmine.createSpy('lock')
+                        .and.returnValue(Promise.resolve()),
+                    unlock: jasmine.createSpy('unlock'),
+                };
+            }
+            const settle = () => new Promise(r => setTimeout(r, 0));
+
+            it('locks Escape on entering fullscreen and unlocks on leaving',
+                () => {
+                    const doc = fakeDoc();
+                    const keyboard = fakeKeyboard();
+                    installEscapeKeyLock(doc, keyboard);
+                    // Not fullscreen at install: nothing locked.
+                    expect(keyboard.lock).not.toHaveBeenCalled();
+                    doc.fullscreenElement = {};
+                    doc.fire();
+                    expect(keyboard.lock).toHaveBeenCalledOnceWith(['Escape']);
+                    // A second change while still fullscreen: no relock.
+                    doc.fire();
+                    expect(keyboard.lock).toHaveBeenCalledTimes(1);
+                    doc.fullscreenElement = null;
+                    doc.fire();
+                    expect(keyboard.unlock).toHaveBeenCalledTimes(1);
+                    // Leaving again (no lock held) unlocks nothing more.
+                    doc.fire();
+                    expect(keyboard.unlock).toHaveBeenCalledTimes(1);
+                    // And it locks again on the next entry.
+                    doc.fullscreenElement = {};
+                    doc.fire();
+                    expect(keyboard.lock).toHaveBeenCalledTimes(2);
+                });
+
+            it('installs nothing without navigator.keyboard.lock (Safari, '
+                + 'Firefox)', () => {
+                    const doc = fakeDoc();
+                    installEscapeKeyLock(doc, undefined);
+                    expect(doc.listeners.size).toBe(0);
+                    installEscapeKeyLock(doc, {});
+                    expect(doc.listeners.size).toBe(0);
+                    // The page's own detection, in node: no navigator.keyboard.
+                    expect(browserKeyboardLock()?.lock).toBeUndefined();
+                });
+
+            it('logs a refused lock and tries again next time', async () => {
+                const doc = fakeDoc();
+                const keyboard = fakeKeyboard();
+                keyboard.lock.and.returnValue(
+                    Promise.reject(new Error('not allowed')));
+                const warn = spyOn(console, 'warn');
+                installEscapeKeyLock(doc, keyboard);
+                doc.fullscreenElement = {};
+                doc.fire();
+                await settle();
+                expect(warn).toHaveBeenCalled();
+                // The refusal holds no lock: leaving does not unlock...
+                doc.fullscreenElement = null;
+                doc.fire();
+                expect(keyboard.unlock).not.toHaveBeenCalled();
+                // ...and the next entry asks again.
+                doc.fullscreenElement = {};
+                doc.fire();
+                expect(keyboard.lock).toHaveBeenCalledTimes(2);
+            });
+
+            it('uninstalling stops following and releases a held lock',
+                () => {
+                    const doc = fakeDoc();
+                    const keyboard = fakeKeyboard();
+                    const uninstall = installEscapeKeyLock(doc, keyboard);
+                    doc.fullscreenElement = {};
+                    doc.fire();
+                    uninstall();
+                    expect(keyboard.unlock).toHaveBeenCalledTimes(1);
+                    expect(doc.listeners.size).toBe(0);
+                });
         });
     });
 

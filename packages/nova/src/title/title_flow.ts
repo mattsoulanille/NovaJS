@@ -519,8 +519,15 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
     // simply dropped (exitAllowed), not held for the arrival. The state machine knows the
     // spaceport dock; starmap/gate map/player info/hail/boarding set
     // MenuControls.focused; text inputs are caught by isTextEntryActive.
+    //
+    // A key REPEAT never quits. In fullscreen Escape reaches the game
+    // (client/fullscreen.ts installEscapeKeyLock), and holding it is how
+    // Chrome leaves fullscreen: a hold that began in the spaceport (its
+    // first press lifts off) or over a dialog (its first press closes it)
+    // must not go on to quit the game once the ship is flying.
     document.addEventListener('keydown', (event) => {
-        if (event.key !== 'Escape' || !exitAllowed(state.state)
+        if (event.key !== 'Escape' || event.repeat
+            || !exitAllowed(state.state)
             || teardownGame === undefined) {
             return;
         }

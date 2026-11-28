@@ -29,7 +29,9 @@ import { CapsLockTracker } from "./client/caps_lock.js";
 import { ClientStateSlot } from "./client/client_state.js";
 import { FleetLedger } from "./client/fleet_ledger.js";
 import { simulationControl } from "./client/frame_pump.js";
-import { installFullscreenShortcut } from "./client/fullscreen.js";
+import {
+    installEscapeKeyLock, installFullscreenShortcut,
+} from "./client/fullscreen.js";
 import { startGame } from "./client/game_session.js";
 import type { PlayerStartOptions } from "./client/player_start.js";
 import { DisplayAssetData } from "./client/gamedata/display_asset_data.js";
@@ -436,6 +438,9 @@ applyActivePilot();
 // Fullscreen (Option+Return / Alt+Enter) answers on every screen, the
 // title included, so the bindings are read now rather than at game entry.
 installFullscreenShortcut(document, () => controls);
+// ...and in fullscreen, Escape reaches the game (Chromium's Keyboard Lock;
+// a held Escape still leaves fullscreen there): client/fullscreen.ts.
+installEscapeKeyLock();
 void applyControls();
 
 if (autoEnter) {

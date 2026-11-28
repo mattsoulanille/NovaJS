@@ -168,3 +168,83 @@ export function wireFullscreenButton(button: FullscreenButton,
     doc.addEventListener('fullscreenchange', onChange);
     button.addEventListener('click', () => toggle(doc));
 }
+
+/**
+ * The Keyboard Lock API surface (navigator.keyboard, Chromium only): what
+ * {@link installEscapeKeyLock} needs, so node specs can stand in for it.
+ */
+export interface KeyboardLock {
+    lock?: (keyCodes?: string[]) => Promise<void>;
+    unlock?: () => void;
+}
+
+/** navigator.keyboard where the browser has one (Chromium), else undefined. */
+export function browserKeyboardLock(): KeyboardLock | undefined {
+    if (typeof navigator === 'undefined') {
+        return undefined;
+    }
+    return (navigator as Navigator & { keyboard?: KeyboardLock }).keyboard;
+}
+
+/**
+ * Lets Escape reach the game while it is fullscreen (Matthew 2026-11-27:
+ * "Is there any way to make `esc` not do that?").
+ *
+ * A browser leaves element fullscreen on Escape and never delivers the key
+ * to the page, so in fullscreen Escape could not quit to the title from
+ * flight, leave the spaceport, or close a venue, the map or the hail
+ * window, as it does windowed (and as the original's does). With the
+ * Keyboard Lock API, `navigator.keyboard.lock(['Escape'])` while the
+ * document is fullscreen delivers it as an ordinary key; HOLDING Escape
+ * (about 2 s) still leaves fullscreen in Chrome, which says so in its
+ * "Press and hold Esc to exit full screen" bubble, and Option+Return
+ * (Alt+Enter) and the Preferences button still toggle it.
+ *
+ * Follows `fullscreenchange`, so fullscreen entered any way the page asked
+ * for it (the shortcut, the Preferences button) locks, and leaving it
+ * however it ends (the shortcut, a held Escape, the browser) unlocks. The
+ * browser's own F11 / View > Enter Full Screen is not element fullscreen,
+ * sets no fullscreenElement, and is left alone (the lock would not engage
+ * there anyway).
+ *
+ * Feature-detected: where the browser has no navigator.keyboard.lock
+ * (Safari, Firefox) this installs nothing and Escape keeps leaving
+ * fullscreen. A refused lock (an insecure origin, a frame) is logged and
+ * otherwise ignored. Returns the uninstaller.
+ */
+export function installEscapeKeyLock(doc: FullscreenEventDocument = document,
+    keyboard: KeyboardLock | undefined = browserKeyboardLock()): () => void {
+    const lock = keyboard?.lock;
+    if (!keyboard || typeof lock !== 'function') {
+        return () => undefined;
+    }
+    let locked = false;
+    const release = () => {
+        if (locked) {
+            locked = false;
+            keyboard.unlock?.call(keyboard);
+        }
+    };
+    const onChange = () => {
+        if (!isFullscreen(doc)) {
+            release();
+            return;
+        }
+        if (locked) {
+            return;
+        }
+        locked = true;
+        Promise.resolve(lock.call(keyboard, ['Escape']))
+            .catch((e: unknown) => {
+                locked = false;
+                console.warn('Keyboard lock refused:', e);
+            });
+    };
+    doc.addEventListener('fullscreenchange', onChange);
+    // Already fullscreen when installed (never at boot, but cheap).
+    onChange();
+    return () => {
+        doc.removeEventListener('fullscreenchange', onChange);
+        release();
+    };
+}
