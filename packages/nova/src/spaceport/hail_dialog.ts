@@ -223,9 +223,9 @@ export interface EscortManagement {
     provenance: 'hired' | 'captured';
     /**
      * The upgrade ON OFFER, absent when there is none — either the class
-     * has no shïp UpgradeTo at all, or the player does not meet the target
-     * class's own Require / Availability gates (hail_dialog_plugin's
-     * escortUpgradeOffer). Both cases read as
+     * has no shïp UpgradeTo at all, or the target class's own Availability
+     * test fails for the player (hail_dialog_plugin's escortUpgradeOffer;
+     * Require is NOT a gate there, measured). Both cases read as
      * {@link CANNOT_UPGRADE_TEXT} in the readout, and grey the button.
      *
      * `toShip` is the target class's global id, carried so the press can

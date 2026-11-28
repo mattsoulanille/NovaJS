@@ -110,7 +110,7 @@ export function shipRequirementsMet(requireHex: string,
  * default — the same policy as the outfitter's availabilityTest.
  */
 export function shipAvailabilityPasses(ship: ShipData,
-    ctx: ShipyardContext): boolean {
+    ctx: Pick<ShipyardContext, 'bits'>): boolean {
     if (!ship.availability) {
         return true;
     }

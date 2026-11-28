@@ -23,8 +23,7 @@ import {
     EscortCommandComponent, ControlledByComponent, GameDateComponent,
 } from '../nova_plugin/player/index.js';
 import {
-    ShipDataComponent, TargetComponent, DisabledComponent, OutfitsStateComponent,
-    FuelComponent,
+    ShipDataComponent, TargetComponent, DisabledComponent, FuelComponent,
 } from '../nova_plugin/ship/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
@@ -47,7 +46,6 @@ import {
 import {
     commButtonSlots, escortButtonSlots,
 } from '../spaceport/hail_layout.js';
-import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
 import { ActiveRanksComponent, ControlBitsComponent } from '../nova_plugin/ncb/index.js';
 import { getDefaultRankData } from 'novadatainterface/rank_data';
 import {
@@ -192,11 +190,11 @@ describe('computeContext: bay fighters vs hired escorts (SourceComponent)',
  *
  * The prices come off the escort's CURRENT class (escort_fees.ts), the
  * queued deals off its synced ownership marker, and the UPGRADE OFFER off
- * the target class's own shïp gates. Those gates are the part worth pinning:
- * an escort upgrade hands the player a hull, so the hull's Require flags
- * and its Availability control-bit test apply exactly as they would in a
- * shipyard — while the SHOP-side gates (tech level, BuyRandom) do not,
- * because the deal is struck over a comm channel with no stellar involved.
+ * the target class's shïp Availability test. That gate is the part worth
+ * pinning, with what is NOT gated: the original (reference wave 57) refuses
+ * an upgrade whose target fails Availability, but offers one whose target
+ * the player lacks the Require bits for, whose AppearOn fails, or whose
+ * TechLevel no stellar stocks.
  */
 describe('computeContext: the escort management offer', () => {
     const UPGRADE = 'nova:200';
@@ -235,15 +233,30 @@ describe('computeContext: the escort management offer', () => {
             expect(escort?.queuedDeal).toBeUndefined();
         });
 
-    it('withdraws the offer — "This ship class cannot be upgraded." — when '
-        + 'the player lacks the target hull\'s REQUIRE bits, and brings it '
-        + 'back when they are granted', async () => {
-            // shïp Require (Bible ~:2620): "If for each 1 bit in the
-            // Require fields there is a matching 1 bit in one or more of
-            // the Contribute fields, the ship can be purchased." The escort
-            // upgrade hands the player that hull, so the same rule holds.
+    it('does NOT withdraw the offer when the player lacks the target '
+        + 'hull\'s REQUIRE bits', async () => {
+            // Measured (reference wave 57): a captured Valkyrie;Second-Hand
+            // (371 -> 137, Require 0x300000000) was offered its upgrade and
+            // it settled, with no license aboard. The shipyard's Require
+            // rule (Bible ~:2620) is not applied to an escort upgrade.
             const { world, gameData } =
                 escortWorld(() => { }, { require: '0x4' });
+            const escort = (await computeContext(world, gameData))
+                ?.context.escort;
+            expect(escort?.upgrade)
+                .toEqual({ toShip: UPGRADE, cost: 50_000, canAfford: true });
+            expect(escortButtonSlots(escort!)[0])
+                .toEqual({ slot: 'upgradeEscort', enabled: true });
+        });
+
+    it('withdraws the offer — "This ship class cannot be upgraded." — when '
+        + 'the target hull\'s AVAILABILITY test fails, and brings it back '
+        + 'when the bit is set', async () => {
+            // Measured (wave 57): Rebel IDA Frigate 412 -> 413 (Availability
+            // b9999) and Pirate Valkyrie 289 -> 291 overridden to b9999 both
+            // read "This ship class cannot be upgraded." with Upgrade greyed.
+            const { world, gameData } =
+                escortWorld(() => { }, { availability: 'b900' });
             const player = world.entities.get(PLAYER)!;
             const before = (await computeContext(world, gameData))
                 ?.context.escort;
@@ -251,44 +264,20 @@ describe('computeContext: the escort management offer', () => {
             expect(before && escortReadout(before).split('\n')[0])
                 .toBe(CANNOT_UPGRADE_TEXT);
 
-            // Grant it — through an OUTFIT's Contribute, the way the
-            // shipyard's own playerContributeOf reads it — and the price
-            // appears, with a live button.
-            gameData.data.Outfit.map.set('nova:300',
-                { ...getDefaultOutfitData(), id: 'nova:300',
-                    contribute: '0x4' });
-            await gameData.data.Outfit.get('nova:300');
-            player.components.set(OutfitsStateComponent,
-                new Map([['nova:300', { count: 1 }]]) as never);
-
-            const after = (await computeContext(world, gameData))
-                ?.context.escort;
-            expect(after?.upgrade)
-                .toEqual({ toShip: UPGRADE, cost: 50_000, canAfford: true });
-            expect(escortButtonSlots(after!)[0])
-                .toEqual({ slot: 'upgradeEscort', enabled: true });
-        });
-
-    it('withdraws the offer when the target hull\'s AVAILABILITY test '
-        + 'fails, and brings it back when the bit is set', async () => {
-            const { world, gameData } =
-                escortWorld(() => { }, { availability: 'b900' });
-            const player = world.entities.get(PLAYER)!;
-            expect((await computeContext(world, gameData))
-                ?.context.escort?.upgrade).toBeUndefined();
-
             player.components.set(ControlBitsComponent,
                 new Set([900]) as never);
             expect((await computeContext(world, gameData))
                 ?.context.escort?.upgrade?.toShip).toBe(UPGRADE);
         });
 
-    it('does NOT apply the shop-side gates: a target class no stellar '
-        + 'stocks is still upgradeable', async () => {
-            // Tech level and BuyRandom say what a particular shipyard has
-            // on the lot; an escort upgrade is arranged in deep space.
+    it('does NOT apply the shop-side gates or AppearOn: a target class no '
+        + 'stellar stocks is still upgradeable', async () => {
+            // Measured (wave 57): Lightning 135 -> 191 (TechLevel 100) and
+            // Arachnid 158 -> 311 (AppearOn !b1303, b1303 set) were offered.
             const { world, gameData } = escortWorld(() => { },
-                { techLevel: 999, buyRandom: 0 });
+                { techLevel: 999, buyRandom: 0, appearOn: '!b900' });
+            world.entities.get(PLAYER)!.components.set(ControlBitsComponent,
+                new Set([900]) as never);
             expect((await computeContext(world, gameData))
                 ?.context.escort?.upgrade?.toShip).toBe(UPGRADE);
         });

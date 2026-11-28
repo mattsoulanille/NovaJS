@@ -332,8 +332,8 @@ export interface EscortButtonSlot {
  *    queued. Un-queueing must never be refusable — a player who has since
  *    gone broke would otherwise be stuck with a deal they cannot cancel.
  *    Otherwise it is "Upgrade Escort", offered when the class HAS an
- *    upgrade on offer (a shïp UpgradeTo whose class the player is allowed
- *    — see hail_dialog_plugin's escortUpgradeOffer) AND the player can
+ *    upgrade on offer (a shïp UpgradeTo whose class's Availability test
+ *    passes — see hail_dialog_plugin's escortUpgradeOffer) AND the player can
  *    afford its EscUpgrdCost today. An unaffordable upgrade is greyed
  *    rather than hidden, so the price in the readout above still has a
  *    button to belong to; affordability is re-checked when the deal

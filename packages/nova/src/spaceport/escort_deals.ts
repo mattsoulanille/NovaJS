@@ -110,12 +110,12 @@ import { formatPrice } from './format_price.js';
  *
  * TWO THINGS ARE DELIBERATELY NOT RE-CHECKED HERE.
  *
- *  - THE TARGET HULL'S OWN GATES (shïp Require / Availability, which
+ *  - THE TARGET HULL'S OWN GATE (shïp Availability, which
  *    hail_dialog_plugin's escortUpgradeOffer applies before the button is
- *    offered at all). They gate the OFFER, the way they gate a shipyard's
- *    grid; a deal already struck is not re-litigated because the player
- *    sold the outfit whose Contribute unlocked the class. If that turns
- *    out to be wrong, this is where the check goes — the gates are pure
+ *    offered at all; the original does not check Require, AppearOn or
+ *    TechLevel there either — wave 57). It gates the OFFER; a deal already
+ *    struck is not re-litigated because a bit changed since. If that turns
+ *    out to be wrong, this is where the check goes — the gate is pure
  *    (shipyard_stock_rules.ts) and the docked player entity is right here.
  *  - THE SETTLING STELLAR'S PriceMod. The comm box quoted the player a
  *    figure before they committed; see escort_fees.ts's ruling.

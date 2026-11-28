@@ -63,7 +63,8 @@ import {
 } from '../nova_plugin/player/index.js';
 import { targetIdentity } from './target_identity.js';
 import {
-    ActiveRanksComponent, ranksAllowAssistance, ranksGiveFreeFuel,
+    ActiveRanksComponent, ControlBitsComponent, ranksAllowAssistance,
+    ranksGiveFreeFuel,
 } from '../nova_plugin/ncb/index.js';
 import {
     PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
@@ -79,9 +80,8 @@ import {
 import {
     escortDailyFee, escortSellValue, escortUpgradeCost,
 } from '../spaceport/escort_fees.js';
-import { shipGateContext } from '../spaceport/ship_gate_context.js';
 import {
-    ShipyardContext, shipStockGatesPass,
+    ShipyardContext, shipAvailabilityPasses,
 } from '../spaceport/shipyard_stock_rules.js';
 import { ShipData } from 'novadatainterface/ship_data';
 import {
@@ -813,29 +813,34 @@ export function commClassName(ship: Pick<ShipData, 'name' | 'commName'>):
  * Whether the player may be OFFERED an upgrade to `toShip`, and its
  * ShipData when they may.
  *
- * The class has to be one the player would be allowed to have. The original
- * gates hulls on two things that have nothing to do with a shop's stock —
- * the shïp's own Require flags and its Availability control-bit expression
- * (EVN Bible ~:2588/~:2620) — and an escort upgrade hands the player one of
- * those hulls, so the same two gates apply. This calls the SHIPYARD's own
- * {@link shipStockGatesPass} with NO planet context, which is exactly:
+ * The ONE gate is the target shïp's Availability control-bit expression
+ * (EVN Bible ~:2588), tested against the player's bits — the shipyard's own
+ * {@link shipAvailabilityPasses}. When it fails the comm box reads "This
+ * ship class cannot be upgraded." and Upgrade Escort is greyed. Measured on
+ * the original (docs/reference_experiments.md, "Escort upgrade gates, wave
+ * 57"), captured escorts at a shipyard stellar, 50M credits:
  *
- *   Require    met by the player's Contribute (hull, outfits, ranks, crons);
- *   Availability   its control-bit test passes;
- *   TechLevel  NOT applied — `ctx.planet` undefined means "no shipyard",
- *              which stocks everything.
+ *   Availability "b9999" (unset)   REFUSED — stock Rebel IDA Frigate
+ *              412 -> 413, and stock Pirate Valkyrie 289 -> 291 with 291
+ *              overridden to "b9999" run-only, as the Singularity plug-in
+ *              does; the same 289 -> 291 without the override is offered;
+ *   Require    NOT a gate — Valkyrie;Second-Hand 371 -> 137 (Require
+ *              0x300000000, no license aboard) was offered and settled;
+ *   AppearOn   NOT a gate — Arachnid 158 -> 311 (AppearOn !b1303 with
+ *              b1303 set) was offered and settled;
+ *   TechLevel  NOT a gate — Lightning 135 -> 191 (TechLevel 100) offered.
  *
- * Tech level and the BuyRandom day roll are deliberately left out: they say
- * what a PARTICULAR shipyard has on the lot today, and an escort upgrade is
- * arranged over a comm channel in deep space with no stellar involved. What
- * is left is the two gates that are about the PLAYER rather than the shop.
+ * So the shipyard's other gates (Require, tech level, the BuyRandom roll)
+ * are deliberately NOT applied here, even though an upgrade hands the
+ * player a hull.
  *
  * A class the data set cannot produce is refused for the same reason a
  * shop skips an unloadable hull — better to offer nothing than to promise
  * a ship that cannot be built.
  */
 export async function escortUpgradeOffer(toShip: string | null,
-    ctx: ShipyardContext, gameData: SimulationGameDataInterface):
+    ctx: Pick<ShipyardContext, 'bits'>,
+    gameData: SimulationGameDataInterface):
     Promise<ShipData | undefined> {
     if (toShip === null) {
         return undefined;
@@ -844,7 +849,7 @@ export async function escortUpgradeOffer(toShip: string | null,
     if (!upgraded) {
         return undefined;
     }
-    return shipStockGatesPass(upgraded, ctx) ? upgraded : undefined;
+    return shipAvailabilityPasses(upgraded, ctx) ? upgraded : undefined;
 }
 
 export async function computeContext(world: World,
@@ -1040,19 +1045,14 @@ export async function computeContext(world: World,
             const upgradeTo = shipData?.escortUpgradeShip ?? null;
             const upgradeCost = shipData ? escortUpgradeCost(shipData) : 0;
             // Is the target class one this player may be offered at all?
-            // Its shïp Require / Availability gates are the player's
-            // business wherever the hull comes from — see
-            // escortUpgradeOffer, which reads them off the SAME context
-            // the shipyard and the bar's hire pool read.
+            // Only its shïp Availability test decides that, against the
+            // player's control bits — see escortUpgradeOffer for what the
+            // original measurably does and does not check.
             const upgradeOffered = shipData
-                ? await escortUpgradeOffer(upgradeTo, shipGateContext(
-                    player.entity, {
-                        currentShipData:
-                            player.entity.components.get(ShipDataComponent),
-                        getOutfit: id => gameData.data.Outfit.getCached(id),
-                        getRank: id => gameData.data.Rank.getCached(id),
-                        getCron: id => gameData.data.Cron.getCached(id),
-                    }), gameData)
+                ? await escortUpgradeOffer(upgradeTo, {
+                    bits: player.entity.components.get(ControlBitsComponent)
+                        ?? new Set<number>(),
+                }, gameData)
                 : undefined;
             const escort: EscortManagement = {
                 provenance,
