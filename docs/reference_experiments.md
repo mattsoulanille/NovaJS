@@ -27622,6 +27622,146 @@ is unexplained.
 - `pilotspecs/`, `scen/`, `tools/` (`tm_kelar_arpia.mjs`, `run.sh`,
   `send.sh`), `recover.json`
 
+### Offer buttons fit their labels (2026-11-28): both of a mission offer's buttons take ONE width, the wider label + 40 px, never under 100 and never capped; refuse grows left, accept right, a can't-refuse offer's lone button stays centred and counts the hidden refuse label; every button draws at most its leftmost 200 px, and the dialog cuts whatever runs past its frame
+
+**Question** (Matthew, with a screenshot of NovaJS's Earth offer "Let it
+go" / "Go after them" whose second label ran past its pill's caps): "Does
+the button grow to fit the text in original nova?"
+
+**Existing references.** None with a long label: every stock offer in
+`ui_screenshots/original_macos_screenshots` (and in the evidence folders
+read) uses No / Yes or a lone Okay. Stock labels run to 16 characters
+("I need more time", mïsn 333/335/446/452/702/704); 877 / 878 / 910 / 911
+use "Go after them" / "Let it go". Matthew's screenshot is mïsn **877**
+"Destroy Bureau Cell" (its offer text, dësc 4749, is the one shown;
+AvailStel 10000 = any Federation stellar), not 878 "Put Down Uprising"
+(878's own text is dësc 4750, "The soldier who was your contact with
+Krane...", and it is can't-refuse).
+
+**Code.** The i386 slice of `Ev Nova.original` (the title roll-in's
+`20261127-titleroll/bin/dis.txt`) has the whole rule in `OfferOneMission`
+(0xa28a2-0xa2beb): it copies the mïsn's AcceptButton (offset 0x75f = 1887)
+and RefuseButton (0x77f = 1919), blanks either one whose first character
+is not a letter (`tolower(c)` outside a..z), fills a blank accept from
+STR# 150 #27 (Yes; #50, Okay, when the offer can't be refused) and a blank
+refuse from #51 (No), then with TextFont(0) TextSize(12):
+`w = max(StringWidth(accept), StringWidth(refuse)) + 40; if (w <= 99) w = 100;`
+item 1 (accept): right = left + w; item 2 (refuse): left = right - w;
+item 6 (the lone button): both edges to its centre, then
+`InsetRect(-w/2, 0)` (so its width is w rounded down to even).
+`DrawButton` draws every button into one 200 x 50 offscreen buffer
+(`InitButtons`: `SetRect(0, 0, 200, 50)`), centres the label in the rect
+(x = mid - StringWidth/2, baseline = mid + 5) and CopyBits the rect out: a
+button shows only inside its rect and only its leftmost 200 px. The
+Mission BBS's Accept (`DrawMissionButtons`) and every other dialog's
+buttons take fixed STR# labels and fixed DITL rects; only the offer reads
+the mïsn's labels.
+
+**Rig.** Run-only plug-ins (`evidence/20261128-btnwidth/plugins/`,
+never the kit) overriding stock mïsn at Earth (spöb 128), AvailLoc 3,
+AvailRandom 100, inert (no cargo, ships, pay or texts), all showing 877's
+offer text so only the buttons differ; a stock Shuttle pilot at Earth
+(`pilotspecs/bw_earth.json`), windowed shots (1:1 game pixels; the offer
+frame's left edge at window x=196). Each landing asks one offer; Return
+accepts it, Return leaves, `l l` lands again. Labels (accept / refuse):
+M1 878 can't-refuse "Go after them" / "Let it go"; M2 877 the same,
+refusable; M3 "Yes" / "W"; M4 "Go after them right now" / "I need more
+time"; M5 "Go after them and destroy them!" / "Let it go, leave it to the
+cops" (31 characters each, the fields' maximum); M6 31 x W / 32 x M; M7
+can't-refuse "Go after them and destroy them!" / "Let it go"; P1 M4's
+labels on an offer with a dësc Graphic (the desc + pict frame); P2
+can't-refuse, BLANK accept, refuse "Let it go, leave it to the cops"; P3
+"...Fine" / "2 late"; B1 a Mission BBS job with AcceptButton "Go after
+them".
+
+**Results** (x from the frame's left edge; a pill's extent is its first
+and last bezel column, 74,74,74 on both sides):
+
+| offer | buttons seen | width | refuse box | accept box | label width (= w - 40) |
+|---|---|---|---|---|---|
+| stock No / Yes (1_sigma_1_offer.png) | No, Yes | 100 | 116..215 | 225..324 | under 60 |
+| M1 878 | "Go after them" alone, **no "Let it go"** | 120 | - | 162..281 | 80 (ink 78) |
+| M4 | both | 177 | **39**..215 | 225..**401** | 137 (ink 136) |
+| M5 | both, each cut flat at 200 px | 230 | -14..(cut at 185) | 225..(cut at 424) | 190 |
+| M6 | both; the refuse box starts off the frame | 360 | -144..(cut at 55) | 225..(cut at 424) | 320 (M = 10 px) |
+| M7 | the accept alone, cut flat at 200 px ("...destroy ther") | 230 | - | 107..(cut at 306) | 190 |
+| P2 | a lone "Okay" 202 px wide, cut at 200 | 202 | - | 121..(cut at 320) | 162: the HIDDEN refuse label's |
+| M2 877 (Matthew's offer) | "Let it go", "Go after them" | 120 | 96..215 | 225..344 | 80 |
+| P1, desc + pict frame | both, under the text | 177 | **37..213** | **221**..397 | 137 |
+| B1, Mission BBS | **"Accept"**, not "Go after them" | - | - | - | - |
+
+So the buttons grow: one width for both, the wider label's StringWidth
++ 40 (20 px each side), at least 100. The refuse button keeps its right
+edge (215) and grows LEFT, the accept button keeps its left edge (225) and
+grows RIGHT, 10 px apart; a lone button keeps its centre (222). There is
+no maximum and no shrinking font or truncation of the label as such: a
+button wider than 200 px is cut flat at its 200th column (right cap and
+label end missing), and the dialog's own window cuts anything beyond the
+frame (M6's refuse button, whose box starts 144 px left of the frame,
+shows only from the frame's edge). The width counts the refuse label even
+when no refuse button is shown (P2). A can't-refuse offer shows only its
+accept button, custom label or not (M1, M7). The dialog's width does not
+change. The label is drawn in the button face at about the width
+StringWidth reports (ink = width - 1 or 2), so the 20 px margins hold.
+
+The desc + pict frame (649 px) anchors its pair at other columns: the
+refuse button ends at 213 and the accept starts at 221, 7 px apart (P1);
+its lone offer button was not seen. The Mission BBS never takes the mïsn's
+label (B1). The briefing / notice popup's lone Okay is a different, fixed
+button: 99 px at 173..271 in both frames (2_sigma_1_accept.png,
+5_sigma_1_mission_text_with_pict.png).
+
+**Not observed:** P3 (labels "...Fine" / "2 late") and M3 ("Yes" / "W")
+were never asked (run 4's visit asked P1 and M2 only); the non-letter
+rule is from the code alone, and M3's 100 px minimum is the stock No /
+Yes's.
+
+**Side findings.** (1) An AvailLoc 3 mission that becomes available
+DURING a system visit is not asked on a re-landing in that system (run 1:
+the accept-set bit 9355 made 877 available; eight re-landings asked
+nothing); one whose conditions held at arrival is asked on a later
+landing (run 3), as NovaJS's frozen per-visit offer sets do
+(`landing_offers_test.ts`). (2) One visit asked at most some of the
+available offers, one per landing (random order, not DispWeight), then
+none on later landings: six of ten in run 3, two of four in run 4 (cause
+not studied). (3) The Mission BBS listed the kit job below the stock
+"Delivery to ..." / "Ferry Passengers to ..." jobs.
+
+**NovaJS before** (`N/spaceport/offer_popup.ts` at main 511b6bc4,
+`addButtons`): both buttons a fixed 99 px (73 px middle) at 116 / 225, the
+lone one at 173, whatever the label: "Go after them" (82 px in NovaJS's
+Geneva 12) ran past its 99 px pill; and a label overflowing any Button
+drew outside it (`N/spaceport/button.ts`). The pair was 1 px narrower than
+the original's 100 px, the pict frame reused the tiled frame's columns,
+and the Mission BBS put the mïsn's AcceptButton on its Accept
+(`N/spaceport/mission_board.ts` refreshDescription).
+
+**Applied** (this branch): `popup_layout.ts` `offerButtonWidth` /
+`offerButtonBoxes` (OFFER_BUTTON_MIN_WIDTH 100, OFFER_BUTTON_LABEL_PAD 40,
+`OFFER_BUTTON_ANCHORS`: tiled refuse right edge 216, accept left 225, lone
+centre 222; pict 214 / 221 / 222 (the lone centre a GUESS); lone width
+rounded down to even); `offer_popup.ts` `offerButtons` returns
+`fitTo` (both labels as the original holds them, the hidden refuse one
+too, and blanks a label not starting with a letter), `popupButtonBoxes`
+lays them out, and `addButtons` cuts the row at the frame; notices keep
+the fixed 99 px Okay at 173. `button.ts`: every Button draws only inside
+its rect and at most its leftmost 200 px (`BUTTON_DRAW_LIMIT`, a mask
+built only when needed) and answers clicks on its whole rect
+(`hitArea`). Shared by the spaceport offers (presentOffers) and the
+in-flight ship offers (`ship_mission_offer_plugin.ts`), which both ask
+through `offerButtons`. NovaJS measures labels in its own button face
+(outline Geneva 12), which runs 2-3 % wider than the original's
+StringWidth ("Go after them" 82 vs 80, "Go after them right now" 140 vs
+137; "Let it go, leave it to the cops" 170 vs 162): its buttons come out
+a few px wider, so its labels keep the original's 20 px margins. The
+BBS Accept always reads "Accept".
+
+**Evidence:** `~/.local/share/novaref/evidence/20261128-btnwidth/`
+(`runs/*-bw_chain` run 1, `runs/*-bw_all` run 3 with `c00`-`c05` the six
+offers and `25-bbs.png`, `runs/20261128-015140-bw_rest` run 4 with P1
+`01-c00-a.png`, M2 `03-c01-a.png` and B1 `17-bbs-row4.png`; `plugins/`,
+`scen/`, `pilotspecs/`).
+
 ### Reliability notes (for anyone running the reference)
 
 - **A map purchase is read from the pilot, not the screen (2026-11-28):**
@@ -27631,6 +27771,20 @@ is unexplained.
   earlier marks hide the walk. Click a grid tile by its window
   coordinates (row pitch 54 px; first tile centre about (85, 178)); two
   identical captions differ only by position.
+- **AvailLoc 3 offers chained by bits need a jump between them
+  (2026-11-28, button widths):** a mission whose AvailBits a just-accepted
+  offer satisfied is not asked on a re-landing in the same system. Make
+  every offer available from the start and re-land (`l wait 1500 l wait
+  10000`, shot, `Return`, shot, `Return`, repeated: a Return that finds
+  no offer leaves, so the loop heals itself); a visit asks only some of
+  them (six of ten, two of four), so give each offer you must see its own
+  run.
+- **A bw_rest attempt found foreign plug-ins (2026-11-28):** its first
+  attempt died at launch ("EV Nova is not running"), and the retry found
+  `testkit` and `w61_g0bm1` in Plug-ins under our lock, refused to run and
+  moved them to `~/novaref/backups/` (the rerun was clean). Another
+  driver's plug-ins appeared while the lock was ours: check `plugin list`
+  before trusting a run that follows a lock hand-over.
 
 - **Chaining hypergate transits (wave 59):** an arrival coasts out at half
   the hull's top speed, so an inertial hull drifts out of the gate's
