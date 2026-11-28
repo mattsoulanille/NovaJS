@@ -23,6 +23,7 @@ import {
 } from "./gate_map.js";
 import { installHeadlessPixi } from "./headless_pixi_fixture.js";
 import { HypergateNetwork } from "./hypergate_network.js";
+import { MenuControls } from "./menu_controls.js";
 import { MissionUniverse } from "./mission_universe.js";
 import { mapDotRule } from "./starmap.js";
 
@@ -845,7 +846,13 @@ describe('Tab on the gate map (wave 56)', () => {
         const { press, shown } = await open();
         press('nextTarget');
         press('nextTarget');
-        press('depart');
+        expect(MenuControls.pressDefaultButton({ key: 'Enter' })).toBeTrue();
         expect((await shown).destinationSpob).toBe('t:kania');
+    });
+
+    it('lifts off on Return with nothing picked, as Done does', async () => {
+        const { shown } = await open();
+        expect(MenuControls.pressDefaultButton({ key: 'Enter' })).toBeTrue();
+        expect((await shown).destinationSpob).toBeNull();
     });
 });

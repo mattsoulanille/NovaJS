@@ -26453,7 +26453,8 @@ line, the column reading "Destination System: <the Tab pick>".
 **NovaJS (main 14dd27b9, before this wave's change).** The gate map had no
 Tab: `N/spaceport/gate_map.ts:467-470` bound only `depart` / `map`, and
 `N/spaceport/system_graph.ts:564-567` (`cycleSingleRoute`) returned at
-once in picker mode: **mismatch**. The star map's Tab
+once in picker mode: **mismatch**. Return did nothing on the gate map (no
+`defaultButton`; Done had to be clicked): **mismatch**. The star map's Tab
 (`system_graph.ts:564-575`, `route.ts:281` `cycleSingle` over the visible
 adjacency) already matches the route case: it cycles every visible
 neighbour, the route's first hop included, goes on from the last pick,
@@ -26468,10 +26469,12 @@ in slot order); `N/spaceport/gate_map.ts` `computeGateMapView` returns
 the graph as `selectableOrder`, and binds Tab (`nextTarget`) to
 `cycleSingleRoute`; `N/spaceport/system_graph.ts` `cycleSingleRoute` in
 picker mode runs the star map's own `cycleSingle` over that order and
-picks the result exactly as a click does. Return / Done already transit
-to the pick. Specs: `hypergate_network_test.ts` "gateCycleOrder",
+picks the result exactly as a click does; Return presses Done
+(`MenuControls.defaultButton`), so Return and Done transit to the pick
+(and lift off with none, as Done always did). Specs: `hypergate_network_test.ts` "gateCycleOrder",
 `gate_map_test.ts` "Tab on the gate map (wave 56)" (the run-b order,
-<Unknown>, wrap, Return) and the stacked-copy cycle,
+<Unknown>, wrap, Return with and without a pick) and the stacked-copy
+cycle,
 `starmap_tab_cycle_test.ts` (the route case). **Left as is (a NovaJS
 choice, plug-in data only):** NovaJS still leaves a DESTROYED gate off the
 gate map entirely (no arrow, not offered, not in the cycle; `landable()`

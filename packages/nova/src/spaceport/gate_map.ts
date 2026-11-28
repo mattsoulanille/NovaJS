@@ -493,6 +493,9 @@ export class GateMap extends Menu<GateMapResult> {
             // map, wave 56").
             nextTarget: () => this.systemGraph?.cycleSingleRoute(1),
         });
+        // Return presses Done: on the original it transited to the Tab's
+        // pick (reference "Tab on the hypergate map, wave 56").
+        this.controls.defaultButton = this.done.bind(this);
     }
 
     override async build() {
