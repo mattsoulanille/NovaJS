@@ -21,7 +21,7 @@ import { SingletonComponent, World } from 'nova_ecs/world';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
 import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
 import { deriveEntityComponents, SimulationGameDataResource } from '../core/index.js';
-import { OutfitsStateComponent, ShipPhysicsComponent } from '../ship/index.js';
+import { OutfitsStateComponent, refreshShipPhysics, ShipPhysicsComponent } from '../ship/index.js';
 import { HitboxHullComponent, HurtboxHullComponent } from '../core/index.js';
 import { CollisionEvent, CollisionHitterComponent, CollisionVulnerabilityComponent } from '../core/index.js';
 import { EscortCommandComponent, findControlledEntity } from '../player/index.js';
@@ -126,6 +126,9 @@ export function refundFighterToBay(carrier: Entity, bayWeaponId: string,
     }
 
     outfits.get(supplying[0])!.count++;
+    // An in-place edit like consumeAmmo's: a fighter outfit that carries
+    // physics changes the carrier's (refreshShipPhysics).
+    refreshShipPhysics(carrier, gameData, [supplying[0]]);
     return true;
 }
 

@@ -4,6 +4,7 @@ import { ShipData, ShipPhysics } from "novadatainterface/ship_data";
 import { DEFAULT_IONIZE_COLOR } from "novadatainterface/weapon_data";
 import { SetComponent, SetComponentFunction } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
+import { Entity } from 'nova_ecs/entity';
 import { System } from 'nova_ecs/system';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -22,7 +23,7 @@ import { CollisionVulnerabilityComponent } from '../core/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { gameDataRefType } from '../core/index.js';
 import { ArmorComponent, FuelComponent, IonizationColorComponent, IonizationComponent, ShieldComponent, shieldFloor } from './health_plugin.js';
-import { applyOutfitPhysics, OutfitsState, OutfitsStateComponent } from './outfit_plugin.js';
+import { applyOutfitPhysics, OutfitsState, OutfitsStateComponent, outfitChangesPhysics } from './outfit_plugin.js';
 import { unchargedTurnRate } from './ionization_plugin.js';
 import { registerEntityDeriver } from '../core/index.js';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
@@ -102,6 +103,61 @@ export function deriveShipPhysics(shipData: ShipData,
     return applyOutfitPhysics(shipData.physics, outfits);
 }
 
+/**
+ * Brings a ship's ShipPhysicsComponent back in line with its outfits after
+ * an IN-PLACE edit of their counts: an ammo round spent (weapon_plugin
+ * consumeAmmo), a fighter refunded to its bay (bay_plugin), rounds
+ * plundered (boarding_plugin). Call it with each outfit whose count moved;
+ * it does nothing unless one of them carries physics (outfitChangesPhysics)
+ * and the derived physics actually differ, so ordinary ammo costs nothing.
+ *
+ * WHY: those edits are in place on purpose (reassigning OutfitsState would
+ * re-derive WeaponsState and reset every reload clock, see bay_plugin), so
+ * no ChangeEvent reaches ShipPhysicsProvider and the live world kept the
+ * physics of the outfit counts it had before. Every restore, though (a
+ * rollback, a join, a resync, an analyzer replay), skips ShipPhysics
+ * (snapshot_policies) and re-derives it from the CURRENT counts. A peer
+ * that restored then flew a different ship from one that never did: the
+ * plug-in Singularity Torpedo is ammo with Accel -0.36 a round, so an NPC
+ * that had fired some accelerated faster on the restored peer, and the
+ * peer was convicted (desyncs 2026-11-28 nova:483, nova:319, nova:131).
+ */
+export function refreshShipPhysics(ship: Entity,
+    gameData: SimulationGameDataInterface, editedOutfitIds: Iterable<string>) {
+    let relevant = false;
+    for (const id of editedOutfitIds) {
+        const outfit = gameData.data.Outfit.getCached(id);
+        if (outfit && outfitChangesPhysics(outfit)) {
+            relevant = true;
+            break;
+        }
+    }
+    if (!relevant) {
+        return;
+    }
+    const current = ship.components.get(ShipPhysicsComponent);
+    const shipData = ship.components.get(ShipDataComponent);
+    const outfits = ship.components.get(OutfitsStateComponent);
+    if (!current || !shipData || !outfits) {
+        // No physics yet: whatever derives them next reads the counts as
+        // they are now.
+        return;
+    }
+    const derived = deriveShipPhysics(shipData, gameData, outfits);
+    if (derived === undefined || sameShipPhysics(current, derived)) {
+        return;
+    }
+    ship.components.set(ShipPhysicsComponent, derived);
+}
+
+function sameShipPhysics(a: ShipPhysics, b: ShipPhysics): boolean {
+    const keys = Object.keys(a) as (keyof ShipPhysics)[];
+    if (keys.length !== Object.keys(b).length) {
+        return false;
+    }
+    return keys.every(key => a[key] === b[key]);
+}
+
 export const ShipPhysicsProvider = ProvideFromCache({
     name: "ShipPhysicsProvider",
     provided: ShipPhysicsComponent,
@@ -141,11 +197,18 @@ export function getShipMovementPhysics(physics: ShipPhysics): MovementPhysics {
  * is what keeps a ship's speed and turn rate following its outfits.
  * Re-deriving here as well would clobber that system's work on whichever
  * ticks it ran second.
+ *
+ * So it does NOT re-provide on a ShipPhysicsComponent change. It used to
+ * (`update: [ShipPhysicsComponent]`), and the re-provide ran in the event
+ * flush AFTER every step system, leaving the tick's end state at the bare
+ * hull numbers (no ionization cut, no afterburner) for whatever read
+ * MovementPhysics before EffectiveMovementPhysicsSystem on the next tick.
+ * refreshShipPhysics now replaces ShipPhysics on ammo spends, which made
+ * that clobber an every-missile event.
  */
 export const ShipMovementPhysicsProvider = Provide({
     name: "ShipMovementPhysicsProvider",
     provided: MovementPhysicsComponent,
-    update: [ShipPhysicsComponent],
     args: [ShipPhysicsComponent] as const,
     factory: getShipMovementPhysics,
     // #237 pin (shared: ShipPhysicsComponent).

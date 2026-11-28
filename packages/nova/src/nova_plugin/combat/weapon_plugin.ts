@@ -26,6 +26,7 @@ import { WeaponEntries, WeaponLocalState, WeaponsComponent } from './fire_weapon
 import { SimulationGameDataResource } from '../core/index.js';
 import { ArmorComponent, FuelComponent } from '../ship/index.js';
 import { OutfitsState, OutfitsStateComponent, OutfitWeaponProvider } from '../ship/index.js';
+import { refreshShipPhysics } from '../ship/index.js';
 import { JumpComponent, SelectStellarSystem } from '../travel/index.js';
 import { PlatformResource } from '../core/index.js';
 import { PlayerShipSelector } from '../player/index.js';
@@ -195,19 +196,25 @@ function hasAmmo(ammoType: AmmoType, outfits: OutfitsState | undefined,
     return outfits ? countAmmo(ammoType[1], outfits, gameData) > 0 : false;
 }
 
+/**
+ * Spends one round of `ammoType`. Returns the outfit whose count went down
+ * (an in-place edit: the caller re-derives the ship's physics with
+ * refreshShipPhysics), or undefined when no outfit count changed.
+ */
 function consumeAmmo(ammoType: AmmoType, outfits: OutfitsState | undefined,
-    fuel: Stat | undefined, gameData: SimulationGameDataInterface) {
+    fuel: Stat | undefined, gameData: SimulationGameDataInterface)
+    : string | undefined {
     if (ammoType === 'unlimited') {
-        return;
+        return undefined;
     }
     if (ammoType[0] === 'energy') {
         if (fuel) {
             fuel.current = Math.max(fuel.min, fuel.current - ammoType[1]);
         }
-        return;
+        return undefined;
     }
     if (!outfits) {
-        return;
+        return undefined;
     }
     // Consume from the lowest outfit id with rounds left so every peer
     // makes the same choice when multiple outfits hold this ammo.
@@ -217,6 +224,24 @@ function consumeAmmo(ammoType: AmmoType, outfits: OutfitsState | undefined,
         .sort()[0];
     if (id !== undefined) {
         outfits.get(id)!.count--;
+    }
+    return id;
+}
+
+/**
+ * A spent round of ammo that carries physics (the plug-in Singularity
+ * Torpedo: Accel -0.36 a round) changes the ship's derived physics, and
+ * consumeAmmo's in-place edit fires nothing that would re-derive them:
+ * see refreshShipPhysics.
+ */
+function refreshAfterSpend(entities: ReadonlyMap<string, Entity>, uuid: string,
+    gameData: SimulationGameDataInterface, spentOutfitId: string | undefined) {
+    if (spentOutfitId === undefined) {
+        return;
+    }
+    const ship = entities.get(uuid);
+    if (ship) {
+        refreshShipPhysics(ship, gameData, [spentOutfitId]);
     }
 }
 
@@ -454,7 +479,8 @@ export const WeaponsSystem = new System({
                     const shot = weapon.fireFromEntity(uuid, true,
                         weaponTarget);
                     if (shot && usesAmmo) {
-                        consumeAmmo(ammoType, outfits, fuel, gameData);
+                        refreshAfterSpend(entities, uuid, gameData,
+                            consumeAmmo(ammoType, outfits, fuel, gameData));
                     }
                     fired = shot || fired;
                 }
@@ -465,7 +491,8 @@ export const WeaponsSystem = new System({
                 fired = weapon.fireFromEntity(uuid, true,
                     weaponTarget);
                 if (fired && usesAmmo) {
-                    consumeAmmo(ammoType, outfits, fuel, gameData);
+                    refreshAfterSpend(entities, uuid, gameData,
+                        consumeAmmo(ammoType, outfits, fuel, gameData));
                 }
             }
 

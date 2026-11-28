@@ -50,6 +50,22 @@ export function sumOutfitField(outfits: OutfitsState,
     return total;
 }
 
+/**
+ * Whether owning one more or one fewer of this outfit changes the ship
+ * physics applyOutfitPhysics derives: any non-zero number (freeMass
+ * included) or granted capability in its physics. Most ammo has none, so
+ * spending it leaves a ship's physics alone; see refreshShipPhysics
+ * (ship_plugin.ts) for why the ammo that does must re-derive.
+ */
+export function outfitChangesPhysics(outfit: Pick<OutfitData, 'physics'>): boolean {
+    for (const value of Object.values(outfit.physics)) {
+        if (value !== 0 && value !== false && value !== undefined) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // THE ONE mass rule (the original's measured max/floor for oütf 0x0400)
 // lives beside OutfitData so the ship parser can use it too: a hull's
 // empty capacity (ShipData physics.freeMass) adds back its stock items at

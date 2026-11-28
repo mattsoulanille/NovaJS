@@ -37,7 +37,7 @@ import { MissionShipComponent } from '../player/index.js';
 import { CargoComponent, cargoUsed } from '../ship/index.js';
 import { CollisionHitterComponent } from '../core/index.js';
 import { HurtboxHullComponent } from '../core/index.js';
-import { OutfitsState, OutfitsStateComponent } from '../ship/index.js';
+import { OutfitsState, OutfitsStateComponent, refreshShipPhysics } from '../ship/index.js';
 import { WeaponsState, WeaponsStateComponent } from '../ship/index.js';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
 import {
@@ -1865,8 +1865,10 @@ const BoardingActionSystem = new System({
             if (boarderOutfits && targetOutfits) {
                 const { victim, boarderRoundsByWeapon, info } = ammoPlunderInputs(
                     boarderOutfits, boarderWeapons, targetOutfits, gameData);
+                const moved: string[] = [];
                 for (const [outfitId, rounds] of
                     planAmmoPlunder(victim, boarderRoundsByWeapon, info)) {
+                    moved.push(outfitId);
                     // Move rounds of the SAME ammo outfit: remove from the
                     // victim, add to the boarder's stock (in-place count
                     // edits, like weapon_plugin's consumeAmmo).
@@ -1884,6 +1886,10 @@ const BoardingActionSystem = new System({
                         boarderOutfits.set(outfitId, { count: rounds });
                     }
                 }
+                // Ammo that carries physics changes both ships' (the edits
+                // above fire nothing that would re-derive them).
+                refreshShipPhysics(target, gameData, moved);
+                refreshShipPhysics(entity, gameData, moved);
             }
             chargeCrime();
             if (tripped('ammo')) {
