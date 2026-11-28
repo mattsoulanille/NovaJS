@@ -1,0 +1,24 @@
+{
+  "name": "novaref-w58-shotcap",
+  "edits": {
+    "ship": 818,
+    "stellar": 2045,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2045": 2
+    },
+    "weapons": {
+      "128": 0,
+      "334": 1
+    },
+    "outfits": {
+      "128": 0
+    },
+    "nickname": "Probe",
+    "shipName": "w58-shotcap"
+  }
+}

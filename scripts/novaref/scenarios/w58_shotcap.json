@@ -1,0 +1,22 @@
+{
+ "name": "w58_shotcap",
+ "_comment": "Shot cap (kits/w58_shotcap.mjs): the player (Kit Ring Crawler, at rest by Kit Sub Port) holds Space for 20 s, firing wëap 334 SC Ring once a second; each ring is 16 SC Star bolts flying out at 1 px a frame for 15 s. Recorded; read each ring's star count per frame. Pilot: pilots/w58_shotcap.json.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs",
+  "../kits/w58_shotcap.mjs"
+ ],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "shot": "space", "window": true },
+  { "record": "start", "window": true },
+  { "wait": 1000 },
+  { "keys": "down:Space wait 20000 up:Space wait 17000" },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ],
+ "pull": false
+}

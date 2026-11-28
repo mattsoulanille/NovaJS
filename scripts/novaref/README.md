@@ -1115,6 +1115,10 @@ apply.
   window shot and prints the best offset, frame and scale by RMSE over the
   frame's opaque pixels (clipped to `--clip`): the hail well's 1:1 clipping
   and frame 0 were read with it.
+- `shotcap.mjs <rec.mp4> [--every 15] [--from F --to F]` (wave 58): the
+  orange bolt blobs per frame of the shot-cap rig (`kits/w58_shotcap.mjs`,
+  run-only, wëap 334 / 335), counted per 30 px band from the player: one
+  band per second of a ring's age. A 16-bolt ring reads as 16-24 blobs.
 - `blob_offset.mjs <shot.png>...`: the largest bright blob's offset from
   the play-area centre (where the player is drawn) in a window shot: how far
   the planet or a target ship is (U9 gates).

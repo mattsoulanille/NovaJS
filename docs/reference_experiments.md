@@ -26991,6 +26991,75 @@ with each install path), `order_b/` (`01-map0.png`, `02-map_p1.png`),
 tree through NovaParse), `novajs_rig_a.txt` / `novajs_rig_b.txt` (the
 NovaJS column, with its override log), `recover.log`.
 
+### The shot cap, wave 58: at most 128 projectiles alive in a system, on screen or off; a full table refuses the NEW shot and keeps every old one (2026-11-27)
+
+**Question** (the hub's SUBMUNITION_OOM brief): Matthew's friend fired
+many Alternate Missles "DVrger missile"s (wëap 298: 36 x wëap 303, each
+of which subs into 2 x wëap 299, so 109 projectiles a shot) and the tab
+nearly ran out of memory. NovaJS had no limit on projectiles at all. The
+Bible's engine table says "Max Shots On Screen 128" without saying what
+counts or what gives. Does the original cap projectiles, does the cap
+count shots off the screen, and when full, is the new shot refused or an
+old one recycled?
+
+**Rig.** Run-only plug-in `kits/w58_shotcap.mjs` (with the test kit for
+Kit Sub Range, sÿst 2045): wëap 334 SC Ring, a primary gun (Reload 30)
+that flies 1 frame and expires into 16 x wëap 335 SC Star (SubTheta -22:
+a starburst); a star flies out at 1 px a frame for 15 s (Count 450),
+Medium Blaster sprite, no damage, planet-type. Pilot
+`pilots/w58_shotcap.json` (Kit Ring Crawler at rest by Kit Sub Port,
+only the SC Ring). Scenario `scenarios/w58_shotcap.json`: Space held 20 s
+(frames 99-701 of the recording), then 17 s more. Each second's ring is
+30 px wider than the next younger one, so a frame shows every ring's age
+and how full it is; rings older than about 10 s are off the 636 px play
+area. `analysis/shotcap.mjs` counts the orange bolt blobs per 30 px band
+(a 16-bolt ring reads as 16-24 blobs: the streaks split).
+
+| frames | what the recording shows |
+|---|---|
+| 105-345 | a new full ring every 30 frames: 8 rings, 128 stars at frame 345 |
+| 360-555 | **no new ring at all** while Space stays down: the inner bands are empty, the eight rings fly on outward (the oldest off screen from about frame 405), so the screen shows fewer and fewer bolts (172 blobs -> 92) and still nothing new fires |
+| 570 | the first ring's 15 s are up (born about 105, gone about 555): a new full ring appears at the ship |
+| 570-701 | one new ring each time an old one dies, about every 30 frames |
+| 735-1100 | Space released: no new rings; the last rings expire on schedule (nothing was cut short) |
+
+**Finding.**
+
+1. **The original caps projectiles at 128** (the Bible's figure): 8
+   rings of 16, and the 9th never came while they lived.
+2. **Off-screen shots count.** From about frame 405 the oldest rings were
+   off the play area and the screen showed far fewer than 128 bolts, yet
+   nothing new fired until the first ring EXPIRED (frame 570, its 15 s,
+   not when it left the screen).
+3. **A full table refuses the new shot; old ones are never recycled.**
+   Every ring that existed lived its full 15 s (the bands thin out only
+   at the play area's edge); the gun simply produced nothing while full,
+   and fired again as soon as slots were free.
+4. Not resolved: whether the parent's own slot is freed before its
+   children spawn (a ring of 15 vs 16 at the edge: the blob counts can't
+   tell), and whether beams (the Bible's separate "Max Beams On Screen
+   64") or an NPC's shots share the same table (only the player fired).
+
+**NovaJS today (base 7a8c3010): mismatch.** No cap: one DVrger shot is
+109 projectiles and a held volley of them keeps 500-1,000 alive
+(`scripts/submunition_benchmark.mjs`, census: 300 shots -> 18,072 x 299
+and 9,108 x 303, peak 1,012 projectiles, 17.5 ms a sim step).
+
+**Applied (this branch):** `N/nova_plugin/combat/shot_cap.ts`
+(`MAX_SHOTS` 128), checked in `ProjectileWeaponEntry.fire`: when 128
+projectiles are alive in the system the new shot (gun, missile, turret,
+point defense or submunition) is refused; the firing loop takes no ammo
+and keeps no reload for a refused shot, so it fires on the first tick a
+slot frees. Beams and bay fighters are not counted. GUESS: the expiring
+parent still holds its slot while its children spawn (a burst at the
+edge comes out one short). After: the same 300-shot benchmark peaks at
+127 projectiles, 5.5 ms a step.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-submun/`:
+`20261127-213840-w58_shotcap/` (`recording.mp4`, `recording.events.json`,
+`frames/t6..t30.png`: t9 shows the rings growing, t18 the empty centre
+while full), `novaref-w58-shotcap(.rsrc)`, `run1.json`.
+
 ### Reliability notes (for anyone running the reference)
 
 - **Plug-ins in folders are inert on the original (wave 58):** a rig
