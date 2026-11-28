@@ -26,13 +26,24 @@ export function statFullness({ current, max }: { current: number, max: number })
  */
 export class GaugesPane {
     /** Class-owned, so it survives an ïntf reload (StatusBar.reload keeps it). */
-    readonly graphics = new PIXI.Graphics();
+    readonly graphics: PIXI.Graphics;
+    private lastDrawn?: {
+        data: StatusBarData,
+        shield: number,
+        armor: number,
+        hasFuel: boolean,
+        fuel: number,
+        fullJumps: number,
+    };
 
-    constructor(private data: StatusBarData) { }
+    constructor(private data: StatusBarData, graphics?: PIXI.Graphics) {
+        this.graphics = graphics ?? new PIXI.Graphics();
+    }
 
     /** A different ïntf: new data areas and colours from the next draw on. */
     reset(data: StatusBarData) {
         this.data = data;
+        this.lastDrawn = undefined;
     }
 
     build(parent: PIXI.Container) {
@@ -40,33 +51,59 @@ export class GaugesPane {
     }
 
     private drawLine(dataArea: StatusBarDataArea, color: number, fullness: number) {
-        var pos = [dataArea.position[0], dataArea.position[1]];
-        var size = [dataArea.size[0], dataArea.size[1]];
-        pos[1] += size[1] / 2;
+        const x = dataArea.position[0];
+        const y = dataArea.position[1] + dataArea.size[1] / 2;
+        const width = dataArea.size[0];
+        const height = dataArea.size[1];
 
-        this.graphics.lineStyle(size[1], color);
-        this.graphics.moveTo(pos[0], pos[1]);
-        this.graphics.lineTo(pos[0] + size[0] * fullness, pos[1]);
+        this.graphics.lineStyle(height, color);
+        this.graphics.moveTo(x, y);
+        this.graphics.lineTo(x + width * fullness, y);
     }
 
     drawStats(shield: Stat, armor: Stat,
         fuel?: { current: number, max: number }) {
+        const shieldFullness = statFullness(shield);
+        const armorFullness = statFullness(armor);
+        const hasFuel = Boolean(fuel && fuel.max > 0);
+        const fuelFullness = hasFuel ? statFullness(fuel!) : 0;
+        const fullJumps = hasFuel
+            ? Math.max(0, Math.floor(
+                fuel!.current / FUEL_PER_JUMP) * FUEL_PER_JUMP / fuel!.max)
+            : 0;
+
+        const prev = this.lastDrawn;
+        if (prev
+            && prev.data === this.data
+            && prev.shield === shieldFullness
+            && prev.armor === armorFullness
+            && prev.hasFuel === hasFuel
+            && prev.fuel === fuelFullness
+            && prev.fullJumps === fullJumps) {
+            return;
+        }
+        this.lastDrawn = {
+            data: this.data,
+            shield: shieldFullness,
+            armor: armorFullness,
+            hasFuel,
+            fuel: fuelFullness,
+            fullJumps,
+        };
+
         this.graphics.clear();
 
         this.drawLine(this.data.dataAreas.shield,
-            this.data.colors.shield, statFullness(shield));
+            this.data.colors.shield, shieldFullness);
 
         this.drawLine(this.data.dataAreas.armor,
-            this.data.colors.armor, statFullness(armor));
+            this.data.colors.armor, armorFullness);
 
-        if (fuel && fuel.max > 0) {
+        if (hasFuel) {
             // Partial-jump fuel in the dim color, with the whole jumps'
             // worth (100 units each) drawn over it in the full color.
-            const fuelFullness = statFullness(fuel);
             this.drawLine(this.data.dataAreas.fuel,
                 this.data.colors.fuelPartial, fuelFullness);
-            const fullJumps = Math.max(0, Math.floor(
-                fuel.current / FUEL_PER_JUMP) * FUEL_PER_JUMP / fuel.max);
             this.drawLine(this.data.dataAreas.fuel,
                 this.data.colors.fuelFull, fullJumps);
         }

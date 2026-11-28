@@ -64,11 +64,14 @@ export function beamCoronaFraction(decay: number, shotDurationMs: number,
     return Math.max(0, Math.min(1, fraction));
 }
 
-const ClearBeams = new System({
+export const ClearBeams = new System({
     name: 'ClearBeams',
     args: [BeamGraphicsResource, SingletonComponent] as const,
     step(beamGraphics) {
-        beamGraphics.clear();
+        if (beamGraphics.visible) {
+            beamGraphics.clear();
+            beamGraphics.visible = false;
+        }
     },
     // #156 pin (shared: *): BeamDisplayPlugin registers after ExplosionPlugin.
     after: [SecondaryExplosionSystem],
@@ -163,6 +166,7 @@ export const BeamDisplaySystem: System = new System({
         Optional(TargetComponent), Entities] as const,
     step(beamData, beamState, movement, beamGraphics, cameraFocus, createTime,
         simTime, source, target, entities) {
+        beamGraphics.visible = true;
         const { width, beamColor, coronaColor, coronaFalloff, length: dataLength, lightningAmplitude, lightningDensity }
             = beamData.beamAnimation;
         // A decaying beam keeps its length and thins its corona over the
@@ -242,6 +246,7 @@ export const BeamDisplayPlugin: Plugin = {
         }
         const beamGraphics = new PIXI.Graphics();
         beamGraphics.name = 'BeamGraphics';
+        beamGraphics.visible = false;
         // Above every ship: a beam's origin is an exit point ON the
         // firing hull, so at the default zIndex of 0 the whole first
         // stretch of the beam was hidden under the ship that fired it

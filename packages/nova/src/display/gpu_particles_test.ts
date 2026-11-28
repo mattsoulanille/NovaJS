@@ -248,6 +248,29 @@ describe('ParticleBudget', () => {
         system.time = 11.5;
         expect(system.stats().liveBlocks).toEqual(2);
     });
+
+    it('coalesces contiguous live blocks into minimal draw runs', () => {
+        const system = new ParticleBudget(PARTICLE_BLOCK_SIZE * 4);
+        system.time = 0;
+        expect(system.liveBlockRuns()).toEqual([]);
+
+        // All 4 blocks live -> 1 single coalesced draw run covering all slots.
+        fill(system, PARTICLE_BLOCK_SIZE * 4, 10);
+        expect(system.liveBlockRuns()).toEqual([
+            { startBlock: 0, blockCount: 4, instances: PARTICLE_BLOCK_SIZE * 4 },
+        ]);
+
+        // Expire block 1 only (leaving block 0 and blocks 2..3 live) -> 2 runs.
+        system.time = 1;
+        // Overwrite block 0 with long life, block 1 with short life.
+        fill(system, PARTICLE_BLOCK_SIZE, 20);
+        fill(system, PARTICLE_BLOCK_SIZE, 1);
+        system.time = 3;
+        expect(system.liveBlockRuns()).toEqual([
+            { startBlock: 0, blockCount: 1, instances: PARTICLE_BLOCK_SIZE },
+            { startBlock: 2, blockCount: 2, instances: PARTICLE_BLOCK_SIZE * 2 },
+        ]);
+    });
 });
 
 describe('advanceEmission', () => {

@@ -37,8 +37,10 @@ import * as PIXI from "pixi.js";
  * per-instance attributes. Instanced quads rather than GL_POINTS on
  * purpose — ANGLE/SwiftShader cap `gl_PointSize` unpredictably, which
  * would silently change particle size depending on the driver. One draw
- * call per live block (see PARTICLE_BLOCK_SIZE); usually one or two,
- * none at all when nothing is alive.
+ * call per contiguous run of live blocks (see PARTICLE_BLOCK_SIZE): every
+ * block's geometry is a view into the same instance buffer at the block's
+ * offset, so a run's first geometry draws the whole run. One draw, or two
+ * when the live run wraps the ring's end; none when nothing is alive.
  *
  * Slots that are unused, expired, or not yet born collapse to zero size
  * in the vertex shader, so dead particles cost a degenerate triangle
@@ -363,6 +365,36 @@ export class ParticleBudget {
         return live;
     }
 
+    /**
+     * Coalesces contiguous runs of live blocks into draw ranges so rendering
+     * issues 1-2 instanced draw calls instead of one per 256-slot block
+     * (32 VAO binds + 32 draws under heavy combat), while still skipping
+     * expired blocks completely.
+     */
+    liveBlockRuns(): { startBlock: number, blockCount: number, instances: number }[] {
+        const runs: { startBlock: number, blockCount: number, instances: number }[] = [];
+        const totalBlocks = this.blockExpiry.length;
+        const capacity = this.ring.capacity;
+        let block = 0;
+        while (block < totalBlocks) {
+            if (this.blockExpiry[block] <= this.time) {
+                block++;
+                continue;
+            }
+            const startBlock = block;
+            while (block < totalBlocks && this.blockExpiry[block] > this.time) {
+                block++;
+            }
+            const blockCount = block - startBlock;
+            const instances = Math.min(
+                blockCount * PARTICLE_BLOCK_SIZE,
+                capacity - startBlock * PARTICLE_BLOCK_SIZE,
+            );
+            runs.push({ startBlock, blockCount, instances });
+        }
+        return runs;
+    }
+
     /** Live counters, for debugging and for the verification harness. */
     stats() {
         const liveBlocks = this.liveBlocks();
@@ -505,7 +537,18 @@ export class GpuParticleSystem extends PIXI.Container {
 
     protected override _render(renderer: PIXI.Renderer) {
         this.flush(renderer);
-        if (this.budget.liveBlocks() === 0) {
+        const totalBlocks = this.blocks.length;
+        // Fast scan: check if any block is live before flushing batches or
+        // binding shader/state, then coalesce each contiguous live run into a
+        // single instanced draw call starting at its first block's geometry.
+        let firstLive = -1;
+        for (let block = 0; block < totalBlocks; block++) {
+            if (this.budget.isBlockLive(block)) {
+                firstLive = block;
+                break;
+            }
+        }
+        if (firstLive < 0) {
             return; // Nothing alive: not even a state change.
         }
         // Sprites batched before us must land underneath the particles.
@@ -514,14 +557,24 @@ export class GpuParticleSystem extends PIXI.Container {
             this.transform.worldTransform.toArray(true);
         renderer.shader.bind(this.shader);
         renderer.state.set(this.state);
-        for (let block = 0; block < this.blocks.length; block++) {
+        const capacity = this.ring.capacity;
+        let block = firstLive;
+        while (block < totalBlocks) {
             if (!this.budget.isBlockLive(block)) {
+                block++;
                 continue;
             }
-            const geometry = this.blocks[block];
+            const startBlock = block;
+            while (block < totalBlocks && this.budget.isBlockLive(block)) {
+                block++;
+            }
+            const instances = Math.min(
+                (block - startBlock) * PARTICLE_BLOCK_SIZE,
+                capacity - startBlock * PARTICLE_BLOCK_SIZE,
+            );
+            const geometry = this.blocks[startBlock];
             renderer.geometry.bind(geometry, this.shader);
-            renderer.geometry.draw(PIXI.DRAW_MODES.TRIANGLES, 6, 0,
-                geometry.instanceCount);
+            renderer.geometry.draw(PIXI.DRAW_MODES.TRIANGLES, 6, 0, instances);
         }
     }
 

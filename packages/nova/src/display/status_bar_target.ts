@@ -94,6 +94,25 @@ export class TargetPane {
      */
     private renderTexture?: PIXI.RenderTexture;
 
+    /**
+     * Snapshot of the last live ship graphic rendered into `renderTexture`,
+     * used to skip redundant offscreen FBO render passes when the target's
+     * visible sprites have not changed since the previous frame.
+     */
+    private lastRenderGraphic?: AnimationGraphic;
+    private lastRenderWidth = 0;
+    private lastRenderHeight = 0;
+    private lastRenderContainerAlpha = -1;
+    private lastRenderLayers: {
+        name: string,
+        visible: boolean,
+        texture: PIXI.Texture,
+        rotationQ: number,
+        tint: PIXI.ColorSource,
+        alpha: number,
+    }[] = [];
+    private lastPercent?: number;
+
     /** Per-build; undefined between an ïntf reload's teardown and rebuild. */
     private texts?: {
         shield: PIXI.Text, armor: PIXI.Text, percent: PIXI.Text,
@@ -217,6 +236,7 @@ export class TargetPane {
             text.destroy();
         }
         this.texts = undefined;
+        this.invalidateRenderCache();
     }
 
     /**
@@ -235,6 +255,83 @@ export class TargetPane {
         this.renderTexture = undefined;
         this.pictFilter?.destroy();
         this.pictFilter = undefined;
+        this.invalidateRenderCache();
+    }
+
+    private invalidateRenderCache() {
+        this.lastRenderGraphic = undefined;
+        this.lastRenderWidth = 0;
+        this.lastRenderHeight = 0;
+        this.lastRenderContainerAlpha = -1;
+        this.lastRenderLayers.length = 0;
+        this.lastPercent = undefined;
+    }
+
+    /**
+     * Returns true if the target's rendered appearance differs from the last
+     * frame rendered into `renderTexture` (updating the cached fingerprint).
+     * Small engine-glow shimmer fluctuations (glowImage alpha jitter while
+     * thrusting) are tolerated so a steady-flying target does not force an
+     * offscreen FBO pass on every display frame.
+     */
+    private needsLiveRender(shipGraphic: AnimationGraphic,
+        width: number, height: number): boolean {
+        const containerAlpha = Math.round(shipGraphic.container.alpha * 20) / 20;
+        let dirty = this.lastRenderGraphic !== shipGraphic
+            || this.lastRenderWidth !== width
+            || this.lastRenderHeight !== height
+            || this.lastRenderContainerAlpha !== containerAlpha
+            || this.lastRenderLayers.length !== shipGraphic.sprites.size;
+
+        let idx = 0;
+        if (!dirty) {
+            for (const [layerName, sprite] of shipGraphic.sprites) {
+                const ps = sprite.pixiSprite;
+                const prev = this.lastRenderLayers[idx++];
+                const rotQ = Math.round(ps.rotation * 1000);
+                if (prev.name !== layerName
+                    || prev.visible !== ps.visible
+                    || prev.texture !== ps.texture
+                    || prev.rotationQ !== rotQ
+                    || prev.tint !== ps.tint) {
+                    dirty = true;
+                    break;
+                }
+                if (layerName === 'glowImage') {
+                    const prevLit = prev.alpha > 0.02;
+                    const curLit = ps.alpha > 0.02;
+                    if (prevLit !== curLit || Math.abs(prev.alpha - ps.alpha) >= 0.25) {
+                        dirty = true;
+                        break;
+                    }
+                } else if (Math.abs(prev.alpha - ps.alpha) >= 0.05) {
+                    dirty = true;
+                    break;
+                }
+            }
+        }
+
+        if (!dirty) {
+            return false;
+        }
+
+        this.lastRenderGraphic = shipGraphic;
+        this.lastRenderWidth = width;
+        this.lastRenderHeight = height;
+        this.lastRenderContainerAlpha = containerAlpha;
+        this.lastRenderLayers.length = 0;
+        for (const [layerName, sprite] of shipGraphic.sprites) {
+            const ps = sprite.pixiSprite;
+            this.lastRenderLayers.push({
+                name: layerName,
+                visible: ps.visible,
+                texture: ps.texture,
+                rotationQ: Math.round(ps.rotation * 1000),
+                tint: ps.tint,
+                alpha: ps.alpha,
+            });
+        }
+        return true;
     }
 
     drawTarget(name: string, shield?: number, armor?: number,
@@ -276,7 +373,10 @@ export class TargetPane {
         texts.percent.visible = readout.kind === 'shield'
             || readout.kind === 'armor';
         if (readout.kind === 'shield' || readout.kind === 'armor') {
-            texts.percent.text = `${String(readout.percent)}%`;
+            if (this.lastPercent !== readout.percent) {
+                this.lastPercent = readout.percent;
+                texts.percent.text = `${String(readout.percent)}%`;
+            }
         }
 
         const mode = targetImageMode(liveView, shipGraphic !== undefined,
@@ -285,6 +385,7 @@ export class TargetPane {
             // The original's fixed picture, drawn red from its blue
             // channel (TARGET_PICT_MATRIX). Textures are cached by PIXI,
             // so asking every frame costs a map lookup.
+            this.invalidateRenderCache();
             this.sprite.texture = this.displayAssets.textureFromPict(
                 targetPict);
             this.sprite.tint = 0xFFFFFF;
@@ -303,6 +404,7 @@ export class TargetPane {
             // size changes. Without this a fresh texture would leak every
             // display frame while a target is locked.
             let renderTexture = this.renderTexture;
+            let textureRecreated = false;
             if (!renderTexture ||
                 renderTexture.width !== width ||
                 renderTexture.height !== height) {
@@ -312,12 +414,40 @@ export class TargetPane {
                 });
                 renderTexture = new PIXI.RenderTexture(baseRenderTexture);
                 this.renderTexture = renderTexture;
+                textureRecreated = true;
             }
 
-            shipContainer.setTransform();
-            shipContainer.position.x = shipGraphic.size.x / 2;
-            shipContainer.position.y = shipGraphic.size.y / 2;
-            this.renderer.render(shipContainer, { renderTexture });
+            const dirty = this.needsLiveRender(shipGraphic, width, height);
+            if (textureRecreated || dirty) {
+                const prevX = shipContainer.position.x;
+                const prevY = shipContainer.position.y;
+                const prevScaleX = shipContainer.scale.x;
+                const prevScaleY = shipContainer.scale.y;
+                const prevRot = shipContainer.rotation;
+                const prevSkewX = shipContainer.skew.x;
+                const prevSkewY = shipContainer.skew.y;
+                const prevPivotX = shipContainer.pivot.x;
+                const prevPivotY = shipContainer.pivot.y;
+                const prevVisible = shipContainer.visible;
+                // The live container is borrowed for the thumbnail (and
+                // may be culled offscreen: ObjectDrawSystem hides what is
+                // out of view), so everything setTransform resets, and its
+                // visibility, is put back afterwards.
+                shipContainer.setTransform();
+                shipContainer.position.x = shipGraphic.size.x / 2;
+                shipContainer.position.y = shipGraphic.size.y / 2;
+                shipContainer.visible = true;
+                try {
+                    this.renderer.render(shipContainer, { renderTexture });
+                } finally {
+                    shipContainer.position.set(prevX, prevY);
+                    shipContainer.scale.set(prevScaleX, prevScaleY);
+                    shipContainer.rotation = prevRot;
+                    shipContainer.skew.set(prevSkewX, prevSkewY);
+                    shipContainer.pivot.set(prevPivotX, prevPivotY);
+                    shipContainer.visible = prevVisible;
+                }
+            }
             this.sprite.texture = renderTexture;
             let scale = 1;
             const maxSize = 110;
@@ -328,6 +458,7 @@ export class TargetPane {
             this.sprite.scale.set(scale, scale);
             this.sprite.visible = true;
         } else {
+            this.invalidateRenderCache();
             this.sprite.visible = false;
         }
 
@@ -345,6 +476,7 @@ export class TargetPane {
         if (!this.texts) {
             return;
         }
+        this.invalidateRenderCache();
         this.container.visible = false;
         this.noTargetContainer.visible = true;
         this.sprite.visible = false;

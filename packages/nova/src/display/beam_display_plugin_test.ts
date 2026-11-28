@@ -14,7 +14,7 @@ import { BeamWeaponData } from 'novadatainterface/weapon_data';
 import { BeamDataComponent, BeamStateComponent } from '../nova_plugin/combat/index.js';
 import { SourceComponent, TargetComponent } from '../nova_plugin/ship/index.js';
 import {
-    BeamDisplaySystem, BeamGraphicsResource, beamOrigin, drawnBeamPose,
+    BeamDisplaySystem, BeamGraphicsResource, beamOrigin, ClearBeams, drawnBeamPose,
 } from './beam_display_plugin.js';
 import { defaultSimulationTime, SimulationTimeResource } from './simulation_time.js';
 import { CameraFocus } from './space_resource.js';
@@ -253,5 +253,52 @@ describe('BeamDisplaySystem anchoring to the firing ship', () => {
         expect(pose.position.x).toEqual(5);
         expect(pose.position.y).toEqual(6);
         expect(pose.rotation.angle).toEqual(1);
+    });
+
+    it('hides beamGraphics and skips clear() on consecutive beamless frames', () => {
+        const world = new World('clear beams test');
+        let clears = 0;
+        const recorder = {
+            visible: false,
+            clear() { clears++; },
+            lineStyle() { },
+            moveTo() { },
+            lineTo() { },
+        } as unknown as PIXI.Graphics;
+        world.resources.set(BeamGraphicsResource, recorder);
+        world.resources.set(CameraFocus, { x: 0, y: 0 });
+        world.resources.set(SimulationTimeResource, defaultSimulationTime());
+        world.addSystem(ClearBeams);
+        world.addSystem(BeamDisplaySystem);
+
+        // No beams: ClearBeams is a no-op and beamGraphics stays hidden.
+        world.step();
+        world.step();
+        expect(clears).toBe(0);
+        expect(recorder.visible).toBeFalse();
+
+        // Add a beam: BeamDisplaySystem draws and unhides beamGraphics.
+        const beam = new Entity('beam')
+            .addComponent(BeamDataComponent, beamData())
+            .addComponent(BeamStateComponent, {} as never)
+            .addComponent(MovementStateComponent, {
+                position: new Position(0, 0),
+                velocity: new Vector(0, 0),
+                rotation: new Angle(0),
+                accelerating: 0, turning: 0, turnBack: false,
+            } as never);
+        world.entities.set('beam', beam);
+        world.step();
+        expect(clears).toBe(0);
+        expect(recorder.visible).toBeTrue();
+
+        // Remove the beam: next frame clears once and hides; following empty
+        // frames skip clear().
+        world.entities.delete('beam');
+        world.step();
+        expect(clears).toBe(1);
+        expect(recorder.visible).toBeFalse();
+        world.step();
+        expect(clears).toBe(1);
     });
 });
