@@ -282,6 +282,19 @@ describe('computeContext: the escort management offer', () => {
                 ?.context.escort?.upgrade?.toShip).toBe(UPGRADE);
         });
 
+    it('names the escort without the shïp name\'s "; note" suffix', async () => {
+        // Reference wave 57: a captured "Valkyrie;Second-Hand - poor"
+        // (stock shïp 371) reads "Valkyrie" / "Class I" in the original's
+        // comm box.
+        const { world, gameData } = escortWorld();
+        const cls = gameData.data.Ship.map.get('nova:128')!;
+        cls.name = 'Valkyrie;Second-Hand - poor';
+        cls.subtitle = 'Class I';
+        const result = await computeContext(world, gameData);
+        expect(result?.context.heading.split('\n').slice(1))
+            .toEqual([' Valkyrie', ' Class I']);
+    });
+
     it('says the class cannot be upgraded when it has no UpgradeTo at all',
         async () => {
             const { world, gameData } = escortWorld();

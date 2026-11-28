@@ -230,7 +230,7 @@ const ShowLandingClearedMessage = new System({
         Optional(ShipDataComponent)] as const,
     step({ kind, automatic, form, welcome, stellarName }, statusLine,
         { time }, _player, names, shipData) {
-        const shipName = playerShipName(names, shipData?.name);
+        const shipName = playerShipName(names, shipData && displayName(shipData.name));
         if (kind !== 'hypergate') {
             statusLine.setMessage(stellarClearedMessage(kind === 'station',
                 form ?? 0, welcome ?? false, stellarName ?? '', shipName),
@@ -259,7 +259,7 @@ const ShowLandingRequestMessage = new System({
     step({ kind, form, stellarName, online }, statusLine, { time }, _player,
         names, shipData) {
         statusLine.setMessage(landingRequestMessage(kind, form, stellarName,
-            playerShipName(names, shipData?.name), online), time);
+            playerShipName(names, shipData && displayName(shipData.name)), online), time);
     },
 });
 

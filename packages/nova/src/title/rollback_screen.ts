@@ -317,8 +317,11 @@ export class RollbackScreen {
                 ? universe.planetName(id) : undefined,
             systemName: id => universe.systemName(id),
             systemOfPlanet: (id, bits) => universe.systemIdOfPlanet(id, bits),
-            outfitName: id => this.outfitNames.get(id)
-                ?? this.simulationData.data.Outfit.getCached(id)?.name,
+            outfitName: id => {
+                const name = this.outfitNames.get(id)
+                    ?? this.simulationData.data.Outfit.getCached(id)?.name;
+                return name === undefined ? undefined : displayName(name);
+            },
             shipName: id => this.shipNames.get(id)
                 ?? this.simulationData.data.Ship.getCached(id)?.name
                     ?.split(';')[0].trim(),
@@ -356,7 +359,7 @@ export class RollbackScreen {
                     continue;
                 }
                 pending.push(this.simulationData.data.Outfit.get(id).then(o => {
-                    this.outfitNames.set(id, o.name);
+                    this.outfitNames.set(id, displayName(o.name));
                 }, () => { /* keep the id */ }));
             }
         }

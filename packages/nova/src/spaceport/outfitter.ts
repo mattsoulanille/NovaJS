@@ -8,7 +8,7 @@ import * as PIXI from 'pixi.js';
 import { Observable } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
-import { ControlEvent } from "../nova_plugin/core/index.js";
+import { ControlEvent, displayName } from "../nova_plugin/core/index.js";
 import {
     NCBParseError, ControlBits, makeDescTextContext, playerGender,
     resolveConditionalBlocks,
@@ -1139,7 +1139,7 @@ export class Outfitter extends Menu<Entity> {
         this.setFreeMassText();
         this.refreshTradeState();
         if (bought > 0 && !this.text.status.text) {
-            this.text.status.text = `Bought ${bought} x ${outfit.name}.`;
+            this.text.status.text = `Bought ${bought} x ${displayName(outfit.name)}.`;
         }
     }
 
@@ -1219,7 +1219,7 @@ export class Outfitter extends Menu<Entity> {
         this.setFreeMassText();
         this.refreshTradeState();
         if (sold > 0 && !this.text.status.text) {
-            this.text.status.text = `Sold ${sold} x ${outfit.name}.`;
+            this.text.status.text = `Sold ${sold} x ${displayName(outfit.name)}.`;
         }
     }
 

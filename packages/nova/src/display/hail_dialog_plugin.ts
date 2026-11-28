@@ -936,7 +936,7 @@ export async function computeContext(world: World,
             shipClass: shipData?.name ?? '',
         });
         const heading = shipIdentityBlock({
-            persName: identity.named ? identity.name : undefined,
+            persName: identity.named ? displayName(identity.name) : undefined,
             shipClass: shipData ? commClassName(shipData) : undefined,
             govtName: govt?.commName,
             // The ship's IFF alone (ruling #297): "A ship of an unfriendly
@@ -1003,7 +1003,7 @@ export async function computeContext(world: World,
             // A carrier-launched fighter from the player's own bay: label it as
             // such (not "Hired Escort:") and show no management buttons — a bay
             // fighter has no salary, upgrade price, or resale value to manage.
-            const fighterName = shipData?.name || 'Fighter';
+            const fighterName = displayName(shipData?.name ?? '') || 'Fighter';
             const fighterClass = shipData?.subtitle?.trim();
             return {
                 context: {
@@ -1039,7 +1039,7 @@ export async function computeContext(world: World,
             // never quote a number applyEscortAction would disagree with,
             // and an escort that has just been upgraded reprices itself
             // with nothing else to update.
-            const escortName = shipData?.name || 'Escort';
+            const escortName = displayName(shipData?.name ?? '') || 'Escort';
             const escortClass = shipData?.subtitle?.trim();
             const provenance = escortProvenance(shipTarget);
             const upgradeTo = shipData?.escortUpgradeShip ?? null;

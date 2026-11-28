@@ -603,6 +603,20 @@ describe('canBuyOutfit', () => {
                     expect(maxSellCount(bayOutfit, returned)).toBe(0);
                 });
 
+                it('names the launcher without its "; note" suffix', () => {
+                    const noted = { ...bayOutfit, name: 'Viper Bay; dev note' };
+                    const returned = makeContext({
+                        outfits: [noted, fighter],
+                        weapons: [bayWeapon],
+                        owned: [['nova:157', 1], ['nova:158', 4]],
+                    });
+                    expect(canSellOutfit(noted, returned)).toEqual(
+                        jasmine.objectContaining({
+                            message: 'You need to sell 4 units of ammunition'
+                                + ' before you can sell your Viper Bay.',
+                        }));
+                });
+
                 it('sells the bay once the fighters have been sold', () => {
                     const empty = makeContext({
                         outfits: [bayOutfit, fighter],

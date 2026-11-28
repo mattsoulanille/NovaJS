@@ -15,6 +15,7 @@ import { OutfitData } from 'novadatainterface/outfit_data';
 import { PlanetData } from 'novadatainterface/planet_data';
 import { ShipData } from 'novadatainterface/ship_data';
 import { WeaponData } from 'novadatainterface/weapon_data';
+import { displayName } from '../nova_plugin/core/index.js';
 import { DiscoveryAccess } from '../nova_plugin/player/index.js';
 import {
     PlayerContributeSources, playerContribute as sharedPlayerContribute,
@@ -1178,7 +1179,7 @@ export function canSellOutfit(outfit: OutfitData,
         }
         if (aboard + deployed > roomLeft) {
             return denied('ammoAboard', ammoSellRefusal(
-                aboard + deployed - roomLeft, outfit.name,
+                aboard + deployed - roomLeft, displayName(outfit.name),
                 context.ammoSellStrings));
         }
     }

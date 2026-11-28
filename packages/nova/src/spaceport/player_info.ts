@@ -587,7 +587,7 @@ export class PlayerInfoDialog {
                     const outfit =
                         await this.simulationData.data.Outfit.get(id);
                     this.outfitNames.set(id, {
-                        name: outfit.name,
+                        name: displayName(outfit.name),
                         // What it cost on THIS hull (oütf 0x0200 scales
                         // the price by the ship's mass), which is what
                         // the trade-in line below values at 50%.
