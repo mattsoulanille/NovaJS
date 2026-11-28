@@ -26247,7 +26247,159 @@ stock PICTs as PNG), `holpa237_mosaic.png`, `fit_o.txt`, `fit_r.txt`,
   PICTs out of size order (the rule "the last that fits" vs "the largest
   that fits"); a plug-in nëbu id above 159 (the Bible's 32-nebula cap).
 
+### dësc test operators, wave 54: a dësc block has NO o / e / compound terms; its scanner walks from the "{" to the next b, g or p ANYWHERE in the text (other letters, quotes, the block's own "}" and later lines are skipped), tests that one letter (b: the digits right after it), and cuts the text at the "{" when none is left; "!" is sticky for the rest of the text; the Extra Outfits `{o609 ...}` takes the g of "get" and shows "License " (male) / "License}" (female) (2026-11-27)
+
+**Question** (the hub's brief, from Matthew's 2026-11-27 screenshot
+`~/.config/novajs-hub/img/outfitter_desc_o609_1127.webp`): the outfitter
+text of Extra Outfits' Inertial Damper ends with the raw block
+`License{o609 "\r\rYou can`t get this outfit since your ship is already
+inertialess." ""}`. The Bible (~:738) documents only `{bXXX "a" "b"}`,
+`!`, `{G ...}` and `{P ...}`. What does the original do with `{oXXX ...}`,
+other letters, compound and malformed blocks?
+
+**1. The installed data** (`tools/scan.mjs` of this session, the parser's
+resource-fork reader over every dësc / STR# / STR of `Nova Files` and the
+26 plug-ins). 1,019 dëscs carry a `{`; every block starts with a letter:
+
+| source | dëscs | blocks by first letter |
+|---|---|---|
+| stock Nova Files | 316 | G 207, g 7, b 114, B 1 (Nova Data 5 dësc 9204 `{B800...`), P 129 |
+| ARPIA | 242 | G 451, b 165, P 19 |
+| Extra Outfits (ExtraOutfits v18 Part 1 + TechnicalData v1) | 209 | b 72, P 207, G 1, **o 2** (dësc 3319 in both files, the Inertial Damper) |
+| ShipVariants v2 (+ "sort of cheat") | 103 + 103 | P 103, b 6 each |
+| More Blasters CHEAT | 8 | P 7, b 1 |
+
+No STR# or STR uses a `{` block, no block uses `!`, none is compound. Only
+the two `{o609` blocks start with a letter other than b / g / p.
+Irregular shapes: stock 4530 `{b800"at least as""far more"}` (no
+spaces), ARPIA 3066 `{P30""" ""\r\rREQUIRES ..."}` (three strings),
+ARPIA 9928 / 11935 / 11991 (an escaped `\"` right before a string's
+closing quote, so a string closes early and the other runs on).
+
+**Rig.** Stock data, no kit. Three run-only plug-ins override STOCK
+dëscs: the five outfits of Snowmelt's first outfitter cells (oütf 184
+Gravimetric Sensors .. 188 Escape Pod -> dësc 3056-3060, cells at window
+(84 / 167 / 250 / 333, 180) and (84, 234)), oütf 433 "Map" (dësc 3305,
+cell (167, 234)) and Snowmelt's landing text (dësc 164)
+(`tools/w54_desc_ops.mjs`, `w54_desc_ops2.mjs`, `w54_desc_ops3.mjs`).
+Every case is `N[<block>]`, so the brackets show what the block became.
+Pilots (pilot-make from the game-made base, at Snowmelt; pilot-make
+gained a `gender` edit for this): `w54_o` (holds an Escape Pod, oütf 188;
+bit 9351 clear; male), `w54_b` (no Escape Pod; bit 9351 SET; male),
+`w54_f` (as `w54_o`, female). All hold the Shuttle's Light Blaster (oütf
+128) and have Fomalhaut (sÿst 136) explored, sÿst 300 not. Scenario
+`scen/desc_ops*.json`: land, refuse the intro job, a window shot of the
+landing text, open the outfitter, click each cell, a window shot each.
+Runs: `ops_o`, `ops_b` (plug-in 1), `ops2_o`, `ops2_b` (retry1), `ops2_f`
+(plug-in 2), `ops3_o` (plug-in 3).
+
+**Results** (every pane, `sheet_ops_o.png`, `sheet_ops_b.png`,
+`sheet_ops2_{o,b,f}.png`; `ops3_o` crops in its run dir):
+
+| case (dësc) | o | b | f | reading |
+|---|---|---|---|---|
+| `1[{o188 "Y" "N"}]` .. `10[...]`, all o terms (3056) | `1[` | `1[` | | no b / g / p anywhere after: the text ENDS at the "{" |
+| `11[{e136 ...}]`, `12[{e300 ...}]`, `13[{E136 ...}]`, `14[{b9351 ...}]` (3057) | `11[N]` | `11[Y]` | | e is skipped; the test is line 14's b9351, lines 12-14 are swallowed |
+| `15[{G ...}]`, `16[{P ...}]` | Y, Y | Y, Y | | G male, P registered |
+| `17[{x188 ...}]` .. `20[{b "Y" "N"}]` | `17[N]` | `17[N]` | | to line 20's bare b (bit 0) |
+| `21[{o188 & b9351 ...}]`, `22[{o188 \| b9351 ...}]`, `25[{o188&b9351 ...}]` (3058) | N, N, N | Y, Y, Y | | only the b9351 counts |
+| `23[{(o188) ...}]` + `24[{[o188 b9351] = 1 ...}]` | `23[N]` | `23[Y]` | | `(` skipped, to line 24's b9351 |
+| `26[{!(o300) ...}]` + `27[{b9351 o188 ...}]` | `26[Y]` | `26[N]` | | !b9351 |
+| `28[{1 ...}]` + `29[{b9351 \| o188 ...}]` | `28[Y]` | `28[N]` | | !b9351: the `!` of line 26 is STILL in force |
+| `30[{o188 Y N}]` .. `36[{o188 "Y" "N" end` (3059) | `30[N ]` / `36[` | same | | to the b of `33[a { b]` (bit 0) and line 34's strings; the next block takes the g of "get" (male: " "); line 36 has none left: cut |
+| `39[{o128 ...}]` + an unterminated quote (3060) | `39[` | `39[` | | the Shuttle's own Light Blaster changes nothing: cut |
+| landing `L1[{o188 ...}] ... L5[{b9351 ...}]` (164) | `L1[N] L5[N]` | `L1[Y] L5[Y]` | | L1 tests L4's b9351; the landing text reads the REAL bits |
+| `1[{b0 \| o188 ...}]` .. `11[...]`: o / e / !o / O / (o) / [..] / g after a b (ops2 3056) | all N | all N but `5[{b9351 & o188 ...}]` Y | all N | ONE term: nothing after it counts |
+| `12[{x ...}]` + `13[{G "M" "F"}]`, `14[x]` + `15[{B9351 ...}]`, `16[x]` + `17[{P "R" "U"}]` | M, N, R | M, Y, R | F, N, R | uppercase G / B / P stop the scan |
+| `20[{x "Y" "N"} ! {b0 ...}]` | Y | Y | Y | a `!` met while scanning negates |
+| `21[... a p {b0 ...}]`, `22[... a g {b0 ...}]`, `23[... a o188 {b0 ...}]` | N, N, Y | N, N, Y | N, **Y**, Y | p and g in prose stop it (negated, sticky), o does not |
+| `25[{G "Y" "N" tail}]`, `26[{!G ...}]`, `27[{b0 "Y"}]`, `28[{G "Y"}]` | Y, N, Y, `[]` | same | N, Y, Y, Y | the tail is dropped; after 26 every block is negated |
+| `29[{G "a\"c" "N"}]`, `30[{!G "Y" "a\"c"}]` | N, `a"c` | same | `a"c`, Y | `\` escapes; a second `!` does not undo the first |
+| `31[{G"Y""N"}]`, `32[{G "Y" "N" "Z"}]`, `34[{!G "Y" x "N"}]` | N, N, N | same | Y, Y, Y | no spaces needed; a third string and junk before the second are skipped |
+| `36[{b0 "Y" "N"}{G "Y" "N"}]`, `37[{ b0 ...}]` (3060) | NY, N | NY, N | NN, N | a fresh text starts un-negated |
+| `38[{b 9351 ...}]`, `39[{b9351x ...}]`, `40[{b9351 ...}]`, `41[{!b9351 ...}]` | N, N, N, Y | **N**, Y, Y, N | N, N, N, Y | the bit is the digits RIGHT after the b (a space first: bit 0) |
+| the Inertial Damper text, verbatim (3305) | `License ` | `License ` | **`License}`** | the g of "get"; male: the string between the quotes after "inertialess." and `""` (one space); female: the second string starts at the last quote and runs to the end |
+| `E1[{b0 "Y" "N" tail]` .. `E5[{} big "Y" "N"} tail]` (ops3) | `E1[N`, `E2[N tail]`, `E3[Y tail]`, `E4[`, `E5[N tail]` | | | no "}" after the string: it is the last thing shown; an unterminated string runs to the end; no quote after the term: cut |
+| `E6[{b0 ...} wow! {b0 ...}]`, `E7[{G "{b0 \"Y\" \"N\"}" "x"}]`, `E8[a } b]`, `E9[{G ...} {!b0 ...} {b0 ...}]` | `N wow! N`, `{b0 "Y" "N"}`, `a } b`, `Y Y Y` | | | a `!` in prose is not read; a chosen string is not rescanned; a stray "}" stays |
+| landing `L1[{G "Y" "N"}{b0 "Y" "N"}] L2[ok]` | `L1[YN] L2[ok]` | | | |
+
+**Findings.**
+1. **There are no o / e / compound terms in a dësc.** The test is ONE
+   letter: b (control bit; the decimal digits immediately after it, none
+   = bit 0), g (male) or p (registered; digits read and ignored), either
+   case. Anything after the term up to the first quote is ignored (`b0 |
+   o188`, `b9351 & o188`, `b0 | g`).
+2. **The scanner walks to the next b / g / p.** From the "{" it skips
+   every other character, crossing quotes, the block's own "}" and later
+   lines, so a block that starts with o / e / x / ( / a digit takes its
+   test from the next b / g / p anywhere after it, including inside a word
+   of prose, and the strings from the next quotes after THAT; everything
+   in between disappears. With no b / g / p left the text ends at the "{".
+3. **"!" is sticky.** A `!` met while scanning for the letter (before it,
+   or among the skipped characters) negates that block AND every later
+   block of the same text; a second `!` does not undo it. A `!` in prose
+   between blocks is not read; each text starts un-negated.
+4. **Strings.** The first string runs from the first quote after the term
+   to the next unescaped one (`\` escapes). True: that string, and the
+   block ends at the first "}" after it (a second or third string and any
+   junk are dropped). False: the scan goes on to the next quote or "}"; a
+   "}" first means no second string (nothing substituted); a quote starts
+   the second string, and the block ends at the first "}" after it. An
+   unterminated string runs to the end of the text; with no "}" after the
+   chosen string the text ends with it; with no quote at all after the
+   term the text is cut at the "{". Substituted text is not rescanned.
+5. **The Inertial Damper** therefore reads "Requires: Exotic Technologies
+   License " for a male pilot and "Requires: Exotic Technologies
+   License}" for a female one, whatever the ship holds; the raw block is
+   never shown. The landing text, like the outfitter's, reads the
+   player's real control bits.
+
+**NovaJS (base 5d22d86c, before this wave's fix).**
+`N/nova_plugin/ncb/desc_text.ts:152-217` (`tryParseConditional`) accepted
+only a leading `[!]b|g|p` term, demanded well-formed strings and a "}"
+right after them, and left anything else as raw text (the screenshot);
+"!" was per block. `N/spaceport/spaceport.ts:1261-1271` expanded the
+landing text once, at build, with every bit clear. **Mismatch** on every
+row above except the plain well-formed cases.
+
+**Applied 2026-11-27 (this branch):** `N/nova_plugin/ncb/desc_text.ts`
+`resolveConditionalBlocks` / `expandBlock` / `substitute` implement
+findings 1-4 (one scanner shared by every caller: outfitter, shipyard,
+hire escort, bar, landing text, mission BBS / offers / info / briefings /
+ship-done texts, the About box); `N/spaceport/spaceport.ts`
+`refreshLandingDesc` re-expands the landing text against the landing's
+working-copy bits on every landing. `N/nova_plugin/ncb/desc_text_reference_test.ts`
+replays every dësc of the three plug-ins for each pilot and expects the
+panes above; `N/spaceport/desc_conditional_landed_test.ts` drives the real
+outfitter (the Inertial Damper text, with and without oütf 609) and the
+landing text (bits per landing). On the installed data the expansion
+changes for exactly three dëscs: Extra Outfits 3319 (both files; as
+finding 5), ARPIA 3066 (the three-string `{P30...}` now reads "" as on
+the original instead of printing raw) and ARPIA 11991's female branch.
+Confidence: high (every case read off window shots, three pilots, one
+change at a time; all six runs agree).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w54/`: `ops_o/`,
+`ops_b/`, `ops2_o/`, `ops2_b/` (`-retry1`), `ops2_f/`, `ops3_o/` (window
+shots `NN-cell*.png`, `02-after_no.png` for the landing text), the sheets
+`sheet_ops_{o,b}.png` and `sheet_ops2_{o,b,f}.png`, `tools/` (plug-in
+specs, `sheet.sh`, the queues), `pilotspecs/`, `scen/`, `recover.log`.
+
+### Not reached in wave 54 (2026-11-27)
+
+- Whether the conditional scanner also runs on STR# text (no installed
+  STR# carries a block); a b number past 9999; whether a mission
+  briefing's text is expanded before or after its wildcards.
+
 ### Reliability notes (for anyone running the reference)
+
+- **A dësc probe needs no kit (wave 54):** override the stock dëscs of
+  Snowmelt's outfitter items (oütf 184-188 and 433 -> dësc 3056-3060 and
+  3305; cells at window (84 / 167 / 250 / 333, 180) and (84 / 167, 234))
+  and its landing text (dësc 164) in a run-only plug-in. A block that
+  finds no b / g / p cuts the rest of its text, so put any case that may
+  misparse LAST in its dësc (or in a dësc of its own), and keep "Y" / "N"
+  style strings free of b / g / p. pilot-make takes `"gender": "female"`.
 
 - **A stock-data map rig needs no kit (wave 53):** pilots made with
   `explored` / `exploreAll` and run-only nëbu overrides (`"@8:str255"`
@@ -27751,6 +27903,7 @@ cosmetic or rare.
 | K7 | Escort command keys (escortCmd 0-3 = f/d/v/c, escort menu e), from the prefs | escort commands | **answered (wave 2, E-view)** | M |
 | K8 | Radar centre arrow range and hypergate ring vs dot (#358) | `N/display/status_bar_radar.ts:209-225,646-668` | VID flying out from a kit stellar. **Answered (wave 22)**: every station (spöb Flags 0x0010, the working hypergates too) is a 2 x 2 dot; a planet rings from 89-96 px. **Applied in 4c6a58ab** (threshold 96; wormholes rings, unmeasured). **Wave 23**: a wormhole is a 2 x 2 dot; applied 2026-11-24 by the wormhole flag (not 0x0020: Jupiter is a ring; see "K8 wormhole on the radar, wave 23"). Centre arrow range not asked **Wave 43** ("The radar's centre arrow (K8), wave 43"): drawn whenever the system CENTRE is off the radar (onset at about 84 of 88 radar px, about 2,750 px), whatever stellars are on the radar (a port 4,000 px from an empty centre: the arrow from the start); NovaJS gates on "no stellar on the radar": mismatch, proposed gate on the centre's offset **Wave 44** ("The centre arrow's onset (K8 leftover), wave 44"): the gate is the centre's DISTANCE, a circle of 2,404-2,650 px, not per axis (NovaJS after a5bb1c25: per axis at 2,864 px: mismatch) **Applied 2026-11-27 (a2256069)**: `centerArrowShown` = the centre's distance (squared) > `CENTER_ARROW_RADIUS` 2,500 px (GUESS inside 2,404-2,650), a fixed world radius, not a share of the radar's span (GUESS: only the stock status bar measured); `CENTER_ARROW_ONSET` and the unused `RadarPane.range` removed **Wave 45** ("The centre arrow's onset radius (K8 leftover), wave 45"): no arrow at 2,450-2,600 px: the radius is 2,601-2,650 (main's 2,500 is low; proposed 2,625). **Applied 2026-11-27 (716dc346)**: `CENTER_ARROW_RADIUS` 2,500 -> 2,625 (GUESS, the middle of 2,601-2,650); the hypot gate kept | L |
 | K10 | Target bracket corners: distance from the centre, shape, what sets them | `N/display/target_corners_plugin.ts:98-117,180`, `N/display/planet_corners_plugin.ts:36` | **answered (wave 9)**: base frame + 15 px per side, square from max(w, h), fixed glyphs, additive fly-in. **Mismatch** (NovaJS: +-0.354 x the largest layer, inside the sprite); fix applied in c43cddcc | L |
+| DT | dësc conditional blocks beyond the Bible: `{oXXX ...}` (Extra Outfits' Inertial Damper), other letters, compound and malformed blocks | `N/nova_plugin/ncb/desc_text.ts` (every dësc reader) | **answered (wave 54, "dësc test operators, wave 54")**: one b / g / p term, reached by skipping ANY other characters (across the text; none left: the text ends at the "{"), sticky `!`, measured string rules. **Mismatch** (NovaJS printed such blocks raw, and the landing text ignored the bits); fix applied on this branch | M |
 
 ### Edge cases
 
