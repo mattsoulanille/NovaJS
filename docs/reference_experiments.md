@@ -28041,6 +28041,73 @@ attempt `20261127-235809-w60_sc_b/` failed at open_pilot),
 `panel.txt`), `20261128-010500-w60_sc_t/` (`04-demand1.png`,
 `09-w1-3.png`: the six red defenders among the green fighters).
 
+### Scourge: MaxOdds and fighting back: an AI 3 of a MaxOdds 0 (or 1) govt FIGHTS BACK when shot, like a MaxOdds 1000 one; MaxOdds gates only the fights it starts (a xenophobic MaxOdds 0 ship never came at an idle player) (2026-11-28)
+
+**Question** (playtest bug "the Scourge ships from the Singularity plug-in
+do not fight back when attacked"). The plug-in's gövt 194 "scourge" has
+**MaxOdds 0** (xenophobic, CrimeTol 0, InitialRec -20); its düdes 270-272
+are AI 3 and its ships are armed. NovaJS let the MaxOdds call veto every
+AI 3 engagement, the aggressor's included, so a shot Scourge ship patrolled
+on. Does the original's warship fight back against the odds, or is MaxOdds
+0 a special "unlimited"?
+
+**Rig.** Wave 3's `ai_retal` (the AI 3 yellow AI Subject Disc, düde 632,
+gövt 363, Strength 50, two Kit Raider Guns; the player in the Kit Lancer
+Heavy, Strength 100, 30000 shield with no recharge, the 1-damage Kit
+Tickler; one 0.6 s tickle, then 100 s of watching) with a run-only plug-in
+`zz_<variant>` (sorts after `testkit`, so its gövt 363 wins) changing only
+gövt 363's MaxOdds and Flags. Odds against the disc: 100 / 50 = 200%.
+Variants: `odds0_retal` (MaxOdds 0), `odds1_retal` (MaxOdds 1), and two
+with NO tickle (the 100 s watch only): `xeno0_idle` (Flags 0x0001
+xenophobic, MaxOdds 0) and `xeno1000_idle` (xenophobic, MaxOdds 1000).
+`analysis/hostility.mjs --colour yellow` reads the player's shield bar and
+the disc's distance.
+
+| run | tickle | disc | player's shield bar |
+|---|---|---|---|
+| odds0_retal | 9.5 s | closed in about 10 s later and made passes (8-260 px, within 200 px half the time) to the end; RED brackets | 148 -> 128 px (first drop 26.6 s, steady to 153 s) |
+| odds1_retal | yes | the same (closest 9 px, within 200 px 51% of frames) | 148 -> 126 px (first drop 26.7 s) |
+| xeno0_idle | none | never on screen in 150 s (a radar dot off to the side) | 148 -> 148 (untouched) |
+| xeno1000_idle | none | on the player from the first frame (102 px) and making passes (8-260 px, within 200 px 59% of frames) to the end: the control, so the run-only gövt override is in force | 146 -> 124 px (already hit before the recording began; first drop in it 21.7 s) |
+
+**Findings.**
+1. **A warship fights back whatever its MaxOdds**: at MaxOdds 0 and at
+   MaxOdds 1, with the odds 2 : 1 against it, the tickled disc attacked
+   the player for two minutes, as wave 3's MaxOdds 1000 disc did. (With
+   wave 5's Strength-10000 attacker the tank also fought until its 0x0010
+   retreat.)
+2. **MaxOdds 0 is not "unlimited"**: the xenophobic MaxOdds 0 disc left an
+   idle player alone, where the same disc at MaxOdds 1000 attacked him at
+   once. MaxOdds gates the fights a ship
+   STARTS, as waves 32/33 and 41/42 found.
+3. So the Singularity Scourge, unprovoked, leave a player alone (and
+   everyone else: MaxOdds 0 never starts a fight) but answer any attack.
+
+**NovaJS (main 511b6bc4).** `N/nova_plugin/npc/npc_decision.ts` case 3
+engaged the nearest of (hostiles in range + the aggressor) only when
+`oddsFavorable(maxOdds, ...)` held, so 1: **mismatch** (a MaxOdds 0 or 1
+warship never fought back), 2: **matches**. AI 4 already engages its
+aggressor without an odds call.
+**Applied (abaedc68):** an AI 3 warship engages its AGGRESSOR whatever
+the odds; when the nearest candidate is an unfavorable hostile, it takes
+the aggressor instead; unprovoked hunts keep the MaxOdds gate, and the
+0x0010 retreat still reads a too-strong attacker as "losing"
+(`npc_fight_back_test.ts`, including the real Singularity data;
+`same_govt_friendly_fire_integration_test.ts`'s fleet escort now goes for
+the shooter, as P1 wave 13's guards did). **Not measured:** AI 2 (brave
+trader), which NovaJS still lets flee an unfavorable attacker (Bible: it
+"fights back when attacked"); a next rig: `w3_ai2_retal` with these
+plug-ins.
+
+Confidence: high for 1 (two variants, two minutes each, the same as the
+control); high for 2 (one run each, opposite outcomes). The planned
+MaxOdds 1000 tickle control (`odds1000_retal`) was not run: wave 3's
+`w3_ai3_retal` is that control.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261128-scourge/`
+(`runs/<variant>/2*/`: `recording.mp4`, `*-watch-*.png`; `plugins/`
+`govt363.mjs` + `zz_*.mjs`; `scen/`; `pilots/scourge_ai3.json`).
+
 ### Reliability notes (for anyone running the reference)
 
 - **A map purchase is read from the pilot, not the screen (2026-11-28):**
