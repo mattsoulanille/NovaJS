@@ -784,6 +784,16 @@ export class Shipyard extends Menu<Entity> {
         }
     }
 
+    /**
+     * Money moved from outside the shipyard while it is open (see
+     * Outfitter.creditsChanged): re-quote "You Have:" and the Buy gate.
+     */
+    creditsChanged() {
+        if (this.container.visible) {
+            this.refreshTradeState();
+        }
+    }
+
     /** A teardown closes the hangar too, so its keys are released. */
     override dismiss() {
         this.hangar.dismiss();

@@ -277,6 +277,7 @@ export class LandedTransaction {
     private leaseOwner?: SavepointRecord;
     private swapListeners: ((ship: Entity) => void)[] = [];
     private shipChangeListeners: ((ship: Entity) => void)[] = [];
+    private creditListeners: (() => void)[] = [];
     /**
      * Every shïp global id in the game data: the lookup the change-ship
      * operators resolve their bare number through, stock-first (see
@@ -753,6 +754,28 @@ export class LandedTransaction {
         if (live) {
             live.credits += delta;
         }
+        for (const listener of [...this.creditListeners]) {
+            listener();
+        }
+    }
+
+    /**
+     * Told after every {@link applyExternalCredits} — money that moved
+     * while a venue may be OPEN but not because of anything it did (the
+     * status bar's debug grant, an escort sale settling). A venue's own
+     * buys and sells refresh its readouts themselves; this is what lets
+     * an open outfitter's "You Have:" line and its afford gates, the
+     * shipyard's, the trade center's and the bar dialogs' follow money
+     * that arrived from outside. Returns the unsubscribe.
+     */
+    onCreditsChanged(listener: () => void): () => void {
+        this.creditListeners.push(listener);
+        return () => {
+            const index = this.creditListeners.indexOf(listener);
+            if (index >= 0) {
+                this.creditListeners.splice(index, 1);
+            }
+        };
     }
 
     // ── The fleet's holds ───────────────────────────────────────────────

@@ -18,6 +18,15 @@ describe('formatCredits', () => {
         expect(formatCredits(3230000)).toBe('3.23M');
         expect(formatCredits(1_340_000_000)).toBe('1.34B');
     });
+    it('truncates rather than rounds, keeping leading zeros', () => {
+        // Matthew's 2026-11-27 playtest balance and its neighbours.
+        expect(formatCredits(1_092_513)).toBe('1.09M');
+        expect(formatCredits(1_047_413)).toBe('1.04M');
+        expect(formatCredits(1_499_999)).toBe('1.49M');
+        expect(formatCredits(1_005_000)).toBe('1.00M');
+        expect(formatCredits(9_999_999_999)).toBe('9.99B');
+        expect(formatCredits(21_844_979)).toBe('21.84M');
+    });
     it('never shows negative balances', () => {
         expect(formatCredits(-5)).toBe('0');
     });

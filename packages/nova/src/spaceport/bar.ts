@@ -371,6 +371,16 @@ export class Bar extends Menu<Entity> {
     }
 
     /**
+     * Money moved from outside the bar while it is open (see
+     * Outfitter.creditsChanged): the hire dialog's "You Have:" line and
+     * Hire gate, and the gamble dialog's bet buttons, follow it.
+     */
+    creditsChanged() {
+        this.hireEscort.creditsChanged();
+        this.gamble.creditsChanged();
+    }
+
+    /**
      * The live working credit balance for the docked status bar: gambling and
      * hire fees settle into the landing's working credits, so the Credits
      * readout follows them before Leave releases the visit.

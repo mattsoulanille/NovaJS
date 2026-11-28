@@ -87,16 +87,29 @@ export function navReadout(destinationSystem: string | null,
  * Formats a credit balance the way the original status bar does: comma-grouped
  * up to a million ("546,553"), then abbreviated to two decimals ("2.10M",
  * "1.34B") so large fortunes stay inside the narrow status column.
+ *
+ * The decimals are TRUNCATED, like the spaceport panes' "1.092M cr"
+ * (format_price.ts): 1,047,413 reads "1.04M", not a rounded "1.05M" that
+ * would sit beside the outfitter's "1.047M cr" claiming more money than
+ * there is (and 1,499,999 must not read "1.50M" next to a 1.5M item the
+ * player cannot afford).
  */
 export function formatCredits(credits: number): string {
     const n = Math.max(0, Math.floor(credits));
     if (n >= 1e9) {
-        return `${(n / 1e9).toFixed(2)}B`;
+        return twoDecimals(n, 1e9) + 'B';
     }
     if (n >= 1e6) {
-        return `${(n / 1e6).toFixed(2)}M`;
+        return twoDecimals(n, 1e6) + 'M';
     }
     return n.toLocaleString('en-US');
+}
+
+/** `n / unit` truncated to two decimals, in integer arithmetic. */
+function twoDecimals(n: number, unit: number): string {
+    const hundredths = Math.floor(n / (unit / 100));
+    return `${Math.floor(hundredths / 100)}.`
+        + String(hundredths % 100).padStart(2, '0');
 }
 
 /**

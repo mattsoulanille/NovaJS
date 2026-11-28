@@ -428,6 +428,13 @@ export class HireEscortDialog {
         this.scrollDownArrow.enabled = this.itemGrid?.canScrollDown ?? false;
     }
 
+    /** Money moved from outside while open: re-read "You Have:" / Hire. */
+    creditsChanged() {
+        if (this.container.visible) {
+            this.refreshButtons();
+        }
+    }
+
     private refreshButtons() {
         this.text.count.text = `${this.credits.credits.toLocaleString()} cr`;
         const ship = this.itemGrid?.selection;

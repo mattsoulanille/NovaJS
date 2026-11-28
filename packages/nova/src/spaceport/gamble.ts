@@ -148,6 +148,13 @@ export class GambleDialog {
         });
     }
 
+    /** Money moved from outside while open: re-gate the bet buttons. */
+    creditsChanged() {
+        if (this.container.visible) {
+            this.layoutButtons();
+        }
+    }
+
     /** Bet buttons appear once a racer is chosen, per the original. */
     private layoutButtons() {
         const chosen = this.selected >= 0;

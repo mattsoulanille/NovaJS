@@ -1,6 +1,7 @@
 import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
 import { Resource } from 'nova_ecs/resource';
+import { CreditsComponent } from '../nova_plugin/player/index.js';
 import type { LandedTransaction } from '../spaceport/landed_transaction.js';
 
 /**
@@ -102,6 +103,34 @@ export class DockedShip {
         return this.transaction
             ? this.transaction.playerComponent(component)
             : this.ship.components.get(component);
+    }
+
+    /**
+     * CREDITS FROM OUTSIDE THE VENUES WHILE DOCKED — the status bar's
+     * "Give 1M Credits" debug button. In flight that button is a control
+     * edge the sim applies (DebugCheatSystem), but a docked ship is OUT
+     * of the simulation, so the edge found nobody and the grant was
+     * silently lost (Matthew's 2026-11-27 playtest). Docked, the money
+     * goes into the landing's ledger instead, like the refuel button's:
+     * the working balance, the hull's component and the sync point move
+     * together (LandedTransaction.applyExternalCredits), every open
+     * venue's readout and afford gate follows (onCreditsChanged), and the
+     * hull carries it back into the sim in its lift-off addEntity record
+     * — the same deterministic road every docked purchase takes. Before
+     * the transaction exists (the landing gap, a hypergate dock), or after
+     * it closed at Leave, the hull is the only copy and is written
+     * directly.
+     */
+    applyExternalCredits(delta: number): void {
+        const transaction = this.transaction;
+        if (transaction && !transaction.isClosed) {
+            transaction.applyExternalCredits(delta);
+            return;
+        }
+        const credits = this.ship.components.get(CreditsComponent);
+        if (credits) {
+            credits.credits += delta;
+        }
     }
 
     /**

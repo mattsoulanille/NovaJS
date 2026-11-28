@@ -7,6 +7,7 @@ import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data
 import {
     ControlAction, DisplayAssetDataResource, SimulationGameDataResource, SystemIdResource,
 } from '../nova_plugin/core/index.js';
+import { DEBUG_CREDITS_GRANT } from "../nova_plugin/pilot/index.js";
 import { DiscoveryStoreResource } from "../nova_plugin/player/index.js";
 import { Button, ButtonClick } from "../spaceport/button.js";
 import { DockedShipResource } from "./docked_ship.js";
@@ -269,7 +270,15 @@ export const StatusBarPlugin: Plugin = {
         // Debug cheats: each becomes a synthetic control edge that
         // browser.ts forwards into the sim (DebugCheatSystem), so the
         // effect rides input records like any other control input.
+        // Docked, the ship is out of the sim and the edge would find
+        // nobody: the grant goes into the landing's ledger instead
+        // (DockedShip.applyExternalCredits).
         statusBar.giveCredits.subscribe(() => {
+            const docked = world.resources.get(DockedShipResource)?.current;
+            if (docked) {
+                docked.applyExternalCredits(DEBUG_CREDITS_GRANT);
+                return;
+            }
             world.emit(DebugActionEvent, { action: 'debugGiveCredits' });
         });
         statusBar.clearRecord.subscribe(() => {

@@ -983,6 +983,19 @@ export class Outfitter extends Menu<Entity> {
      * Recomputes the Buy/Sell button states and the persistent denial
      * caption for the current selection, as the original does.
      */
+    /**
+     * Money moved from OUTSIDE the outfitter while it is open — the status
+     * bar's debug grant, through LandedTransaction.applyExternalCredits
+     * (the Spaceport forwards onCreditsChanged here). The working balance
+     * already holds it; re-read the "You Have:" line and the Buy/Sell
+     * gates so the pane, the status bar and the afford check agree.
+     */
+    creditsChanged() {
+        if (this.container.visible && this.visit) {
+            this.refreshTradeState();
+        }
+    }
+
     /** Refreshes the "You Have:" line from the working credit balance. */
     private updateCreditsText() {
         this.text.count.text = formatPrice(this.credits.credits);

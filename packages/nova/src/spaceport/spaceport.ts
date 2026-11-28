@@ -608,6 +608,12 @@ export class Spaceport extends Menu<Entity> {
             // shipyard purchase is (see adoptPurchasedShip).
             this.transaction.onShipChanged(
                 ship => this.adoptPurchasedShip(ship, 'Changed ship to'));
+            // Money from outside the venues (the status bar's debug grant
+            // while docked, DockedShip.applyExternalCredits): every
+            // readout and afford gate on screen re-reads the balance —
+            // the Recharge button here, and whichever venue is open.
+            this.transaction.onCreditsChanged(
+                () => this.creditsChangedOutside());
             try {
                 events = await this.transaction.processLanding();
             } catch (e) {
@@ -1176,6 +1182,15 @@ export class Spaceport extends Menu<Entity> {
             return;
         }
         this.updateRefuelButton(entity);
+    }
+
+    /** See the onCreditsChanged subscription in the landing's setup. */
+    private creditsChangedOutside() {
+        this.refreshRefuelButton();
+        this.outfitter?.creditsChanged();
+        this.shipyard?.creditsChanged();
+        this.tradeCenter?.creditsChanged();
+        this.bar?.creditsChanged();
     }
 
     /** Hidden when fuel is full; greyed when unaffordable. */

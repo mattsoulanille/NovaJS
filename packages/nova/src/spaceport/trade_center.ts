@@ -496,6 +496,16 @@ export class TradeCenter extends Menu<Entity> {
         return !!good && good.canSell && fleetHeld(this.fleet, good.key) > 0;
     }
 
+    /**
+     * Money moved from outside the exchange while it is open (see
+     * Outfitter.creditsChanged): redraw so Buy's affordability follows.
+     */
+    creditsChanged() {
+        if (this.container.visible && this.visit) {
+            this.refresh();
+        }
+    }
+
     /** Redraws the list, summary lines, and button states. */
     private refresh() {
         for (const text of this.rowTexts) {
