@@ -30,6 +30,8 @@
  *   node scripts/big_fight_benchmark.mjs [--data synthetic|real]
  *       [--system nova:130] [--brawlers 84] [--missiles 260]
  *       [--pd-ships 24] [--steps 600] [--warmup 120]
+ *       [--rule original|novajs]  the room's limits rule (default novajs)
+ *       [--caps soft,hard]        override the NovaJS shot caps (a sweep)
  *       [--systems]   per-system self time (adds overhead; the headline
  *                     ms/tick of a --systems run is not comparable)
  *       [--json] [--quiet]
@@ -53,6 +55,8 @@ import { makeNpc } from '../dist/src/nova_plugin/npc/npc_plugin.js';
 import { makeSystem } from '../dist/src/nova_plugin/make_system.js';
 import { GovtComponent } from '../dist/src/nova_plugin/core/govt_component.js';
 import { ProjectileDataComponent } from '../dist/src/nova_plugin/core/projectile_data.js';
+import { applyRoomRules } from '../dist/src/nova_plugin/core/room_rules.js';
+import { ENGINE_LIMITS } from '../dist/src/nova_plugin/core/engine_limits.js';
 import { WeaponEntries } from '../dist/src/nova_plugin/combat/fire_weapon_plugin.js';
 import { SimulationBridgeHost } from '../dist/src/communication/simulation_bridge_host.js';
 
@@ -93,6 +97,13 @@ const LAUNCH_PER_TICK = Number(argValue('--launch-per-tick', '12'));
 /** Ticks between two shots of one scripted PD turret. */
 const PD_EVERY = Number(argValue('--pd-every', '6'));
 const HASH_EVERY = Number(argValue('--hash-every', '100'));
+const RULE = argValue('--rule', 'novajs');
+// --caps soft,hard: override the NovaJS shot caps (a sweep).
+const CAPS = argValue('--caps', undefined)?.split(',').map(Number);
+if (CAPS) {
+    ENGINE_LIMITS.novajs.shots.soft = CAPS[0];
+    ENGINE_LIMITS.novajs.shots.hard = CAPS[1] ?? CAPS[0];
+}
 const JSON_OUT = args.includes('--json');
 const QUIET = args.includes('--quiet');
 const PER_SYSTEM = args.includes('--systems');
@@ -182,6 +193,9 @@ async function main() {
     }
     await gameData.data.Weapon.get(preset.pointDefense);
     const world = await makeSystem(SYSTEM_ID, gameData, 'worker');
+    // The room's `limits` rule (combat/engine_limits.ts): the original's
+    // 128 projectiles or NovaJS's caps.
+    applyRoomRules(world, { limits: RULE });
 
     const factions = [[], []];
     for (let i = 0; i < BRAWLERS; i++) {
@@ -281,6 +295,7 @@ async function main() {
     const frameMs = new Array(STEPS);
     const entityCounts = new Array(STEPS);
     const missileCounts = [];
+    const projectileCounts = new Array(STEPS);
     const hashes = [];
     const t0 = performance.now();
     for (let i = 0; i < STEPS; i++, tick++) {
@@ -293,6 +308,11 @@ async function main() {
         stepMs[i] = b - a;
         frameMs[i] = c - b;
         entityCounts[i] = world.entities.size;
+        let shots = 0;
+        for (const [, entity] of world.entities) {
+            if (entity.components.has(ProjectileDataComponent)) shots++;
+        }
+        projectileCounts[i] = shots;
         if ((i + 1) % HASH_EVERY === 0) {
             hashes.push(`${i + 1}:${hashWorld(world).hash}`);
             missileCounts.push(liveMissiles());
@@ -311,7 +331,10 @@ async function main() {
         steps: STEPS,
         brawlers: BRAWLERS,
         entities: world.entities.size,
+        rule: RULE,
         meanEntities: Math.round(entityCounts.reduce((a, b) => a + b, 0) / STEPS),
+        meanProjectiles: Math.round(projectileCounts.reduce((a, b) => a + b, 0) / STEPS),
+        peakProjectiles: Math.max(...projectileCounts),
         missilesSampled: missileCounts,
         msPerTick: +(totalMs / STEPS).toFixed(3),
         tick: summarize(tickMs),
@@ -338,6 +361,7 @@ async function main() {
     }
     console.log(`data=${DATA} system=${SYSTEM_ID} steps=${STEPS} brawlers=${BRAWLERS} `
         + `entities=${stats.entities} (mean ${stats.meanEntities}) missiles sampled=${missileCounts.join(',')}`);
+    console.log(`rule=${RULE} projectiles mean=${stats.meanProjectiles} peak=${stats.peakProjectiles}`);
     console.log(`${stats.msPerTick} ms/tick (host.step + host.snapshot)`);
     const t = stats.tick, s = stats.step, f = stats.frame;
     console.log(`  tick:          mean=${t.meanMs} p50=${t.p50Ms} p90=${t.p90Ms} p99=${t.p99Ms} max=${t.maxMs}`);

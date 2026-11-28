@@ -13,20 +13,28 @@
  * `m` star map each sample: both build fresh SystemGraphs, whose dot layer
  * is the 646-circle Graphics the OOM pause was building.
  *
- * Passes (exit 0) when the display world never holds more than the
- * original's 128 projectiles (combat/shot_cap.ts; a small allowance for a
- * frame in flight), the heap after GC grows less than HEAP_SLACK_MB from
- * the first sample to the last, and the page logged no errors.
+ * Passes (exit 0) when the display world never holds more projectiles,
+ * beams or ships than the server's engine limits allow (RULE, the rule the
+ * server runs: NOVA_ROOM_LIMITS / settings/server.json; core/
+ * engine_limits.ts; a small allowance for a frame in flight), the heap
+ * after GC grows less than HEAP_SLACK_MB from the first sample to the
+ * last, and the page logged no errors.
+ *
+ * OUTFITS replaces the launchers with any loadout, e.g. Matthew's friend's
+ * 100 Vell-os Javelins (a bay of fighters with three beams each):
+ *   OUTFITS='[["Advanced Vell-os Beams:405",1],["Advanced Vell-os Beams:404",100]]'
  *
  *   PORT=<own server port> node scripts/submunition_flood_browser.mjs
  *       [LAUNCHERS=16] [SECONDS=90] [SYSTEM=nova:483] [MAPKEYS=1]
  *       [OUT=<dir for screenshots>] [HEAP_SLACK_MB=25]
+ *       [RULE=novajs|original] [OUTFITS=<json>] [SHIP=nova:164]
  *   (from packages/nova, with `PORT=<port> node dist/server.js` running;
  *   needs the plug-ins in Nova_Data)
  */
 import os from 'node:os';
 import path from 'node:path';
 import puppeteer from 'puppeteer-core';
+import { ENGINE_LIMITS } from '../dist/src/nova_plugin/core/engine_limits.js';
 
 const PORT = process.env.PORT;
 if (!PORT) {
@@ -37,7 +45,11 @@ const SECONDS = Number(process.env.SECONDS ?? '90');
 const SYSTEM = process.env.SYSTEM ?? 'nova:483';
 const OUT = process.env.OUT ?? os.tmpdir();
 const HEAP_SLACK_MB = Number(process.env.HEAP_SLACK_MB ?? '25');
-const SHOT_CAP = 128;
+const RULE = process.env.RULE ?? 'novajs';
+const LIMITS = ENGINE_LIMITS[RULE];
+const OUTFITS = process.env.OUTFITS ? JSON.parse(process.env.OUTFITS)
+    : [['Alternate Missles:539', LAUNCHERS]];
+const SHIP = process.env.SHIP ?? 'nova:164';
 const CHROME = process.env.CHROME_PATH
     ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
@@ -74,14 +86,14 @@ async function tap(code) {
 // A fresh pilot, then the save rewritten to carry only the launchers. It
 // is written before the reloaded page's scripts run: the unloading page
 // saves on its way out and would clobber an edit made now.
-await boot(`http://localhost:${PORT}/?reset=1&mute=1&ship=nova:164`
+await boot(`http://localhost:${PORT}/?reset=1&mute=1&ship=${SHIP}`
     + `&system=${SYSTEM}&enter=1`);
-const edited = await page.evaluate(n => {
+const edited = await page.evaluate(outfits => {
     window.novaSaveNow();
     const save = JSON.parse(localStorage.getItem('novajs:save'));
-    save.data.outfits = [['Alternate Missles:539', n]];
+    save.data.outfits = outfits;
     return JSON.stringify(save);
-}, LAUNCHERS);
+}, OUTFITS);
 await page.evaluateOnNewDocument(
     s => localStorage.setItem('novajs:save', s), edited);
 await boot(`http://localhost:${PORT}/?mute=1&enter=1`);
@@ -113,8 +125,16 @@ async function sample() {
         const world = window.displayWorld;
         let projectiles = 0;
         let dvrg = 0;
+        let beams = 0;
+        let ships = 0;
         for (const entity of world.entities.values()) {
             for (const [component, value] of entity.components) {
+                if (component.name === 'BeamData') {
+                    beams++;
+                }
+                if (component.name === 'Ship') {
+                    ships++;
+                }
                 if (component.name === 'Projectile') {
                     projectiles++;
                     if (String(value.id).startsWith('Alternate Missles:')) {
@@ -126,11 +146,12 @@ async function sample() {
         const frames = window.__frames.splice(0).sort((a, b) => a - b);
         return {
             heapMB: +(performance.memory.usedJSHeapSize / 1e6).toFixed(1),
-            entities: world.entities.size, projectiles, dvrg,
+            entities: world.entities.size, projectiles, dvrg, beams, ships,
             managedGeometries: Object.keys(
                 window.app.renderer.geometry.managedGeometries).length,
             frames: frames.length,
             p50Ms: +(frames[Math.floor(frames.length / 2)] ?? 0).toFixed(1),
+            p90Ms: +(frames[Math.floor(frames.length * 0.9)] ?? 0).toFixed(1),
             maxMs: +(frames[frames.length - 1] ?? 0).toFixed(1),
         };
     });
@@ -158,7 +179,7 @@ while (Date.now() - t0 < SECONDS * 1000) {
     const s = { t: Math.round((Date.now() - t0) / 1000), ...await sample() };
     samples.push(s);
     console.log(JSON.stringify(s));
-    if (shot < 2 && s.dvrg > 0) {
+    if (shot < 2 && (s.dvrg > 0 || s.beams > 0)) {
         await page.screenshot({
             path: path.join(OUT, `submunition_flood_${PORT}_${shot++}.png`),
         });
@@ -171,12 +192,15 @@ console.log('after', JSON.stringify(after));
 await browser.close();
 
 const peak = Math.max(...samples.map(s => s.projectiles));
-const fired = samples.some(s => s.dvrg > 0);
+const peakBeams = Math.max(...samples.map(s => s.beams));
+const peakShips = Math.max(...samples.map(s => s.ships));
+const fired = samples.some(s => s.dvrg > 0 || s.beams > 0);
 const growth = samples[samples.length - 1].heapMB - samples[0].heapMB;
-const ok = fired && peak <= SHOT_CAP + 8 && growth < HEAP_SLACK_MB
-    && errors.length === 0;
+const ok = fired && peak <= LIMITS.shots.hard + 8
+    && peakBeams <= LIMITS.beams.hard + 8 && peakShips <= LIMITS.ships + 2
+    && growth < HEAP_SLACK_MB && errors.length === 0;
 console.log(JSON.stringify({
-    ok, fired, peakProjectiles: peak, heapGrowthMB: +growth.toFixed(1),
-    errors: errors.slice(0, 10),
+    ok, rule: RULE, fired, peakProjectiles: peak, peakBeams, peakShips,
+    heapGrowthMB: +growth.toFixed(1), errors: errors.slice(0, 10),
 }));
 process.exit(ok ? 0 : 1);

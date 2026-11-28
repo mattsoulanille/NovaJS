@@ -10,8 +10,8 @@ a player can turn it off.
   restores the original.
 - **Sim**: the departure changes a simulation rule, which every peer in a
   room must share. A per-player toggle would desync the room, so these have
-  no toggle. Making one switchable would need a **room rule**: a setting
-  the room's host picks and every peer runs.
+  no toggle. Making one switchable needs a **room rule**: a setting the
+  server picks and every peer runs (see "Room rules" below).
 
 "Reference" means `docs/reference_experiments.md`.
 
@@ -43,6 +43,7 @@ a player can turn it off.
 | Bay fighters still in flight count against the bay's capacity when buying, and block selling the bay ("You can't sell this while its fighters are deployed."). | Matthew 2026-08-09 (`spaceport/deployed_outfits.ts`), 2026-08-17 launcher sell rule (`spaceport/outfitter_rules.ts`); listed as "the deployed-fighters trade block" in the reference | sim (it decides what the ship carries at lift-off) | room rule |
 | An OWNED escort (provenance "captured": a prize kept with "Use As Escort", the hull the pilot left for a prize with "Use As My Ship", a stored ship sent along from the hangar, or the pilot's old hull left behind in a hangar swap) that lands with the player is rearmed back up to the ammo it had aboard when it became an escort, never past it (and, like every restock, only as far as the hull's free mass allows), at the same lift-offs where a hired escort is rearmed to its ship class's stock loadout (Matthew 2026-11-27). Fuel and hull repair are the same for both. Ammo outfits the snapshot does not name are left alone, and an upgrade swaps in the new class's stock loadout as the new target. Escorts made from the player's own ships, and ship storage itself, are NovaJS additions, so this is a rule for a NovaJS feature. Escorts saved before the rule take their counts at load as the target. | Matthew 2026-11-24: "refill their ammo stores to whatever the player left the ship with when they swapped it to an escort", "at the same events as we refill normal hired escorts" (`spaceport/escort_restock.ts`, `player/player_escort.ts` OWNED ESCORT AMMO) | sim (it decides what the escort carries at lift-off) | room rule |
 | The per-day BuyRandom / HireRandom roll is off: anything with a nonzero chance is offered every day. | Matthew 2026-08-14: "disabled for now" (`spaceport/day_roll.ts` BUY_RANDOM_DAY_ROLL_ENABLED) | sim (a shop's stock is shared by everyone docked there) | room rule |
+| Higher engine limits: a system holds up to 256 submunitions and 512 projectiles in all (a ship's own shots get the top 256), 128 beam submunitions and 256 beams, and 128 ships; every descendant of one directly fired shot shares a budget of 256 spawns. The original holds 128 projectiles and 64 beams, whatever fired them, and 64 ships (Max Shots / Beams On Screen, Max Ships In System). | Matthew 2026-11-27: "I'd like to raise this limit if possible ... (firing a weapon and having the projectiles never appear...)", with a guard against cheat weapons that "sub into 5 copies of self" (`core/engine_limits.ts`, `ship/ship_cap.ts`); reference "The shot cap, wave 58" and the beam and ship cap sections after it | sim | room rule `limits`: `novajs` (default) or `original` (see "Room rules") |
 
 No longer departures (they were listed as deliberate non-fidelity, but now
 match the original): **one plunder per hulk** (the original does the same,
@@ -51,3 +52,62 @@ since ruling #378, ef61904a) and **player self-repair** (the inherent 20-45 s
 repair droid is gone, Matthew's ruling "Remove player auto-repair", #383 on 2026-11-27: a disabled player without a
 ModType 49 repair outfit stays disabled, as the original's does, reference
 "A disabled player (A10), wave 37").
+
+## Room rules
+
+A room rule is a simulation departure that every peer of a room runs
+(`packages/nova/src/nova_plugin/core/room_rules.ts`). The server picks the
+rules: `settings/server.json` `"roomRules"` (a missing or malformed value
+means the default), overridden by an environment variable where one exists.
+When the relay opens a room it logs them as a server-authored `roomRules`
+input in the room's first record, beside the room seed, so the archive,
+every peer and a late joiner (through the log or a baseline) apply the same
+rules at the same tick; a peer that sends one is dropped. A world no record
+reached (local play, specs, benchmarks) runs the defaults. The rules are
+per server today: every room of a server runs the same ones.
+
+| Rule | Values | Override |
+|---|---|---|
+| `limits`: the engine's population limits (`core/engine_limits.ts` ENGINE_LIMITS, `ship/ship_cap.ts`) | `novajs` (default), `original` | `NOVA_ROOM_LIMITS` |
+
+### `limits`
+
+|  | original | novajs |
+|---|---|---|
+| projectiles alive: a submunition is refused at | 128 | 256 (soft) |
+| projectiles alive: a directly fired shot (a ship's gun, turret, point defense, launched missile) is refused at | 128 | 512 (hard) |
+| beams alive: a beam submunition / a ship's beam is refused at | 64 / 64 | 128 / 256 |
+| spawns shared by every descendant of one directly fired shot | no limit | 256 |
+| ships in the system: an NPC, a fleet, a person, a planet's defender, a bay launch is refused at | 64 | 128 |
+
+Under both, a full table refuses the NEW shot and never removes one that
+is alive, and a refused shot takes no ammo (a refused bay launch keeps its
+fighter in the bay). A pilot's own ship (and the escorts it brings in) is
+never refused. The family budget is split evenly among each shot's
+children, so it bounds a family of any shape: one DVrger missile (109
+projectiles) fits, the synthetic "5 copies of itself, SubLimit 9999" cheat
+weapon stops at 256 descendants.
+
+The numbers come from these measurements (2026-11-28, the MacBook under
+heavy load from other agents (load average 12-30 on 10 cores), so absolute
+times run 2-3x high; compare the columns):
+
+| scene (`packages/nova/scripts/`) | original | novajs | uncapped / other caps |
+|---|---|---|---|
+| DVrger flood: 300 "DVrger missile"s, one every 2 steps (`submunition_benchmark.mjs --weapon 'Alternate Missles:298' --steps 600 --fire-every 2 --shots 300`), sim ms a step at the plateau | 1.8 ms, 126 alive | 3.2 ms, 253 alive | soft 384: 9.0 ms (378); 512: 12-14 ms (504); 768: 21.6 ms (750); none (before wave 58): 17.5 ms, peak 1,012 |
+| Self-replicator (`--weapon replicator`: 5 copies of itself, fire at nearest, SubLimit 9999; 20 shots, one every 30 steps) | 0.6 ms, 127 alive (the table full) | 1.0 ms, 220 alive (each family stops at 256) | no limits: killed after 6 min at 3.6 GB, still growing |
+| Big fight, real data (`big_fight_benchmark.mjs --data real`: 84 warships, 260 missiles kept in flight, PD), ms a tick (step + snapshot) | 9.2 ms, 128 projectiles | 24.6 ms, 512 | hard 256: 16.7 ms; 384: 21.1 ms |
+| Big fight, synthetic data | 6.5 ms, 128 | 17.7 ms, 512 | |
+| Beams: Thunderhead Lances fired straight at a target (`--weapon nova:166 --fire-every 1 --volley K --beam-caps inf,inf`), sim ms a step | | | 66 beams 0.4 ms; 132 1.0 ms; 264 2.9 ms; 528 3.8 ms |
+| Browser (`submunition_flood_browser.mjs`, headless Chrome on SwiftShader): 16 DVrger launchers held 60 s | 128 projectiles; frame p50 18-60 ms | 511; frame p50 16-68 ms | the frame time follows the machine's load, not the count: no difference visible; heap after GC +2.4 / +3.8 MB, no page errors |
+| Browser: 100 Vell-os Javelins (a bay of fighters, 3 beams each) | 150 s: ships held at 64, the bay kept the rest | 50 s: 53 ships (one launch every 1.5 s) | |
+
+Reading: a projectile costs the simulation about 20-30 µs a step (a beam
+about 7), on top of a tick budget of 16.7 ms that rollback resimulation
+must also fit into. Submunitions are capped at 2x the original's table, so
+the worst flood a plug-in weapon makes stays near 3 ms a step; directly
+fired shots get 4x, so a ship's shot appears unless the system holds 512
+projectiles, which only an extreme brawl reaches (the big fight above, at
+2.5x the original's cost). The ship cap of 128 keeps the original's
+planet-domination tactic (fill the system with escorts and fighters so the
+defense fleet cannot launch) possible with twice the ships.

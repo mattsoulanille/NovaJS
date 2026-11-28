@@ -14,18 +14,28 @@
  * is a pure function of the code. Run before and after an optimization;
  * identical hashes prove the optimization is behavior-preserving.
  *
- * It also takes a CENSUS: the projectiles alive after each step (peak) and
- * every projectile ever seen per weapon id (what the shots expanded to).
- * With the original's 128-shot cap (combat/shot_cap.ts) the peak never
- * passes 128, e.g. the Alternate Missles "DVrger missile" (one shot = 1 +
- * 36 x wëap 303 + 72 x wëap 299) held down:
+ * It also takes a CENSUS: the projectiles (and beams) alive after each step
+ * (peak) and every projectile ever seen per weapon id (what the shots
+ * expanded to). The engine limits (combat/engine_limits.ts) bound the
+ * peak: under `--rule original` 128 projectiles, e.g. the Alternate
+ * Missles "DVrger missile" (one shot = 1 + 36 x wëap 303 + 72 x wëap 299)
+ * held down:
  *   node scripts/submunition_benchmark.mjs --weapon 'Alternate Missles:298' \
- *       --steps 600 --fire-every 2 --shots 300 --quiet
+ *       --steps 600 --fire-every 2 --shots 300 --quiet --rule original
  *
  * Usage (from packages/nova, after `npm run build`):
  *   node scripts/submunition_benchmark.mjs
  *   node scripts/submunition_benchmark.mjs --weapon 'Gravitron Weapons:359' \
  *       --steps 1500 --fire-every 100 --shots 6 [--json] [--quiet]
+ *   [--rule original|novajs]  the room's `limits` rule (default novajs)
+ *   [--caps soft,hard,budget] override the NovaJS shot caps and family
+ *                             budget (a sweep; `inf` for no limit)
+ *   [--beam-caps soft,hard]   override the NovaJS beam caps
+ *   [--volley K]              fire K shots on each firing step (default 1)
+ *   --weapon replicator       a synthetic cheat weapon: subs into 5 copies
+ *                             of itself, fire-at-nearest, SubLimit 9999
+ *   --weapon <a beam wëap>    beams: --volley K --fire-every 1 sustains
+ *                             about K x (beam life in ticks) beams
  * Profile:
  *   node --cpu-prof --cpu-prof-dir=/tmp/prof scripts/submunition_benchmark.mjs
  */
@@ -48,6 +58,9 @@ import { WeaponEntries } from '../dist/src/nova_plugin/combat/fire_weapon_plugin
 import { ProjectileComponent } from '../dist/src/nova_plugin/core/projectile_data.js';
 import { TargetComponent } from '../dist/src/nova_plugin/ship/target_component.js';
 import { ArmorComponent, ShieldComponent } from '../dist/src/nova_plugin/ship/health_plugin.js';
+import { applyRoomRules } from '../dist/src/nova_plugin/core/room_rules.js';
+import { ENGINE_LIMITS } from '../dist/src/nova_plugin/core/engine_limits.js';
+import { BeamDataComponent } from '../dist/src/nova_plugin/combat/beam_plugin.js';
 
 const args = process.argv.slice(2);
 function argValue(name, fallback) {
@@ -61,6 +74,72 @@ const SHOTS = Number(argValue('--shots', '6'));
 const HASH_EVERY = Number(argValue('--hash-every', '300'));
 const JSON_OUT = args.includes('--json');
 const QUIET = args.includes('--quiet');
+const RULE = argValue('--rule', 'novajs');
+const VOLLEY = Number(argValue('--volley', '1'));
+const parseCap = value => value === 'inf' ? Infinity : Number(value);
+const CAPS = argValue('--caps', undefined)?.split(',').map(parseCap);
+const BEAM_CAPS = argValue('--beam-caps', undefined)?.split(',').map(parseCap);
+if (CAPS) {
+    // The table is a plain object at run time: a sweep rewrites it.
+    ENGINE_LIMITS.novajs.shots.soft = CAPS[0];
+    ENGINE_LIMITS.novajs.shots.hard = CAPS[1] ?? CAPS[0];
+    if (CAPS[2] !== undefined) {
+        ENGINE_LIMITS.novajs.familyBudget = CAPS[2];
+    }
+}
+if (BEAM_CAPS) {
+    ENGINE_LIMITS.novajs.beams.soft = BEAM_CAPS[0];
+    ENGINE_LIMITS.novajs.beams.hard = BEAM_CAPS[1] ?? BEAM_CAPS[0];
+}
+
+/**
+ * The synthetic cheat weapon (Matthew: "subs into 5 copies of self; subs
+ * fire at nearest target; sub limit 9999"), built on a stock gun's data.
+ */
+const REPLICATOR_ID = 'bench:replicator';
+const REPLICATOR_BASE = argValue('--replicator-base', 'nova:128');
+function withReplicator(aggregator, base) {
+    const replicator = {
+        ...base,
+        id: REPLICATOR_ID,
+        name: 'Bench Replicator',
+        shotDuration: 500,
+        submunitions: [{
+            id: REPLICATOR_ID, count: 5, theta: 0.5, limit: 9999,
+            fireAtNearest: true, subIfExpire: true,
+        }],
+    };
+    const weapons = aggregator.data.Weapon;
+    // Everything else (the cache the wire's sprite references are read
+    // from, among others) is the real table's.
+    const Weapon = new Proxy(weapons, {
+        get(target, key) {
+            if (key === 'get') {
+                return id => id === REPLICATOR_ID
+                    ? Promise.resolve(replicator) : target.get(id);
+            }
+            if (key === 'getCached') {
+                return id => id === REPLICATOR_ID ? replicator
+                    : target.getCached(id);
+            }
+            const value = Reflect.get(target, key, target);
+            return typeof value === 'function' ? value.bind(target) : value;
+        },
+    });
+    const data = new Proxy(aggregator.data, {
+        get: (target, key, receiver) => key === 'Weapon' ? Weapon
+            : Reflect.get(target, key, receiver),
+    });
+    return new Proxy(aggregator, {
+        get(target, key) {
+            if (key === 'data') {
+                return data;
+            }
+            const value = Reflect.get(target, key, target);
+            return typeof value === 'function' ? value.bind(target) : value;
+        },
+    });
+}
 
 // nova:226 (Ver'ashan): asteroid-free, a controlled battlefield (same
 // choice as the firing-group and bay-escort integration specs).
@@ -89,8 +168,14 @@ function quantile(sorted, q) {
 }
 
 async function main() {
-    const gameData = await getGameData();
+    let gameData = await getGameData();
+    const weaponId = WEAPON_ID === 'replicator' ? REPLICATOR_ID : WEAPON_ID;
+    if (weaponId === REPLICATOR_ID) {
+        gameData = withReplicator(gameData,
+            await gameData.data.Weapon.get(REPLICATOR_BASE));
+    }
     const world = await makeSystem(SYSTEM_ID, gameData, undefined, { npcs: false });
+    applyRoomRules(world, { limits: RULE });
 
     const shipData = await gameData.data.Ship.get(SHIP_ID);
     const ship = makeShip(shipData);
@@ -137,9 +222,12 @@ async function main() {
     // Staged, not bare-got: the whole submunition closure (shot sprites,
     // hurtboxes) must be cached before the sim spawns any of it — a
     // simulation world throws CacheMissError on an unstaged projectile.
-    await loadWeaponsGameData(world, [WEAPON_ID]);
-    const weapon = world.resources.get(WeaponEntries).getCached(WEAPON_ID);
-    if (!weapon) throw new Error(`No weapon entry for ${WEAPON_ID}`);
+    // The replicator borrows its base gun's sprite, whose wire reference
+    // names the base: stage that too.
+    await loadWeaponsGameData(world, weaponId === REPLICATOR_ID
+        ? [weaponId, REPLICATOR_BASE] : [weaponId]);
+    const weapon = world.resources.get(WeaponEntries).getCached(weaponId);
+    if (!weapon) throw new Error(`No weapon entry for ${weaponId}`);
 
     // Warm up: providers attach hitboxes/hurtboxes; JIT warms.
     for (let i = 0; i < 60; i++) world.step();
@@ -151,6 +239,7 @@ async function main() {
     // Census: projectiles alive per step (peak), and every projectile
     // ever seen per weapon id (spawned) — what one shot expands to.
     const projectileCounts = new Array(STEPS);
+    const beamCounts = new Array(STEPS);
     const seen = new Set();
     const spawnedById = new Map();
 
@@ -159,7 +248,9 @@ async function main() {
         if (i % FIRE_EVERY === 0 && shotsFired < SHOTS) {
             // inaccuracy=false: pinned geometry; the sub cones still
             // draw from the seeded PRNG deterministically.
-            weapon.fireFromEntity('shooter', false);
+            for (let v = 0; v < VOLLEY; v++) {
+                weapon.fireFromEntity('shooter', false);
+            }
             shotsFired++;
         }
         pinVictim();
@@ -168,7 +259,9 @@ async function main() {
         stepMs[i] = performance.now() - a;
         entityCounts[i] = world.entities.size;
         let live = 0;
+        let beams = 0;
         for (const [uuid, entity] of world.entities) {
+            if (entity.components.has(BeamDataComponent)) beams++;
             const projectile = entity.components.get(ProjectileComponent);
             if (!projectile) continue;
             live++;
@@ -179,6 +272,7 @@ async function main() {
             }
         }
         projectileCounts[i] = live;
+        beamCounts[i] = beams;
         if ((i + 1) % HASH_EVERY === 0) {
             hashes.push(`${i + 1}:${hashWorld(world).hash}`);
         }
@@ -190,8 +284,19 @@ async function main() {
     const goldenHash = fnv1a(hashes.join('\n')).toString(16);
 
     const sorted = [...stepMs].sort((a, b) => a - b);
+    // The plateau: the second half of the run, where a sustained flood
+    // holds steady (the headline for a cap sweep).
+    const half = Math.floor(STEPS / 2);
+    const mean = values => values.reduce((a, b) => a + b, 0)
+        / Math.max(1, values.length);
     const stats = {
         weapon: WEAPON_ID,
+        rule: RULE,
+        limits: ENGINE_LIMITS[RULE],
+        plateauMeanMs: +mean(stepMs.slice(half)).toFixed(3),
+        plateauProjectiles: Math.round(mean(projectileCounts.slice(half))),
+        plateauBeams: Math.round(mean(beamCounts.slice(half))),
+        peakBeams: Math.max(...beamCounts),
         steps: STEPS,
         shots: shotsFired,
         totalMs: +totalMs.toFixed(1),
@@ -216,7 +321,9 @@ async function main() {
             `p50=${stats.p50Ms}ms p90=${stats.p90Ms}ms p95=${stats.p95Ms}ms ` +
             `p99=${stats.p99Ms}ms max=${stats.maxMs}ms`);
         console.log(`peakEntities=${stats.peakEntities} endEntities=${stats.endEntities} ` +
-            `peakProjectiles=${stats.peakProjectiles}`);
+            `peakProjectiles=${stats.peakProjectiles} peakBeams=${stats.peakBeams}`);
+        console.log(`rule=${RULE} plateau: ${stats.plateauMeanMs}ms/step with ` +
+            `${stats.plateauProjectiles} projectiles, ${stats.plateauBeams} beams`);
         console.log(`spawned=${JSON.stringify(stats.spawned)}`);
         console.log(`goldenHash=${stats.goldenHash}`);
         if (!QUIET) {
