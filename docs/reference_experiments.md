@@ -26678,7 +26678,10 @@ replacement through the accept (sampled every 150 ms), the pane read
 docking, Raven 1.", and the board printed "Valkyrie:  Energy transfer
 complete, Raven 1." with credits 25,000 -> 27,000, the mission gone, and
 the plunder dialog visible in 0 of the 217 frames after the press; no
-console errors.
+console errors. The same script on main a1b07bc6 (`rescue/shots_base/`)
+reproduced all three reports: the target was empty at every sample after
+the accept, the re-selected replacement was a drifting hulk ("Disabled"),
+and the plunder dialog was up for 2 frames after the board.
 Not matched: what the released ship does next (NovaJS: its own trader
 AI; it jumped out of the empty test system about 7 s after the board, the
 original's left within about 35 s, most likely by landing). Confidence:
