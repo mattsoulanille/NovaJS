@@ -27055,6 +27055,13 @@ parent still holds its slot while its children spawn (a burst at the
 edge comes out one short). After: the same 300-shot benchmark peaks at
 127 projectiles, 5.5 ms a step.
 
+**Since (the engine-limits room rule, 2026-11-28):** the cap moved to
+`N/nova_plugin/core/engine_limits.ts` and became the room rule `limits`
+(docs/novajs_enhancements.md, "Room rules"). Under `original` it is this
+128 exactly; under `novajs` (the default) submunitions are refused at 256,
+shots fired from a ship at 512, and every descendant of one directly fired
+shot shares a budget of 256 spawns.
+
 **Evidence:** `~/.local/share/novaref/evidence/20261127-submun/`:
 `20261127-213840-w58_shotcap/` (`recording.mp4`, `recording.events.json`,
 `frames/t6..t30.png`: t9 shows the rings growing, t18 the empty centre
