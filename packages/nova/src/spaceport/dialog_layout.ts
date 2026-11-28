@@ -245,6 +245,15 @@ export const NEWS = {
     text: { x: -140, y: 25 },
     wrapWidth: 270,
     /**
+     * The black text pane inside the frame's grey border, measured on the
+     * 300x230 PICTs 9000 and 9002 (x3..296, y132..226), in the dialog's
+     * centred coordinates; right/bottom exclusive. The text is clipped to
+     * it: nothing the window says may spill onto the spaceport below
+     * (Matthew's 2026-11-27 playtest). From text.y that leaves 87px, seven
+     * 12px lines.
+     */
+    pane: { left: -147, top: 17, right: 147, bottom: 112 },
+    /**
      * News items are separated by a HALF line, not a blank one: the
      * reference's second item starts 18px below the first item's last
      * line (y580 -> y598), where a blank line would be 24.
