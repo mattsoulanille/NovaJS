@@ -38,7 +38,9 @@ import {
     AcceptShipMissionEvent, RefuseShipMissionEvent,
 } from '../display/ship_mission_offer_plugin.js';
 import { LeaveSpaceportEvent } from '../display/spaceport_plugin.js';
-import { SetJumpRouteEvent } from '../display/starmap_plugin.js';
+import {
+    NebulaExploredEvent, SetJumpRouteEvent,
+} from '../display/starmap_plugin.js';
 import { EscortPanelResource } from '../display/escort_panel_plugin.js';
 import { AddEnemyEvent, DebugActionEvent } from '../display/status_bar.js';
 import { isTextEntryActive } from '../input_focus.js';
@@ -243,6 +245,14 @@ function wireWorld(runtime: ClientRuntime, pump: FramePump): WorldWiring {
         world.events.get(MissionSetStringEvent).subscribe(({ data }) => {
             void bridge.missionSetString(data.record).catch(e => {
                 console.warn('Failed to send a mission set string:', e);
+            });
+        });
+        // A nëbu's OnExplore, run by display/starmap_plugin.ts when the
+        // map finds the nebula visible and the string would change a bit,
+        // on its own input kind (missions/nebula_explored_record.ts).
+        world.events.get(NebulaExploredEvent).subscribe(({ data }) => {
+            void bridge.nebulaExplored(data.record).catch(e => {
+                console.warn('Failed to send a nebula OnExplore:', e);
             });
         });
         world.events.get(LandEvent).subscribe(({ data, entities }) => {

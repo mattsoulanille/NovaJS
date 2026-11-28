@@ -22,7 +22,9 @@ import { applyOwnedMapOutfits } from '../spaceport/map_outfit.js';
 import {
     FinishJumpEvent, JumpComponent, JumpRouteComponent, StellarBribesComponent,
 } from '../nova_plugin/travel/index.js';
-import { MissionMapMark, missionMapMarks } from '../nova_plugin/missions/index.js';
+import {
+    MissionMapMark, missionMapMarks, NebulaExplored, resolveNebulaOnExplore,
+} from '../nova_plugin/missions/index.js';
 import {
     ActiveRanksComponent, ControlBitsComponent,
 } from '../nova_plugin/ncb/index.js';
@@ -50,6 +52,9 @@ const StarmapJumpSubscription = new Resource<Subscription>('StarmapJumpSubscript
 /** Marks the plugin's openStarmap as torn down (see remove). */
 const StarmapDisposer = new Resource<() => void>('StarmapDisposer');
 export const SetJumpRouteEvent = new EcsEvent<{ route: string[] }>('SetJumpRouteEvent');
+/** A nëbu's OnExplore to send (game_session.ts -> bridge.nebulaExplored). */
+export const NebulaExploredEvent =
+    new EcsEvent<{ record: NebulaExplored }>('NebulaExploredEvent');
 
 /** The `window.novaDiscovery` levers (see window_hooks.ts). */
 export interface DiscoveryHooks {
@@ -302,6 +307,39 @@ export const StarmapPlugin: Plugin = {
                 dominated: playerComponent(world, DominatedComponent),
                 now: world.resources.get(SimulationTimeResource)?.time ?? 0,
             }));
+        /**
+         * Tests the nebulae for visibility and runs the OnExplore of every
+         * visible one (missions/nebula_explored_record.ts), sending the
+         * deltas of each that would change a bit. IN FLIGHT ONLY: docked,
+         * the pilot is not in the simulation to apply them to, and the
+         * next test after lift-off finds the same nebulae visible.
+         *
+         * WHEN, GUESS (reference pending): the Bible says only "whenever
+         * the nebula is tested for visibility". Tested here on arrival in
+         * a system (exploring is what reveals a nebula) and whenever the
+         * full map opens (drawing it is testing it).
+         */
+        const exploreNebulae = () => {
+            if (disposed
+                || world.resources.get(DockedShipResource)?.current) {
+                return;
+            }
+            const bits = playerComponent(world, ControlBitsComponent);
+            if (!bits) {
+                return;
+            }
+            for (const nebula of starmap.visibleNebulae(bits)) {
+                const record = resolveNebulaOnExplore(nebula.id,
+                    nebula.onExplore, bits);
+                if (record) {
+                    world.emit(NebulaExploredEvent, { record });
+                }
+            }
+        };
+        const exploreNebulaeWhenBuilt = () => {
+            void starmap.buildPromise.then(exploreNebulae).catch(e =>
+                console.warn('Failed to test the nebulae:', e));
+        };
         let opening = false;
         // Set by remove(): a map dismissed because its world is being torn
         // down (jump/gate transit with the map open) must not write its
@@ -337,6 +375,7 @@ export const StarmapPlugin: Plugin = {
                 return jumpRoute?.route ?? [];
             }
             opening = true;
+            exploreNebulaeWhenBuilt();
             try {
                 // Re-adding moves the map to the top of the stage: the
                 // spaceport's container is added after the starmap's,
@@ -438,6 +477,8 @@ export const StarmapPlugin: Plugin = {
                     && playerComponent(world, ControlBitsComponent)) {
                     builtForPlayer = true;
                     void refreshMiniMap();
+                    // Arrival: the system just entered may reveal one.
+                    exploreNebulaeWhenBuilt();
                 }
                 const docked = world.resources.get(DockedShipResource)
                     ?.current !== undefined;

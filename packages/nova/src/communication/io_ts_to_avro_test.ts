@@ -476,6 +476,8 @@ describe('io-ts to Avro derivation', () => {
                                 { kind: 'captureShip', capture: { name: '', escort: true, bitsSet: [8888] } },
                                 { kind: 'stellarSetString', record: { seq: 3, planetId: 'nova:128', bitsSet: [6100] } },
                                 { kind: 'missionSetString', record: { missionId: 'nova:128', kind: 'shipDone', bitsSet: [9001] } },
+                                { kind: 'nebulaExplored', record: { nebulaId: 'nova:128', bitsSet: [117], bitsCleared: [3] } },
+                                { kind: 'nebulaExplored', record: { nebulaId: 'nova:129' } },
                                 { kind: 'missionSetString', record: { missionId: 'nova:128', kind: 'failure', notices: [{ missionId: 'nova:128', missionName: 'Courier', type: 'failed', text: '', pict: 'nova:9000' }], recordsDelta: [['nova:128', -1]] } },
                                 { kind: 'addEntity', uuid: 'u', entity: { name: 'n', components: [['A', { x: 1 }], ['B', null]] } },
                                 { kind: 'removeEntity', uuid: 'u' },

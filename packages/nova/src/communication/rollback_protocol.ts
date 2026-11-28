@@ -1132,6 +1132,15 @@ export const STATE_HASH_INTERVAL = 60;
 //    The derived wire schema fingerprint changes (34e9ddc679dcfa8f ->
 //    9de999c5881f0046), and the join gate keeps older and newer builds
 //    apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the `nebulaExplored` input kind (a nëbu's
+//    OnExplore, resolved on the owning client when its map finds the
+//    nebula visible, carried as bit deltas —
+//    missions/nebula_explored_record.ts applyNebulaExplored). A new union
+//    member of SimulationInputType; every existing kind is unchanged. The
+//    derived wire schema fingerprint changes (9de999c5881f0046 ->
+//    e2aac6975801120c), and the join gate keeps older and newer builds
+//    apart.
 
 export const PROTOCOL_VERSION = 8;
 

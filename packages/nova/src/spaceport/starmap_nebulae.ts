@@ -3,8 +3,10 @@
 // rule that is not measured on the original yet lives here, marked GUESS,
 // so matching the reference is an edit to this one file.
 import { NebulaData, NebulaImage } from "novadatainterface/nebula_data";
+import { SystemData } from "novadatainterface/system_data";
 import * as PIXI from 'pixi.js';
 import { evaluateNCBTest } from "../nova_plugin/ncb/index.js";
+import { DISCOVERY_ENTERED, DiscoveryLevel } from "../nova_plugin/player/index.js";
 import { BASE_SCALE } from "./starmap_viewport.js";
 
 /**
@@ -128,6 +130,23 @@ export function nebulaVisible(nebula: NebulaData, bits: ReadonlySet<number>,
         }
     }
     return false;
+}
+
+/**
+ * The nebulae the player sees ({@link nebulaVisible}), given every system
+ * and how much the player knows about each. Explored = entered (discovery
+ * level 1+), the set the Bible's "systems the player has explored" names
+ * (discovery.ts), plus wherever the player stands.
+ */
+export function visibleNebulae(nebulae: readonly NebulaData[],
+    systems: readonly SystemData[], currentSystem: string,
+    bits: ReadonlySet<number>,
+    discoveryOf: (systemId: string) => DiscoveryLevel): NebulaData[] {
+    const explored = systems
+        .filter(s => s.id === currentSystem
+            || discoveryOf(s.id) >= DISCOVERY_ENTERED)
+        .map(s => s.position);
+    return nebulae.filter(n => nebulaVisible(n, bits, explored));
 }
 
 /** The nebula's picture rectangle in laid-out (BASE_SCALE) coordinates. */

@@ -5,7 +5,8 @@ import {
     CapturedShip, HailAction, StellarSetString,
 } from "../nova_plugin/encounters/index.js";
 import {
-    AbortedMission, AcceptedMission, MissionSetString, RefusedMission,
+    AbortedMission, AcceptedMission, MissionSetString, NebulaExplored,
+    RefusedMission,
 } from "../nova_plugin/missions/index.js";
 import { AnalogControlState } from "../nova_plugin/player/index.js";
 import { SimulationFrame } from "./simulation_frame.js";
@@ -39,6 +40,8 @@ export interface SimulationBridgeHostApi {
     /** A mission's OnShipDone or in-flight OnFailure, resolved on the
      * owning client. */
     missionSetString(record: MissionSetString): void | Promise<void>;
+    /** A nëbu's OnExplore, resolved on the owning client. */
+    nebulaExplored(record: NebulaExplored): void | Promise<void>;
     step(count?: number): void;
     /** System entry: step straight to the room clock's pacing target;
      * returns the ticks stepped (SimulationBridgeHost.catchUpToRoomClock). */
@@ -132,6 +135,7 @@ export interface AsyncSimulationBridgeHostApi {
     captureShip(capture: CapturedShip): Promise<void>;
     stellarSetString(record: StellarSetString): Promise<void>;
     missionSetString(record: MissionSetString): Promise<void>;
+    nebulaExplored(record: NebulaExplored): Promise<void>;
     /**
      * Steps `count` ticks. A host that times itself (the browser worker)
      * resolves to the wall-clock ms the batch took IN the host, which the

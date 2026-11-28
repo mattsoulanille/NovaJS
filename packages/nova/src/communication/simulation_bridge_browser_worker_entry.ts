@@ -25,7 +25,8 @@ import {
 } from "../nova_plugin/encounters/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import {
-    AbortedMission, AcceptedMission, MissionSetString, RefusedMission,
+    AbortedMission, AcceptedMission, MissionSetString, NebulaExplored,
+    RefusedMission,
 } from "../nova_plugin/missions/index.js";
 import { makeSystem } from "../nova_plugin/make_system.js";
 import { SimulationBridgeHost } from "./simulation_bridge_host.js";
@@ -155,6 +156,10 @@ class BrowserSimulationBridgeHost implements BrowserSimulationBridgeWorkerApi {
 
     async missionSetString(record: MissionSetString) {
         await this.requireBridge().missionSetString(record);
+    }
+
+    async nebulaExplored(record: NebulaExplored) {
+        await this.requireBridge().nebulaExplored(record);
     }
 
     async step(count?: number) {

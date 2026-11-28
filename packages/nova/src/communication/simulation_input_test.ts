@@ -367,6 +367,8 @@ describe('malformed inputs', () => {
             { kind: 'acceptMission', accepted: { missionId: 3 } },
             { kind: 'refundFighter', refund: { carrier: 'c' } },
             { kind: 'refundFighter', refund: { carrier: 'c', bayWeaponId: 7 } },
+            { kind: 'nebulaExplored', record: { bitsSet: [117] } },
+            { kind: 'nebulaExplored', record: { nebulaId: 'n', bitsSet: ['117'] } },
             { kind: 'teleport', to: [0, 0] },
             null, 'inputs', 42,
         ]) {
@@ -388,6 +390,7 @@ describe('malformed inputs', () => {
                     { kind: 'hail', action: { kind: 'bribe', target: 'x' } },
                     { kind: 'escortAction', action: { kind: 'releaseEscort', target: 'e' } },
                     { kind: 'refundFighter', refund: { carrier: 'c', bayWeaponId: 'nova:150' } },
+                    { kind: 'nebulaExplored', record: { nebulaId: 'nova:128', bitsSet: [117] } },
                     { kind: 'addEntity', uuid: 'x', entity: { components: [['Foo', { x: 1 }]] } },
                     { kind: 'acceptMission', accepted: { missionId: 'nova:1', mission: null } },
                 ],
@@ -397,7 +400,7 @@ describe('malformed inputs', () => {
             expect(isRight(decoded)).toBeTrue();
             if (isRight(decoded)) {
                 expect('junk' in decoded.right).toBeFalse();
-                expect(decoded.right.inputs.length).toBe(10);
+                expect(decoded.right.inputs.length).toBe(11);
             }
             for (const tick of [-1, 1.5, 1e300, 'x', NaN]) {
                 expect(isLeft(InputRecordType.decode({ ...record, tick })))

@@ -27,7 +27,7 @@ import {
 import { drawTerritory, TerritoryOwner, TerritorySite } from "./starmap_borders.js";
 import { bindMapPointer } from "./starmap_input.js";
 import { buildMissionMarks, MissionMarkTextures } from "./starmap_marks.js";
-import { NebulaLayer, nebulaVisible } from "./starmap_nebulae.js";
+import { NebulaLayer, visibleNebulae } from "./starmap_nebulae.js";
 import {
     BASE_SCALE, MapViewport, scalePos, worldBoundsOf,
 } from "./starmap_viewport.js";
@@ -320,15 +320,8 @@ export class SystemGraph {
             worldBoundsOf(visibleSystems.map(s => s.position)));
         const mapContainer = this.viewport.mapContainer;
         if (options.nebulae && options.nebulaTexture) {
-            // Explored = entered (discovery level 1+), the set the Bible's
-            // "systems the player has explored" names (discovery.ts), plus
-            // where the player stands.
-            const explored = systems
-                .filter(s => s.id === currentSystem
-                    || this.discoveryOf(s.id) >= DISCOVERY_ENTERED)
-                .map(s => s.position);
-            this.nebulae = new NebulaLayer(options.nebulae.filter(
-                n => nebulaVisible(n, playerBits, explored)),
+            this.nebulae = new NebulaLayer(visibleNebulae(options.nebulae,
+                systems, currentSystem, playerBits, this.discoveryOf),
                 options.nebulaTexture);
             // Beneath everything, borders included (starmap_nebulae.ts).
             mapContainer.addChild(this.nebulae.container);

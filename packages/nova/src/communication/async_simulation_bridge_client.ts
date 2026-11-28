@@ -6,7 +6,8 @@ import {
     CapturedShip, HailAction, StellarSetString,
 } from "../nova_plugin/encounters/index.js";
 import {
-    AbortedMission, AcceptedMission, MissionSetString, RefusedMission,
+    AbortedMission, AcceptedMission, MissionSetString, NebulaExplored,
+    RefusedMission,
 } from "../nova_plugin/missions/index.js";
 import { AnalogControlState } from "../nova_plugin/player/index.js";
 import { AsyncSimulationBridgeHostApi } from "./simulation_bridge_api.js";
@@ -138,6 +139,10 @@ export class AsyncSimulationBridgeClient {
 
     async missionSetString(record: MissionSetString) {
         await this.guard(() => this.host.missionSetString(record));
+    }
+
+    async nebulaExplored(record: NebulaExplored) {
+        await this.guard(() => this.host.nebulaExplored(record));
     }
 
     async addEntity(uuid: string, entity: Entity) {

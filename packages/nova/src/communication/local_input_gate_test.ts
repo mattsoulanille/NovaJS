@@ -150,6 +150,8 @@ describe('the local input gate', () => {
         { name: 'missionSetString', valid: true, input: { kind: 'missionSetString', record: { missionId: 'nova:128', kind: 'shipDone', bitsSet: [9001] } } },
         { name: 'missionSetString, a failure with its notice', valid: true, input: { kind: 'missionSetString', record: { missionId: 'nova:128', kind: 'failure', notices: [{ missionId: 'nova:128', missionName: 'Courier', type: 'failed', text: 'You failed.' }], bitsCleared: [100] } } },
         { name: 'missionSetString, an unknown string', valid: false, input: { kind: 'missionSetString', record: { missionId: 'nova:128', kind: 'onSuccess', bitsSet: [9001] } } },
+        { name: 'nebulaExplored', valid: true, input: { kind: 'nebulaExplored', record: { nebulaId: 'nova:128', bitsSet: [117], bitsCleared: [3] } } },
+        { name: 'nebulaExplored, no nebula', valid: false, input: { kind: 'nebulaExplored', record: { bitsSet: [117] } } },
         { name: 'escortAction', valid: true, input: { kind: 'escortAction', action: { kind: 'queueUpgrade', target: 'escort', toShip: 'nova:130' } } },
         { name: 'escortAction, upgrade without a class', valid: false, input: { kind: 'escortAction', action: { kind: 'queueUpgrade', target: 'escort' } } },
         { name: 'refundFighter', valid: true, input: { kind: 'refundFighter', refund: { carrier: 'carrier', bayWeaponId: 'nova:200' } } },
@@ -175,7 +177,7 @@ describe('the local input gate', () => {
         const members = (SimulationInputType as unknown as {
             types: { type: { props: { kind: { value: string } } } }[],
         }).types.map(member => member.type.props.kind.value).sort();
-        expect(members.length).toBe(19);
+        expect(members.length).toBe(20);
         const kindsOf = (valid: boolean) => [...new Set(cases
             .filter(c => c.valid === valid)
             .map(c => (c.input as { kind: string }).kind))]

@@ -30,6 +30,7 @@ import {
     AcceptedMission, AcceptedMissionType, applyAcceptMission,
     AbortedMission, AbortedMissionType, applyAbortMission,
     applyMissionSetString, MissionSetString, MissionSetStringType,
+    applyNebulaExplored, NebulaExplored, NebulaExploredType,
     applyRefuseMission, RefusedMission, RefusedMissionType, SetStringEffects,
 } from "../nova_plugin/missions/index.js";
 import {
@@ -115,6 +116,13 @@ export type SimulationInput =
      * (missions/mission_set_string_record.ts applyMissionSetString).
      */
     | { kind: 'missionSetString', record: MissionSetString }
+    /**
+     * A nëbu's OnExplore: the nebula was found visible on the owning
+     * client's map and its string changed some of the pilot's bits; the
+     * deltas, applied to the SENDER's ship
+     * (missions/nebula_explored_record.ts applyNebulaExplored).
+     */
+    | { kind: 'nebulaExplored', record: NebulaExplored }
     /**
      * A hail-dialog ESCORT MANAGEMENT action against one of the player's
      * own escorts: release it, or queue/cancel an upgrade or a sale
@@ -217,6 +225,7 @@ export const SimulationInputType: t.Type<SimulationInput, unknown> = t.union([
     t.strict({ kind: t.literal('captureShip'), capture: CapturedShipType }),
     t.strict({ kind: t.literal('stellarSetString'), record: StellarSetStringType }),
     t.strict({ kind: t.literal('missionSetString'), record: MissionSetStringType }),
+    t.strict({ kind: t.literal('nebulaExplored'), record: NebulaExploredType }),
     t.strict({ kind: t.literal('escortAction'), action: EscortActionType }),
     t.strict({ kind: t.literal('refundFighter'), refund: FighterRefundType }),
     t.strict({ kind: t.literal('addEntity'), uuid: t.string, entity: EncodedEntity }),
@@ -752,6 +761,10 @@ function applySimulationInput(world: World, input: SimulationInput,
         }
         case 'missionSetString': {
             applyMissionSetString(world, peerId, input.record);
+            break;
+        }
+        case 'nebulaExplored': {
+            applyNebulaExplored(world, peerId, input.record);
             break;
         }
         case 'escortAction': {

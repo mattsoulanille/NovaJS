@@ -26,7 +26,8 @@ import {
 } from "../nova_plugin/encounters/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import {
-    AbortedMission, AcceptedMission, MissionSetString, RefusedMission,
+    AbortedMission, AcceptedMission, MissionSetString, NebulaExplored,
+    RefusedMission,
 } from "../nova_plugin/missions/index.js";
 import { canonicalDesyncHash, DesyncDump, RollbackLogEntry, SpeedVote, STATE_HASH_INTERVAL, wrapRollbackMessage } from "./rollback_protocol.js";
 import { InputRefusedNotice, relayServer, requestCatchUp, subscribeRollbackMessages } from "./rollback_messages.js";
@@ -2105,6 +2106,14 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     async missionSetString(record: MissionSetString) {
         await loadSetStringEffectsGameData(this.world, record);
         this.schedule({ kind: 'missionSetString', record });
+    }
+
+    /**
+     * A nëbu's OnExplore (missions/nebula_explored_record.ts
+     * NebulaExploredType): bit deltas only, so nothing to stage.
+     */
+    nebulaExplored(record: NebulaExplored) {
+        this.schedule({ kind: 'nebulaExplored', record });
     }
 
     snapshot(): SimulationFrame {

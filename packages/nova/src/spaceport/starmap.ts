@@ -47,6 +47,7 @@ import {
 import { MapRefusal } from "./starmap_draw.js";
 import { SystemGraph, SystemGraphOptions } from "./system_graph.js";
 import { ZoomButton } from "./starmap_zoom_button.js";
+import { visibleNebulae } from "./starmap_nebulae.js";
 import { TerritoryOwner } from "./starmap_borders.js";
 import { loadEachOrSkip } from "./skip_failed_loads.js";
 
@@ -429,6 +430,19 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         }
         return loadEachOrSkip('Starmap', 'nebula', ids,
             id => nebulae.get(id));
+    }
+
+    /**
+     * The nebulae the player sees right now against `bits` (the full map's
+     * rule, starmap_nebulae.ts visibleNebulae) — what a nëbu's OnExplore
+     * is run for. Empty until the map has loaded.
+     */
+    visibleNebulae(bits: ReadonlySet<number>): NebulaData[] {
+        if (!this.allSystems) {
+            return [];
+        }
+        return visibleNebulae(this.nebulae, this.allSystems, this.systemId,
+            bits, id => this.discoveryOf(id));
     }
 
     /**
