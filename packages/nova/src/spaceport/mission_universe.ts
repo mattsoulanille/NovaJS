@@ -322,6 +322,14 @@ export class MissionUniverse {
         return this.systemInfosById.get(systemId);
     }
 
+    /** Whether a loaded sÿst passes its Visibility test for these control
+     * bits (blank = visible). An unknown id is not visible. */
+    systemVisibleTo(systemId: string, bits: ReadonlySet<number>): boolean {
+        const system = this.systemsById.get(systemId);
+        return system !== undefined
+            && systemVisible(system.visibility ?? '', bits);
+    }
+
     /** A system's display name ("; note" suffix stripped), or undefined
      * for an unknown id. */
     systemName(systemId: string): string | undefined {

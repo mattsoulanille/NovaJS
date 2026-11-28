@@ -43,13 +43,15 @@ import { MissionUniverse } from './mission_universe.js';
  */
 
 /**
- * Reveals everything within one map outfit's reach, in `discovery` (the
- * client's store unless the caller — a display world — holds another).
- * Returns the systems.
+ * The systems one map outfit reaches from `fromSystem`, without marking
+ * them (discovery.ts mapOutfitSystems has the walk and its evidence).
+ * `bits` are the player's control bits, for the sÿst Visibility tests: a
+ * system hidden from the player is neither revealed nor walked through.
+ * Absent, no bit is set (a fresh pilot's galaxy).
  */
-export function applyMapOutfit(modVal: number, fromSystem: string,
+export function mapOutfitReach(modVal: number, fromSystem: string,
     universe: MissionUniverse,
-    discovery: DiscoveryStore = defaultDiscoveryStore()): string[] {
+    bits: ReadonlySet<number> = new Set()): string[] {
     const infos = universe.systemInfos;
     const systems: MapOutfitSystem[] = infos.map(info => ({
         id: info.id,
@@ -59,8 +61,21 @@ export function applyMapOutfit(modVal: number, fromSystem: string,
     }));
     const adjacency: SystemAdjacency =
         new Map(infos.map(info => [info.id, info.links]));
-    const revealed = mapOutfitSystems(modVal, fromSystem, systems, adjacency,
-        govtId => universe.getGovt(govtId)?.classes ?? []);
+    return mapOutfitSystems(modVal, fromSystem, systems, adjacency,
+        govtId => universe.getGovt(govtId)?.classes ?? [],
+        systemId => universe.systemVisibleTo(systemId, bits));
+}
+
+/**
+ * Reveals everything within one map outfit's reach, in `discovery` (the
+ * client's store unless the caller — a display world — holds another).
+ * Returns the systems. `bits` as for mapOutfitReach.
+ */
+export function applyMapOutfit(modVal: number, fromSystem: string,
+    universe: MissionUniverse,
+    discovery: DiscoveryStore = defaultDiscoveryStore(),
+    bits: ReadonlySet<number> = new Set()): string[] {
+    const revealed = mapOutfitReach(modVal, fromSystem, universe, bits);
     discovery.markMany(revealed, DISCOVERY_LANDED);
     return revealed;
 }
@@ -74,7 +89,8 @@ export function applyMapOutfit(modVal: number, fromSystem: string,
 export function applyOwnedMapOutfits(outfitIds: Iterable<string>,
     fromSystem: string, universe: MissionUniverse,
     getOutfit: (id: string) => OutfitData | undefined,
-    discovery: DiscoveryStore = defaultDiscoveryStore()): string[] {
+    discovery: DiscoveryStore = defaultDiscoveryStore(),
+    bits: ReadonlySet<number> = new Set()): string[] {
     const revealed = new Set<string>();
     for (const id of outfitIds) {
         const modVal = getOutfit(id)?.map;
@@ -82,7 +98,7 @@ export function applyOwnedMapOutfits(outfitIds: Iterable<string>,
             continue;
         }
         for (const systemId of applyMapOutfit(modVal, fromSystem, universe,
-            discovery)) {
+            discovery, bits)) {
             revealed.add(systemId);
         }
     }

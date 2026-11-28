@@ -157,6 +157,40 @@ describe('mapOutfitSystems (oütf ModType 16)', () => {
             .not.toContain('far');
     });
 
+    it('walks depth first with ONE visited set, as the original does', () => {
+        // r's first link x reaches y (r's second link) at depth 2, where
+        // the walk stops; y is then already visited when r's own loop gets
+        // to it, so y's neighbour z is never reached, although it is only
+        // two jumps from r (r -> y -> z). Reference "Map outfits ... two
+        // maps at Kel'ar Iy" (2026-11-28): the original's 3-jump map at
+        // Kel'ariy left out two-jump systems exactly this way.
+        const tri: SystemAdjacency = new Map<string, string[]>([
+            ['r', ['x', 'y']],
+            ['x', ['r', 'y']],
+            ['y', ['r', 'x', 'z']],
+            ['z', ['y']],
+        ]);
+        const ids = ['r', 'x', 'y', 'z'].map(id => ({ id, inhabited: true }));
+        expect(mapOutfitSystems(2, 'r', ids, tri).sort())
+            .toEqual(['r', 'x', 'y']);
+        // The link ORDER decides it: with y listed first, z is in reach.
+        const yFirst = new Map(tri).set('r', ['y', 'x']);
+        expect(mapOutfitSystems(2, 'r', ids, yFirst).sort())
+            .toEqual(['r', 'x', 'y', 'z']);
+    });
+
+    it('neither reveals nor walks through a hidden system', () => {
+        const adj: SystemAdjacency = new Map<string, string[]>([
+            ['r', ['h', 'q']],
+            ['h', ['r', 's']],
+            ['q', ['r']],
+            ['s', ['h']],
+        ]);
+        const ids = ['r', 'h', 'q', 's'].map(id => ({ id, inhabited: true }));
+        expect(mapOutfitSystems(2, 'r', ids, adj, () => [], id => id !== 'h')
+            .sort()).toEqual(['q', 'r']);
+    });
+
     it('ModVal 0 reveals only the present system', () => {
         expect(mapOutfitSystems(0, 'c', systems, ADJ, classesOf)).toEqual(['c']);
     });

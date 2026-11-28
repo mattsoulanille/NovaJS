@@ -235,17 +235,31 @@ export interface MapOutfitSystem {
  * "Map; Fed/Pol" 2, nova:434 "Map; Reb/Pir/Aur" 3. The three purchasable
  * ones cost 1000 cr and are stocked through SpecialTech 80/81/82.
  *
- * `from` is the "present system" the radius is measured from. Radius counts
- * hyperspace jumps, so radius 1 is the present system plus its immediate
- * neighbours. ModVal 0 is not a documented value; it reveals just the
- * present system, which is the honest reading of "0 jumps away".
+ * `from` is the "present system" the radius is measured from. ModVal 0 is
+ * not a documented value; it reveals just the present system, which is the
+ * honest reading of "0 jumps away".
+ *
+ * THE RADIUS IS THE ORIGINAL'S DEPTH-FIRST WALK, NOT "EVERY SYSTEM WITHIN N
+ * JUMPS" (reference "Map outfits ... two maps at Kel'ar Iy", 2026-11-28).
+ * The original walks each system's links in slot order, depth first, with
+ * ONE visited set shared by the whole walk and a depth limit of ModVal: a
+ * system first reached by a long path is marked at that depth and never
+ * re-expanded when a shorter path reaches it later, so its own neighbours
+ * can be left out even though they are within ModVal jumps. Bought at Kel'ar
+ * Iy (sÿst nova:237), the 3-jump map revealed exactly the 16 systems this
+ * walk gives (216, 220, 221, 225-237), where a breadth-first radius gives 26
+ * (P'ecksa 224, two jumps out, among the missing). A system hidden by its
+ * Visibility test (`visible`) is neither revealed nor walked through: the
+ * same walk through the hidden Za'iuso copy nova:656 would have added 224.
+ * Radius 1 is still the present system plus its visible neighbours.
  *
  * The govt-class form is resolved through `classesOf`, which answers a
  * gövt id's Class1-4 list (GovtData.classes).
  */
 export function mapOutfitSystems(modVal: number, from: string,
     systems: readonly MapOutfitSystem[], adjacency: SystemAdjacency,
-    classesOf: (govtId: string) => readonly number[] = () => []): string[] {
+    classesOf: (govtId: string) => readonly number[] = () => [],
+    visible: (systemId: string) => boolean = () => true): string[] {
     if (modVal <= -1000) {
         const wanted = -1000 - modVal;
         return systems
@@ -259,20 +273,24 @@ export function mapOutfitSystems(modVal: number, from: string,
             .filter(s => s.inhabited && s.govt == null)
             .map(s => s.id);
     }
-    // Breadth-first out to `modVal` jumps, present system included.
+    // Depth-first, links in slot order, one visited set (see above). An
+    // explicit stack in place of recursion: a huge ModVal on a large plug-in
+    // galaxy must not grow the call stack per system.
     const seen = new Set<string>([from]);
-    let frontier: string[] = [from];
-    for (let hop = 0; hop < modVal && frontier.length > 0; hop++) {
-        const next: string[] = [];
-        for (const id of frontier) {
-            for (const neighbour of adjacency.get(id) ?? []) {
-                if (!seen.has(neighbour)) {
-                    seen.add(neighbour);
-                    next.push(neighbour);
-                }
-            }
+    const stack: { id: string, depth: number, next: number }[] =
+        [{ id: from, depth: 0, next: 0 }];
+    while (stack.length > 0) {
+        const top = stack[stack.length - 1];
+        const links = top.depth < modVal ? adjacency.get(top.id) ?? [] : [];
+        if (top.next >= links.length) {
+            stack.pop();
+            continue;
         }
-        frontier = next;
+        const neighbour = links[top.next++];
+        if (!seen.has(neighbour) && visible(neighbour)) {
+            seen.add(neighbour);
+            stack.push({ id: neighbour, depth: top.depth + 1, next: 0 });
+        }
     }
     return [...seen];
 }

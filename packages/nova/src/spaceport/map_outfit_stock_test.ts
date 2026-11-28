@@ -37,6 +37,8 @@ const STOCK_MAPS: [string, string, number][] = [
 
 /** sÿst nova:130 "Kania", the system the visual-comparison pilot starts in. */
 const KANIA = 'nova:130';
+/** sÿst nova:237 "Kel'ariy", home of Kel'ar Iy (spöb 254). */
+const KELARIY = 'nova:237';
 
 describe('stock map outfits', () => {
     let universe: MissionUniverse;
@@ -71,9 +73,13 @@ describe('stock map outfits', () => {
         const kania = await gameData.data.System.get(KANIA);
         const revealed = applyMapOutfit(1, KANIA, universe);
         // "1 and up: How many jumps away from present system to explore."
-        // Radius 1 is the present system plus everything one jump out.
-        expect(revealed.sort())
-            .toEqual([KANIA, ...kania.links].sort());
+        // Radius 1 is the present system plus everything one jump out that
+        // the pilot can see (a fresh pilot's bits: nova:536, a Visibility-
+        // gated copy, is not on its map).
+        const visible = kania.links.filter(id =>
+            universe.systemVisibleTo(id, new Set()));
+        expect(visible.length).toBeLessThan(kania.links.length);
+        expect(revealed.sort()).toEqual([KANIA, ...visible].sort());
         expect(revealed.length).toBeGreaterThan(1);
     });
 
@@ -97,12 +103,36 @@ describe('stock map outfits', () => {
     });
 
     it('never leaves the region reachable by hyperspace', () => {
-        // A radius map is a breadth-first walk of real links; a system with
+        // A radius map is a depth-first walk of real links; a system with
         // no path to Kania can never appear, however large the ModVal.
         const huge = new Set(applyMapOutfit(999, KANIA, universe));
         const all = universe.systemInfos.map(s => s.id);
         expect(huge.size).toBeLessThan(all.length);
         expect(huge.has(KANIA)).toBeTrue();
+    });
+
+    it('reveals what the original revealed at Kel\'ar Iy (sÿst 237)', () => {
+        // Reference "Map outfits ... two maps at Kel'ar Iy" (2026-11-28):
+        // the original's pilot after buying the 3-jump Map (oütf 434) there
+        // with a fresh pilot's bits held exactly these 16 systems at
+        // "landed". A breadth-first radius would add P'ecksa 224 and nine
+        // more; the hidden Za'iuso copy nova:656 (Visibility b335) is
+        // neither revealed nor walked through.
+        const ids = (n: number[]) => n.map(i => `nova:${i}`).sort();
+        expect(applyMapOutfit(3, KELARIY, universe).sort()).toEqual(ids([
+            216, 220, 221, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234,
+            235, 236, 237]));
+        expect(applyMapOutfit(1, KELARIY, universe).sort()).toEqual(ids([
+            230, 231, 232, 233, 234, 235, 236, 237]));
+        // The 2-jump Map (oütf 433) bought at Ver'ar Pised, Ver'avo (sÿst
+        // 232), on a second fresh pilot: these 13; a breadth-first radius
+        // would add 234, 235, 236 and 239, and nova:656, a DIRECT link of
+        // Ver'avo, stays out as hidden.
+        expect(applyMapOutfit(2, 'nova:232', universe).sort()).toEqual(ids([
+            214, 220, 221, 222, 223, 224, 225, 230, 231, 232, 233, 237, 261]));
+        // With b335 set the other Za'iuso is the visible one.
+        expect(applyMapOutfit(1, KELARIY, universe, undefined, new Set([335]))
+            .sort()).toEqual(ids([230, 231, 232, 234, 235, 236, 237, 656]));
     });
 
     it('ModVal -1 reveals inhabited INDEPENDENT systems only', () => {

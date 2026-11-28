@@ -320,7 +320,7 @@ export const StarmapPlugin: Plugin = {
                 }
             }
             applyOwnedMapOutfits(mapOutfits.keys(), systemId, universe,
-                id => mapOutfits.get(id), discovery);
+                id => mapOutfits.get(id), discovery, getPlayerBits());
         }).catch(e => console.warn('Failed to apply map outfits:', e));
         const getMissionMarks = () => playerMissionMarks(world, universe);
 
