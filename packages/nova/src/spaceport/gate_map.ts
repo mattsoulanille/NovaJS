@@ -13,7 +13,8 @@ import { MissionMapMark } from "../nova_plugin/missions/index.js";
 import { LegalRecordsState } from "../nova_plugin/reputation/index.js";
 import { Button } from "./button.js";
 import {
-    DEFAULT_HYPERGATE_TRANSITIVITY, gateMapDestinations, HypergateNetwork,
+    DEFAULT_HYPERGATE_TRANSITIVITY, gateCycleOrder, gateMapDestinations,
+    HypergateNetwork,
     hypergateReach, parseHypergateTransitivity,
 } from "./hypergate_network.js";
 import { Menu } from "./menu.js";
@@ -160,6 +161,10 @@ export interface GateMapView {
      * it follows, drawn WHITE while it is picked: the one lane to it, or
      * under transitivity the shortest chain of lanes. */
     routes: Map<string, [string, string][]>;
+    /** The selectable systems in the order Tab picks them
+     * (hypergate_network.ts gateCycleOrder: the gate's HyperLink slots),
+     * one system per destination gate. */
+    cycle: string[];
 }
 
 /**
@@ -315,11 +320,23 @@ export function computeGateMapView(index: GateMapIndex,
         routes.set(pickedSystem, route);
     }
 
+    // Tab's order: the destination gates in HyperLink slot order, each as
+    // the first visible system the map offers it in.
+    const cycle: string[] = [];
+    for (const gate of gateCycleOrder(network, gateSpob, viewer.transitive)) {
+        const system = visibleSystemsOf(gate)
+            .find(id => selectable.get(id) === gate);
+        if (system !== undefined && !cycle.includes(system)) {
+            cycle.push(system);
+        }
+    }
+
     return {
         networkGates: [...reach.hops.keys()].sort(),
         gateLinks: computeHypergateSystemLinks(systemOfSpob, lanes),
         selectable,
         routes,
+        cycle,
     };
 }
 
@@ -362,11 +379,15 @@ export function gateMapGraphOptions(gateLinks: [string, string][],
     gateRoutes?: ReadonlyMap<string, [string, string][]>,
     /** The ordinary lanes' colour ({@link gateMapLaneColor}); omitted, the
      * original's nearly black one. */
-    laneColor = GATE_MAP_LANE_COLOR): SystemGraphOptions {
+    laneColor = GATE_MAP_LANE_COLOR,
+    /** {@link GateMapView.cycle}: the order Tab picks the offered
+     * systems in. Omitted, Tab picks nothing. */
+    cycle?: readonly string[]): SystemGraphOptions {
     return {
         gateLinks,
         selectable,
         laneColor,
+        ...(cycle ? { selectableOrder: cycle } : {}),
         ...(gateRoutes ? { gateRoutes } : {}),
         missionMarks,
         ...(playerBits ? { playerBits } : {}),
@@ -467,6 +488,10 @@ export class GateMap extends Menu<GateMapResult> {
         this.controls = new MenuControls(controlEvents, {
             depart: this.done.bind(this),
             map: this.done.bind(this),
+            // Tab picks the next destination gate, as the star map's Tab
+            // picks the next neighbour (reference "Tab on the hypergate
+            // map, wave 56").
+            nextTarget: () => this.systemGraph?.cycleSingleRoute(1),
         });
     }
 
@@ -653,7 +678,7 @@ export class GateMap extends Menu<GateMapResult> {
                     this.refusingSystems(input.clearancePlayer,
                         input.legalRecords)),
                 id => this.discoveryOf(id), playerBits, view.routes,
-                gateMapLaneColor()));
+                gateMapLaneColor(), view.cycle));
         // The original's opening scale, the star map's (Kit Gate A1 -> A2,
         // 120 map units, 212 px apart: "Gate map, wave 24").
         this.systemGraph.zoomBy(DEFAULT_ZOOM);

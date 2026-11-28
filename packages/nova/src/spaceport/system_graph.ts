@@ -59,6 +59,13 @@ export interface SystemGraphOptions {
      * by the hypergate map to pick one of the gate's linked neighbors.
      */
     selectable?: Set<string>;
+    /**
+     * Destination-picker mode: the order Tab ({@link
+     * SystemGraph.cycleSingleRoute}) picks the selectable systems in. The
+     * hypergate map passes its gate's HyperLink slot order. Omitted, Tab
+     * picks nothing in picker mode.
+     */
+    selectableOrder?: readonly string[];
     size?: { x: number, y: number };
     /**
      * The player's control bits for NCB visibility filtering: systems whose
@@ -226,6 +233,9 @@ export class SystemGraph {
     private readonly gateLinks: [SystemData, SystemData][];
     // Destination-picker mode (see SystemGraphOptions.selectable).
     private readonly selectable?: Set<string>;
+    // Tab's order in destination-picker mode
+    // (SystemGraphOptions.selectableOrder).
+    private readonly selectableOrder: readonly string[];
     // Active-mission destination / ship-syst markers (decorative overlay).
     private readonly missionMarks: MissionMapMark[];
     private readonly viewedMarks: MissionMapMark[];
@@ -258,6 +268,8 @@ export class SystemGraph {
         const gateLinks = options.gateLinks ?? [];
         const playerBits = options.playerBits ?? new Set<number>();
         this.selectable = options.selectable;
+        this.selectableOrder = (options.selectableOrder ?? [])
+            .filter(id => options.selectable?.has(id));
         this.gateRoutes = options.gateRoutes ?? new Map();
         this.missionMarks = options.missionMarks ?? [];
         this.viewedMarks = options.viewedMarks ?? [];
@@ -560,9 +572,17 @@ export class SystemGraph {
     }
 
     /** Tab: cycles the single-jump route through the current system's
-     * neighbours in link-slot order, wrapping (route.ts cycleSingle). */
+     * neighbours in link-slot order, wrapping (route.ts cycleSingle). In
+     * destination-picker mode it picks the next offered system instead, in
+     * {@link SystemGraphOptions.selectableOrder}, by the same rule (from
+     * the first, wrapping, no empty step), exactly as a click on it would. */
     cycleSingleRoute(direction = 1) {
         if (this.selectable) {
+            const next = cycleSingle(this.selectableOrder,
+                this.selectedSystem, direction);
+            if (next !== undefined) {
+                this.onClickSystem(next, false);
+            }
             return;
         }
         const neighbours = adjacentSystems(this.adj, this.currentSystem);

@@ -4,7 +4,8 @@ import path from "path";
 import { getIntegrationGameData } from "../communication/simulation_test_fixture.js";
 import { landable } from "../nova_plugin/core/index.js";
 import {
-    DEFAULT_HYPERGATE_TRANSITIVITY, gateMapDestinations, HypergateNetwork,
+    DEFAULT_HYPERGATE_TRANSITIVITY, gateCycleOrder, gateMapDestinations,
+    HypergateNetwork,
     hypergateNetworkComponents, hypergateReach, parseHypergateTransitivity,
     reachableGates,
 } from "./hypergate_network.js";
@@ -245,4 +246,48 @@ describe('what a gate offers', () => {
         };
         expect(gateMapDestinations(network, 'a', false)).toEqual(['b']);
     });
+});
+
+describe('gateCycleOrder (Tab on the gate map)', () => {
+    // Reference "Tab on the hypergate map, wave 56": HG-Tichel's links
+    // reordered to [Primus, Kania, (destroyed) Aldebaran, Alphara] were
+    // cycled in exactly that slot order, not by id or distance.
+    it('follows the gate\'s HyperLink slots, not id order', () => {
+        const network: HypergateNetwork = {
+            links: new Map([['tichel', ['primus', 'kania', 'alphara']]]),
+        };
+        expect(gateCycleOrder(network, 'tichel', false))
+            .toEqual(['primus', 'kania', 'alphara']);
+    });
+
+    it('holds the same gates gateMapDestinations offers', () => {
+        const network: HypergateNetwork = {
+            links: new Map([
+                ['a', ['c', 'dead', 'b', 'c', 'a']], ['b', ['d']],
+                ['c', ['a']], ['d', []], ['dead', []],
+            ]),
+            unusable: new Set(['dead']),
+        };
+        for (const transitive of [false, true]) {
+            expect([...gateCycleOrder(network, 'a', transitive)].sort())
+                .toEqual(gateMapDestinations(network, 'a', transitive));
+        }
+        expect(gateCycleOrder(network, 'a', false)).toEqual(['c', 'b']);
+        // Under transitivity, the gates further out follow, breadth first.
+        expect(gateCycleOrder(network, 'a', true)).toEqual(['c', 'b', 'd']);
+    });
+
+    it('is empty at a destroyed gate', () => {
+        const network: HypergateNetwork = {
+            links: new Map([['dead', ['a']], ['a', []]]),
+            unusable: new Set(['dead']),
+        };
+        expect(gateCycleOrder(network, 'dead', true)).toEqual([]);
+    });
+
+    it('cycles stock HG-Tichel as Kania, Alphara, Primus', async () => {
+        const network = await stockNetwork();
+        expect(gateCycleOrder(network, 'nova:1405', false))
+            .toEqual(['nova:1404', 'nova:1406', 'nova:1407']);
+    }, 60_000);
 });

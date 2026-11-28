@@ -559,6 +559,25 @@ describe('computeGateMapView', () => {
                 .toEqual(['A1>A2x', 'A2x>A3']);
         });
 
+    it('cycles the visible copy of a stacked destination, in slot order',
+        () => {
+            const gateIndex = makeIndex([
+                system('A1', ['a1']), system('A2', ['a2'], '!b7'),
+                system('A2x', ['a2'], 'b7'), system('A3', ['a3']),
+                system('C1', ['c1']),
+            ], new Map([
+                ['a1', ['c1', 'a2']], ['a2', ['a1', 'a3']], ['a3', ['a2']],
+                ['c1', ['a1']],
+            ]));
+            expect(view(gateIndex, 'a1', 'A1', false).cycle)
+                .toEqual(['C1', 'A2']);
+            expect(view(gateIndex, 'a1', 'A1', false, [7]).cycle)
+                .toEqual(['C1', 'A2x']);
+            // Under transitivity the gates further out follow.
+            expect(view(gateIndex, 'a1', 'A1', true, [7]).cycle)
+                .toEqual(['C1', 'A2x', 'A3']);
+        });
+
     it('works from a gate in a copy the player\'s bits say is hidden', () => {
         const gateIndex = index();
         (gateIndex.systemById.get('A1') as SystemData).visibility = 'b9';
@@ -709,5 +728,124 @@ describe('the gate map at Kit Gate N1 (wave 27)', () => {
         ]);
         map.dismiss();
         await shown;
+    });
+});
+
+/**
+ * Tab on the hypergate map (reference "Tab on the hypergate map, wave 56"):
+ * HG-Tichel with its links reordered to [Primus, Kania, (destroyed)
+ * Aldebaran, Alphara] cycled Primus, Kania, Aldebaran, Alphara, Primus: the
+ * gate's HyperLink SLOT order, wrapping with no empty step, the unexplored
+ * Alphara included; Return (or Done) transited to the Tab's pick. NovaJS
+ * leaves a destroyed gate off the map entirely (computeGateMapView), so its
+ * cycle skips it; stock data links no working gate to a destroyed one.
+ */
+describe('Tab on the gate map (wave 56)', () => {
+    beforeAll(() => installHeadlessPixi());
+
+    function displayAssets(): DisplayAssetDataInterface {
+        return {
+            spriteFromPict: () => new PIXI.Sprite(),
+            spriteFromPictAsync: async () => new PIXI.Sprite(),
+            textureFromPict: () => PIXI.Texture.EMPTY,
+            textureFromPictAsync: async () => PIXI.Texture.EMPTY,
+            textureFromCicn: async () => PIXI.Texture.EMPTY,
+            textureFromPpat: async () => PIXI.Texture.EMPTY,
+            data: {},
+        } as unknown as DisplayAssetDataInterface;
+    }
+
+    function gameData(): MockGameData {
+        const data = new MockGameData();
+        const gate = (id: string, destinations: string[], canLand = true) => {
+            const base = getDefaultPlanetData();
+            data.data.Planet.map.set(id, {
+                ...base, id, name: `HG-${id}`,
+                flags: { ...base.flags, canLand, uninhabited: false },
+                gate: { kind: 'hypergate', destinations, emergenceAngle: null },
+            });
+        };
+        // Not in id, distance or angle order.
+        gate('t:tichel', ['t:primus', 't:kania', 't:dead', 't:alphara']);
+        gate('t:primus', ['t:tichel']);
+        gate('t:kania', ['t:tichel']);
+        gate('t:alphara', ['t:tichel']);
+        gate('t:dead', [], false);
+        const sys = (id: string, position: [number, number],
+            planets: string[]) => {
+            data.data.System.map.set(id, {
+                ...getDefaultSystemData(), id, name: id, position, planets,
+            });
+        };
+        sys('s:tichel', [110, 40], ['t:tichel']);
+        sys('s:primus', [30, -70], ['t:primus']);
+        sys('s:kania', [160, -20], ['t:kania']);
+        sys('s:aldebaran', [-10, -70], ['t:dead']);
+        sys('s:alphara', [50, 70], ['t:alphara']);
+        return data;
+    }
+
+    async function open() {
+        const controlEvents = new Subject<ControlEvent>();
+        const map = new GateMap(displayAssets(),
+            gameData() as unknown as SimulationGameDataInterface,
+            controlEvents,
+            id => id === 's:alphara' ? DISCOVERY_UNKNOWN : DISCOVERY_ENTERED);
+        await map.buildPromise;
+        const shown = map.show({
+            gateSpob: 't:tichel', systemId: 's:tichel',
+            destinationSpob: null,
+        });
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const press = (action: 'nextTarget' | 'depart') =>
+            controlEvents.next({ action, state: 'start' });
+        return { map, shown, press };
+    }
+
+    it('cycles the destinations in HyperLink slot order and wraps',
+        async () => {
+            const { map, shown, press } = await open();
+            const picks: (string | undefined)[] = [];
+            for (let i = 0; i < 5; i++) {
+                press('nextTarget');
+                picks.push(map.graph?.selectedSystem);
+            }
+            expect(picks).toEqual(['s:primus', 's:kania', 's:alphara',
+                's:primus', 's:kania']);
+            // The column follows the pick, as a click's does.
+            expect(map.propertiesText.slice(0, 2))
+                .toEqual([HYPERGATE_DESTINATION_TITLE, 's:kania']);
+            map.dismiss();
+            await shown;
+        });
+
+    it('includes an unexplored destination, read as "<Unknown>"',
+        async () => {
+            const { map, shown, press } = await open();
+            for (let i = 0; i < 3; i++) {
+                press('nextTarget');
+            }
+            expect(map.graph?.selectedSystem).toBe('s:alphara');
+            expect(map.propertiesText.slice(0, 2))
+                .toEqual([HYPERGATE_DESTINATION_TITLE, '<Unknown>']);
+            map.dismiss();
+            await shown;
+        });
+
+    it('goes on from a clicked pick', async () => {
+        const { map, shown, press } = await open();
+        map.pickSystem('s:kania');
+        press('nextTarget');
+        expect(map.graph?.selectedSystem).toBe('s:alphara');
+        map.dismiss();
+        await shown;
+    });
+
+    it('transits to the Tab\'s pick on Return', async () => {
+        const { press, shown } = await open();
+        press('nextTarget');
+        press('nextTarget');
+        press('depart');
+        expect((await shown).destinationSpob).toBe('t:kania');
     });
 });

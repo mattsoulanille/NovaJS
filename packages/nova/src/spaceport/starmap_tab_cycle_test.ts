@@ -46,4 +46,39 @@ describe('Tab on the full star map', () => {
         // Each pick is a single-jump route.
         expect(map.getEffectiveRoute()).toEqual([SW]);
     });
+
+    /**
+     * Reference "Tab on the hypergate map, wave 56", at stock Alphara
+     * (links Vega, Vemap, Spica, Sol, Sol's hidden NCB copy) with the route
+     * Alphara > Vemap > Heraan Cov plotted: Tab went on from its last pick
+     * through Sol, Vega, Vemap, skipping only the copy the map hides; the
+     * route's own first hop is no exception, and the route stays plotted.
+     */
+    it('cycles every visible neighbour with a route plotted, keeping it',
+        () => {
+            const sys = (id: string, links: string[], x: number,
+                visibility = ''): SystemData => ({
+                ...getDefaultSystemData(), id, name: id,
+                position: [x, 0], links, visibility,
+            });
+            const map = new SystemGraph([
+                sys('alphara', ['vega', 'vemap', 'spica', 'sol', 'solB'], 0),
+                sys('vega', ['alphara'], 10),
+                sys('vemap', ['alphara', 'heraan'], 20),
+                sys('heraan', ['vemap'], 30),
+                sys('spica', ['alphara'], 40),
+                sys('sol', ['alphara'], 50, '!b147'),
+                sys('solB', ['alphara'], 50, 'b147'),
+            ], 'alphara', { discoveryOf: () => DISCOVERY_ENTERED });
+            map.clickSystem('vemap', true);
+            map.clickSystem('heraan', true);
+            expect(map.getRouteState().pinned).toEqual(['vemap', 'heraan']);
+            const picks: (string | undefined)[] = [];
+            for (let i = 0; i < 5; i++) {
+                map.cycleSingleRoute(1);
+                picks.push(map.getRouteState().single);
+            }
+            expect(picks).toEqual(['vega', 'vemap', 'spica', 'sol', 'vega']);
+            expect(map.getRouteState().pinned).toEqual(['vemap', 'heraan']);
+        });
 });

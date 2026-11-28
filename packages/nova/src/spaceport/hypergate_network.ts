@@ -216,6 +216,44 @@ export function reachableGates(network: HypergateNetwork,
 }
 
 /**
+ * The order Tab cycles the gate map's destinations in: the gate's own
+ * HyperLinks in SLOT order (HyperLink1 first), not by id, distance or
+ * angle, as the star map's Tab follows the sÿst link slots (reference
+ * "Tab on the hypergate map, wave 56"). Unusable (destroyed) gates and
+ * repeats are left out.
+ *
+ * With `transitive` on (a NovaJS addition), the gates further out follow,
+ * in a breadth-first walk that takes each gate's links in slot order too:
+ * the gate's own links first, then everything one transit beyond them, and
+ * so on. The result holds the same gates as {@link gateMapDestinations},
+ * only ordered for the cycle.
+ */
+export function gateCycleOrder(network: HypergateNetwork, from: string,
+    transitive: boolean): string[] {
+    if (!usable(network, from)) {
+        return [];
+    }
+    const order: string[] = [];
+    const seen = new Set([from]);
+    let frontier = [from];
+    while (frontier.length > 0) {
+        const next: string[] = [];
+        for (const current of frontier) {
+            for (const to of network.links.get(current) ?? []) {
+                if (seen.has(to) || !usable(network, to)) {
+                    continue;
+                }
+                seen.add(to);
+                order.push(to);
+                next.push(to);
+            }
+        }
+        frontier = transitive ? next : [];
+    }
+    return order;
+}
+
+/**
  * The gate spöbs a player standing on `from` may travel to.
  *
  * - `transitive` false (the original game): `from`'s own HyperLink
