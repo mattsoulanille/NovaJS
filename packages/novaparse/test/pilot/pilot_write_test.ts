@@ -59,6 +59,7 @@ describe("pilot_write", () => {
             nickname: "Probe",
             shipName: "Test Hull",
             strictPlay: true,
+            gender: "female",
             dominated: { 2000: true },
             priceFlux: [3, -2, 1, 0],
             stellarShipCount: { 2000: 6, 128: 600 },
@@ -91,6 +92,7 @@ describe("pilot_write", () => {
         expect(p.rating).toBe(6400);
         expect(parsed.globals.nickname).toBe("Probe");
         expect(parsed.globals.strictPlay).toBeTrue();
+        expect(parsed.globals.gender).toBe(0);
         expect(parsed.globals.priceFlux).toEqual([3, -2, 1, 0]);
         expect(parsed.globals.stellarShipCount[2000 - 128]).toBe(6);
         expect(parsed.globals.stellarShipCount[0]).toBe(600);

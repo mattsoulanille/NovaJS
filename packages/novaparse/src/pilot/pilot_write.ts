@@ -77,6 +77,8 @@ export interface PilotEdits {
     nickname?: string;
     shipName?: string;
     strictPlay?: boolean;
+    /** The pilot's gender (AltPlayerFileDataStruct 0x0004: 1 male, 0 female); dësc {G ...} reads it. */
+    gender?: "male" | "female";
     /** spöb resource id -> dominated. */
     dominated?: { [id: string]: boolean };
     /** AltPlayerFileDataStruct priceFlux (4 shorts at 0x3588; meaning unknown, see #321). */
@@ -103,7 +105,7 @@ export const PLAYER_OFFSETS = {
 } as const;
 
 /** Absolute offsets in the decrypted AltPlayerFileDataStruct. */
-export const GLOBALS_OFFSETS = { strictPlay: 0x0002, stellarShipCount: 0x0006, priceFlux: 0x3588, nickname: 0x5d98 } as const;
+export const GLOBALS_OFFSETS = { strictPlay: 0x0002, gender: 0x0004, stellarShipCount: 0x0006, priceFlux: 0x3588, nickname: 0x5d98 } as const;
 
 const MISSION_OBJECTIVES_SIZE = 20;
 
@@ -221,6 +223,7 @@ export function editMacPilot(pilot: DecryptedMacPilot, edits: PilotEdits): Decry
     if (e.rating !== undefined) p.setInt32(O.rating, e.rating);
     if (e.nickname !== undefined) writePString(globals, GLOBALS_OFFSETS.nickname, e.nickname, 63);
     if (e.strictPlay !== undefined) g.setInt16(GLOBALS_OFFSETS.strictPlay, e.strictPlay ? 1 : 0);
+    if (e.gender !== undefined) g.setInt16(GLOBALS_OFFSETS.gender, e.gender === "male" ? 1 : 0);
     for (const [id, n] of Object.entries(e.stellarShipCount ?? {})) {
         g.setInt16(GLOBALS_OFFSETS.stellarShipCount + 2 * index(id, "spöb", 2048), n);
     }

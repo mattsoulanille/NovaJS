@@ -411,6 +411,7 @@ novaref pilot-make scripts/novaref/pilots/probe_a.json
   (+ammo), legal (**per sÿst id**, because EV Nova keeps legal records per
   system), clearLegal, explored/exploreAll, missionBits/clearMissionBits,
   clearMissions, escorts, fighters, rating, nickname, shipName, strictPlay,
+  gender ("male" / "female", wave 54),
   dominated, priceFlux, and stellarShipCount (spöb id -> defence ships
   left). Ids are resource ids, not indexes.
 - **Defence fleets** (wave 39): the pilot file keeps every stellar's
