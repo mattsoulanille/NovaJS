@@ -15,7 +15,10 @@ import {
 import {
     CargoComponent, OutfitsStateComponent, ShipComponent,
 } from '../nova_plugin/ship/index.js';
-import { HangarContext, HangarDialog, hangarEntries } from './hangar_dialog.js';
+import {
+    HANGAR_DESCRIPTION_PANE, HANGAR_MESSAGE_Y, HangarContext, HangarDialog,
+    hangarDescriptionFrame, hangarEntries,
+} from './hangar_dialog.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { MenuControls } from './menu_controls.js';
 import { STORAGE_REFUSAL_TEXT } from './ship_storage.js';
@@ -54,12 +57,18 @@ describe('the hangar dialog', () => {
         [FLOWN, ship(FLOWN, 'Runabout')],
         [STORED, ship(STORED, 'Hauler')],
     ]);
+    /** A plug-in loadout: forty "Build ..." outfits (Matthew's
+     * 2026-11-27 screenshot). */
+    const BUILD_IDS = Array.from({ length: 40 }, (_, i) => `builds:${400 + i}`);
     const OUTFITS = new Map<string, OutfitData>([
         [BLASTER, { ...getDefaultOutfitData(), id: BLASTER, name: 'Blaster' }],
         [LICENCE, {
             ...getDefaultOutfitData(), id: LICENCE, name: 'Licence',
             persistent: true,
         }],
+        ...BUILD_IDS.map((id, i): [string, OutfitData] => [id, {
+            ...getDefaultOutfitData(), id, name: `Build Thing ${i + 1}`,
+        }]),
     ]);
 
     function displayAssets(): DisplayAssetDataInterface {
@@ -158,6 +167,7 @@ describe('the hangar dialog', () => {
         itemGrid: { right(): void, selection?: { kind: string } },
         text: { message: PIXI.Text },
     };
+    const textOf = (hangar: HangarDialog) => hangar.descriptionPane.text;
     const click = (button: { click: Subject<{ option: boolean, shift: boolean }> }) =>
         button.click.next({ option: false, shift: false });
 
@@ -229,6 +239,55 @@ describe('the hangar dialog', () => {
         await shown;
         expect(hangar.container.visible).toBeFalse();
         expect(MenuControls.focused).toBeUndefined();
+    });
+
+    it('clips a long outfit list to the pane and scrolls it, back to the '
+        + 'top for the next ship (Matthew\'s 2026-11-27 overflow)',
+        async () => {
+            const hull = pilot([stored()]);
+            hull.components.set(OutfitsStateComponent, new Map(
+                BUILD_IDS.map(id => [id, { count: 1 }])));
+            const { hangar, shown } = open(hull);
+            await settle();
+            const pane = hangar.descriptionPane;
+            const text = textOf(hangar);
+            expect(text.text).toContain('Build Thing 40');
+            expect(text.mask).toBeTruthy();
+            expect(pane.frame).toEqual(hangarDescriptionFrame(false));
+            const bottom = HANGAR_DESCRIPTION_PANE.y
+                + HANGAR_DESCRIPTION_PANE.height;
+            // Forty-odd lines run far past the pane...
+            expect(text.y + text.height).toBeGreaterThan(bottom + 200);
+            expect(pane.maxOffset).toBeGreaterThan(200);
+            // ...and the wheel brings the last of them onto it.
+            for (let i = 0; i < 100; i++) {
+                pane.onWheel({ deltaX: 0, deltaY: 1, deltaMode: 1,
+                    ctrlKey: false, timeStamp: i });
+            }
+            expect(pane.offset).toBe(pane.maxOffset);
+            expect(text.y + text.height).toBeCloseTo(bottom, 0);
+            // The stored Hauler's short sheet: at the top, nothing to scroll.
+            internals(hangar).itemGrid.right();
+            await settle();
+            expect(text.text).not.toContain('Build Thing');
+            expect(pane.offset).toBe(0);
+            expect(pane.maxOffset).toBe(0);
+            click(hangar.buttons.done);
+            await shown;
+        });
+
+    it('keeps the sheet above a message under it', async () => {
+        const { hangar, shown } = open(pilot([stored()]));
+        await settle();
+        internals(hangar).itemGrid.right();
+        (hangar as unknown as { say(m: string): void }).say('A message.');
+        const frame = hangar.descriptionPane.frame;
+        expect(frame.y + frame.height).toBe(HANGAR_MESSAGE_Y - 4);
+        (hangar as unknown as { say(m: string): void }).say('');
+        expect(hangar.descriptionPane.frame)
+            .toEqual(hangarDescriptionFrame(false));
+        click(hangar.buttons.done);
+        await shown;
     });
 
     it('lists ships under their own names where the caption has room',

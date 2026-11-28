@@ -147,6 +147,13 @@ player gave it at the shipyard's "Please name your new <ship>:" prompt.
 - The hangar lists a ship by its own name: on the tile's first line when it
   fits (`HANGAR_CAPTION_NAME_CHARS`, 14 characters), otherwise the class's
   short name; the description pane always shows the name and the class.
+- The description pane is a scrolling text field (`spaceport/scroll_text_pane.ts`):
+  the ship sheet is clipped to the pane, and a long one (a plug-in loadout of
+  forty-odd outfits ran over Done and the spaceport underneath, Matthew
+  2026-11-27) scrolls by the wheel, a slim scroll bar at the pane's right edge
+  (drag the thumb, click the track to page) and PageUp / PageDown / Home /
+  End. Each ship's sheet starts at its top; while a message shows under the
+  sheet, the sheet stops above it.
 
 **No `OnPurchase` / `OnRetire`.** The Bible ties those to buying, selling and
 capturing. Storing or swapping a hull is none of these: the pilot still owns

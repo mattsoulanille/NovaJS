@@ -30,6 +30,9 @@ import { MenuControls } from './menu_controls.js';
 import { FONT } from './outfitter.js';
 import { ScrollArrow } from './scroll_arrow.js';
 import {
+    PaneRect, ScrollTextPane, SHOP_DESCRIPTION_PANE,
+} from './scroll_text_pane.js';
+import {
     escortToStorage, escortWingOut, recordOutfitsLoaded, snapshotHull,
     STORAGE_REFUSAL_TEXT, StorageLookups, StorageRefusal, storableEscort,
     storedShipLabel, storedShipsOf, storedToEscort, swapHoldRefusal,
@@ -71,6 +74,31 @@ import {
  * the name.
  */
 export const HANGAR_CAPTION_NAME_CHARS = 14;
+
+/**
+ * The description pane of the 8501 frame (SHOP_DESCRIPTION_PANE). The ship
+ * sheet clips to it and scrolls (scroll_text_pane.ts) — a plug-in loadout
+ * of forty-odd outfits ran far past its bottom, over Done and the
+ * spaceport's own description (Matthew's 2026-11-27 screenshot). Ship
+ * storage is NovaJS's own, so the hangar scrolls whatever the "Scroll
+ * wheel in text" enhancement says.
+ */
+export const HANGAR_DESCRIPTION_PANE: PaneRect = SHOP_DESCRIPTION_PANE;
+/** The press/refusal message's top, in the same pane under the sheet. */
+export const HANGAR_MESSAGE_Y = 76;
+/** The sheet's text wrap: the shops' description width (outfitter.ts). */
+const HANGAR_DESCRIPTION_WRAP = 190;
+
+/**
+ * The sheet's clip: the whole pane, or the part above the message (with a
+ * 4px gap) while one is shown.
+ */
+export function hangarDescriptionFrame(messageShown: boolean): PaneRect {
+    const pane = HANGAR_DESCRIPTION_PANE;
+    return messageShown
+        ? { ...pane, height: HANGAR_MESSAGE_Y - 4 - pane.y }
+        : { ...pane };
+}
 
 /** What a tile stands for. */
 export type HangarEntryKind = 'current' | 'stored' | 'escort';
@@ -244,7 +272,8 @@ export class HangarDialog {
     private scrollUpArrow = new ScrollArrow('up');
     private scrollDownArrow = new ScrollArrow('down');
     private text = {
-        description: new PIXI.Text('', { ...FONT.normal, wordWrapWidth: 196 }),
+        description: new PIXI.Text('',
+            { ...FONT.normal, wordWrapWidth: HANGAR_DESCRIPTION_WRAP }),
         storedLabel: new PIXI.Text('Stored:', FONT.normal),
         storedValue: new PIXI.Text('', FONT.normal),
         escortsLabel: new PIXI.Text('Escorts:', FONT.normal),
@@ -257,6 +286,8 @@ export class HangarDialog {
      * caption follows the selection). done: back to the shipyard.
      */
     readonly buttons: { move: Button, swap: Button, done: Button };
+    /** The ship sheet, clipped to its pane and scrolling inside it. */
+    readonly descriptionPane: ScrollTextPane;
     /** Rebuilds in flight, so a press cannot act on a stale grid. */
     private busy = false;
 
@@ -293,7 +324,7 @@ export class HangarDialog {
         this.gridContainer.position.set(-373, -153);
         this.pictContainer.position.set(174, -152.5);
         this.text.description.position.set(-27, -150);
-        this.text.message.position.set(-27, 76);
+        this.text.message.position.set(-27, HANGAR_MESSAGE_Y);
         // The hire dialog's two-row pane ("Hiring Price:" / "You Have:").
         this.text.storedLabel.position.set(HIRE.label.x, HIRE.label.y);
         this.text.storedValue.position.set(HIRE.valueX, HIRE.label.y);
@@ -314,7 +345,12 @@ export class HangarDialog {
         });
         this.container.addChild(this.scrollUpArrow.container,
             this.scrollDownArrow.container);
-        for (const t of Object.values(this.text)) {
+        const { description, ...others } = this.text;
+        this.descriptionPane = new ScrollTextPane(description, {
+            frame: hangarDescriptionFrame(false), name: 'HangarDescription',
+        });
+        this.container.addChild(this.descriptionPane.container);
+        for (const t of Object.values(others)) {
             this.container.addChild(t);
         }
 
@@ -470,7 +506,8 @@ export class HangarDialog {
 
     private setSelected(tile: ItemTile<HangarEntry> | undefined) {
         this.pictContainer.removeChildren();
-        this.text.description.text = tile?.item.desc ?? '';
+        // Each ship's sheet starts at its own top.
+        this.descriptionPane.setText(tile?.item.desc ?? '');
         if (tile?.largePict) {
             this.pictContainer.addChild(tile.largePict);
         }
@@ -638,6 +675,7 @@ export class HangarDialog {
     /** Reports a refusal, or the result of a press, under the figures. */
     protected say(message: string) {
         this.text.message.text = message;
+        this.descriptionPane.setFrame(hangarDescriptionFrame(message !== ''));
     }
 
     /**
@@ -725,11 +763,14 @@ export class HangarDialog {
             }
             this.container.visible = true;
             this.controls.bind();
+            // PageUp / PageDown / Home / End scroll the sheet.
+            this.descriptionPane.bindPageKeys(this.controls);
             if (!closed) {
                 await firstValueFrom(this.closed);
             }
         } finally {
             subscription.unsubscribe();
+            this.descriptionPane.unbindPageKeys();
             this.showing = false;
             this.controls.unbind();
             if (!this.container.destroyed) {
@@ -749,6 +790,7 @@ export class HangarDialog {
      */
     dismiss() {
         this.controls.release();
+        this.descriptionPane.unbindPageKeys();
         if (this.showing) {
             this.closed.next();
         }
