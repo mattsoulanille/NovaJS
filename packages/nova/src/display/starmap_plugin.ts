@@ -37,7 +37,7 @@ import {
     MINI_MAP_PANE, MINI_MAP_ZOOM, MiniMap, MiniMapPeek, miniMapPosition,
 } from '../spaceport/mini_map.js';
 import type { SystemGraph } from '../spaceport/system_graph.js';
-import { DockedShipResource } from './docked_ship.js';
+import { DockedPlayerEditedEvent, DockedShipResource } from './docked_ship.js';
 import { SimulationTimeResource } from './simulation_time.js';
 import {
     keepCentred, ScreenSize, stopCentring,
@@ -49,6 +49,8 @@ import { BEEP_MAP_CLOSE, BEEP_MAP_OPEN, playUiSound } from './ui_sound.js';
 export const StarmapResource = new Resource<Starmap>("Starmap");
 const StarmapControlsSubscription = new Resource<Subscription>('StarmapControlsSubscription');
 const StarmapJumpSubscription = new Resource<Subscription>('StarmapJumpSubscription');
+const StarmapDockedEditSubscription =
+    new Resource<Subscription>('StarmapDockedEditSubscription');
 /** Marks the plugin's openStarmap as torn down (see remove). */
 const StarmapDisposer = new Resource<() => void>('StarmapDisposer');
 export const SetJumpRouteEvent = new EcsEvent<{ route: string[] }>('SetJumpRouteEvent');
@@ -388,6 +390,11 @@ export const StarmapPlugin: Plugin = {
         // while open (CentredUiResource).
         keepCentred(world, starmap.container);
         world.resources.set(StarmapResource, starmap);
+        // The status bar's "Clear Legal Record" while docked changes the
+        // records under an open map: re-read its Legal Status line.
+        world.resources.set(StarmapDockedEditSubscription,
+            world.events.get(DockedPlayerEditedEvent)
+                .subscribe(() => starmap.refreshProperties()));
         // Debug/headless-driving handle, like window.displayWorld.
         if (typeof window !== 'undefined') {
             window.novaStarmap = starmap;
@@ -588,6 +595,8 @@ export const StarmapPlugin: Plugin = {
     remove(world) {
         world.resources.get(StarmapControlsSubscription)?.unsubscribe();
         world.resources.get(StarmapJumpSubscription)?.unsubscribe();
+        world.resources.get(StarmapDockedEditSubscription)?.unsubscribe();
+        world.resources.delete(StarmapDockedEditSubscription);
         world.resources.delete(StarmapJumpSubscription);
         world.removeSystem(DrawMiniMap);
         const miniMapState = world.resources.get(MiniMapResource);

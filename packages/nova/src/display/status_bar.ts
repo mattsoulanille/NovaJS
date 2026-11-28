@@ -10,7 +10,7 @@ import {
 import { DEBUG_CREDITS_GRANT } from "../nova_plugin/pilot/index.js";
 import { DiscoveryStoreResource } from "../nova_plugin/player/index.js";
 import { Button, ButtonClick } from "../spaceport/button.js";
-import { DockedShipResource } from "./docked_ship.js";
+import { DockedPlayerEditedEvent, DockedShipResource } from "./docked_ship.js";
 import { PixiAppResource } from "./pixi_app_resource.js";
 import { ScreenSize } from "./screen_size_plugin.js";
 import { defaultSimulationTime, SimulationTimeResource } from "./simulation_time.js";
@@ -277,11 +277,19 @@ export const StatusBarPlugin: Plugin = {
             const docked = world.resources.get(DockedShipResource)?.current;
             if (docked) {
                 docked.applyExternalCredits(DEBUG_CREDITS_GRANT);
+                world.emit(DockedPlayerEditedEvent, undefined);
                 return;
             }
             world.emit(DebugActionEvent, { action: 'debugGiveCredits' });
         });
+        // Likewise "Clear Legal Record" (DockedShip.clearLegalRecords).
         statusBar.clearRecord.subscribe(() => {
+            const docked = world.resources.get(DockedShipResource)?.current;
+            if (docked) {
+                docked.clearLegalRecords();
+                world.emit(DockedPlayerEditedEvent, undefined);
+                return;
+            }
             world.emit(DebugActionEvent, { action: 'debugClearRecord' });
         });
 

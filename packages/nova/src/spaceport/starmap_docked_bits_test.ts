@@ -8,6 +8,7 @@ import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
+import { legalStatusInSystem } from '../nova_plugin/reputation/index.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { MenuControls } from './menu_controls.js';
 import { Starmap } from './starmap.js';
@@ -201,4 +202,31 @@ describe('the docked starmap\'s control bits', () => {
         starmap.container.destroy({ children: true });
         await expectAsync(starmap.buildPromise).toBeResolved();
     });
+    // The status bar's "Clear Legal Record" while docked empties the
+    // landing's records IN PLACE under an open map (DockedShip
+    // .clearLegalRecords); DockedPlayerEditedEvent asks the map to re-read.
+    it('re-reads Legal Status when the records are cleared under it',
+        async () => {
+            const starmap = await dockedMap();
+            const records = new Map([[KANIA, -30]]);
+            starmap.openOptions = { legalRecords: records };
+            const shown = starmap.show([]);
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const status = () => {
+                const lines = propertyLines(starmap);
+                return lines[lines.indexOf('Legal Status:') + 1];
+            };
+            expect(status()).toBe('Offender');
+            records.clear();
+            starmap.refreshProperties();
+            expect(status()).not.toBe('Offender');
+            const neutral = legalStatusInSystem(new Map(), KANIA,
+                'nova:128', () => ({
+                    ...getDefaultGovtData(), id: 'nova:128', crimeTol: 6,
+                }));
+            expect(neutral).toBeDefined();
+            expect(status()).toBe(neutral!);
+            starmap.dismiss();
+            await shown;
+        });
 });

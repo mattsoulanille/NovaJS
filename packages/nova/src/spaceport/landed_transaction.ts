@@ -760,6 +760,28 @@ export class LandedTransaction {
     }
 
     /**
+     * THE STATUS BAR'S "Clear Legal Record" WHILE DOCKED (the in-flight
+     * DebugCheatSystem's `records.clear()`, applied to the landing): every
+     * stored per-system record goes, from the working copy (what the
+     * docked readers see and what the flush lifts off with) and from the
+     * hull alike, IN PLACE so readers holding either map see it.
+     *
+     * Like applyExternalCredits' money, this is not a venue's to undo: a
+     * savepoint taken earlier and rolled back later must not bring the old
+     * records back. A rollback restores the records as they stood at its
+     * savepoint, and every record that existed then is gone now, so each
+     * open savepoint's copy is emptied too — what a venue recorded AFTER
+     * the clear is still undone by its own rollback.
+     */
+    clearLegalRecords(): void {
+        this.session.state.records?.clear();
+        this.hull.components.get(LegalRecordsComponent)?.clear();
+        for (const savepoint of this.savepoints) {
+            savepoint.snapshot.records?.clear();
+        }
+    }
+
+    /**
      * Told after every {@link applyExternalCredits} — money that moved
      * while a venue may be OPEN but not because of anything it did (the
      * status bar's debug grant, an escort sale settling). A venue's own

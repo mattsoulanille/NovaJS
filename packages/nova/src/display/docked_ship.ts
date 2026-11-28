@@ -1,7 +1,9 @@
 import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
+import { EcsEvent } from 'nova_ecs/events';
 import { Resource } from 'nova_ecs/resource';
 import { CreditsComponent } from '../nova_plugin/player/index.js';
+import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import type { LandedTransaction } from '../spaceport/landed_transaction.js';
 
 /**
@@ -134,6 +136,24 @@ export class DockedShip {
     }
 
     /**
+     * THE STATUS BAR'S "Clear Legal Record" WHILE DOCKED — lost for the
+     * same reason the credit grant was (see applyExternalCredits): the
+     * control edge found no ship in the sim. Docked, the records are
+     * cleared in the landing's working copy and on the hull
+     * (LandedTransaction.clearLegalRecords), and lift off with the hull's
+     * addEntity record; without an open transaction the hull is cleared
+     * directly.
+     */
+    clearLegalRecords(): void {
+        const transaction = this.transaction;
+        if (transaction && !transaction.isClosed) {
+            transaction.clearLegalRecords();
+            return;
+        }
+        this.ship.components.get(LegalRecordsComponent)?.clear();
+    }
+
+    /**
      * THE DOCKED HULL CHANGED MID-VISIT — the player traded up at the
      * shipyard, which builds a whole new entity (shipyard_rules'
      * `buildPurchasedShip`) rather than mutating the old one.
@@ -168,3 +188,15 @@ export interface DockedShipHolder {
 
 export const DockedShipResource =
     new Resource<DockedShipHolder>('DockedShip');
+
+/**
+ * The docked player's data was edited from outside the landed menus — a
+ * status-bar debug button (credits, legal records) pressed while docked.
+ * A landed screen that is not a venue and can stay open under the status
+ * bar re-reads it: the star map's Legal Status line. (The venues follow
+ * money through LandedTransaction.onCreditsChanged; the 'p' dialog is
+ * modal — its shield keeps the status bar's buttons from being pressed
+ * while it is up — and reads the player afresh each time it opens.)
+ */
+export const DockedPlayerEditedEvent =
+    new EcsEvent<undefined>('DockedPlayerEditedEvent');

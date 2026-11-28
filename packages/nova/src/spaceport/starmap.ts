@@ -263,6 +263,8 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
 
     // The properties readouts.
     private propContainer = new PIXI.Container();
+    /** The system the properties column describes (see showProperties). */
+    private propertiesSystemId?: string;
     private portsLabel = new PIXI.Text('Ports:', PROP_LABEL_FONT);
     private portsValue = new PIXI.Text('', PROP_VALUE_FONT);
     private hazardsLabel = new PIXI.Text('Navigation Hazards:',
@@ -642,6 +644,7 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
      * plugin's lookup, for the same reason as the bits (#29).
      */
     private showProperties(systemId: string) {
+        this.propertiesSystemId = systemId;
         // Cleared BEFORE the lines are computed (renderPropertyLines clears
         // again, harmlessly): a lookup that throws part-way must leave the
         // column blank, not the previous system's lines, as it always has.
@@ -655,6 +658,17 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         renderPropertyLines(this.propContainer, lines);
         this.portsValue.text = ports;
         this.hazardsValue.text = hazards;
+    }
+
+    /**
+     * Re-reads the properties column of the system it is showing — the
+     * player's records changed under an open map (the status bar's "Clear
+     * Legal Record" while docked, DockedPlayerEditedEvent).
+     */
+    refreshProperties() {
+        if (this.container.visible && this.propertiesSystemId) {
+            this.showProperties(this.propertiesSystemId);
+        }
     }
 
     override async show(route: string[]) {
