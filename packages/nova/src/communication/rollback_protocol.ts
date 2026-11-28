@@ -1249,7 +1249,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    fleets, reinforcements, persons, listed persons), planet defenders
 //    and bay launches (the bay keeps its fighter). No message kind
 //    changes. The derived wire schema fingerprint changes
-//    (5228b7f1a5a94f40 -> NEWPRINT), and the join gate keeps older and
+//    (5228b7f1a5a94f40 -> fcce7ad2bfc8f5bf), and the join gate keeps older and
 //    newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
