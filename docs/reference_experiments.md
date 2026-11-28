@@ -27491,7 +27491,146 @@ readers), `pilotspecs/`, `scen/`, `recover.log`. (The `open` variant, the
 gate opened to all with govt -1 / MinStatus -32767, was built but not run:
 base already showed the stock lock stops no NPC.)
 
+### Map outfits: the two maps at Kel'ar Iy (2026-11-28): Matthew's ARPIA2 plug-in adds SpecialTech 82 to Kel'ar Iy (and to the Polaris worlds), so the 1-jump Map (oütf 204) and the 3-jump Map (434) are both stocked, and the original shows the pair the same way: two identical "Map" tiles. Separately, a map's reach is a depth-first walk with one visited set, not "every system within N jumps", and the outfitter sells only one map per opening
+
+**Question** (Matthew's playtest): "There appear to be two maps offered.
+One is 1 system range and the other is 3. This is on Kel'ar Iy in the
+Kel'ariy system, but I've seen it elsewhere, too." Both tiles read "Map".
+
+**Data** (read through NovaParse, stock + the canonical Plug-ins set).
+Stock `Nova Files` has six ModType 16 items. Three of them can be bought
+(1,000 cr each, ShortName "Map", Max 1, BuyRandom 100):
+
+| oütf | name | ModVal | sold by | stock DispWeight |
+|---|---|---|---|---|
+| 204 | `Map; Sol/Kel'ar Iy only` | 1 | SpecialTech 80: Earth, Mars, Kel'ar Iy | 16 |
+| 433 | `Map; Fed/Pol` | 2 | SpecialTech 81: Federation and Polaris worlds, Availability `!b424` | 16 |
+| 434 | `Map; Reb/Pir/Aur` | 3 | SpecialTech 82: Rebel, Pirate and Auroran worlds, `!b424` | 16 |
+
+On stock data, no outfitter stocks two maps (checked over every spöb).
+Stock Kel'ar Iy (spöb 254) has SpecialTech 8, 18, 80, 133. **ARPIA2's
+`ARPIA2 - Data 2` overrides spöb 254, and its only difference from stock
+is byte 1095 (SpecialTech slot 4: 0 -> 82)**. It adds 82 to the Polaris
+worlds the same way. The result is two maps at Kel'ar Iy (204 and 434)
+and two at 43 more outfitters (433 + 434: every Nil'a / Ver'ar / Tre'ar
+/ P'ar world with 81, plus ARPIA's own Culuria and Harbor). ARPIA2
+`Data 1` and `ExtraOutfits v18 Part 1` also override oütf 204 / 433 /
+434, changing only DispWeight (17, then 116). ExtraOutfits also overrides
+the descriptions, which is where "Map Range: N Systems" comes from. The
+stock descriptions say only "the systems surrounding this one". So the
+semicolon change (2dceebf5 / 79d7b0ca) is not the cause: both tiles
+caption the ShortName "Map", in the original as well.
+
+**Rig.** No kit, no kit ids. Pilots `novaref-tm-kelar` (base Shuttle at
+spöb 254) and `novaref-tm-pised` (spöb 248 Ver'ar Pised), with missions
+and mission bits cleared. One run-only plug-in, `tm_kelar_arpia.mjs`:
+stock spöb 254 with `specialTech2: [82, 0, 0, 0, 0]`, byte-identical to
+ARPIA2's. Each run: Enter Ship, `l l`, `o`, click tiles, Buy, Done,
+Leave, and pull the pilot. Four runs: `tm_stock` (no plug-in),
+`tm_arpia`, `tm_seq` (plug-in, two landings) and `tm_pised` (no plug-in).
+
+**The outfitter (original).**
+- Stock Kel'ar Iy: 8 items, with one Map last, after Escape Pod.
+- With the plug-in: a **second identical "Map" tile** follows it (204
+  first, 434 second, in id order at equal DispWeight).
+- Both tiles have the same icon, description, price (1,000 cr) and info
+  pane. Nothing on screen tells the two apart.
+- NovaJS's `visibleOutfits` (stock and stock + 82) gives the same items
+  in the same order.
+
+**What a purchase reveals** (pilot `exploration` read back; level 2 =
+"landed"):
+
+| run | map bought | systems set to 2 | breadth-first (NovaJS before) |
+|---|---|---|---|
+| tm_arpia (fresh) | 434, 3 jumps from Kel'ariy 237 | **216, 220, 221, 225-237** (16) | 26: also 214, 215, 222-224, 239, 244, 249, 256, 261 |
+| tm_seq visit 1 (fresh) | 204, 1 jump | **230-237** (not 656) | the same |
+| tm_seq visit 2 (after 204) | 434 | the 16 above **+ 656** | |
+| tm_pised (fresh) | 433, 2 jumps from Ver'avo 232 | **214, 220-225, 230-233, 237, 261** (13) | 17: also 234, 235, 236, 239 |
+
+The fresh results are exactly this walk: from the present system, take
+each link in con-slot order, depth first, with **one visited set for
+the whole walk** and a depth limit of ModVal. A system first reached by
+a long path is marked at that depth and never re-expanded. For example,
+Ver'avo 232 is reached at depth 3 through Bis'valalo, so its neighbour
+P'ecksa 224, which is two jumps from Kel'ariy, is left out.
+
+Za'iuso nova:656 (Visibility `b335`, stacked on 233) is a direct link of
+both 237 and 232. It was neither revealed nor walked through: walking
+through it would have added 224 at Kel'ariy. The one exception is the
+second walk of tm_seq, which marked 656 but not 224. Bit 335 stayed
+clear, and no hidden-system variant (declared or closed links, a
+per-walk or persistent visited set) explains it. **Open.**
+
+The map is never kept: after each buy, the pilot's outfits held only
+the base oütf 128. This matches NovaJS's one-shot.
+
+**One map per outfitter opening.**
+- After buying either Map, Buy greys on **both** Maps, with no caption.
+  This includes 434 after 204, which would still reveal 216 and more.
+- Sell stays grey (the map is not kept).
+- Auto-eject stays buyable.
+- Closing the outfitter and pressing `o` again (Ver'ar Pised) makes Buy
+  live again.
+- On the next landing, the 1-jump Map at Kel'ar Iy is live again,
+  although it would reveal nothing new.
+
+The original also hid Cargo Retool in tm_arpia (a BuyRandom day roll;
+it was back in tm_seq).
+
+**NovaJS (main 05367f3d):**
+- Visibility: **matches**. It shows the two "Map" tiles exactly as the
+  original does (`N/spaceport/outfitter_rules.ts` `visibleOutfits`).
+  The duplicate is ARPIA2's data, so nothing is hidden.
+- Reach: **mismatch**. `mapOutfitSystems`
+  (`N/nova_plugin/player/discovery.ts:246`) was breadth-first and walked
+  through hidden systems.
+- Greying: **mismatch**. The second map stayed buyable after the first.
+
+**Applied (this branch):**
+- `mapOutfitSystems` is the depth-first walk with one visited set and
+  links in slot order. It now takes a visibility predicate.
+- `map_outfit.ts` `mapOutfitReach` / `applyMapOutfit` take the player's
+  bits, via `MissionUniverse.systemVisibleTo`, from both the outfitter
+  and the starmap's re-application of a held map.
+- `canBuyOutfit` denies `mapBoughtThisVisit`, with no caption. The
+  Outfitter resets it in `setInput`, once per opening.
+- Specs:
+  - `map_outfit_stock_test.ts` pins the three fresh results above and the
+    b335 swap.
+  - `discovery_test.ts` covers the walk's order quirk and the hidden
+    system.
+  - `outfitter_rules_test.ts` covers one map per visit.
+- Headless browser check (`?system=nova:237`, land on Kel'ar Iy, buy the
+  second Map): two "Map" tiles; after the buy, discovery level 2 on
+  exactly the 16, with 222-224, 249, 256 and 656 untouched; no console
+  errors.
+
+Confidence: high for the walk (two locations, three exact fresh sets)
+and for the greying (four observations). The 656 case on a second walk
+is unexplained.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-twomaps/`:
+- `tm_stock/` (`03-outfitter.png`, `04-map-stock.png`)
+- `tm_arpia/` (`03-outfitter.png` with the two tiles, `04-map-a.png`,
+  `05-map-b.png`, `06-bought-b.png`, `07-after-a.png`,
+  `pilot-after-buy/`)
+- `tm_seq/` (`03-bought-a.png`, `04-b-after-a.png`, `06-b-next-visit.png`,
+  `07-a-next-visit.png`, `09-a-after-b.png`, `10-autoeject-after-b.png`,
+  `pilot-after-a/`, `pilot-after-b/`)
+- `tm_pised/` (`04-bought.png`, `05-reopened.png`, `pilot-after-map/`)
+- `pilotspecs/`, `scen/`, `tools/` (`tm_kelar_arpia.mjs`, `run.sh`,
+  `send.sh`), `recover.json`
+
 ### Reliability notes (for anyone running the reference)
+
+- **A map purchase is read from the pilot, not the screen (2026-11-28):**
+  Leave after the buy (the pilot is written then), `{"pull": ...}`, and
+  read `player.exploration` with novaparse `readPilot` (index + 128 =
+  sÿst id; 2 = landed). Start from a pilot that has not bought a map, or
+  earlier marks hide the walk. Click a grid tile by its window
+  coordinates (row pitch 54 px; first tile centre about (85, 178)); two
+  identical captions differ only by position.
 
 - **Chaining hypergate transits (wave 59):** an arrival coasts out at half
   the hull's top speed, so an inertial hull drifts out of the gate's
