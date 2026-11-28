@@ -177,6 +177,17 @@ export interface MissionMachineryContext {
      */
     moveToSystem?(globalSystemId: string, keepCoordinates: boolean): void;
     /**
+     * `Qxxx` (leave the stellar the player is landed on, with a message at
+     * the bottom of the screen picked from STR# xxx). Supplied only by the
+     * in-flight accept (spaceport/ship_mission_accept.ts), where there is
+     * no stellar to leave and only the message is shown: the stock Refuel
+     * Trader's OnAccept "Q25057", "<OSN>: Ready for docking, <PSN>."
+     * (reference "Refuel rescue", 2026-11-27). Everywhere else it is
+     * reported as an unimplemented hook. `prefix` is the running
+     * expression's plug-in, for resolving the bare STR# number.
+     */
+    leaveStellar?(stringId: number, prefix: string): void;
+    /**
      * Whether a shïp with this global id exists, so the change-ship
      * operators resolve their bare number stock-first like every other
      * numeric reference.

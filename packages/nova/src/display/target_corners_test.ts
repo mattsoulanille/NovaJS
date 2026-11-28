@@ -13,6 +13,7 @@ import { DisabledComponent, TargetComponent } from '../nova_plugin/ship/index.js
 import { GovtComponent } from '../nova_plugin/core/index.js';
 import {
     FormationComponent, NpcComponent, ShootAllWeaponsComponent,
+    SystemHoldComponent,
 } from '../nova_plugin/npc/index.js';
 import { EscortCommandComponent } from '../nova_plugin/player/index.js';
 import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
@@ -226,6 +227,18 @@ describe('styleForTarget (target corner selection)', () => {
             .addComponent(DisabledComponent, { repairAt: null });
         expect(style('escort', { escort })).toBe('disabled');
     });
+
+    it('shows the gray corners for a rescue ship WAITING for its pilot '
+        + '(reference "Refuel rescue", 2026-11-27; wave 19)', () => {
+            const waiting = new Entity('waiting')
+                .addComponent(GovtComponent, { id: 'nova:157' })
+                .addComponent(NpcComponent, { aiType: 1 })
+                .addComponent(SystemHoldComponent, { reason: 'rescue' });
+            expect(style('waiting', { waiting })).toBe('disabled');
+            // Released (boarded): an ordinary trader again.
+            waiting.components.delete(SystemHoldComponent);
+            expect(style('waiting', { waiting })).toBe('neutral');
+        });
 
     it("an NPC fleet escort (someone else's flock) is not friendly", () => {
         const npcLeader = new Entity('npc leader')

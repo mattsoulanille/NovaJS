@@ -7,6 +7,7 @@ import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { PersData } from 'novadatainterface/pers_data';
+import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import {
     dayNumber, PlayerShipSelector, GameDateComponent, PlayerNamesComponent,
@@ -227,6 +228,33 @@ async function expandOfferText(world: World, universe: MissionUniverse,
 }
 
 /**
+ * One line of STR# `stringId` for a `Qxxx` message, picked at random as
+ * the Bible says ("randomly selected from the STR# resource with ID
+ * xxx"), the number resolved stock-first like every sibling operator,
+ * then under the running plug-in's own prefix. Display-only, so the pick
+ * needs no shared random. Undefined when neither table exists or it is
+ * empty.
+ */
+export async function statusQuoteLine(
+    displayAssets: DisplayAssetDataInterface,
+    stringId: number, prefix: string,
+    random: () => number = Math.random): Promise<string | undefined> {
+    for (const id of [`nova:${stringId}`, `${prefix}:${stringId}`]) {
+        let strings: readonly string[] | undefined;
+        try {
+            strings = (await displayAssets.data.StringTable.get(id))?.strings;
+        } catch {
+            continue;
+        }
+        if (strings && strings.length > 0) {
+            return strings[Math.min(strings.length - 1,
+                Math.floor(random() * strings.length))];
+        }
+    }
+    return undefined;
+}
+
+/**
  * Shows `target`'s LinkMission offer if it has one for this player right
  * now, and returns whether it did. Both triggers call this; the hail
  * plugin uses the answer to decide whether to open the comm dialog
@@ -409,6 +437,19 @@ async function acceptShipOffer(world: World,
     }
 
     world.emit(AcceptShipMissionEvent, { record: accept.record, ships });
+
+    // The OnAccept's Qxxx messages on the status line (no stellar to
+    // leave in flight): the stock Refuel Trader's "<OSN>: Ready for
+    // docking, <PSN>." (reference "Refuel rescue", 2026-11-27).
+    const displayAssets = world.resources.get(DisplayAssetDataResource);
+    for (const { stringId, prefix } of displayAssets
+        ? accept.statusQuotes : []) {
+        const line = await statusQuoteLine(displayAssets!, stringId, prefix);
+        if (line) {
+            showStatusMessage(world, await expandOfferText(world, universe,
+                offer, pers.name, line, { active: accept.active }));
+        }
+    }
 
     // The briefing (or, for an immediate auto-abort, its notice). Every
     // stock AvailLoc 2 mission has an EMPTY BriefText, so in stock

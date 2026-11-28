@@ -289,6 +289,15 @@ export interface ShipMissionAccept {
      * draw, and the visible copy of a stacked system.
      */
     bits: ReadonlySet<number>;
+    /**
+     * The OnAccept's `Qxxx` messages, in order: the STR# number and the
+     * plug-in prefix it resolves against. In flight there is no stellar to
+     * leave, so the message on the status line is all of it (the stock
+     * Refuel Trader's "Q25057", "<OSN>: Ready for docking, <PSN>.",
+     * reference "Refuel rescue", 2026-11-27). Display-only: nothing in the
+     * simulation reads them.
+     */
+    statusQuotes: { stringId: number, prefix: string }[];
 }
 
 function missionsAfter(copy: Entity, missionId: string) {
@@ -470,6 +479,10 @@ export async function buildShipMissionAccept(player: Entity,
     const ships = options.ships ?? [];
     const { session, before, outcome } = await detachedSession(player,
         gameData, universe, options.systemId);
+    const statusQuotes: ShipMissionAccept['statusQuotes'] = [];
+    session.machinery.leaveStellar = (stringId, prefix) => {
+        statusQuotes.push({ stringId, prefix });
+    };
     // A përs that is REPLACED by the special ship is the Bible's condition
     // for deferring a board/rescue auto-abort (deferredAutoAbort).
     const accepted = offeredByFate === 'replace'
@@ -506,6 +519,7 @@ export async function buildShipMissionAccept(player: Entity,
     return {
         active,
         events,
+        statusQuotes,
         bits: new Set(after.components.get(ControlBitsComponent) ?? []),
         shipSource: active ?? {
             shipObjective: offer.shipObjective,

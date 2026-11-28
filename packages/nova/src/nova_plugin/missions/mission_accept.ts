@@ -19,7 +19,7 @@ import { addRecordIn, LegalGeographyResource } from '../reputation/index.js';
 import { LegalRecordsComponent } from '../reputation/index.js';
 import { ShipPhysicsComponent } from '../ship/index.js';
 import { SystemHoldComponent } from '../npc/index.js';
-import { WeaponsStateComponent } from '../ship/index.js';
+import { TargetComponent, WeaponsStateComponent } from '../ship/index.js';
 import { findControlledEntity } from '../player/index.js';
 import { releaseAbortedMissionShips } from './mission_ship_release.js';
 import {
@@ -810,8 +810,23 @@ function applyOfferingShipFate(world: World,
         // record whose replacement batch is EMPTY (the client failed to
         // build the ship) must not delete the hull into nothing — the
         // person simply stays.
-        if ((accepted.ships?.length ?? 0) === 0) {
+        const replacement = accepted.ships?.[0]?.uuid;
+        if (replacement === undefined
+            || !world.entities.has(replacement)) {
             return;
+        }
+        // Whoever had the person targeted now has the special ship in its
+        // place: the original never drops the player's target at the swap
+        // (reference "Refuel rescue", 2026-11-27, and wave 43's r16 runs:
+        // the brackets stayed on the hull and the pane went straight from
+        // the person's name to the special ship's, "Waiting", with no key
+        // pressed). Moved BEFORE the delete, so TargetRemovedSystem finds
+        // nobody pointing at the departed hull.
+        for (const entity of world.entities.values()) {
+            const target = entity.components.get(TargetComponent);
+            if (target?.target === uuid) {
+                target.target = replacement;
+            }
         }
         world.entities.delete(uuid);
         return;

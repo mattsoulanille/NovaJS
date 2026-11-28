@@ -64,6 +64,12 @@ export function makeMissionSetHooks(machinery: MissionMachineryContext,
             resolveNumberedResource(id, runningMissionPrefix,
                 machinery.systemExists), keepCoordinates);
     }
+    // Qxxx, only where the caller can show its message (the in-flight
+    // accept); see MissionMachineryContext.leaveStellar.
+    const { leaveStellar } = machinery;
+    if (leaveStellar) {
+        hooks.leaveStellar = id => leaveStellar(id, runningMissionPrefix);
+    }
 
     if (depth > 4) {
         // Guard against Sxxx/Axxx/Fxxx cycles in scripting.

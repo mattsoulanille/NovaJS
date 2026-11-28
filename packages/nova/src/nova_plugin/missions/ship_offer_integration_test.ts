@@ -38,8 +38,10 @@ import {
 } from '../player/index.js';
 import { CombatRatingComponent } from '../reputation/index.js';
 import { ShipComponent } from '../ship/index.js';
-import { SystemHoldComponent } from '../npc/index.js';
+import { SystemHoldComponent, waitingForRescue } from '../npc/index.js';
 import { TargetComponent } from '../ship/index.js';
+import { DisplayAssetDataInterface } from '../../client/gamedata/display_asset_data.js';
+import { statusQuoteLine } from '../../display/ship_mission_offer_plugin.js';
 
 /**
  * ============================================================================
@@ -60,10 +62,11 @@ import { TargetComponent } from '../ship/index.js';
  *               one from play")
  *   replaced    applyAcceptMission inserts the replacement and deletes
  *               the trader on the SAME tick
- *   disabled    ShipGoal 5, "they start out disabled and stay that way
- *               until you board them": the replacement is a hulk, and
- *               ShipDisableSystem will not lift it however healthy it is
- *   board       the player boards it
+ *   waiting     not the Bible's ShipGoal-5 hulk: the original's
+ *               replacement reads "Waiting" from the accept on, held still,
+ *               and the player's target stays on it (reference "The
+ *               Refuel Trader rescue", 2026-11-27)
+ *   board       the player boards it (no plunder dialog: rescue_board.ts)
  *   auto-abort  mïsn Flags 0x0001 deferred: Flags2 0x0002 pays the 2000
  *               credits, Flags 0x0008 takes the 100 units of fuel, and
  *               the player-local half is marked pending
@@ -75,7 +78,9 @@ import { TargetComponent } from '../ship/index.js';
 
 /** The hailed përs, its hull, and the accept record the player's press
  * would produce — the whole of what the display would have done. */
-async function hailTheTrader(persId = 'nova:225') {
+async function hailTheTrader(persId = 'nova:225',
+    /** The trader's velocity at the accept (the replacement inherits it). */
+    velocity?: Vector) {
     const harness = await makeSimulationBridgeHarness(getIntegrationGameData());
     const { world, shipUuid, systemId } = harness;
     const gameData = await getIntegrationGameData();
@@ -126,6 +131,9 @@ async function hailTheTrader(persId = 'nova:225') {
         throw new Error(`${persId}'s offer could not be accepted`);
     }
     const movement = trader.components.get(MovementStateComponent)!;
+    if (velocity) {
+        movement.velocity = velocity;
+    }
     const ships = await buildAcceptedMissionShips(offer.data.id,
         accept.shipSource, shipUuid, systemId, gameData, universe, {
         replace: {
@@ -180,12 +188,37 @@ describe('the Refuel Trader, hail to undock (mïsn 141)', () => {
             expect(offer.data.flags.cantRefuse).toBeFalse();
         }, 30_000);
 
-    it('replaces the trader with a disabled hulk in its own berth',
+    it('says "Ready for docking" on the status line at the accept '
+        + '(OnAccept Q25057; reference "Refuel rescue", 2026-11-27)',
         async () => {
-            const { world, trader, traderUuid, berth, record, shipUuids } =
-                await hailTheTrader();
+            const { accept, gameData } = await hailTheTrader();
+            // In flight Qxxx has no stellar to leave: only its message.
+            expect(accept.statusQuotes)
+                .toEqual([{ stringId: 25057, prefix: 'nova' }]);
+            const strings = (await gameData.data.StringTable
+                .get('nova:25057')).strings;
+            const assets = { data: { StringTable: { get: async (id: string) => {
+                if (id !== 'nova:25057') {
+                    throw new Error(`no ${id}`);
+                }
+                return { strings };
+            } } } } as unknown as DisplayAssetDataInterface;
+            expect(await statusQuoteLine(assets, 25057, 'nova'))
+                .toEqual('<OSN>: Ready for docking, <PSN>.');
+            // A plug-in's own table when stock has none.
+            expect(await statusQuoteLine(assets, 999, 'nova')).toBeUndefined();
+        }, 30_000);
+
+    it('replaces the trader with a WAITING rescue ship in its own berth, '
+        + 'and keeps it targeted (reference "Refuel rescue", 2026-11-27)',
+        async () => {
+            const { world, player, trader, traderUuid, berth, record,
+                shipUuids } = await hailTheTrader('nova:225',
+                    new Vector(60, -20));
             expect(record.offeredByFate).toEqual('replace');
             expect(record.ships.length).toEqual(1);
+            // The player hailed the trader, so it is the player's target.
+            player.components.get(TargetComponent)!.target = traderUuid;
 
             applyAcceptMission(world, undefined, record);
 
@@ -194,6 +227,10 @@ describe('the Refuel Trader, hail to undock (mïsn 141)', () => {
             // back (Matthew's ruling).
             expect(world.entities.has(traderUuid)).toBeFalse();
             expect(trader.components.has(ShipOfferSpentComponent)).toBeTrue();
+            // ...and the player's target moved with it: the original
+            // never drops it at the swap.
+            expect(player.components.get(TargetComponent)!.target)
+                .toEqual(shipUuids[0]);
 
             const rescue = world.entities.get(shipUuids[0])!;
             expect(rescue).toBeDefined();
@@ -208,16 +245,21 @@ describe('the Refuel Trader, hail to undock (mïsn 141)', () => {
             expect(rescue.components.get(SystemHoldComponent))
                 .toEqual({ reason: 'rescue' });
 
-            // ShipGoal 5: adrift, and it stays adrift. Stepping the world
-            // must not repair it, however healthy its armor is.
-            for (let i = 0; i < 30; i++) {
+            // WAITING, not adrift: the target pane reads "Waiting" (not
+            // "Disabled"), and it comes to a stop where it was.
+            for (let i = 0; i < 240; i++) {
                 world.step();
-                await new Promise(resolve => setImmediate(resolve));
+                if (i < 30) {
+                    await new Promise(resolve => setImmediate(resolve));
+                }
             }
-            const disabled = world.entities.get(shipUuids[0])!
-                .components.get(DisabledComponent);
-            expect(disabled).toBeDefined();
-            expect(disabled!.hulk).toBeTrue();
+            const after = world.entities.get(shipUuids[0])!;
+            expect(after.components.has(DisabledComponent)).toBeFalse();
+            expect(waitingForRescue(after)).toBeTrue();
+            expect(after.components.get(MovementStateComponent)!
+                .velocity.length).toBeLessThan(1);
+            expect(player.components.get(TargetComponent)!.target)
+                .toEqual(shipUuids[0]);
         }, 30_000);
 
     it('pays, takes the 100 fuel, and lets the trader go when boarded',

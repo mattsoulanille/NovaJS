@@ -10,7 +10,8 @@ import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import {
-    boardingBlockedMessage, cargoRetrievedMessage,
+    boardingBlockedMessage, cargoRetrievedMessage, energyTransferMessage,
+    TARGET_BOARDED_MESSAGE,
 } from '../../display/status_bar_content.js';
 import {
     getIntegrationGameData, getSyntheticGameData,
@@ -35,7 +36,7 @@ import {
 } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { BoardingBlockedEvent } from './boarding_plugin.js';
-import { MissionCargoRetrievedEvent } from './rescue_board.js';
+import { MissionCargoRetrievedEvent, RescueBoardedEvent } from './rescue_board.js';
 
 /**
  * ============================================================================
@@ -381,22 +382,111 @@ describe('boarding a rescue ship', () => {
             expect(retrieved).toEqual([CARGO_TYPE]);
         });
 
-    it('leaves the deferred auto-abort rescue on the plunder path',
-        async () => {
-            // The Refuel Traders (përs replacements, mïsn Flags 0x0001):
-            // untested on the original, so boarding still ends them.
-            const { world, owner, hulk, retrieved } = await rescueWorld(
-                rescueMission({
-                    cargoType: -1, cargoQty: 0, pickupOnBoard: false,
-                    autoAbortOnBoard: true,
-                }));
-            press(world, OWNER);
-            expect(retrieved).toEqual([]);
-            expect(owner.components.get(BoardingComponent)?.target)
-                .toBe(HULK);
-            expect(hulk.components.get(BoardedComponent)?.plundered)
-                .toBeTrue();
+    describe('the deferred auto-abort rescue (the Refuel Traders)', () => {
+        // Përs replacements, mïsn Flags 0x0001: reference "The deferred
+        // (përs) auto-abort (R16), wave 43" and "Refuel rescue"
+        // (2026-11-27): one press boards it with "Target ship has been
+        // boarded." and NO dialog; the mission ends at the board.
+        const deferred = () => rescueMission({
+            cargoType: -1, cargoQty: 0, pickupOnBoard: false,
+            autoAbortOnBoard: true, autoAbortPay: 2000,
         });
+
+        function recordBoarded(world: World) {
+            const boarded: boolean[] = [];
+            world.addSystem(new System({
+                name: 'RecordRescueBoarded',
+                events: [RescueBoardedEvent],
+                args: [RescueBoardedEvent] as const,
+                step: ({ energyTransfer }) => {
+                    boarded.push(energyTransfer);
+                },
+            }));
+            return boarded;
+        }
+
+        for (const waiting of [true, false]) {
+            it(`boards a ${waiting ? 'WAITING ship' : 'hulk'} with no `
+                + 'plunder session, and the board is the rescue', async () => {
+                    const { world, owner, hulk, blocked, retrieved } =
+                        await rescueWorld(deferred(), { waiting });
+                    const boarded = recordBoarded(world);
+                    press(world, OWNER);
+                    world.step();
+
+                    expect(boarded).toEqual([false]);
+                    expect(blocked).toEqual([]);
+                    expect(retrieved).toEqual([]);
+                    // No session: nothing for the plunder dialog to show.
+                    expect(owner.components.has(BoardingComponent))
+                        .toBeFalse();
+                    // The one board, spent by the owner...
+                    expect(hulk.components.get(BoardedComponent))
+                        .toEqual({ boarder: OWNER, plundered: true });
+                    // ...which MissionShipTrackSystem's rescueBoarded
+                    // reads: paid, the abort pending, the ship let go.
+                    expect(active(owner).autoAbortPending).toBeTrue();
+                    expect(active(owner).shipObjective!.complete)
+                        .toBeTrue();
+                    expect(owner.components.get(CreditsComponent)!.credits)
+                        .toBe(2000);
+                    expect(hulk.components.has(SystemHoldComponent))
+                        .toBeFalse();
+                    if (waiting) {
+                        // (This spec's hulk keeps 1 armor, so it is
+                        // disabled again by the armor rule once the hulk
+                        // state is lifted; mission_ship_spawn's hulks
+                        // keep their full armor.)
+                        expect(hulk.components.has(DisabledComponent))
+                            .toBeFalse();
+                    }
+                    expect(TARGET_BOARDED_MESSAGE)
+                        .toBe('Target ship has been boarded.');
+                });
+        }
+
+        it('says "Energy transfer complete" when the mission takes the '
+            + 'fuel (mïsn Flags 0x0008, the stock Refuel Traders)', async () => {
+                const { world } = await rescueWorld(rescueMission({
+                    cargoType: -1, cargoQty: 0, pickupOnBoard: false,
+                    autoAbortOnBoard: true, autoAbortPay: 2000,
+                    autoAbortFuel: 100,
+                }), { waiting: true });
+                const boarded = recordBoarded(world);
+                press(world, OWNER);
+                expect(boarded).toEqual([true]);
+                expect(energyTransferMessage('Valkyrie', 'rescue-a'))
+                    .toBe('Valkyrie:  Energy transfer complete, rescue-a.');
+            });
+
+        it('does not board it twice', async () => {
+            const { world, owner, hulk } = await rescueWorld(deferred(),
+                { waiting: true });
+            const boarded = recordBoarded(world);
+            press(world, OWNER);
+            world.step();
+            press(world, OWNER);
+            world.step();
+            expect(boarded).toEqual([false]);
+            expect(owner.components.has(BoardingComponent)).toBeFalse();
+            expect(owner.components.get(CreditsComponent)!.credits)
+                .toBe(2000);
+            expect(hulk.components.get(BoardedComponent)?.boarder)
+                .toBe(OWNER);
+        });
+
+        it('refuses a rival, who spends nothing', async () => {
+            const { world, owner, hulk, blocked } = await rescueWorld(
+                deferred(), { waiting: true });
+            const boarded = recordBoarded(world);
+            press(world, RIVAL);
+            expect(boarded).toEqual([]);
+            expect(blocked).toEqual(["You can't board this ship."]);
+            expect(hulk.components.has(BoardedComponent)).toBeFalse();
+            expect(active(owner).autoAbortPending).toBeFalsy();
+            expect(waitingForRescue(hulk)).toBeTrue();
+        });
+    });
 
     it('leaves every other goal on the ordinary rules', async () => {
         const { world, owner, retrieved } = await rescueWorld(

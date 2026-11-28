@@ -171,6 +171,10 @@ type MissionShipSource = {
     shipSubtitle?: string,
     travelPlanet: string | null,
     returnPlanet: string | null,
+    /** The deferred auto-abort kind (a përs replacement's rescue, the
+     * Refuel Traders): its rescue ship WAITS instead of drifting as a
+     * hulk (see buildShip's GOAL_RESCUE branch). */
+    autoAbortOnBoard?: boolean,
 };
 
 interface SpawnContext {
@@ -306,6 +310,9 @@ async function buildShip(ctx: SpawnContext, missionId: string,
         replace?: ReplacementPlacement,
         /** The class frozen by mïsn Flags 0x0800 (see freezeShipType). */
         frozenShipId?: string,
+        /** The mission is the deferred auto-abort kind (see
+         * MissionShipSource.autoAbortOnBoard). */
+        autoAbortOnBoard?: boolean,
     }): Promise<Entity | null> {
     let dude, shipData;
     try {
@@ -397,8 +404,18 @@ async function buildShip(ctx: SpawnContext, missionId: string,
     // retrieval releases it (encounters/rescue_board.ts). It spawns
     // scattered like ShipStart 0, uncloaked (the kit ship had no cloaking
     // device; whether one WITH a cloak starts cloaked is open).
+    //
+    // AND the deferred auto-abort's ship (a përs replacement: the four
+    // stock Refuel Traders), which WAITS too: reference "The deferred
+    // (përs) auto-abort (R16), wave 43" — the replacement read "Waiting"
+    // the moment the offer was accepted (ShipStart 0, the stock Refuel
+    // Traders' value), and "Refuel rescue" (2026-11-27) on the stock
+    // Refuel Trader itself. Keyed on the mission kind as well as on the
+    // replacement, so a respawn on re-entering the system waits as well.
     if (options.goal === GOAL_RESCUE) {
-        if (options.shipStart !== SHIP_START_RANDOM_CLOAKED) {
+        const waits = options.shipStart === SHIP_START_RANDOM_CLOAKED
+            || options.replace !== undefined || !!options.autoAbortOnBoard;
+        if (!waits) {
             makeHulk(ship, {
                 armor: shipData.physics.armor,
                 armorRecharge: shipData.physics.armorRecharge,
@@ -687,6 +704,8 @@ async function buildShipsForMission(ctx: SpawnContext, missionId: string,
                 name,
                 subtitle,
                 frozenShipId: objective.shipId,
+                ...(active.autoAbortOnBoard
+                    ? { autoAbortOnBoard: true } : {}),
                 // A përs replacement is by the Bible's own wording a
                 // SINGLE special ship ("with a single special ship");
                 // only the first gets the përs's berth, and a

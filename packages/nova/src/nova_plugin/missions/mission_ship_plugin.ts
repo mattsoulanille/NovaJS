@@ -171,8 +171,10 @@ function pickUpOnBoarding(active: ActiveMission, owner: Entity): void {
  * Refuel Traders, `autoAbortOnBoard`). Every other live rescue ship is
  * never plundered at all: its board only retrieves the mission cargo and
  * leaves the hulk disabled, as the original does (encounters/
- * rescue_board.ts). For the refuelled trader boarding is the rescue, so
- * the hulk state is lifted here and the ship flies off under its own AI —
+ * rescue_board.ts). For the refuelled trader boarding is the rescue (the
+ * gate writes the boarded record with no plunder session: rescue_board.ts
+ * boardDeferredRescue), so its hold (and the hulk state of a ship spawned
+ * before it WAITED) is lifted here and the ship flies off under its own AI —
  * the only thing that CAN lift it, since ShipDisableSystem refuses to
  * re-enable a `hulk` however healthy its armor is (see makeHulk). Deleting
  * the component is the documented external-repair route that file names.

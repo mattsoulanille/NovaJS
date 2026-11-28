@@ -5,6 +5,7 @@ import {
 } from '../../spaceport/hire_escort.js';
 import {
     ALREADY_BOARDED_MESSAGE, ARRIVAL_LEAD_INDEX, ARRIVAL_LEAD_TEXT,
+    ENERGY_TRANSFER_COMPLETE, TARGET_BOARDED_MESSAGE,
     ARRIVAL_SYSTEM_ON_INDEX, ARRIVAL_SYSTEM_ON_TEXT, boardingBlockedMessage,
     CAPTURE_REPELLED_MESSAGE,
 } from '../../display/status_bar_content.js';
@@ -140,7 +141,9 @@ describe('StringTable against real Nova data', () => {
             const gameData = await getIntegrationGameData();
             const table = await gameData.data.StringTable.get('nova:2002');
             expect(table.strings[129]).toBe(ALREADY_BOARDED_MESSAGE);
-            expect(table.strings[125]).toBe('Target ship has been boarded.');
+            expect(table.strings[125]).toBe(TARGET_BOARDED_MESSAGE);
+            // The Refuel Trader's board line (reference "Refuel rescue").
+            expect(table.strings[2]).toBe(ENERGY_TRANSFER_COMPLETE);
             expect(table.strings[124]).toBe(CAPTURE_REPELLED_MESSAGE);
             // The two proximity refusals, quoted verbatim from the same
             // table, so a data change shows up here rather than as

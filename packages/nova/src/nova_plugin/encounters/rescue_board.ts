@@ -8,7 +8,7 @@ import {
     MissionShipComponent, shipBoarded, ShipObjective,
 } from '../player/index.js';
 import {
-    CargoComponent, cargoUsed, ShipPhysicsComponent,
+    BoardedComponent, CargoComponent, cargoUsed, ShipPhysicsComponent,
 } from '../ship/index.js';
 import {
     NpcComponent, SystemHoldComponent, waitingForRescue,
@@ -49,12 +49,20 @@ import {
  * the drop-off complete the mission; the cargo's DropOffMode then does
  * the rest at landing, as for any mission cargo.
  *
+ * THE DEFERRED AUTO-ABORT RESCUE (mïsn Flags 0x0001 with a përs
+ * replacement: the four stock Refuel Traders, `autoAbortOnBoard`) is the
+ * third kind of board, 'deferred': the owner's first board is the rescue
+ * itself, with NO dialog — the status line "Target ship has been
+ * boarded." (STR# 2002 index 125) and nothing else (reference "The
+ * deferred (përs) auto-abort (R16), wave 43", and "Refuel rescue",
+ * 2026-11-27, on the stock Refuel Trader). It spends the hull's one
+ * board through the durable BoardedComponent record, which is what
+ * MissionShipTrackSystem's rescueBoarded reads to pay, take the fuel,
+ * release the ship and mark the mission's abort pending. No plunder
+ * session opens, so the plunder dialog can never flash up. Every later
+ * press is refused.
+ *
  * NOT COVERED, and so left on the ordinary boarding rules:
- *  - the DEFERRED auto-abort rescue (mïsn Flags 0x0001 with a përs
- *    replacement: the four stock Refuel Traders, `autoAbortOnBoard`).
- *    Whether the original refuses those too is untested (wave 11 left it
- *    for a përs kit), and boarding is how they end today
- *    (MissionShipTrackSystem's rescueBoarded);
  *  - a ship whose owner is not in the world (a departed peer's), an
  *    untethered one, and an aux ship: none is a live rescue target.
  *
@@ -73,6 +81,16 @@ export type RescueBoard =
      * cargo to take: silent, and it spends the hull's one board
      * ({@link spendRescueBoard}). */
     | { kind: 'silent', objective: ShipObjective }
+    /** The owner's first board of a deferred auto-abort rescue ship (a
+     * përs replacement): the rescue, with no dialog
+     * ({@link boardDeferredRescue}). */
+    | {
+        kind: 'deferred',
+        /** The mission takes the 100 units of fuel the player hands over
+         * (mïsn Flags 0x0008): the status line says "Energy transfer
+         * complete" instead of "Target ship has been boarded.". */
+        energyTransfer: boolean,
+    }
     /** The owner takes the mission cargo off it. */
     | {
         kind: 'retrieve', owner: Entity, active: ActiveMission,
@@ -93,13 +111,23 @@ export function rescueBoard(target: Entity, targetUuid: string,
     const active = owner?.components.get(MissionsComponent)
         ?.get(missionShip.mission);
     const objective = active?.shipObjective;
-    if (!owner || !active || !objective || objective.goal !== GOAL_RESCUE
-        || active.autoAbortOnBoard) {
+    if (!owner || !active || !objective || objective.goal !== GOAL_RESCUE) {
         return { kind: 'none' };
     }
     const flags = objective.live.get(targetUuid);
     if (missionShip.owner !== boarderUuid || flags?.boarded) {
         return { kind: 'refuse' };
+    }
+    if (active.autoAbortOnBoard) {
+        // Spent already, even if the goal credit has not run yet (the
+        // record is written here and read by MissionShipTrackSystem).
+        return active.autoAbortPending
+            || target.components.get(BoardedComponent)?.plundered
+            ? { kind: 'refuse' }
+            : {
+                kind: 'deferred',
+                energyTransfer: (active.autoAbortFuel ?? 0) > 0,
+            };
     }
     // Nothing aboard to take (no PickupMode-2 cargo; GUESS: cargo loaded
     // at the spaceport reads the same): the one board is spent silently.
@@ -167,6 +195,35 @@ export function spendRescueBoard(
         flags.boarded = true;
     }
 }
+
+/**
+ * The deferred auto-abort rescue's board (kind 'deferred'): the durable
+ * boarding record, spent by the owner, with no session open. Everything
+ * the rescue does follows from it in MissionShipTrackSystem (rescueBoarded:
+ * the pay, the fuel, the ship released, the abort pending), exactly as a
+ * plunder board used to trigger it — only without the plunder dialog.
+ */
+export function boardDeferredRescue(target: Entity,
+    boarderUuid: string): void {
+    target.components.set(BoardedComponent,
+        { boarder: boarderUuid, plundered: true });
+}
+
+/**
+ * Emitted (targeted at the boarding ship) when the owner boards a
+ * deferred auto-abort rescue ship (boardDeferredRescue): the status line,
+ * the only thing the original shows. With `energyTransfer` (the mission
+ * takes the player's fuel: the stock Refuel Traders) it is the rescued
+ * ship's "Valkyrie:  Energy transfer complete, rescue-a." (STR# 2002
+ * index 2; reference "Refuel rescue", 2026-11-27); without (wave 43's kit
+ * mission, no Flags 0x0008) "Target ship has been boarded." (index 125).
+ * GUESS: that the fuel flag is what picks the line (two missions, one
+ * each). Never mutates the simulation.
+ */
+export const RescueBoardedEvent =
+    new EcsEvent<{ energyTransfer: boolean }>('RescueBoardedEvent');
+export const RescueBoardedEventType = t.type({ energyTransfer: t.boolean });
+registerSimulationBridgeEvent({ event: RescueBoardedEvent });
 
 /**
  * Emitted (targeted at the boarding ship) when a rescue board retrieves

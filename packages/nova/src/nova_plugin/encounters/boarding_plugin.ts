@@ -29,8 +29,9 @@ import { AggressionComponent } from '../combat/index.js';
 import { endPlanetBribes, GateDepartureSystem, LandEvent } from '../travel/index.js';
 import { SelfDestructSystem } from './disabled_plugin.js';
 import {
-    MissionCargoRetrievedEvent, MissionCargoRetrievedEventType, rescueBoard,
-    retrieveRescueCargo, spendRescueBoard,
+    boardDeferredRescue, MissionCargoRetrievedEvent,
+    MissionCargoRetrievedEventType, rescueBoard, RescueBoardedEvent,
+    RescueBoardedEventType, retrieveRescueCargo, spendRescueBoard,
 } from './rescue_board.js';
 import { MissionShipComponent } from '../player/index.js';
 import { CargoComponent, cargoUsed } from '../ship/index.js';
@@ -627,6 +628,15 @@ const BoardingGateSystem = new System({
             matchVelocity();
             emit(MissionCargoRetrievedEvent,
                 { cargoType: rescue.active.cargoType }, [uuid]);
+            return;
+        }
+        if (rescue.kind === 'deferred') {
+            // The Refuel Trader's board: the rescue itself, no dialog
+            // (rescue_board.ts boardDeferredRescue).
+            boardDeferredRescue(targetEntity!, uuid);
+            matchVelocity();
+            emit(RescueBoardedEvent,
+                { energyTransfer: rescue.energyTransfer }, [uuid]);
             return;
         }
 
@@ -2127,6 +2137,8 @@ export const BoardingPlugin: Plugin = {
             PlunderSelfDestructEvent, PlunderSelfDestructEventType);
         world.resources.get(SerializerResource)?.addEvent(
             MissionCargoRetrievedEvent, MissionCargoRetrievedEventType);
+        world.resources.get(SerializerResource)?.addEvent(
+            RescueBoardedEvent, RescueBoardedEventType);
 
         world.addSystem(BoardingGateSystem);
         world.addSystem(BoardingActionSystem);

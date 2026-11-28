@@ -414,16 +414,15 @@ export const MISSION_FAILED_MESSAGE = 'Mission failed.';
 
 /**
  * Whether a completed goal's ShipDoneText is the boarding dialog's to
- * present (see the module note): a BOARD goal, and the one kind of rescue
- * that is still boarded through a plunder session — the deferred
- * auto-abort's (`autoAbortOnBoard`). Every other rescue goal completes by
- * the cargo retrieval, which opens no dialog at all (encounters/
- * rescue_board.ts), so its text is the sweep's like any other goal's.
+ * present (see the module note): a BOARD goal only. No rescue is boarded
+ * through a plunder session any more — the cargo retrieval and the
+ * deferred auto-abort's board (the Refuel Traders, `autoAbortOnBoard`)
+ * both open no dialog at all (encounters/rescue_board.ts) — so a rescue's
+ * text is the sweep's like any other goal's (GUESS for a deferred one: no
+ * stock deferred rescue has a ShipDoneText).
  */
-function boardingPresents(objective: ShipObjective,
-    autoAbortOnBoard: boolean | undefined): boolean {
-    return objective.goal === GOAL_BOARD
-        || (objective.goal === GOAL_RESCUE && !!autoAbortOnBoard);
+function boardingPresents(objective: ShipObjective): boolean {
+    return objective.goal === GOAL_BOARD;
 }
 
 /**
@@ -461,7 +460,7 @@ export const MissionShipDoneSystem = new System({
             const hasText = shipDoneTextKnown(state, universe, missionId);
             if (!objective.shipDonePending || hasText !== true
                 || state.shown.has(missionId)
-                || boardingPresents(objective, active.autoAbortOnBoard)) {
+                || boardingPresents(objective)) {
                 continue;
             }
             due.push(missionId);

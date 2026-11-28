@@ -14,15 +14,15 @@ import {
 import { Entity } from "nova_ecs/entity";
 import { SingletonComponent } from "nova_ecs/world";
 import { DISTRESS_MESSAGES_STRING_TABLE } from "novadatainterface/string_table_data";
-import { ShipDataComponent } from '../nova_plugin/ship/index.js';
+import { ShipDataComponent, TargetComponent } from '../nova_plugin/ship/index.js';
 import { SimulationTimeResource } from './simulation_time.js';
 import {
     GameDateComponent, PlayerNamesComponent, playerShipName, PlayerShipSelector,
 } from '../nova_plugin/player/index.js';
 import { Optional } from 'nova_ecs/optional';
-import { ArrivalRoute, bayCaptureMessage, boardingBlockedMessage, captureAssignedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, JUMP_COLLAPSED_MESSAGE, jumpArrivalMessage, landingBlockedMessage, landingRequestMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage, SHIP_DISABLED_MESSAGE, SHIP_REPAIRED_MESSAGE, stellarClearedMessage } from "./status_bar_content.js";
+import { ArrivalRoute, bayCaptureMessage, boardingBlockedMessage, captureAssignedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, JUMP_COLLAPSED_MESSAGE, jumpArrivalMessage, landingBlockedMessage, landingRequestMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage, SHIP_DISABLED_MESSAGE, SHIP_REPAIRED_MESSAGE, stellarClearedMessage, TARGET_BOARDED_MESSAGE, energyTransferMessage } from "./status_bar_content.js";
 import { LandingBlockedEvent, LandingClearedEvent, LandingRequestEvent } from "../nova_plugin/travel/index.js";
-import { BayCaptureEvent, BOARD_SOUND, CaptureAssignedEvent, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, PlunderSelfDestructEvent, SentHail, SentHailComponent, ShipDisabledEvent, ShipRepairedEvent } from "../nova_plugin/encounters/index.js";
+import { BayCaptureEvent, BOARD_SOUND, CaptureAssignedEvent, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, PlunderSelfDestructEvent, RescueBoardedEvent, SentHail, SentHailComponent, ShipDisabledEvent, ShipRepairedEvent } from "../nova_plugin/encounters/index.js";
 import { missionCargoName } from '../nova_plugin/missions/index.js';
 import {
     ContrabandScanEvent, DistressCallEvent, distressCallMessage, distressLine,
@@ -510,6 +510,29 @@ const ShowCargoRetrievedMessage = new System({
     },
 });
 
+// The owner boarded a deferred auto-abort rescue ship, the Refuel
+// Trader's (rescue_board.ts): no dialog, only "Target ship has been
+// boarded." Same targeting as the other boarding messages; a success, so
+// no cant-do beep.
+const ShowRescueBoardedMessage = new System({
+    name: 'ShowRescueBoardedMessage',
+    events: [RescueBoardedEvent],
+    args: [RescueBoardedEvent, StatusLineResource, TimeResource, Entities,
+        PlayerShipSelector, Optional(PlayerNamesComponent),
+        Optional(ShipDataComponent), Optional(TargetComponent)] as const,
+    step({ energyTransfer }, statusLine, { time }, entities, _player, names,
+        shipData, target) {
+        // The Refuel Trader's own line, naming the ship just boarded (the
+        // board needs it targeted) and the player's ship.
+        statusLine.setMessage(energyTransfer
+            ? energyTransferMessage(
+                shipLabel(target?.target !== undefined
+                    ? entities.get(target.target) : undefined),
+                playerShipName(names, shipData?.name))
+            : TARGET_BOARDED_MESSAGE, time);
+    },
+});
+
 // The bay-capture shortcut's only feedback: no dialog opens, so this line
 // is how the player learns the hulk is now one of their fighters. Same
 // targeting as the other boarding messages (emitted at the boarder,
@@ -669,6 +692,7 @@ export const StatusMessagePlugin: Plugin = {
         world.addSystem(ShowStellarDominatedMessage);
         world.addSystem(ShowBayCaptureMessage);
         world.addSystem(ShowCargoRetrievedMessage);
+        world.addSystem(ShowRescueBoardedMessage);
         world.resources.set(SeenPlayerHailsResource, new Map());
         world.addSystem(ShowPlayerHailMessage);
     },
@@ -692,6 +716,7 @@ export const StatusMessagePlugin: Plugin = {
         world.removeSystem(ShowStellarDominatedMessage);
         world.removeSystem(ShowBayCaptureMessage);
         world.removeSystem(ShowCargoRetrievedMessage);
+        world.removeSystem(ShowRescueBoardedMessage);
         world.removeSystem(ShowPlayerHailMessage);
         world.resources.delete(SeenPlayerHailsResource);
         // Destroyed, children included: the line's Text owns a canvas

@@ -493,8 +493,8 @@ describe('buildShipMissionAccept (the input record)', () => {
 });
 
 describe('the Refuel Trader replacement ship (përs Flags 0x0040)', () => {
-    it('spawns the rescue hulk where the trader was, in the player\'s '
-        + 'own system', async () => {
+    it('spawns the WAITING rescue ship where the trader was, in the '
+        + 'player\'s own system', async () => {
             const { gameData, universe } = await universeFor();
             const pers = await gameData.data.Pers.get('nova:225');
             const player = await makePlayer();
@@ -524,11 +524,14 @@ describe('the Refuel Trader replacement ship (përs Flags 0x0040)', () => {
             // In the trader's berth, not scattered by ShipStart 0.
             expect(movement.position.x).toEqual(1234);
             expect(movement.position.y).toEqual(-567);
-            // ShipGoal 5: "they start out disabled and stay that way until
-            // you board them" — a hulk, which only a boarding can lift.
-            const disabled = ships[0].components.get(DisabledComponent);
-            expect(disabled).toBeDefined();
-            expect(disabled!.hulk).toBeTrue();
+            // Not the Bible's ShipGoal-5 hulk: the original's replacement
+            // reads "Waiting" from the accept on (reference "The deferred
+            // (përs) auto-abort (R16), wave 43"; "Refuel rescue",
+            // 2026-11-27), held in the system until it is boarded.
+            expect(ships[0].components.has(DisabledComponent)).toBeFalse();
+            const { waitingForRescue } =
+                await import('../nova_plugin/npc/index.js');
+            expect(waitingForRescue(ships[0])).toBeTrue();
         });
 
     it('keeps the përs\'s own ship class when the ShipDude contains it',

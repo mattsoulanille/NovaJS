@@ -1166,6 +1166,18 @@ export const STATE_HASH_INTERVAL = 60;
 //    kind changes. The derived wire schema fingerprint changes
 //    (e2aac6975801120c -> 012d2e220f2f71b8), and the join gate keeps older
 //    and newer builds apart.
+//    Also under 8, no further bump, and NO schema change: the Refuel
+//    Trader rescue (reference "The Refuel Trader rescue, stock përs 225 /
+//    mïsn 141", 2026-11-27). One new serializer event, RescueBoardedEvent
+//    (`{energyTransfer}`, encounters/rescue_board.ts; host -> display only,
+//    like the other boarding events); no component, field, input kind or
+//    message kind changes. Sim-rule changes alongside: a përs-replacing
+//    (deferred auto-abort) rescue ship spawns WAITING (live, held still)
+//    instead of a hulk; the accept's swap moves every target lock on the
+//    përs hull to its replacement; the owner's board of such a ship opens
+//    no plunder session (it writes the boarded record directly). The
+//    derived wire schema fingerprint is unchanged (012d2e220f2f71b8), so
+//    only the build stamp keeps the builds on either side of it apart.
 
 export const PROTOCOL_VERSION = 8;
 

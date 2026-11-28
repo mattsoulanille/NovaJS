@@ -6,7 +6,7 @@ import { CloakActiveComponent, CloakScannerComponent, isTargetable } from '../sh
 import { ExplodingComponent } from '../ship/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { OwnerComponent } from '../ship/index.js';
-import { attacksOnSight, isAttackingPlayer, isInFlock, onSightAiType } from '../npc/index.js';
+import { attacksOnSight, isAttackingPlayer, isInFlock, onSightAiType, waitingForRescue } from '../npc/index.js';
 import { GovtComponent } from '../core/index.js';
 import {
     Disposition, govtDisposition, LegalRecords, LocalLaw, localLawIn,
@@ -152,8 +152,13 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
     getEntity: (uuid: string) => Entity | undefined,
     now: number, systemId: string | undefined): TargetCornerStyle {
     // Disabled beats everything, own flock included: gray corners mean
-    // "dead in space" whoever the hulk belongs to.
-    if (targetEntity.components.has(DisabledComponent)) {
+    // "dead in space" whoever the hulk belongs to. A rescue ship WAITING
+    // for its pilot wears them too (npc/system_hold.ts waitingForRescue):
+    // grey brackets on the original for the ShipStart-2 ship (reference
+    // "Contraband / rescue / A14, wave 19") and for the Refuel Trader from
+    // the accept to the board (reference "Refuel rescue", 2026-11-27).
+    if (targetEntity.components.has(DisabledComponent)
+        || waitingForRescue(targetEntity)) {
         return targetCornerStyle('neutral', false, true);
     }
     if (isInFlock(targetUuid, playerUuid, getEntity)) {
