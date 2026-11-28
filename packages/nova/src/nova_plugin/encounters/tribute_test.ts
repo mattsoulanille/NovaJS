@@ -360,15 +360,15 @@ describe('Demand Tribute in the sim', () => {
             expect(dominatedBy(world, 'a')).toEqual([]);
         });
 
-    it('launches no defender into a full system (Max Ships In System), '
-        + 'and launches one as soon as a ship leaves', async () => {
-            const { world, gameData, addPlayer } = await build(8);
-            applyRoomRules(world, { limits: 'original' });
-            await addPlayer('a', PEER_A, 12_800);
-            const cap = ENGINE_LIMITS.original.ships;
+    describe('in a full system (the original\'s ship cap, wave 60)', () => {
+        const ships = (world: World) => [...world.entities.values()]
+            .filter(entity => entity.components.has(ShipComponent)).length;
+
+        /** Parks plain hulls until a `kind` spawn has no room. */
+        async function fill(world: World, gameData: MockGameData,
+            kind: 'npc' | 'defender') {
             const fillers: string[] = [];
-            expect(shipSlotFree(world)).toBeTrue();
-            while (shipSlotFree(world)) {
+            while (shipSlotFree(world, kind)) {
                 const filler = makeShip(
                     gameData.data.Ship.map.get(PLAYER_HULL)!);
                 await completeEntity(world, filler);
@@ -382,18 +382,43 @@ describe('Demand Tribute in the sim', () => {
                 world.entities.set(uuid, filler);
                 fillers.push(uuid);
             }
-            applyHail(world, PEER_A, { kind: 'demandTribute', target: FORT_UUID });
-            advance(world, DEFENSE_FIRST_LAUNCH_MS + 3_000);
-            expect(defenders(world).length).toBe(0);
-            expect(fleet(world)?.launched).toBe(0);
-            world.entities.delete(fillers[0]);
-            advance(world, 1_000);
-            expect(defenders(world).length).toBe(1);
-            expect(fleet(world)?.launched).toBe(1);
-            const ships = [...world.entities.values()].filter(entity =>
-                entity.components.has(ShipComponent)).length;
-            expect(ships).toBe(cap);
-        });
+            return fillers;
+        }
+
+        it('still launches the defenders past the 55 that hold bay '
+            + 'fighters (MEASURED: six came out past 55 fighters)',
+            async () => {
+                const { world, gameData, addPlayer } = await build(8);
+                applyRoomRules(world, { limits: 'original' });
+                await addPlayer('a', PEER_A, 12_800);
+                await fill(world, gameData, 'npc');
+                expect(ships(world)).toBe(
+                    1 + ENGINE_LIMITS.original.ships.others);
+                applyHail(world, PEER_A,
+                    { kind: 'demandTribute', target: FORT_UUID });
+                advance(world, DEFENSE_FIRST_LAUNCH_MS + 3_000);
+                expect(defenders(world).length).toBe(6);
+            });
+
+        it('launches no defender at 64 ships, and one as soon as a ship '
+            + 'leaves', async () => {
+                const { world, gameData, addPlayer } = await build(8);
+                applyRoomRules(world, { limits: 'original' });
+                await addPlayer('a', PEER_A, 12_800);
+                const fillers = await fill(world, gameData, 'defender');
+                expect(ships(world)).toBe(ENGINE_LIMITS.original.ships.total);
+                applyHail(world, PEER_A,
+                    { kind: 'demandTribute', target: FORT_UUID });
+                advance(world, DEFENSE_FIRST_LAUNCH_MS + 3_000);
+                expect(defenders(world).length).toBe(0);
+                expect(fleet(world)?.launched).toBe(0);
+                world.entities.delete(fillers[0]);
+                advance(world, 1_000);
+                expect(defenders(world).length).toBe(1);
+                expect(fleet(world)?.launched).toBe(1);
+                expect(ships(world)).toBe(ENGINE_LIMITS.original.ships.total);
+            });
+    });
 
     it('launches a new defender as one dies, until the whole fleet has '
         + 'launched; the last one down dominates the stellar', async () => {

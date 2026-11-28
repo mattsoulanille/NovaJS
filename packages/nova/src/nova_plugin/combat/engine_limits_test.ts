@@ -188,6 +188,13 @@ describe('engine limits', () => {
                 expect(ORIGINAL.beams).toEqual(jasmine.objectContaining(
                     { soft: 64, hard: 64 }));
                 expect(ORIGINAL.familyBudget).toEqual(Infinity);
+                // Wave 60: a refused beam costs its reload; the shot cap
+                // could not tell (GUESS: it does not).
+                expect(ORIGINAL.beams.refusalReloads).toBeTrue();
+                expect(ORIGINAL.shots.refusalReloads).toBeFalse();
+                // Wave 60: 55 ships besides the player hold bay launches
+                // and NPCs; the defenders got past them (GUESS: to 64).
+                expect(ORIGINAL.ships).toEqual({ others: 55, total: 64 });
             });
 
         it('give NovaJS more room, direct fire above the submunitions, '

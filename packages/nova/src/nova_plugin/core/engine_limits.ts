@@ -19,6 +19,16 @@ import { LimitsRule, roomRulesOf } from './room_rules.js';
  * recycled. Every projectile counts the same, a submunition or a shot
  * fired from a ship.
  *
+ * Beams likewise ("The beam cap, beamcap (wave 60)"): exactly 64 alive per
+ * system (60 beams fired off the play area left room for exactly 4 more),
+ * the player's and NPCs' in one table, first come first served; a full
+ * table refuses the NEW beam and never cuts an old one; and a refused beam
+ * COSTS ITS WEAPON'S RELOAD (a 20 s probe tapped against a full table fired
+ * only a whole number of reloads after its first refused tap, not at the
+ * first free slot), hence `refusalReloads`. For projectiles the shot cap's
+ * rig could not tell (its gun was held continuously), so they keep the
+ * cheaper reading: GUESS, a refused shot keeps its weapon ready.
+ *
  * NOVAJS (room rule 'novajs', the default). Matthew: "I'd like to raise
  * this limit if possible ... firing a weapon and having the projectiles
  * never appear" was annoying, but some limit stays, because cheat plug-ins
@@ -79,12 +89,22 @@ export interface EngineLimits {
      * alike) one directly fired shot may have. Infinity: no budget.
      */
     readonly familyBudget: number;
+    /** Ships in the system (ship/ship_cap.ts). */
+    readonly ships: ShipCaps;
+}
+
+/** The system ship cap (ship/ship_cap.ts has the measurement). */
+export interface ShipCaps {
     /**
-     * Ships in the system (ship/ship_cap.ts): while this many are there,
-     * a new NPC (traffic, a fleet member, a planet's defender) and a bay
-     * launch are refused. The pilots' own ships always enter.
+     * Ships that are not a pilot's own: at this many a new NPC (traffic,
+     * a fleet, reinforcements, a person) and a bay launch are refused.
      */
-    readonly ships: number;
+    readonly others: number;
+    /**
+     * Every ship: at this many a planet's defender (and anything else the
+     * simulation would add) is refused. Pilots' own ships always enter.
+     */
+    readonly total: number;
 }
 
 /**
@@ -94,15 +114,15 @@ export interface EngineLimits {
 export const ENGINE_LIMITS: Readonly<Record<LimitsRule, EngineLimits>> = {
     original: {
         shots: { soft: 128, hard: 128, refusalReloads: false },
-        beams: { soft: 64, hard: 64, refusalReloads: false },
+        beams: { soft: 64, hard: 64, refusalReloads: true },
         familyBudget: Infinity,
-        ships: 64,
+        ships: { others: 55, total: 64 },
     },
     novajs: {
         shots: { soft: 256, hard: 512, refusalReloads: false },
         beams: { soft: 128, hard: 256, refusalReloads: false },
         familyBudget: 256,
-        ships: 128,
+        ships: { others: 110, total: 128 },
     },
 };
 

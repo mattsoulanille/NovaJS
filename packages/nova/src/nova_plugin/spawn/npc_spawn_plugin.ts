@@ -23,7 +23,7 @@ import { World } from 'nova_ecs/world';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
 import { loadShipGameData, primeWeaponEntries } from './entity_data_loader.js';
 import { deriveEntityComponents } from '../core/index.js';
-import { DisabledComponent, shipSlotFree } from '../ship/index.js';
+import { DisabledComponent, ShipSpawnKind, shipSlotFree } from '../ship/index.js';
 import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
 import { ArmorComponent, ShieldComponent, shieldFloor } from '../ship/index.js';
@@ -1330,12 +1330,12 @@ export function spawnNpc(world: World,
  * Inserts an NPC built by makeNpcShip, fully formed (see spawnNpc), with
  * a derelict govt's ships disabled (gövt Flags1 0x0800). Exported for the
  * other in-sim spawners (a stellar's defence fleet, encounters/tribute.ts).
- * Returns false, inserting nothing, when the system is full (the room's
- * ship cap, ship/ship_cap.ts).
+ * Returns false, inserting nothing, when the system is full for `kind`
+ * (the room's ship cap, ship/ship_cap.ts).
  */
 export function insertNpc(world: World, gameData: SimulationGameDataInterface,
-    uuid: string, entity: Entity): boolean {
-    if (!shipSlotFree(world)) {
+    uuid: string, entity: Entity, kind: ShipSpawnKind = 'npc'): boolean {
+    if (!shipSlotFree(world, kind)) {
         return false;
     }
     deriveEntityComponents(world, entity);

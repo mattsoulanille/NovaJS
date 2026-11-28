@@ -136,7 +136,7 @@ function setFiring(carrier: Entity, firing: boolean) {
 
 describe('the system ship cap', () => {
     for (const rule of ['original', 'novajs'] as const) {
-        const cap = ENGINE_LIMITS[rule].ships;
+        const cap = ENGINE_LIMITS[rule].ships.others;
         describe(`under the ${rule} rule (${cap} ships)`, () => {
             it('refuses a bay launch while full and keeps the fighter in '
                 + 'the bay; launches once a slot frees', async () => {
