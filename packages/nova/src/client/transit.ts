@@ -34,6 +34,7 @@ import {
 } from '../nova_plugin/travel/index.js';
 import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship/index.js';
 import { advanceEntityDate } from '../spaceport/mission_session.js';
+import { carryFlyingEscorts } from './flying_escorts.js';
 import {
     emptySetStringRequests, pickShipName, SetStringRequests,
 } from '../spaceport/set_string_requests.js';
@@ -318,6 +319,10 @@ export function followSpaceportSystemMove(runtime: ClientRuntime,
             console.warn('Escort restock failed on a mission move from the '
                 + 'spaceport:', e);
         }
+        // The escorts still flying in the system being left (on approach
+        // to land, say) come along, as they would through a jump
+        // (flying_escorts.ts).
+        await carryDockFlock(runtime, data.uuid);
         if (!departure.keepCoordinates) {
             await placeOnFirstStellar(data.entity, departure.systemId,
                 gameData);
@@ -350,6 +355,31 @@ export function followSpaceportSystemMove(runtime: ClientRuntime,
             console.error('Mission move follow-through failed:', e);
         }
     });
+}
+
+/**
+ * The player's escorts still flying in the system a DOCKED player is
+ * leaving for another one (flying_escorts.ts), onto the jump roster the
+ * transit's jumpTo takes. A no-op off a live dock; a failure leaves them
+ * where they are (the lost-escort ledger's retry still applies).
+ */
+async function carryDockFlock(runtime: ClientRuntime, playerUuid: string):
+    Promise<void> {
+    const current = runtime.state.state;
+    if (current.kind !== 'landed' && current.kind !== 'gateMap') {
+        return;
+    }
+    try {
+        const carried = await carryFlyingEscorts(runtime, current.system,
+            playerUuid);
+        if (carried > 0) {
+            console.info(`${carried} escort(s) still in flight follow the `
+                + 'player out of the dock.');
+        }
+    } catch (e) {
+        console.warn('Escorts in flight could not be carried from the '
+            + 'dock:', e);
+    }
 }
 
 /**
@@ -484,6 +514,10 @@ export function leaveGateMap(runtime: ClientRuntime,
                 emergenceAngle: null,
                 randomDraw: Math.random(),
             });
+            // Escorts that were not with the player when he docked at the
+            // gate (the gate sweep took the rest) come along too
+            // (flying_escorts.ts).
+            await carryDockFlock(runtime, docked.uuid);
             await jumpTo(runtime, {
                 kind: 'gate', from: origin, to, uuid: docked.uuid, entity: ship,
                 arrivalSpob: destinationSpob, gateKind: 'hypergate',
