@@ -31,7 +31,8 @@ import { SystemData } from "novadatainterface/system_data";
 import { TargetCornersData } from "novadatainterface/target_corners_data";
 import { WeaponData } from "novadatainterface/weapon_data";
 import {
-    DEFAULT_SUB_PATHS, IDSpaceHandler, isPluginPrefixConflictError, NovaSubPaths,
+    DEFAULT_SUB_PATHS, describePluginOverrideReport, IDSpaceHandler,
+    isPluginPrefixConflictError, NovaSubPaths, PluginOverrideReport,
 } from "./id_space_handler.js";
 import { describeFlagNamespaceReport, FlagNamespaceMap } from "./flag_namespace.js";
 import { ControlBitNamespaceMap, describeControlBitNamespaceReport } from "./ncb_namespace.js";
@@ -120,6 +121,10 @@ export type {
 } from "./flag_namespace.js";
 export { describeFlagNamespaceReport, flagBits } from "./flag_namespace.js";
 
+// The plug-in override load log; see IDSpaceHandler.getOverrideReport.
+export type { PluginOverrideReport, PluginOverrideClash } from "./id_space_handler.js";
+export { describePluginOverrideReport } from "./id_space_handler.js";
+
 type ParseFunction<T extends BaseResource, O> = (resource: T, errorFunc: (message: string) => void) => Promise<O>;
 
 export class NovaParse implements GameDataInterface {
@@ -172,6 +177,14 @@ export class NovaParse implements GameDataInterface {
     public flagNamespaceWarn: (message: string) => void = console.warn;
     // Same for the control bit namespacing diagnostics.
     public controlBitNamespaceWarn: (message: string) => void = console.warn;
+    // The plug-ins' overrides: how many stock resources they replace, and
+    // one line per resource a plug-in replaced after ANOTHER plug-in had
+    // written it (IDSpaceHandler.getOverrideReport). Logged once, when the
+    // load finishes, through pluginOverrideLog (overridable like the
+    // warnings above; the server's copy lands in its log, see
+    // nova/src/server/parsing/nova_parse_worker.ts).
+    public readonly overrideReport: Promise<PluginOverrideReport>;
+    public pluginOverrideLog: (message: string) => void = console.log;
 
     // subPaths.novaPlugins may be set to null to parse the base "Nova Files"
     // data only, ignoring the Plug-ins directory entirely. The default keeps
@@ -233,6 +246,17 @@ export class NovaParse implements GameDataInterface {
         this.controlBitMap.catch((_e: Error) => { });
         this.controlBitNamespaces = this.controlBitMap.then(map => map.data);
         this.controlBitNamespaces.catch((_e: Error) => { });
+
+        this.overrideReport = this.idSpaceHandler.getOverrideReport()
+            .then(report => {
+                const lines = describePluginOverrideReport(report);
+                if (lines.length > 0) {
+                    this.pluginOverrideLog(
+                        "NovaParse: " + lines.join("\n    "));
+                }
+                return report;
+            });
+        this.overrideReport.catch((_e: Error) => { });
 
         this.shipPICTMap = this.makeShipPictMap(ship => ship.pictID,
             "default");

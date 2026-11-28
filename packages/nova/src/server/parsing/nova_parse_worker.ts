@@ -10,9 +10,12 @@ const api = {
         // NovaParse's load-time diagnostics — skipped plug-ins, malformed
         // resources, and the one-time Require/Contribute and control-bit
         // namespacing reports (cross-plug-in bits separated, a plug-in
-        // Require that nothing contributes) — are written with
-        // console.warn/error from inside this worker, using NovaParse's
-        // defaults (flagNamespaceWarn, controlBitNamespaceWarn). Nothing
+        // Require that nothing contributes), and the plug-in override log
+        // (how many stock resources the plug-ins replace, one line per
+        // resource a plug-in replaced after another plug-in wrote it) —
+        // are written with console.log/warn/error from inside this worker,
+        // using NovaParse's defaults (flagNamespaceWarn,
+        // controlBitNamespaceWarn, pluginOverrideLog). Nothing
         // redirects them on purpose: worker_threads pipes a worker's
         // stdout/stderr into the parent process's unless the Worker is
         // built with `stdout`/`stderr: true` (server.ts does not), so they

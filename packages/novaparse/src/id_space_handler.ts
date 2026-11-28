@@ -203,7 +203,16 @@ export async function resolvePluginEntries(pluginsPath: string):
     // LAST name wins. Loading in reverse instead silently dropped
     // Extra Outfits' extra Spica stellar whenever the alphabetically
     // earlier "arpia" plug-in, which overrides the same sÿst 144, was
-    // installed alongside it.
+    // installed alongside it. Measured on the original (wave 58,
+    // docs/reference_experiments.md): top-level plug-ins load in
+    // case-INsensitive name order ("k low" < "M top" < "t low"), last
+    // wins, regardless of the order the files were created in.
+    //
+    // A FOLDER in Plug-ins is a NovaJS extension: the original (Mac
+    // 1.1.1) ignores every sub-folder of Plug-ins and the files in it
+    // (wave 58). Here a folder loads as ONE plug-in, at its own sorted
+    // position, its files in sorted order inside it (addDirectory, one
+    // level deep), under the folder's namespace.
     //
     // The sort is explicit rather than trusting readdir: on macOS
     // readdir happens to come back sorted, but that is not guaranteed
@@ -260,6 +269,59 @@ export async function resolvePluginEntries(pluginsPath: string):
     return entries;
 }
 
+/**
+ * What the plug-ins did to ids other data had already defined, gathered
+ * while they load (IDSpaceHandler.getOverrideReport).
+ */
+export interface PluginOverrideReport {
+    /**
+     * Stock resources a plug-in replaced (each counted once, however many
+     * plug-ins replace it). Normal plug-in behaviour, so only counted.
+     */
+    readonly stockOverrides: number;
+    /**
+     * Each time a plug-in file replaced a resource a DIFFERENT plug-in file
+     * had already written, in load order, deduplicated. The later file's
+     * copy is the one the game uses.
+     */
+    readonly clashes: readonly PluginOverrideClash[];
+}
+
+export interface PluginOverrideClash {
+    /** The resource type, e.g. "spöb". */
+    readonly type: string;
+    /** The id the plug-ins wrote it under (the stock id for an override). */
+    readonly id: string;
+    /** The replaced copy: its resource name, and its file relative to Plug-ins. */
+    readonly replacedName: string;
+    readonly replacedFile: string;
+    /** The winning copy, likewise. */
+    readonly byName: string;
+    readonly byFile: string;
+}
+
+/**
+ * The load-log lines for a {@link PluginOverrideReport}: one summary line,
+ * then one line per clash, e.g. `spöb 516 "Gravit Station" (Planet Rico)
+ * replaced by "Wormhole" (singularity/Singularity1.plug)`. Empty when no
+ * plug-in replaced anything.
+ */
+export function describePluginOverrideReport(
+    report: PluginOverrideReport): string[] {
+    const { stockOverrides, clashes } = report;
+    if (stockOverrides === 0 && clashes.length === 0) {
+        return [];
+    }
+    const count = (n: number, noun: string) =>
+        `${n} ${noun}${n === 1 ? "" : "s"}`;
+    const summary = `plug-ins override ${count(stockOverrides, "stock resource")}`
+        + (clashes.length === 0 ? "" : `; ${count(clashes.length, "resource")}`
+            + " replaced by a later-loaded plug-in:");
+    return [summary, ...clashes.map(c =>
+        `${c.type} ${c.id} ${JSON.stringify(c.replacedName)} (${c.replacedFile})`
+        + ` replaced by ${JSON.stringify(c.byName)} (${c.byFile})`)];
+}
+
 class IDSpaceHandler {
     private globalResources: Promise<NovaResources | Error>;
     private tmpBuildingResources: NovaResources;
@@ -284,6 +346,13 @@ class IDSpaceHandler {
     // on demand, this one is APPLIED to the raw resources once in build().
     private baseControlBitSet: Set<number> | null = null;
     private controlBitMap: ControlBitNamespaceMap | null = null;
+    // The override report's bookkeeping (see noteWrite): which plug-in
+    // FILE (relative to Plug-ins) last wrote each resource a plug-in wrote,
+    // keyed "<type> <globalID>" (a resource missing here is stock data),
+    // the stock resources replaced, and the clashes in load order.
+    private pluginWriters = new Map<string, string>();
+    private stockOverrides = new Set<string>();
+    private clashes = new Map<string, PluginOverrideClash>();
 
     constructor(novaPath: string,
         { novaFiles, novaPlugins }: NovaSubPaths = DEFAULT_SUB_PATHS) {
@@ -363,6 +432,23 @@ class IDSpaceHandler {
         return this.controlBitMap;
     }
 
+    /**
+     * How many stock resources the plug-ins replaced, and every resource
+     * one plug-in file replaced after another had written it (see
+     * {@link PluginOverrideReport}). Rejects like getIDSpace when the core
+     * data failed to load.
+     */
+    public async getOverrideReport(): Promise<PluginOverrideReport> {
+        const result = await this.globalResources;
+        if (result instanceof Error) {
+            throw result;
+        }
+        return {
+            stockOverrides: this.stockOverrides.size,
+            clashes: [...this.clashes.values()],
+        };
+    }
+
     /** Plug-in prefixes in load (= flag namespace allocation) order. */
     public async getPluginPrefixOrder(): Promise<string[]> {
         const result = await this.globalResources;
@@ -398,7 +484,11 @@ class IDSpaceHandler {
     // either "plugin 1:" or "nova:" depending on whether or not the ID already exists in the "nova"
     // namespace. It is used by nova resource parsers to reference other nova resources because those
     // references must occur in the correct namespace.
-    private getIDSpaceUnsafe(prefix: string | null = null): NovaResources {
+    //
+    // `writerFile` (a plug-in file's path relative to Plug-ins) turns on
+    // the override bookkeeping for the writes made through this space.
+    private getIDSpaceUnsafe(prefix: string | null = null,
+        writerFile?: string): NovaResources {
         const globalResources = this.tmpBuildingResources;
 
         if (prefix == null) {
@@ -462,12 +552,52 @@ class IDSpaceHandler {
                         // plug-in actually wrote it would otherwise be lost.
                         value.writerPrefix = prefix;
 
+                        if (writerFile !== undefined) {
+                            this.noteWrite(String(resourceType), localID,
+                                globalID, Reflect.get(target, globalID),
+                                value, writerFile);
+                        }
 
                         return Reflect.set(target, globalID, value);
                     }
                 });
             }
         });
+    }
+
+    // The override bookkeeping for one plug-in write (getOverrideReport).
+    // Replacing a stock resource is counted; replacing what ANOTHER
+    // plug-in file wrote is a clash: two plug-ins overriding one stock id,
+    // or two files of one plug-in folder (they share its namespace, so
+    // their new ids meet too). New ids of different plug-ins live in
+    // different namespaces and never meet, so they never clash here.
+    //
+    // A `vers` (the file's own version stamp; every plug-in carries vers 1
+    // and 2, and nothing in the game reads them) is not game data, so it is
+    // left out: it would add two lines per plug-in file and say nothing.
+    private noteWrite(type: string, localID: string, globalID: string,
+        existing: { name: string } | undefined, value: { name: string },
+        writerFile: string) {
+        if (type === NovaResourceType.vers) {
+            return;
+        }
+        const key = type + " " + globalID;
+        const previousFile = this.pluginWriters.get(key);
+        this.pluginWriters.set(key, writerFile);
+        if (existing === undefined) {
+            return;
+        }
+        if (previousFile === undefined) {
+            this.stockOverrides.add(key);
+        } else if (previousFile !== writerFile) {
+            const clash: PluginOverrideClash = {
+                type, id: localID,
+                replacedName: existing.name, replacedFile: previousFile,
+                byName: value.name, byFile: writerFile,
+            };
+            // Deduplicated: one line however often the same clash recurs.
+            this.clashes.set(JSON.stringify(clash), clash);
+        }
     }
 
     // Adds the Nova Plug-ins directory, already listed, sorted and keyed
@@ -539,6 +669,15 @@ class IDSpaceHandler {
         const fileNames = (await readdir(dirPath)).sort(comparePluginNames);
         for (const name of fileNames) {
             const currentPath = path.join(dirPath, name);
+            // A folder inside a plug-in folder is not loaded (one level
+            // only; the original loads no folders at all, wave 58). Said
+            // plainly, rather than as a failed read with resource-fork
+            // advice that doesn't apply.
+            if (!fatalOnError && await isDirectory(currentPath).catch(() => false)) {
+                console.warn(`NovaParse: skipped the folder ${currentPath}:`
+                    + " only files directly inside a plug-in folder load.");
+                continue;
+            }
             if (fatalOnError) {
                 await this.addPlugin(currentPath, prefix);
             } else {
@@ -574,7 +713,15 @@ class IDSpaceHandler {
         // This is the correct ID space because even though a plugin named,
         // for example, "cats", might have a resource that overwrites a nova resource,
         // that resource should still have access to all the other stuff in "cats"
-        const resourceCount = await readNovaFile(filePath, this.getIDSpaceUnsafe(prefix));
+        // A plug-in file is named in the override report by its path
+        // relative to Plug-ins ("singularity/Singularity1.plug"); the stock
+        // data is not tracked.
+        const writerFile = prefix === "nova" || this.novaPluginsPath === null
+            ? undefined
+            : path.relative(this.novaPluginsPath, filePath)
+                .split(path.sep).join("/");
+        const resourceCount = await readNovaFile(filePath,
+            this.getIDSpaceUnsafe(prefix, writerFile));
 
         // A .plug / .ndat / .rez that parsed to zero resources almost always
         // means its resource fork is present-but-empty. On macOS the resource
