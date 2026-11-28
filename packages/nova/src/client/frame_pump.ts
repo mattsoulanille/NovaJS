@@ -45,6 +45,7 @@ import { SIMULATION_STEP_MS } from '../nova_plugin/make_system.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import { dockedShip, liveSystem, LiveSystem } from './client_state.js';
 import { runDockingFrame } from './docking.js';
+import { FrameBacklog } from './frame_backlog.js';
 import {
     flushCarriedJumpEscorts, flushLandedEscorts, localPlayerShipUuid,
 } from './fleet_ledger.js';
@@ -343,6 +344,10 @@ export class FramePump {
      */
     private syncedPlayerJumpRoute: string[] | undefined;
     private syncedFor: LiveSystem | undefined;
+    /** Frames taken from the simulation and not yet applied (their game
+     * data would not load): client/frame_backlog.ts. Per live system. */
+    private readonly backlog = new FrameBacklog();
+    private backlogWarned = false;
     /** The frame time the current live system was taken up at (the
      * start of its entry snap window, ENTRY_SNAP_WINDOW_MS). */
     private liveSince: number | undefined;
@@ -667,16 +672,31 @@ export class FramePump {
                     onResyncFailed(runtime, live);
                     return;
                 }
+                this.backlog.push(frame);
+            }
+            if (this.backlog.length > 0) {
                 // The frame's game-data references resolve in the
-                // display's own caches: stage them before applying.
-                await stageSimulationFrameGameData(runtime.gameData, frame);
+                // display's own caches: stage them before applying. A
+                // frame whose staging fails is held, never dropped
+                // (client/frame_backlog.ts).
+                const blocked = await this.backlog.drain(
+                    frame => stageSimulationFrameGameData(runtime.gameData,
+                        frame),
+                    frame => this.applyFrame(live, frame, {
+                        pumpFrameMs: frameTime, debtMs: this.timeDebt,
+                        rate: stepRate,
+                    }),
+                    () => liveSystem(runtime.state.state) === live);
                 if (liveSystem(runtime.state.state) !== live) {
                     return;
                 }
-                this.applyFrame(live, frame, {
-                    pumpFrameMs: frameTime, debtMs: this.timeDebt,
-                    rate: stepRate,
-                });
+                if (blocked !== undefined && !this.backlogWarned) {
+                    this.backlogWarned = true;
+                    console.warn('Holding simulation frames until their '
+                        + 'game data loads:', blocked);
+                } else if (blocked === undefined) {
+                    this.backlogWarned = false;
+                }
             }
             // The display world is NOT stepped here: tick() steps it every
             // ticker frame, whether or not this round trip made it back in
@@ -743,6 +763,8 @@ export class FramePump {
      */
     private beginLiveSystem(live: LiveSystem, frameTime: number): void {
         this.syncedFor = live;
+        this.backlog.clear();
+        this.backlogWarned = false;
         // The presentation clock re-anchors on this system's snapshots.
         this.displaySimTime = undefined;
         this.lastFrameTime = undefined;
