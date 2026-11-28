@@ -9,6 +9,7 @@
  * pass over its entities with component lookups, written into a reused
  * array in ENTITY_COUNT_KEYS order. Nothing is written to the world.
  */
+import { wrapNearestDelta } from 'nova_ecs/datatypes/position';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import type { World } from 'nova_ecs/world';
 import { ENTITY_COUNT_KEYS, EntityCounts } from '../common/perf_stats.js';
@@ -113,8 +114,9 @@ export function countDisplayEntities(world: World,
         if (!movement) {
             continue;
         }
-        const dx = movement.position.x - focus.x;
-        const dy = movement.position.y - focus.y;
+        // The copy nearest the camera, as the sprites are drawn.
+        const dx = wrapNearestDelta(movement.position.x - focus.x);
+        const dy = wrapNearestDelta(movement.position.y - focus.y);
         if (dx >= view.left && dx <= view.right
             && dy >= view.top && dy <= view.bottom) {
             out[I.onScreenEntities]++;
