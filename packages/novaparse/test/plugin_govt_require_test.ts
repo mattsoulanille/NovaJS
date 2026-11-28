@@ -114,6 +114,7 @@ describe("gövt Require through the whole NovaParse pipeline", () => {
         np.resourceNotFoundFunction = () => { };
         np.flagNamespaceWarn = () => { };
         np.controlBitNamespaceWarn = () => { };
+        np.pluginOverrideLog = () => { };
     });
 
     afterEach(() => {

@@ -298,6 +298,7 @@ export function makePluginNovaParse(pluginDirectories: string[]):
     // real Plug-ins folder, not for the test log.
     novaParse.flagNamespaceWarn = () => { };
     novaParse.controlBitNamespaceWarn = () => { };
+    novaParse.pluginOverrideLog = () => { };
     return novaParse;
 }
 

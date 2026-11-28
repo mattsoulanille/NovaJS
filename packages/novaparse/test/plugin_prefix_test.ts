@@ -130,6 +130,7 @@ describe("Plug-ins namespaces from full base names (issue #310)", () => {
         np.resourceNotFoundFunction = () => { };
         np.flagNamespaceWarn = () => { };
         np.controlBitNamespaceWarn = () => { };
+        np.pluginOverrideLog = () => { };
         return np;
     }
 

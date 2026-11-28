@@ -25,6 +25,7 @@ function quietParse(dataPath: string): NovaParse {
     np.resourceNotFoundFunction = () => { };
     np.flagNamespaceWarn = () => { };
     np.controlBitNamespaceWarn = () => { };
+    np.pluginOverrideLog = () => { };
     return np;
 }
 
