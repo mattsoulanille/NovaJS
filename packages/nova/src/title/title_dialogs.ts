@@ -944,6 +944,9 @@ export function showEnhancementsSheet(settings: GameSettingsOverride,
     Object.assign(box.style, {
         background: '#e2e2e2', border: '1px solid #d6d6d6',
         borderRadius: '4px', padding: '6px 14px',
+        // The list scrolls rather than pushing the title bar and the
+        // buttons off a short window (the original's 800 x 600).
+        maxHeight: 'calc(100vh - 170px)', overflowY: 'auto',
     } as Partial<CSSStyleDeclaration>);
     modal.panel.appendChild(box);
 
