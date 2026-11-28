@@ -1200,7 +1200,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    save. Sim-rule change alongside: a second LIVE copy of one identity
 //    under the same owning peer (MultiplayerData.owner) is deleted on the
 //    tick it appears (the original kept, else the lowest uuid). No input or message kind changes. The derived wire schema
-//    fingerprint changes (67ff6c826e092635 -> NEWFP), and the
+//    fingerprint changes (67ff6c826e092635 -> 3a6d49a035638325), and the
 //    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
