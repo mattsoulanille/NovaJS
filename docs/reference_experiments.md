@@ -27060,7 +27060,146 @@ edge comes out one short). After: the same 300-shot benchmark peaks at
 `frames/t6..t30.png`: t9 shows the rings growing, t18 the empty centre
 while full), `novaref-w58-shotcap(.rsrc)`, `run1.json`.
 
+### Hypergate emergence, wave 59: a ship comes out AT the arrival gate's centre (the first frame within a few px of it, for 40, 150 and 325 px gate art alike), facing the destination gate's CustSndID direction (120 on every stock gate; random for -1, whatever the departure heading), coasting along it at HALF its top speed; escorts come out at the same centre 0.4-2.6 s later, nearly at rest, and fly to formation (2026-11-27)
+
+**Question** (the hub's brief; Matthew: "sure" — measure and match).
+NovaJS put an arriving ship 300 px out from the arrival gate
+(`GATE_EMERGENCE_DISTANCE`, `N/nova_plugin/travel/gate_transit_plugin.ts:62`
+on main 1590b596), flying out at its full top speed (`:253-256`), while
+wave 56's run b (`gate_b/11-done1.png`) showed the original's Leviathan
+about 100 px from the destroyed HG-Aldebaran. How far from the gate's
+centre does a ship emerge, in which direction, with what heading and
+speed; does the gate's art size matter; do escorts come out the same way?
+
+**Rig** (no kit, no kit ids; stock data plus one run-only plug-in per run,
+`tools/w59_g1.mjs` .. `w59_g3.mjs`). The wave-56 rig: stock HG-Tichel
+(spöb 1405, sÿst 129) and HG-Kania (spöb 1404, sÿst 128) opened with govt
+-1 / MinStatus -32767; each lists the other in HyperLink slot 1, so `Tab`,
+`Return` on the gate map ping-pongs. The player's hull and the escorts'
+get Shield / Armor / ShieldRecharge 30000. Pilots start ON HG-Tichel,
+every system explored.
+- `g1` (stock gates: Type 1, the 150 x 150 Hypergate art, CustSndID 120):
+  a Leviathan (shïp 131, Speed 100) with two hired escorts (Arachnid 158,
+  Starbridge 133); one transit to Kania.
+- `g2` (varied gates): Kania CustSndID **-1** (random) with Type **5** art
+  (the 325 x 325 gas giant), Tichel CustSndID **300** with Type **3** art
+  (the 40 x 40 moon); a Starbridge (Speed 400) with an Arachnid escort;
+  one transit to Kania.
+- `g3`: as g2 with the Starbridge made INERTIALESS (Flags2 0x0089 | 0x0040),
+  so `Down@3000` right after an arrival stops it and the transits chain
+  (Down, turn, `Up`, Down, `l`, `l`, Tab, Return): **12 transits**, 6 into
+  each gate.
+- Wave 56's `gate_b` recording re-read for the destroyed gate (HG-Aldebaran,
+  Type 64, the 53 x 60 Broken Hypergate art, CustSndID 120).
+
+Measured off the 30 fps recordings with `tools/framescan.mjs` (the open
+gate's blue lightning, the gas giant's orange), `tools/comps.mjs`
+(lit components: the moon, the escort), `tools/kania.py` / `tichel.py`
+(per-frame offsets and a constant-velocity fit) and a sprite match of the
+Starbridge's rotation frames (rlëD 1010, 10 degrees a frame). The gas giant's
+art is off-centre in its frame (its orange bbox is sprite (2..292, 2..291)
+in a 325 frame, centre 162), which the fit corrects for.
+
+| run | gate (art, CustSndID) | hull | first frame: player from gate centre | coast speed (top) | direction (heading frame) |
+|---|---|---|---|---|---|
+| g1 | Kania (150 px, 120) | Leviathan | about 0 (the opening gate drawn centred on the hull) | 22 px/s (45) | 119 (nose ESE) |
+| w56 b | Aldebaran wreck (53 x 60, 120) | Leviathan | the wreck appears from UNDER the hull, ~105 px off 4 s later | ~22 | ~123 |
+| g2 | Kania (325 px, -1) | Starbridge | 1.6 px | 89.2 (180) | 310.2 |
+| g3 x6 | Kania (325 px, -1) | Starbridge, inertialess | 3-12 px (fit at the first frame) | 87.5-90.7 | 92, 298, 155, 106, 321, 317 (frames 10, 29, 15, 10, 32, 31) |
+| g3 x6 | Tichel (40 px, 300) | Starbridge, inertialess | 0-6 px (moon edge extrapolated) | ~89-94 | 297-300 every time (frame 30 every time) |
+
+**Findings.**
+1. **Where:** AT the arrival gate's centre: the first frame of the new
+   system already has the ship on it, within a few px, for the 40, 150
+   and 325 px art and the 53 x 60 wreck alike, so the gate's sprite size
+   plays no part. The ship then moves out; the wave-56 "100 px" was the
+   Leviathan's 4 s of coast.
+2. **Direction:** the DESTINATION gate's CustSndID as a clock angle (300
+   came out 297-300 six times; stock 120 came out 119 and 123). CustSndID
+   -1 gave a random direction (92, 106, 155, 298, 317, 321, 310) that did
+   not follow the departure heading: six departures from Tichel at 140-170
+   degrees came out at 100, 290, 150, 100, 320 and 310.
+3. **Heading:** the ship faces the way it flies (the Starbridge's rotation
+   frame matched its motion within one 10-degree frame every time; the
+   Leviathan's nose pointed ESE).
+4. **Speed:** HALF the hull's top speed, coasting: 22 px/s for the
+   Leviathan (top 43.7-45), 87-91 for the Starbridge (top 175-180),
+   inertial or inertialess alike (the inertialess one kept coasting until
+   `Down`). No thrust follows.
+5. **Escorts** come out of the same point: the Arachnid appeared at the
+   gate's centre 0.4-0.75 s after the player in five g3 Tichel arrivals
+   (a red fade-in in g2, 0.9 s after), the g1 escorts about 2-2.6 s after,
+   staggered, nearly at rest relative to the gate (about 20-30 px/s
+   along the emergence direction, read from a component merged with the
+   moon, so rough), and flew from there to their formation stations.
+6. The arrival gate plays its opening animation as the ship appears
+   (g1); its "Exiting hypergate in the <system> system on <date>." line
+   shows at once.
+
+**NovaJS (main 1590b596): mismatch** on distance (300 px out), speed (full
+top speed) and the escorts (formation stations around the player as it
+coasts away: `N/spaceport/landed_escorts.ts:402`, put down by
+`N/client/fleet_ledger.ts:726` `flushCarriedJumpEscorts`); the direction
+rule (destination CustSndID, seeded random otherwise) and the heading
+already matched.
+
+**Applied 2026-11-27 (this branch):** `GateArrivalSystem`
+(`N/nova_plugin/travel/gate_transit_plugin.ts:223`) puts the ship exactly
+on the gate's position, facing the emergence angle, with velocity and
+targetSpeed `GATE_EMERGENCE_SPEED_FRACTION` (0.5, `:65`) x its top speed
+(`GATE_EMERGENCE_DISTANCE` is gone). Escorts held for a gate arrival
+(system_entry stamps the rows `emergeAtGate`) come out at that gate's
+centre, at rest, facing the emergence direction, and FormationSystem flies
+them to their stations: `GateEmergence` (`N/spaceport/landed_escorts.ts:97`),
+`prepareCarriedEscorts`' `emergence`, `gateEmergenceFor`
+(`N/client/fleet_ledger.ts:637`, the gate's centre from the display
+world's stellars). A fighter a carried carrier holds takes formation on
+it there. The stagger is not modelled (they come out together, a tick
+after the player). The gate animation's "a ship appeared at a gate"
+radius is its own constant now (`GATE_ARRIVAL_SIGHTING_RADIUS`, 600 px,
+`N/display/gate_animation_plugin.ts`). Wormholes share GateArrivalSystem
+and so the rule (not measured). No synced component changed (the escort
+field lives on the client's roster), so no protocol note. Specs:
+`gate_transit_plugin_test.ts` (at the centre, half speed, facing out, the
+destination's 270), `landed_escorts_test.ts` "a batch held for a gate
+arrival (wave 59)", `fleet_ledger_test.ts` "where a held gate batch comes
+out (wave 59)", `gate_animation_test.ts` (sighting radius). Confidence:
+high for the point, direction and speed (14 transits, two hulls, three art
+sizes); medium for the escorts' speed.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w59/`: `g1/*/`
+(`03-k1arr.png`, `04-k1sel.png` the gate 290 px back after 12 s,
+`recording.mp4` from 33.1 s), `g2/*/` (`03-k1a.png`, the recording from
+30.5 s), `g3/*/` (`NN-c<k>stop.png` / `c<k>k.png` / `c<k>t.png` after each
+arrival, `c<k>kmap` / `c<k>tmap` the next gate map, the recording), the
+tools (`framescan.mjs`, `comps.mjs`, `kania.py`, `tichel.py`, plug-in
+specs, `build.sh`, `send.sh`), `pilotspecs/`, `scen/`, `recover.log`.
+
+### Not reached in wave 59 (2026-11-27)
+
+- A wormhole arrival (same code path in NovaJS); an NPC's gate transit;
+  the escorts' exact stagger and emergence speed (a clean rig: escorts of
+  a distinct colour against black space).
+
 ### Reliability notes (for anyone running the reference)
+
+- **Chaining hypergate transits (wave 59):** an arrival coasts out at half
+  the hull's top speed, so an inertial hull drifts out of the gate's
+  landing range for good (the Leviathan was "too far" 290 px out 12 s
+  later, and flying back blind took minutes). Make the player's hull
+  inertialess in the run-only plug-in (shïp Flags2 | 0x0040) and send
+  `Tab wait 800 Return wait 1000 Down@3000`: the ship stops about 125 px
+  out (`Down@800` did NOT stop it). A 325 px gate (Type 5) lands from
+  there with `l wait 1500 l wait 3500`; a 40 px one (Type 3) needs
+  `Left@1060 wait 200 Up@1000 Down@2500` first (a Turn-50 hull, CustSndID
+  300). Then `Tab`, `Return` again: 12 transits in one run (`g3`).
+- **An escort hides a small gate in the first second (wave 59):** the
+  escorts come out of the gate's centre 0.4-2.6 s after the player, on
+  top of a 40 px gate, so read a small gate's distance in the frames
+  before that (or give the pilot no escorts).
+- **`analysis/sprite_match.mjs` prints nothing for a small hull:** its
+  coarse pass needs more than 100 sampled pixels (`n > 300` channels); a
+  48 px Starbridge falls short. Wave 59 ran a copy with `n > 60`.
 
 - **Plug-ins in folders are inert on the original (wave 58):** a rig
   must install every test plug-in at the TOP of Plug-ins; novaref's
