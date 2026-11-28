@@ -209,6 +209,15 @@ export interface OpenStarmapOptions {
     /** The player's legal records, for the Legal Status line — passed by
      * landed screens for the same reason as `playerBits`. */
     legalRecords?: LegalRecordsState;
+    /**
+     * The system the player is in when it is not the one this map's
+     * display world is: a landed `Mxxx` / `Nxxx` moves the player AT ONCE
+     * while he stays docked, and the map opened from the spaceport then
+     * reads "Current System: <the destination>" (MEASURED, reference "M /
+     * N without Q while landed (ncbops)"). The map centres, marks and
+     * routes from it for this open.
+     */
+    currentSystemId?: string;
 }
 
 // Layout (container-centered like every menu): the nova:8509 dialog frame
@@ -272,9 +281,15 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
     private hazardsValue = new PIXI.Text('', PROP_VALUE_FONT);
     private dateText = new PIXI.Text('', DATE_FONT);
 
+    /** The player's system: this world's, or an open's override
+     * (OpenStarmapOptions.currentSystemId). */
+    private get systemId(): string {
+        return this.openOptions?.currentSystemId ?? this.homeSystemId;
+    }
+
     constructor(displayAssets: DisplayAssetDataInterface,
         simulationData: SimulationGameDataInterface,
-        private systemId: string, controlEvents: Observable<ControlEvent>,
+        private homeSystemId: string, controlEvents: Observable<ControlEvent>,
         /** The player's control bits, for NCB system visibility. */
         private getPlayerBits: () => ReadonlySet<number> = () => new Set(),
         /**
@@ -569,7 +584,7 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         // missions and outfits — all while the map is closed — so the
         // orange / red set (and each one's colour) is part of the key too.
         const refusing = this.refusingSystems();
-        const key = [...bits].sort((a, b) => a - b).join(',')
+        const key = this.systemId + '@' + [...bits].sort((a, b) => a - b).join(',')
             + '#' + marksKey + '#' + discoveryKey
             + '#' + [...refusing].map(([id, why]) => `${id}:${why}`)
                 .sort().join(',');

@@ -29577,6 +29577,125 @@ MaxOdds 1000 tickle control (`odds1000_retal`) was not run: wave 3's
   jamming run's launch heading was checked in the recording (none of the
   jammed cells pointed at the target).
 
+### M / N without Q while landed (ncbops): the move happens AT ONCE and the player stays docked: the spaceport stays open (still the old stellar's name, venues usable) while the map opened from it already reads the new "Current System"; the next Leave launches into the new system (no jump, no fuel, no extra day); an outfit's OnPurchase M launches at the docked stellar's own x/y (exactly where N does), a mission's OnSuccess M on top of the destination's first stellar; with a Q the player is ejected at once, from inside the outfitter (2026-11-28)
+
+**Question** (FIX_NCB_OPERATOR_GAPS item 3): a set string run while landed with
+`Mxxx` / `Nxxx` and no `Qxxx` (ARPIA mïsn 1034 OnSuccess `b20128 M773
+A1084`; Extra Outfits oütf 552 "Buy Station" OnPurchase `b20243 N800 ...`,
+whose text says you are "dropped off the station"). Is the player ejected at
+once, moved at the next Leave, moved while staying landed, or not moved?
+
+**Rig** (no shared-kit ids; run-only plug-ins
+`evidence/20261128-ncbops/plugins/novaref-ncbops-move-v1viking`, spec
+`tools/ncbops_move.mjs` as first built). Stock data otherwise. oütf 600 "NO
+Move M" (OnPurchase `M153`), 601 "NO Move N" (`N153`), 602 "NO Move MQ"
+(`M153 Q25048`), TechLevel 1, 1,000 cr, Mass 0; mïsn 1100 "NO Success M"
+(AvailLoc 3 at Viking while `!b9355`, OnAccept `b9355`, ReturnStel Viking,
+CompText dësc 4990, OnSuccess `M153`). Pilot `ncbops_viking` (the base
+Shuttle at Viking, spöb 157 at (-20, -30) in Tichel, 1,000,000 cr, fuel
+300, June 23rd 1177). Destination SPC-1927 (sÿst 153): its FIRST stellar
+is UHP-0164 (spöb 132, a 40 px rocky moon at (400, -300)), its second the
+gas giant LV-2063 (spöb 180 at (0, 0)), so "on top of the first stellar"
+and "Viking's x/y" land in visibly different places. Every run: land (the
+stock intro job pops first: No, Okay), act, Done, `m` from the spaceport,
+Leave, window shots, the pilot pulled after the Leave. Positions are read
+by a circle fit to LV-2063's lit limb (`tools/limbfit.mjs`; the player is
+drawn at (318, 302)).
+
+| run | what ran | spaceport after it | map from the spaceport | Leave puts the ship | pilot after the Leave |
+|---|---|---|---|---|---|
+| `move_m` | Buy NO Move M (`M153`) | stays open, still "Viking"; the outfitter's Buy greys for EVERY item until it is reopened (then live again) | **Current System: SPC-1927** | SPC-1927, LV-2063's disc centre at (+16, +18) px from the ship: Viking's x/y, nowhere near UHP-0164 | last stellar **Viking**, June 25th, fuel 300 |
+| `viking_n` | Buy NO Move N (`N153`) | the same (Buy greyed) | Current System: SPC-1927 | **identical to the pixel** to `move_m` (LV-2063 bbox 217-433 x 208-427 in both) | Viking, June 25th, fuel 300 |
+| `viking_mq` | Buy NO Move MQ (`M153 Q25048`) | **gone within 1.5 s of the Buy**, straight from the outfitter (no Done), "A mysterious force transports you to an unknown location..." on the status line | (in space) Current System: SPC-1927 | the same spot as `move_m` / `viking_n` (same fit, still 6 s later: at rest) | Viking, June 25th, fuel 300 |
+| `viking_misn2` | mïsn 1100 accepted at the 2nd landing, completed at the 3rd: CompText, Okay, then OnSuccess `M153` | stays open, still "Viking" | **Current System: SPC-1927** | **on top of UHP-0164** (the moon under the ship, LV-2063 at the far lower left, about (-400, +300)) | last stellar **UHP-0164**, system SPC-1927 |
+
+**Findings.**
+1. **A landed M or N without a Q moves the player at once and leaves him
+   docked** (neither an ejection, nor a move deferred to the Leave, nor
+   ignored): the spaceport stays up under the old stellar's name and its
+   venues keep working, but the map opened from it already shows the
+   destination as "Current System", and the next Leave launches into the
+   destination. No date (every single-visit pilot reads June 25th, M, N or
+   MQ, as an ordinary visit from the base's June 23rd) and no fuel (300).
+2. **Where the Leave launches depends on what ran the M.** A mïsn
+   OnSuccess `M153` set the pilot's landed stellar to the destination's
+   first stellar (pilot: UHP-0164) and the Leave launched on top of it, as
+   the Bible's M says. An oütf OnPurchase `M153` left the landed stellar at
+   Viking (pilot: Viking), and the Leave launched at Viking's own x/y in
+   SPC-1927, exactly where `N153` launched: in the outfitter, M behaved as
+   N. Not separated: whether the split is mission vs outfit, or the first
+   vs a later landing of the visit (`move_m` / `viking_n` bought on the
+   first landing, `viking_misn2` completed on the third). Reading: the
+   original's M re-points the "landed stellar" at the first stellar and the
+   launch always starts from the landed stellar's x/y in the current
+   system; the outfitter path keeps (or restores) its own stellar.
+3. **With a Q the eject is immediate even inside the outfitter**: no Done,
+   no further dialog; the Q message on the status line; the outfit's M
+   placed the ship at Viking's x/y as in 2.
+4. A side effect of the immediate move inside the outfitter: Buy greys for
+   every item (even one never bought) until the outfitter is closed and
+   reopened; the grid itself does not change.
+
+**NovaJS (main b840d896):** a landed M / N with no Q "does not end the
+visit: the player stays landed, and their next Leave takes them to the
+named system" (`N/spaceport/landed_departure.ts:40-48`, marked GUESS);
+the Leave goes through `followSpaceportSystemMove`, M placed on top of the
+first stellar, N at the docked stellar's x/y
+(`N/client/transit.ts:186-260`, `placeOnFirstStellar` at :274); a Q
+"leaves AFTER THE CURRENT DIALOG ... the venue closes"
+(`landed_departure.ts:31-35`). **Matches** 1's outcome (docked until the
+Leave, then the move; no date or fuel) and 2's mission case; **differs**
+in that (a) the spaceport's map still shows the docked system as current
+until the Leave, and (b) an oütf OnPurchase M launches on the first
+stellar where the original launches at the docked stellar's x/y (as N).
+**Proposed:** keep the deferred-to-Leave model and drop its GUESS mark
+(measured); show the moved-to system as the landed map's current system
+once an M / N has run (display only); give an M run from an oütf
+OnPurchase (or OnSell) the N placement. Confidence: high for 1 and 3
+(four runs, map shots and pilots agree), medium for the scope of 2 (one
+mission run; the v3 rig below would pin it).
+
+**Not reached:** `tools/ncbops_move_v3.mjs` (plug-in
+`novaref-ncbops-move-v3`, scenarios `scen/viking_acc.json` /
+`viking_m2nd.json`): mïsn 1101 OnAccept `b9356 M153` accepted at the second
+landing, and the M outfit bought at the second landing, to tell mission vs
+outfit from first vs later landing; queued but starved of the lock for 70
+min behind other waves. An in-flight M (does M ever place on the first
+stellar outside a mission completion?) was not tried.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261128-ncbops/`:
+`move_m/20261128-002522-ncbops_move_m/` (05-outfitter .. 13-port-m-key
+.. 15-left, pilot-after/), `viking_n/20261128-005458-ncbops_viking_vn/`
+(05-bought-n, 06-port-map, 07-left), `viking_mq/20261128-005915-ncbops_viking_vmq/`
+(04-sel-mq, 05-bought-mq, 06-bought-mq-4s), `viking_misn2/20261128-011036-ncbops_viking_vmisn2/`
+(03-landed2 offer, 05-landed3 CompText, 07-port-map, 09-left), each with
+`recording.mp4` and `log.jsonl`; `tools/limbfit.mjs`, `tools/disc.mjs`;
+the inbox / outbox logs `inbox_*.jsonl(.out)`.
+
+**Reliability notes (ncbops).** `pilot-make` with `stellar` alone does not
+put Enter Ship next to that stellar: a pilot set to Spacedock II (133) or,
+once, Viking (a Federation reinforcement fleet arriving at Enter Ship) came
+up far out in Tichel, out of `l` range (runs `sd2_m2`, `viking_misn`
+wasted); check the first shot before `l l`. In SPC-1927 the Shuttle is
+smashed by the asteroid field within about a minute of the launch (credits
+on the HUD drop with it): shoot the arrival at once. The stock intro job
+takes the first landing's AvailLoc 3 slot on a base pilot (a plug-in
+AvailLoc 3 mission is offered from the second landing on). With five other
+agents' queues on the lock, a waiter starved for 70 min: plan for one
+uninterrupted run, not a queue.
+
+**Implemented (FIX_NCB_OPERATOR_GAPS, item 3):** the deferred-to-Leave model
+stays and loses its GUESS mark (`N/spaceport/landed_departure.ts`); the map
+opened from the spaceport (and from the Mission BBS) after a landed M / N
+reads the destination as the Current System (`LandedTransaction
+.movedToSystem` -> `OpenStarmapOptions.currentSystemId`,
+`N/spaceport/starmap.ts`); an oütf OnPurchase / OnSell `Mxxx` is given the N
+placement (`N/spaceport/outfitter.ts` runSetString); and a Q from the
+outfitter closes it at once, so the spaceport departs straight from the
+purchase (`Outfitter.leaveIfAsked`). Finding 4 (Buy greyed until the
+outfitter is reopened) is not reproduced.
+
+
 ## Pending
 
 | id | question | status |

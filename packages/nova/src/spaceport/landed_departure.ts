@@ -44,8 +44,15 @@ import type { SystemMove } from '../nova_plugin/missions/index.js';
  *    run wins. An M / N WITHOUT a Q (ARPIA's mïsn 1034 OnSuccess `M773`,
  *    Extra Outfits' "Buy Station" oütf 552 OnPurchase `N800`) does not
  *    end the visit: the player stays landed, and their next Leave takes
- *    them to the named system. (GUESS: the Bible does not say; it is the
- *    reading in which the player is never landed somewhere they are not.)
+ *    them to the named system. MEASURED (reference "M / N without Q while
+ *    landed (ncbops)"): the original moves him AT ONCE but leaves him
+ *    docked — the spaceport stays up under the old stellar's name, the
+ *    map opened from it already reads the destination as "Current
+ *    System" (LandedTransaction.movedToSystem, OpenStarmapOptions
+ *    .currentSystemId), and the Leave launches there; no date, no fuel.
+ *    An oütf's OnPurchase / OnSell `Mxxx` launches at the docked
+ *    stellar's x/y, exactly where an `Nxxx` does (outfitter.ts), and a Q
+ *    there ejects the player straight from the outfitter.
  */
 export interface LandedDeparture {
     /** A Qxxx ran: leave the stellar after the current dialog. */

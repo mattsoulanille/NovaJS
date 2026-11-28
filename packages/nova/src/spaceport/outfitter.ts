@@ -791,8 +791,18 @@ export class Outfitter extends Menu<Entity> {
         if (context) {
             session.setCargoCapacity(freeCargo(context));
         }
+        const moveBefore = session.departure.move;
         try {
             session.runMissionSet(expression, resourcePrefix);
+            // An outfit's `Mxxx` launches where an `Nxxx` does: at the
+            // docked stellar's own x/y in the destination, not on its first
+            // stellar (MEASURED, reference "M / N without Q while landed
+            // (ncbops)": OnPurchase `M153` and `N153` launched on the same
+            // pixel; a mïsn OnSuccess `M153` on the first stellar).
+            const move = session.departure.move;
+            if (move && move !== moveBefore && !move.keepCoordinates) {
+                session.departure.move = { ...move, keepCoordinates: true };
+            }
         } catch (error) {
             if (error instanceof NCBParseError) {
                 console.warn('Bad outfit mission set string:', error);
@@ -1107,6 +1117,20 @@ export class Outfitter extends Menu<Entity> {
         this.refreshGrid();
         this.setFreeMassText();
         this.refreshTradeState();
+        this.leaveIfAsked();
+    }
+
+    /**
+     * An OnPurchase / OnSell `Qxxx` ejects the player AT ONCE, straight
+     * from the outfitter: no Done, no further dialog (MEASURED, reference
+     * "M / N without Q while landed (ncbops)", run `viking_mq`: gone within
+     * 1.5 s of the Buy). The outfitter closes as its Done would, and the
+     * spaceport departs behind it (spaceport.ts departIfAsked).
+     */
+    private leaveIfAsked(): void {
+        if (this.transaction?.mustLeave && this.container.visible) {
+            this.done();
+        }
     }
 
     /**
@@ -1164,6 +1188,7 @@ export class Outfitter extends Menu<Entity> {
         if (bought > 0 && !this.text.status.text) {
             this.text.status.text = `Bought ${bought} x ${displayName(outfit.name)}.`;
         }
+        this.leaveIfAsked();
     }
 
     private sellOutfit(click?: ButtonClick) {
@@ -1192,6 +1217,7 @@ export class Outfitter extends Menu<Entity> {
         this.refreshGrid();
         this.setFreeMassText();
         this.refreshTradeState();
+        this.leaveIfAsked();
     }
 
     /**
@@ -1244,6 +1270,7 @@ export class Outfitter extends Menu<Entity> {
         if (sold > 0 && !this.text.status.text) {
             this.text.status.text = `Sold ${sold} x ${displayName(outfit.name)}.`;
         }
+        this.leaveIfAsked();
     }
 
     private setOutfitSelected(outfitTile: ItemTile<OutfitData> | undefined) {

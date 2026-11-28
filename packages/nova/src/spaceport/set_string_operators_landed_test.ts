@@ -305,6 +305,84 @@ describe('landed set-string operators (T / P / M / N / Q)', () => {
             });
     });
 
+    describe('an oütf\'s M / N / Q (ncbops)', () => {
+        const OUTFITS = [
+            outfit(MOVE_M, 'NO Move M', 'M600'),
+            outfit(MOVE_MQ, 'NO Move MQ', 'M600 Q700'),
+        ];
+
+        async function shop(openStarmap?:
+            (options?: OpenStarmapOptions) => Promise<unknown>) {
+            const landed = await land(gameData([], OUTFITS), pilot(),
+                openStarmap);
+            const { spaceport, press } = landed;
+            await waitFor(() => spaceport.onMainScreen, 'the port');
+            await press('outfitter');
+            await waitFor(() => !spaceport.onMainScreen, 'the outfitter');
+            const view = (spaceport as unknown as { outfitter: Outfitter })
+                .outfitter as unknown as {
+                    shipData?: unknown,
+                    itemGrid?: { selection?: OutfitData, items: OutfitData[] },
+                    buyOutfit(): void,
+                    container: PIXI.Container,
+                };
+            await waitFor(() => view.shipData !== undefined
+                && (view.itemGrid?.items.length ?? 0) === OUTFITS.length,
+                'the outfitter stocked');
+            const buy = (id: string) => {
+                view.itemGrid!.selection =
+                    view.itemGrid!.items.find(item => item.id === id)!;
+                view.buyOutfit();
+            };
+            const transaction = () => (spaceport as unknown as {
+                transaction?: LandedTransaction,
+            }).transaction;
+            return { ...landed, view, buy, transaction };
+        }
+
+        it('M alone: stays docked, the map reads the destination as current, '
+            + 'and the Leave launches at the docked stellar\'s x/y (as N)',
+            async () => {
+                const maps: (OpenStarmapOptions | undefined)[] = [];
+                const { spaceport, view, buy, press, departed, hull,
+                    transaction } = await shop(async options => {
+                        maps.push(options);
+                        return [];
+                    });
+                buy(MOVE_M);
+                await settle();
+                expect(view.container.visible).withContext('still shopping')
+                    .toBeTrue();
+                expect(transaction()!.movedToSystem).toBe(DESTINATION);
+                await press('depart');
+                await waitFor(() => spaceport.onMainScreen, 'back in port');
+                (spaceport as unknown as { openDockedMap(): void })
+                    .openDockedMap();
+                expect(maps[maps.length - 1]?.currentSystemId)
+                    .toBe(DESTINATION);
+                expect(spaceport.container.visible).toBeTrue();
+                await press('depart');
+                await departed;
+                expect(hull()!.components.get(PendingDepartureComponent))
+                    .toEqual({
+                        move: { systemId: DESTINATION, keepCoordinates: true },
+                        statusMessages: [],
+                    });
+            });
+
+        it('M with Q: ejected straight from the outfitter', async () => {
+            const { view, buy, departed, hull } = await shop();
+            buy(MOVE_MQ);
+            await departed;
+            expect(view.container.visible).toBeFalse();
+            expect(hull()!.components.get(PendingDepartureComponent))
+                .toEqual({
+                    move: { systemId: DESTINATION, keepCoordinates: true },
+                    statusMessages: [QUOTE_TEXT],
+                });
+        });
+    });
+
     describe('against the real data', () => {
         beforeEach(requireNovaData);
 

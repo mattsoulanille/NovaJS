@@ -345,7 +345,13 @@ export class Spaceport extends Menu<Entity> {
         this.popupBlocker = new MenuControls(controlEvents);
         this.missionComputer = new MissionBoard(displayAssets, simulationData,
             controlEvents, this.universe, id, LOCATION_MISSION_COMPUTER,
-            MISSION_BBS_PICT, "Mission BBS", this.openStarmap);
+            MISSION_BBS_PICT, "Mission BBS", this.openStarmap
+            && (options => this.openStarmap!({
+                ...options,
+                // A landed M / N has already moved the player (see
+                // LandedTransaction.movedToSystem).
+                currentSystemId: this.transaction?.movedToSystem,
+            })));
         const showMissionComputer = async () => {
             if (!this.enterVenue()) {
                 return;
@@ -564,6 +570,11 @@ export class Spaceport extends Menu<Entity> {
             missionMarks: this.activeMissionMarks(),
             playerBits: this.playerComponent(ControlBitsComponent),
             legalRecords: this.playerComponent(LegalRecordsComponent),
+            // A landed M / N without a Q has moved the player already: the
+            // map reads the destination as the Current System while he is
+            // still docked here (MEASURED, reference "M / N without Q
+            // while landed (ncbops)").
+            currentSystemId: this.transaction?.movedToSystem,
         });
     }
 
