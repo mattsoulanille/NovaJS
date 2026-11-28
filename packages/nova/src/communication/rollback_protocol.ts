@@ -1259,7 +1259,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    name the owning client picked from the T's STR#, applied (cleaned)
 //    to the hull the player ends up in. No input or message kind
 //    changes. The derived wire schema fingerprint changes
-//    (fcce7ad2bfc8f5bf -> NEWFP), and the join gate keeps
+//    (fcce7ad2bfc8f5bf -> 0bacfbdb2cbfd802), and the join gate keeps
 //    older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
