@@ -27185,6 +27185,156 @@ specs, `build.sh`, `send.sh`), `pilotspecs/`, `scen/`, `recover.log`.
   the escorts' exact stagger and emergence speed (a clean rig: escorts of
   a distinct colour against black space).
 
+### Title button roll-in (2026-11-27): on every appearance of the main screen the three button rows slide in from the panel's edges as filmstrips (PICTs 8030-8032), top to bottom 5 ticks apart, one frame a 60 Hz tick, 22 ticks (0.37 s) in all; each row plays snd 602 as it starts and snd 603 as it lands, its labelled buttons replace the strip as it lands, and the ATMOS emblem fades in (8 ticks) after the last; a click skips it, keys do not (hotkeys act at once), a modal dialog freezes it; the logo flickers to a RANDOM other frame every 5 ticks
+
+**Question** (Matthew: "render the button roll in sequence on the main
+menu (plus audio) that shows up when first opening the game or when
+pressing esc to return to the main menu"). NovaJS drew the six buttons at
+once and had snds 602/603 marked "deferred". What exactly does the
+original play, with which sounds, and can it be skipped?
+
+**Rig.** No plug-in; a stock experiment pilot (`pilots/minimal.json`,
+Shuttle at Earth) as `novaref-titleroll`. Three runs, all recorded:
+`r1_measure.json` (full-screen recording from before `launch`: the cold
+start, with Matthew's `Matt` only SHOWN at the title, never entered;
+then `open_pilot`, `e`, Escape back twice with no input), `r2_keys.json`
+(keys 0.45 s after Escape: landed after the roll-in, inconclusive) and
+`r3_keys.json` (Space, then `a`, about 0.25 s after Escape: mid-roll).
+The recordings have no audio (no loopback device on the old Mac; the
+microphone was not used), so the sound ids and the input rules come from
+the executable: the i386 slice of `Ev Nova.original` keeps its symbols
+(`otool -arch i386 -tV`, `nm`), and the main screen's routines
+(`LoadMainScreenAnim`, `MainScreenAnimIdle`, `MainScreenRolloverIdle`,
+`MainScreenMouse`, `MainScreenKey`, `MainScreenAppear`) read directly.
+Frames were matched against the strips by `rows.mjs` (each row's best
+strip frame, or the settled buttons, per recorded frame).
+
+**Resources.** spïn 608 / 609 / 610 (unnamed) point at PICT 8030 "Slide
+upper" (338 x 63 frames, 1 x 11), 8031 "Slide middle" (351 x 64, 1 x 10)
+and 8032 "Slide lower" (351 x 65, 1 x 11): the red button blanks, without
+labels, sliding in from the panel's outer edges over the empty slots
+of PICT 8000. Matched against the recordings at background-local (343,
+399), (337, 462) and (337, 526). spïn 606 "Main screen logo" is PICT 8010
+(1 x 7), spïn 607 "Main screen rollover" rlëD 8020 (1 x 7), spïn 600-605
+the six button rlëDs 8050-8055. `MainScreenAppear` loads snd 600-603 into
+`mainScreenSnd[0..3]`: 600 "Menu button down", 601 "Menu button up", 602
+"Menu button start" (0.33 s rising whoosh), 603 "Menu button end" (0.77 s,
+sharp attack: the clunk).
+
+**The code** (globals by their symbol names):
+
+- `LoadMainScreenAnim` (both on the first open, from `DoMainScreen`, and
+  on every return from the game, from `EnterGameFromMainScreen`): the
+  rows' `slideIndex` start at -1, then `trunc(prev + prevFrameCount x
+  -0.5)`: -1, -6, -11 (the double -0.5 sits at 0xdd488). If the app is
+  `inBackground`, every index is set to its frame count instead (no
+  roll-in) and `rolloverAlpha` to 32; else `rolloverAlpha` = 0.
+  `lastSlideAnimTime` = TickCount.
+- `MainScreenAnimIdle`, once a tick (TickCount >= last + 1): for each row
+  with index < count: index 0 plays snd 602 (`PlaySound(snd, 50, vol,
+  vol)`), index++, index == count plays snd 603 (and the last row's
+  landing redraws the screen). `MainScreenAnimDraw` draws strip frame
+  `index` only for 0 <= index < count; a landed row draws its rlëD
+  buttons. Every 5 ticks the logo takes `Rand(7)` until it differs from
+  the current frame.
+- `MainScreenRolloverIdle`: while any row is unfinished `rolloverAlpha` =
+  0 (no emblem); after, once a tick, +4 up to 32 when the shown emblem is
+  the wanted one (a change swaps at once, except in 16-bit colour, where
+  it fades out by 4s first).
+- `MainScreenMouse`, a mouse-down in the window: every row's index is set
+  to 32000 (all landed at once, no 603), the screen redrawn, and THEN the
+  same click goes to `TrackMainScreenButtons` (a click on a button that is
+  still sliding presses it).
+- `MainScreenKey`: no slide check at all: n / o / q / e / p / a run their
+  command at once (each after `PlayMainScreenClickSound`, which plays 600,
+  busy-waits until it ends, then plays 601), x shows dësc 32766, every
+  other key does nothing.
+
+So the sequence, in ticks after the screen appears:
+
+| tick | upper row | middle row | lower row | sound |
+|---|---|---|---|---|
+| 1 | frame 0 | - | - | |
+| 2 | frame 1 | - | - | 602 |
+| 6 | frame 5 | frame 0 | - | |
+| 7 | 6 | 1 | - | 602 |
+| 11 | 10 | 5 | frame 0 | |
+| 12 | **buttons** | 6 | 1 | 603, 602 |
+| 16 | buttons | **buttons** | 5 | 603 |
+| 22 | buttons | buttons | **buttons** | 603; emblem alpha 4/32 |
+| 29 | | | | emblem at 32/32 |
+
+**Recordings** (30 fps, so 2 strip frames a recorded frame; `rows.mjs`):
+
+| run / appearance | screen appears | upper strip runs | middle | lower | all landed |
+|---|---|---|---|---|---|
+| r1 cold start (after the loading splash, about 1 s) | f178 | f178-182, lands f183 | f181-184, lands f185 | f183-187, lands f188 | f188 (0.33 s) |
+| r1 Escape 1 (pressed f1539) | f1543 | 1546-1550, lands 1551 | 1548-1552, lands 1553 | 1551-1555, lands 1556 | f1556; emblem fades in f1557-1560 |
+| r1 Escape 2 (f2143) | f2146 | 2150-2154 | 2152-2156 | 2155-2158 | f2159 |
+| r3 Escape 1, Space at f108 (upper on frame 3) | f104 | 107-111 | 110-113 | 112-116 | f117: Space did NOT skip |
+| r3 Escape 2, `a` at f505 (upper on frame 5) | f501 | 503-505 | (0) | (0) | About opened at f507 over the half-drawn rows and they stood still under it (and the logo too: PSNR 43 dB between f510 and f520, 34 dB once it moved again); Okay at f766, then the rows went on from where they stood (f769 upper 6 / middle 1), all landed f779 |
+
+The middle row always trails the upper by 5 frames (upper 6 / middle 1,
+8 / 3, 10 / 5) and the lower the middle by 5, as the code says. On a
+return the screen sat about 3 recorded frames (0.1 s) on the empty slots
+before the first strip frame (the game's own work after drawing the
+screen, not a coded delay); on the cold start the strips started at once.
+The screen appears in one frame (no fade in a window). Not measured: a
+click mid-roll on the old Mac (a novaref click lands about 1.2 s after
+the preceding key through the terrapin jump, after the 0.37 s roll-in);
+the code above is the evidence for the skip.
+
+**NovaJS before (base 2176d89f): mismatch.** `title/title_screen.ts` drew
+the six buttons and the emblem at once on every `show()`; 602/603 were
+loaded nowhere ("deferred"); the logo cycled its 7 frames IN ORDER every
+120 ms.
+
+**Applied (this branch).** `title/title_rollin.ts` (pure, specs in
+`title_rollin_test.ts`): `TitleRollIn` reproduces the indices, the per-tick
+step, the cues (602 at ticks 2 / 7 / 12, 603 at 12 / 16 / 22), the
+emblem's 4/32 a tick from the last landing, `skip()` (no 603) and the
+background case; `TickClock` turns frame time into 60.15 Hz ticks (at
+most 4 a frame, so a stalled tab cannot burst sounds); `nextLogoFrame`
+is the logo's random other frame every 5 ticks. `TitleScreen` draws the
+three strips under the buttons and the emblem, hides each row's buttons
+until it lands, fades the emblem, restarts the roll-in on every `show()`
+(first open, Escape back, a failed entry), skips it on a pointer-down on
+the background or on a button (the buttons keep their art's rectangle as
+hit area, so a still-hidden button takes the click as in the original),
+lets keys and hotkeys work without skipping, freezes the roll-in and the
+logo while a title dialog is up, and starts with no roll-in when the
+page is hidden (`document.hidden`, the `inBackground` case). Sounds: the
+cues play at the title's UI volume through @pixi/sound (so `?mute`
+silences them), but only into a RUNNING audio context: on a first load
+the browser's autoplay rule keeps audio locked until the first gesture,
+and a sound started then would come out late on the first click, so a
+locked context drops the cue (the roll-in still plays). After any key or
+click (a return from the game) they play. `TitleScreen.rollInCues`
+reports each cue and whether it played.
+
+Departures (not toggles: none is a UI choice): the silent roll-in on a
+first load before any gesture (browser rule); the press sounds keep
+NovaJS's down-on-press / up-on-release instead of the original's
+600-then-601 on release.
+
+**Browser check** (headless Chrome, `--mute-audio`, own server):
+stepping the title's tick by hand gives exactly the table above (strip
+frames, buttons per row, emblem 0.125 at tick 22, 1.0 at 29); in real
+time (60 fps) a return from flight raised 602 / 602 / 603+602 / 603 /
+603 at 0, 83, 166, 233, 333 ms (the table's ticks exactly), all played; the cold load's cues were all dropped
+(audio locked); a click on the starfield right after the middle row's
+602 landed every row with no 603; `a` mid-roll opened About with the
+rows frozen, Okay resumed them. Side by side (original r1 return 1
+frames 1546 / 1548 / 1550 / 1552 / 1554 / 1560 over NovaJS ticks 3 / 7 /
+11 / 15 / 19 / 29): `side_by_side.png`.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-titleroll/`:
+`runs/20261127-231309-titleroll_r1/` (`recording-main.mp4`: cold start
+f143-188, returns f1539-1560 and f2143-2165), `runs/...-232841-titleroll_r2/`,
+`runs/...-233643-titleroll_r3/` (`02-about-mid-roll.png`), the scenarios,
+`bin/dis.txt` (the disassembly; the binary itself is not in git),
+`side_by_side.png`, `browser/` (NovaJS tick frames).
+
 ### Reliability notes (for anyone running the reference)
 
 - **Chaining hypergate transits (wave 59):** an arrival coasts out at half
@@ -27204,6 +27354,21 @@ specs, `build.sh`, `send.sh`), `pilotspecs/`, `scen/`, `recover.log`.
 - **`analysis/sprite_match.mjs` prints nothing for a small hull:** its
   coarse pass needs more than 100 sampled pixels (`n > 300` channels); a
   48 px Starbridge falls short. Wave 59 ran a copy with `n > 60`.
+- **The executable has symbols (title roll-in, 2026-11-27):** the i386
+  slice of `Ev Nova.original` keeps its function and global names
+  (`otool -arch i386 -tV`, `nm -arch i386`; globals are reached through
+  `__data` pointer slots, e.g. 0xdeb34 -> `_slideIndex`). A UI or timing
+  question is often answered faster by reading the routine (e.g.
+  `MainScreenAnimIdle`) than by a rig, and it covers what a recording
+  cannot (sounds: the recordings have no audio). Copy it with `ssh ...
+  cat` into the evidence dir; never commit it.
+
+- **Inputs inside a 0.4 s window (title roll-in):** the title appears
+  about 4 recorded frames after Escape in a window-cropped recording (7
+  in a full-screen one), so a key meant for the roll-in needs `Escape
+  wait 100 <key>` in ONE keys step (`wait 450` landed after it). A click
+  step cannot follow a key that closely through the terrapin jump (about
+  1.2 s between steps).
 
 - **Plug-ins in folders are inert on the original (wave 58):** a rig
   must install every test plug-in at the TOP of Plug-ins; novaref's
