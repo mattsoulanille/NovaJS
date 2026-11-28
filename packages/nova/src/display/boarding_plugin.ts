@@ -25,7 +25,7 @@ import {
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import { CapturedShip } from '../nova_plugin/encounters/index.js';
 import { ShipComponent } from '../nova_plugin/ship/index.js';
-import { SystemIdResource } from '../nova_plugin/core/index.js';
+import { displayName, SystemIdResource } from '../nova_plugin/core/index.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { buildCaptureSetStrings } from '../spaceport/ship_mission_accept.js';
 import {
@@ -206,7 +206,7 @@ export function cargoKeyDisplayName(key: string,
     }
     if (key.startsWith('junk:')) {
         const junk = gameData?.data.Junk.getCached(key.slice(5));
-        return junk?.name || 'cargo';
+        return displayName(junk?.name ?? '') || 'cargo';
     }
     if (key.startsWith('mission:')) {
         return 'mission cargo';

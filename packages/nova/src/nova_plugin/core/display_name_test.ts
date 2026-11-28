@@ -1,5 +1,5 @@
 import 'jasmine';
-import { displayName, govtTargetName } from './display_name.js';
+import { displayName, displayNameOf, govtTargetName } from './display_name.js';
 
 describe('displayName', () => {
     it('drops the "; developer note" suffix', () => {
@@ -64,5 +64,13 @@ describe('govtTargetName', () => {
             .toEqual('Rebel Alliance');
         expect(govtTargetName({ targetCode: '   ', name: 'Rebel Alliance' }))
             .toEqual('Rebel Alliance');
+    });
+});
+
+describe('displayNameOf', () => {
+    it('cleans a loaded name and passes an unloaded one through', () => {
+        // Stock sÿst 483 (the nav panel's "Hyperspace / Koria;Rebs !assim").
+        expect(displayNameOf('Koria;Rebs !assim')).toEqual('Koria');
+        expect(displayNameOf(undefined)).toBeUndefined();
     });
 });

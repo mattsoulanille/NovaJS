@@ -31,6 +31,7 @@ import { OpenSpaceportEvent } from '../display/spaceport_plugin.js';
 import {
     DISCOVERY_LANDED, markDiscovered, PlayerShipSelector,
 } from '../nova_plugin/player/index.js';
+import { displayNameOf } from '../nova_plugin/core/index.js';
 import { PlanetTargetComponent } from '../nova_plugin/travel/index.js';
 import { TargetComponent } from '../nova_plugin/ship/index.js';
 import { PendingEscortsComponent } from '../spaceport/pending_escorts.js';
@@ -128,7 +129,8 @@ export function onLeaveSpaceport(runtime: ClientRuntime, launching: Entity):
     const planetId = current.kind === 'landed' ? current.ship.planetId : undefined;
     state.apply(s => requestLaunch(s, launching));
     const planetName = planetId
-        ? gameData.data.Planet.getCached(planetId)?.name
+        ? displayNameOf(gameData.data.Planet.getCached(planetId)?.name)
+            || undefined
         : undefined;
     saves.recordCheckpointNow({
         label: `Departed ${planetName ?? 'the spaceport'}`,

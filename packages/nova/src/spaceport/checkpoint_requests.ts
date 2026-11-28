@@ -105,7 +105,7 @@ export function describeOutfitChanges(
         if (delta === 0) {
             continue;
         }
-        const name = nameOf(id) ?? id;
+        const name = displayName(nameOf(id) ?? id);
         const item = `${name} ×${Math.abs(delta)}`;
         (delta > 0 ? bought : sold).push(item);
     }

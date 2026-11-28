@@ -12,7 +12,9 @@ import {
 import {
     DISCOVERY_ENTERED, DiscoveryLevel, PlayerShipSelector,
 } from '../nova_plugin/player/index.js';
-import { SimulationGameDataResource } from "../nova_plugin/core/index.js";
+import {
+    displayName, displayNameOf, SimulationGameDataResource,
+} from "../nova_plugin/core/index.js";
 import {
     JumpComponent, JumpRouteComponent, JUMP_DISTANCE, canJump, jumpRadiusFor, PlanetDataComponent,
     PlanetTargetComponent,
@@ -146,10 +148,11 @@ export const DrawStatusBarNavigation = new System({
         const nextSystem = (jump?.to || undefined) ?? jumpRoute?.route[0];
         // getCached is undefined until the system data loads, then the name
         // appears.
+        // displayName drops the author's "; note" ("Koria;Rebs !assim").
         let destinationName: string | null = null;
         if (nextSystem) {
-            destinationName =
-                gameData.data.System.getCached(nextSystem)?.name ?? null;
+            destinationName = displayNameOf(
+                gameData.data.System.getCached(nextSystem)?.name) ?? null;
         }
 
         // A DESTINATION THE PILOT HAS NEVER BEEN TO IS NOT NAMED. The star
@@ -166,7 +169,7 @@ export const DrawStatusBarNavigation = new System({
         let stellarName: string | null = null;
         if (planetTarget?.target) {
             const planet = runQuery(PlanetNavQuery, planetTarget.target)[0];
-            stellarName = planet ? planet[0].name : null;
+            stellarName = planet ? displayName(planet[0].name) : null;
         }
 
         // DIM UNTIL JUMP-READY, off the shared readiness predicate

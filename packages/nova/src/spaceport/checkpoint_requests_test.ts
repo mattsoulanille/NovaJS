@@ -42,6 +42,9 @@ describe('checkpoint labels', () => {
         expect(describeOutfitChanges([['nova:1', 1]], [['nova:1', 1]], nameOf))
             .toBeUndefined();
         expect(describeOutfitChanges([], [], nameOf)).toBeUndefined();
+        // An author's "; note" is dropped (stock oütf 204).
+        expect(describeOutfitChanges([], [['nova:204', 1]],
+            () => 'Map; Sol/Kel\'ar Iy only')).toBe('Bought Map ×1');
         // Unknown names fall back to the id.
         expect(describeOutfitChanges([], [['plug:9', 1]], nameOf))
             .toBe('Bought plug:9 ×1');

@@ -13,6 +13,12 @@ export function displayName(name: string): string {
     return (semicolon === -1 ? name : name.slice(0, semicolon)).trim();
 }
 
+/** {@link displayName} for a name that may not be loaded (yet): undefined
+ * stays undefined. */
+export function displayNameOf(name: string | undefined): string | undefined {
+    return name === undefined ? undefined : displayName(name);
+}
+
 /**
  * The government label the target box shows lower-right. The original
  * shows the gövt's short Target Code (gövt TMPL offset 68) — "Pyro" for

@@ -7,7 +7,9 @@ import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { ControlEvent, displayName } from '../nova_plugin/core/index.js';
+import {
+    ControlEvent, displayName, displayNameOf,
+} from '../nova_plugin/core/index.js';
 import {
     cappedEscortCount, CarriedEscortEntry, MAX_ESCORTS,
 } from '../nova_plugin/escorts/index.js';
@@ -417,7 +419,8 @@ export class HangarDialog {
         const context = this.context!;
         return hangarEntries(context.hull(), this.lookups,
             this.simulationData,
-            id => this.simulationData.data.Planet.getCached(id)?.name,
+            id => displayNameOf(
+                this.simulationData.data.Planet.getCached(id)?.name),
             context.stellarId, context.roster?.() ?? [], context.playerUuid);
     }
 

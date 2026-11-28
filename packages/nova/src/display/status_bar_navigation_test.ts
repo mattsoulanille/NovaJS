@@ -339,3 +339,27 @@ describe('status bar navigation: an unexplored destination is not named',
                 .toThrowError(/Cannot remove resource DiscoveryLevel/);
         });
     });
+
+describe('status bar navigation: the author\'s "; note" is not shown', () => {
+    it('names stock Koria ("Koria;Rebs !assim") as "Koria"', () => {
+        // sÿst 483 and 533 are both "Koria" with a story-state note; the
+        // original never prints the note (Matthew's playtest read
+        // "Hyperspace / Koria;Rebs !assim").
+        const { world, last } = makeWorld({ 'nova:129': 'Koria;Rebs !assim' });
+        world.step();
+        expect(last().value).toBe('Koria');
+    });
+
+    it('names a selected stellar without its note', () => {
+        const { world, player, last } = makeWorld();
+        player.components.set(JumpRouteComponent, { route: [] });
+        const planet = new Entity('planet');
+        planet.components.set(PlanetDataComponent,
+            { name: 'HG-Scheall;under construction' } as never);
+        world.entities.set('planet', planet);
+        player.components.set(PlanetTargetComponent,
+            { target: 'planet' } as never);
+        world.step();
+        expect(last().value).toBe('HG-Scheall');
+    });
+});

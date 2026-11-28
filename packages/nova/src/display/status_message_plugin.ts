@@ -9,7 +9,7 @@ import { BEEP_CANT_DO, UiSoundEvent } from "./ui_sound.js";
 import * as PIXI from "pixi.js";
 import {
     DisplayAssetDataResource, SimulationGameDataResource, SystemIdResource,
-    ProjectileAnimationProvider, displayName,
+    ProjectileAnimationProvider, displayName, displayNameOf,
 } from '../nova_plugin/core/index.js';
 import { Entity } from "nova_ecs/entity";
 import { SingletonComponent } from "nova_ecs/world";
@@ -173,7 +173,8 @@ export const DrawStatusMessage = new System({
     step(statusLine, arrivalShown, dateSuffix, date, { time }, gameData,
         systemId) {
         if (!arrivalShown.shown) {
-            const systemName = gameData.data.System.getCached(systemId)?.name;
+            const systemName = displayNameOf(
+                gameData.data.System.getCached(systemId)?.name);
             if (systemName) {
                 statusLine.setMessage(
                     jumpArrivalMessage(systemName, date, dateSuffix.suffix,
@@ -545,7 +546,8 @@ const ShowBayCaptureMessage = new System({
         SimulationGameDataResource, PlayerShipSelector] as const,
     step({ shipId }, statusLine, { time }, gameData) {
         statusLine.setMessage(
-            bayCaptureMessage(gameData.data.Ship.getCached(shipId)?.name),
+            bayCaptureMessage(displayNameOf(
+                gameData.data.Ship.getCached(shipId)?.name)),
             time);
     },
 });

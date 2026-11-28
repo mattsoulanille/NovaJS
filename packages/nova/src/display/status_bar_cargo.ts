@@ -10,7 +10,7 @@ import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_
 import {
     CargoComponent, OutfitsState, OutfitsStateComponent, sumOutfitField, ShipComponent,
 } from '../nova_plugin/ship/index.js';
-import { SimulationGameDataResource } from "../nova_plugin/core/index.js";
+import { displayName, SimulationGameDataResource } from "../nova_plugin/core/index.js";
 import {
     missionCargoAbbrev, STANDARD_CARGO_NAMES,
 } from "../nova_plugin/missions/index.js";
@@ -273,7 +273,7 @@ export function specialCargoName(key: string,
 export function specialJunkName(key: string,
     gameData: SimulationGameDataInterface): string {
     const junk = gameData.data.Junk.getCached(key.slice('junk:'.length));
-    return junk?.abbrev?.trim() || junk?.name?.trim() || 'Cargo';
+    return junk?.abbrev?.trim() || displayName(junk?.name ?? '') || 'Cargo';
 }
 
 /**

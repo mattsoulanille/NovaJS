@@ -12,7 +12,7 @@ import {
 } from '../nova_plugin/ncb/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { ControlEvent } from '../nova_plugin/core/index.js';
+import { ControlEvent, displayName } from '../nova_plugin/core/index.js';
 import {
     stellarHasTradeCenter, stellarNeedsJunksForTrade,
 } from '../nova_plugin/economy/index.js';
@@ -1284,7 +1284,7 @@ export class Spaceport extends Menu<Entity> {
             : [];
         const hasTradeCenter = stellarHasTradeCenter(data, junks);
         this.buildVenues(data, hasTradeCenter);
-        const title = new PIXI.Text(data.name, this.font.title);
+        const title = new PIXI.Text(displayName(data.name), this.font.title);
         title.anchor.x = 0.5;
         // "Earth"'s ink spans x940..982 on the R8 wave-5 capture
         // (02-spaceport.png), centred on x961; at -2 ours centred on 957.5.

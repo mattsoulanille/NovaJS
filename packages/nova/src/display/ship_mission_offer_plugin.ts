@@ -14,7 +14,7 @@ import {
 } from '../nova_plugin/player/index.js';
 import {
     ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource, GovtComponent,
-    SystemIdResource,
+    SystemIdResource, displayName,
 } from '../nova_plugin/core/index.js';
 import {
     makeDescTextContext, playerGender, ActiveRanksComponent, ControlBitsComponent,
@@ -366,7 +366,7 @@ async function refuseShipOffer(world: World,
             continue;
         }
         const text = await expandOfferText(world, universe, offer,
-            pers.name, event.text, {
+            displayName(pers.name), event.text, {
             payment: event.payment,
             specialShipName: event.specialShipName,
         });
@@ -459,7 +459,7 @@ async function acceptShipOffer(world: World,
             continue;
         }
         const brief = await expandOfferText(world, universe, offer,
-            pers.name, event.text, {
+            displayName(pers.name), event.text, {
             active: accept.active,
             payment: event.payment,
             specialShipName: event.specialShipName,
@@ -615,7 +615,7 @@ async function sayHailQuote(world: World, state: HailQuoteState,
     showStatusMessage(world, expandMissionText(pers.hailQuote, {
         ...identity,
         // Every stock quote opens with <OSN> — see mission_text.ts.
-        offeringShipName: persName || pers.name,
+        offeringShipName: persName || displayName(pers.name),
     }));
 }
 

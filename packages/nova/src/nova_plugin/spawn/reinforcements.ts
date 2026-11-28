@@ -21,7 +21,7 @@ import { World } from 'nova_ecs/world';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
 import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
 import {
-    GovtComponent, IdFactoryResource, loadWithRetries,
+    displayName, GovtComponent, IdFactoryResource, loadWithRetries,
     SimulationGameDataResource, SystemIdResource,
 } from '../core/index.js';
 import {
@@ -367,7 +367,7 @@ export function reinforcementArrivalMessage(misc: readonly string[],
 
 /** The name the line gives a govt: its MediumName, else its name. */
 export function reinforcementGovtName(govt: GovtData): string {
-    return govt.mediumName.trim() || govt.name;
+    return govt.mediumName.trim() || displayName(govt.name);
 }
 
 /**
