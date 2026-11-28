@@ -141,8 +141,9 @@ outfits, hold and fuel, and with `PlayerEscort {provenance: 'captured', deal:
 none, ammoStock}`. Formation, firing group and ownership are stamped when the
 lift-off puts the roster back down (`prepareCarriedEscorts`), and it is
 restocked like any landed escort, except for its ammo: `ammoStock` is the
-record's ammo counts, and an owned escort is rearmed back up to those, never
-to capacity (Matthew 2026-11-24; `player_escort.ts`'s OWNED ESCORT AMMO).
+record's ammo counts, and an owned escort is rearmed back up to those, not
+to its class's stock loadout (a hired escort's target) nor to capacity
+(Matthew 2026-11-24 and 2026-11-27; `player_escort.ts`'s OWNED ESCORT AMMO).
 Storing it again or swapping into it drops the snapshot with the marker; the
 next time it goes out as an escort it takes a new one.
 

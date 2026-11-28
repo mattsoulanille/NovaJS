@@ -45,12 +45,21 @@ function gameDataOf(outfits: OutfitData[], weapons: WeaponData[],
     };
 }
 
-/** A hull class with `freeMass` tons of outfit space and a 100-ton hull. */
-function hull(id: string, freeMass: number): ShipData {
+/** A hull class with `freeMass` tons of outfit space and a 100-ton hull,
+ * stocking `outfits` (its shïp resource's loadout). */
+function hull(id: string, freeMass: number,
+    outfits: Record<string, number> = {}): ShipData {
     return {
-        ...getDefaultShipData(), id,
+        ...getDefaultShipData(), id, outfits,
         physics: { ...getDefaultShipPhysics(), mass: 100, freeMass },
     };
+}
+
+/** A hired escort of hull class `shipId`, carrying `outfits`. */
+function hiredEscort(shipId: string, outfits: OutfitsState): Entity {
+    const entity = escortEntity(outfits);
+    entity.components.set(ShipComponent, { id: shipId });
+    return entity;
 }
 
 function stat(current: number, max: number): Stat {
@@ -153,283 +162,237 @@ describe('escort restock', () => {
         });
     });
 
-    it('restocks ammo to launcher maxAmmo times the launcher count',
-        async () => {
-            // Two launchers aboard, each holding 10 rounds: capacity 20.
-            const rocket = outfit({ id: 'ammo', ammoFor: 'launcher' });
-            const launcherOutfit = outfit({
-                id: 'launcherOutfit', weapons: { launcher: 1 },
+    /**
+     * Matthew (2026-11-27): landing refills a hired escort to its ship
+     * VARIANT's default ammo, the counts its shïp resource stocks, not the
+     * most its magazines could hold: "a Fed Viper should come back with 6
+     * IR missiles, not 200". The same loadout a docked bay craft relaunches
+     * with (escorts/bay_plugin.ts).
+     */
+    describe('a hired escort refills to its hull class\'s stock loadout',
+        () => {
+            const IR = 'ir';
+            const irMissile = outfit({
+                id: IR, ammoFor: 'irLauncher', max: 200,
             });
-            const weapon = launcherWeapon({
-                id: 'launcher', maxAmmo: 10, ammoType: ['weapon', 'launcher'],
+            const irRack = outfit({
+                id: 'irRack', weapons: { irLauncher: 2 },
             });
-            const outfits: OutfitsState = new Map([
-                ['ammo', { count: 3 }],
-                ['launcherOutfit', { count: 2 }],
-            ]);
-            await restockEscortEntity(escortEntity(outfits),
-                gameDataOf([rocket, launcherOutfit], [weapon]));
-            expect(outfits.get('ammo')!.count).toEqual(20);
+            // MaxAmmo 0: the oütf Max (200) would be the capacity.
+            const irLauncher = launcherWeapon({
+                id: 'irLauncher', maxAmmo: 0,
+            });
+            const viper = hull('viper', 50, { irRack: 1, [IR]: 6 });
+            const data = gameDataOf([irMissile, irRack], [irLauncher],
+                [viper]);
+            const missiles = (entity: Entity) =>
+                entity.components.get(OutfitsStateComponent)!.get(IR)?.count;
+
+            it('back to its 6 after firing them, not the oütf Max of 200',
+                async () => {
+                    const escort = hiredEscort('viper', new Map([
+                        ['irRack', { count: 1 }], [IR, { count: 1 }],
+                    ]));
+                    await restockEscortEntity(escort, data);
+                    expect(missiles(escort)).toEqual(6);
+                });
+
+            it('brings back an outfit spent to nothing and dropped',
+                async () => {
+                    const escort = hiredEscort('viper', new Map([
+                        ['irRack', { count: 1 }],
+                    ]));
+                    await restockEscortEntity(escort, data);
+                    expect(missiles(escort)).toEqual(6);
+                });
+
+            it('trims a magazine an earlier build filled to capacity back '
+                + 'to the stock count', async () => {
+                    const escort = hiredEscort('viper', new Map([
+                        ['irRack', { count: 1 }], [IR, { count: 200 }],
+                    ]));
+                    await restockEscortEntity(escort, data);
+                    expect(missiles(escort)).toEqual(6);
+                });
+
+            it('ignores a launcher\'s MaxAmmo too', async () => {
+                // Two launchers of 10: capacity 20, stock 3.
+                const rocket = outfit({ id: 'ammo', ammoFor: 'launcher' });
+                const launcherOutfit = outfit({
+                    id: 'launcherOutfit', weapons: { launcher: 1 },
+                });
+                const weapon = launcherWeapon({
+                    id: 'launcher', maxAmmo: 10,
+                    ammoType: ['weapon', 'launcher'],
+                });
+                const outfits: OutfitsState = new Map([
+                    ['ammo', { count: 0 }], ['launcherOutfit', { count: 2 }],
+                ]);
+                await restockEscortEntity(hiredEscort('boat', outfits),
+                    gameDataOf([rocket, launcherOutfit], [weapon], [
+                        hull('boat', 50, { launcherOutfit: 2, ammo: 3 }),
+                    ]));
+                expect(outfits.get('ammo')!.count).toEqual(3);
+            });
+
+            it('leaves an escort whose hull class is unknown as it is',
+                async () => {
+                    const outfits: OutfitsState = new Map([
+                        ['irRack', { count: 1 }], [IR, { count: 1 }],
+                    ]);
+                    await restockEscortEntity(escortEntity(outfits), data);
+                    expect(outfits.get(IR)!.count).toEqual(1);
+                });
+
+            it('leaves ammo its hull class does not stock alone', async () => {
+                const other = outfit({ id: 'other', ammoFor: 'irLauncher' });
+                const escort = hiredEscort('viper', new Map([
+                    ['irRack', { count: 1 }], [IR, { count: 6 }],
+                    ['other', { count: 40 }],
+                ]));
+                await restockEscortEntity(escort, gameDataOf(
+                    [irMissile, irRack, other], [irLauncher], [viper]));
+                expect(escort.components.get(OutfitsStateComponent)!
+                    .get('other')!.count).toEqual(40);
+                expect(missiles(escort)).toEqual(6);
+            });
         });
-
-    it('restocks to the SUPPLY weapon\'s instances, not its drawers\'',
-        async () => {
-            // The Nuke plug-in's shape (see ammoCapacity in
-            // outfitter_rules.ts): the magazine is the outfit granting the
-            // supply weapon 'rack' (MaxAmmo 8), while 'tube' merely fires
-            // from that supply and holds nothing. Two racks and any number
-            // of tubes hold 16 rounds.
-            const nuke = outfit({ id: 'ammo', ammoFor: 'rack', max: 120 });
-            const rackOutfit = outfit({
-                id: 'rackOutfit', weapons: { rack: 1 },
-            });
-            const tubeOutfit = outfit({
-                id: 'tubeOutfit', weapons: { tube: 1 },
-            });
-            const rack = launcherWeapon({ id: 'rack', maxAmmo: 8 });
-            const tube = launcherWeapon({
-                id: 'tube', maxAmmo: 0, ammoType: ['weapon', 'rack'],
-            });
-            const outfits: OutfitsState = new Map([
-                ['ammo', { count: 1 }],
-                ['rackOutfit', { count: 2 }],
-                ['tubeOutfit', { count: 3 }],
-            ]);
-            await restockEscortEntity(escortEntity(outfits),
-                gameDataOf([nuke, rackOutfit, tubeOutfit], [rack, tube]));
-            expect(outfits.get('ammo')!.count).toEqual(16);
-        });
-
-    it('falls back to the outfit Max when the weapon has no maxAmmo',
-        async () => {
-            // maxAmmo 0 means "constrained by the ammo outfit's Max".
-            const ammo = outfit({ id: 'ammo', ammoFor: 'gun', max: 50 });
-            const weapon = launcherWeapon({ id: 'gun', maxAmmo: 0 });
-            const outfits: OutfitsState = new Map([['ammo', { count: 4 }]]);
-            await restockEscortEntity(escortEntity(outfits),
-                gameDataOf([ammo], [weapon]));
-            expect(outfits.get('ammo')!.count).toEqual(50);
-        });
-
-    it('applies increases-max items to the Max fallback', async () => {
-        const ammo = outfit({ id: 'ammo', ammoFor: 'gun', max: 50 });
-        const expander = outfit({ id: 'expander', increasesMax: 'ammo' });
-        const weapon = launcherWeapon({ id: 'gun', maxAmmo: 0 });
-        const outfits: OutfitsState = new Map([
-            ['ammo', { count: 4 }], ['expander', { count: 3 }],
-        ]);
-        await restockEscortEntity(escortEntity(outfits),
-            gameDataOf([ammo, expander], [weapon]));
-        expect(outfits.get('ammo')!.count).toEqual(150);
-    });
-
-    it('leaves unlimited ammo (Max <= 0, no launcher cap) untouched',
-        async () => {
-            const ammo = outfit({ id: 'ammo', ammoFor: 'gun', max: 0 });
-            const weapon = launcherWeapon({ id: 'gun', maxAmmo: 0 });
-            const outfits: OutfitsState = new Map([['ammo', { count: 4 }]]);
-            await restockEscortEntity(escortEntity(outfits),
-                gameDataOf([ammo], [weapon]));
-            expect(outfits.get('ammo')!.count).toEqual(4);
-        });
-
-    it("restores a carrier's fighter complement, which is ammo too",
-        async () => {
-            // A bay outfit is a launcher whose "ammo" is the fighter.
-            const fighters = outfit({ id: 'fighters', ammoFor: 'bay' });
-            const bayOutfit = outfit({ id: 'bayOutfit', weapons: { bay: 1 } });
-            const bay = launcherWeapon({
-                id: 'bay', maxAmmo: 4, ammoType: ['weapon', 'bay'],
-            });
-            // Two fighters were launched and lost: 2 of 4 left.
-            const outfits: OutfitsState = new Map([
-                ['fighters', { count: 2 }], ['bayOutfit', { count: 1 }],
-            ]);
-            await restockEscortEntity(escortEntity(outfits),
-                gameDataOf([fighters, bayOutfit], [bay]));
-            expect(outfits.get('fighters')!.count).toEqual(4);
-        });
-
-    it('never trims a magazine that is somehow overfull', async () => {
-        const ammo = outfit({ id: 'ammo', ammoFor: 'gun', max: 10 });
-        const weapon = launcherWeapon({ id: 'gun', maxAmmo: 0 });
-        const outfits: OutfitsState = new Map([['ammo', { count: 25 }]]);
-        await restockEscortEntity(escortEntity(outfits),
-            gameDataOf([ammo], [weapon]));
-        expect(outfits.get('ammo')!.count).toEqual(25);
-    });
 
     it('leaves non-ammo outfits alone', async () => {
         const armorPlate = outfit({ id: 'plate', max: 4 });
         const outfits: OutfitsState = new Map([['plate', { count: 1 }]]);
-        await restockEscortEntity(escortEntity(outfits),
-            gameDataOf([armorPlate], []));
+        await restockEscortEntity(hiredEscort('boat', outfits),
+            gameDataOf([armorPlate], [], [hull('boat', 50, { plate: 3 })]));
         expect(outfits.get('plate')!.count).toEqual(1);
+    });
+
+    describe('a carrier escort\'s fighters (ammo too)', () => {
+        const fighters = outfit({ id: 'fighters', ammoFor: 'bay' });
+        const bayOutfit = outfit({ id: 'bayOutfit', weapons: { bay: 1 } });
+        // MaxAmmo 6: room for more than the 4 the class stocks.
+        const bay = launcherWeapon({
+            id: 'bay', maxAmmo: 6, ammoType: ['weapon', 'bay'],
+        });
+        const carrier = hull('carrier', 50, { bayOutfit: 1, fighters: 4 });
+        const data = gameDataOf([fighters, bayOutfit], [bay], [carrier]);
+
+        it('restores the stock complement, not the bay\'s capacity',
+            async () => {
+                // Two fighters were launched and lost: 2 of 4 left.
+                const outfits: OutfitsState = new Map([
+                    ['fighters', { count: 2 }], ['bayOutfit', { count: 1 }],
+                ]);
+                await restockEscortEntity(hiredEscort('carrier', outfits),
+                    data);
+                expect(outfits.get('fighters')!.count).toEqual(4);
+            });
+
+        /**
+         * A carrier escort that lands with its own fighters STILL DEPLOYED
+         * (landing does not stow them — see landed_escorts.ts) would
+         * otherwise be restocked to its full complement and the landed
+         * fighters redeploy on top of the fresh ones. A launched fighter
+         * still occupies its bay slot, as the outfitter's deployedCounts
+         * hook models it.
+         */
+        it('subtracts its still-deployed fighters from the target',
+            async () => {
+                const outfits: OutfitsState = new Map([
+                    ['fighters', { count: 1 }], ['bayOutfit', { count: 1 }],
+                ]);
+                await restockEscortEntity(hiredEscort('carrier', outfits),
+                    data, new Map([['bay', 2]]));
+                // Stock 4, two fighters out: two aboard.
+                expect(outfits.get('fighters')!.count).toEqual(2);
+            });
+
+        it('trims an over-stock bay to the slots its deployed fighters '
+            + 'leave', async () => {
+                // 4 aboard and 2 out of a stock 4 (an earlier build's
+                // capacity fill): back to the 2 slots left.
+                const outfits: OutfitsState = new Map([
+                    ['fighters', { count: 4 }], ['bayOutfit', { count: 1 }],
+                ]);
+                await restockEscortEntity(hiredEscort('carrier', outfits),
+                    data, new Map([['bay', 2]]));
+                expect(outfits.get('fighters')!.count).toEqual(2);
+            });
+
+        it('counts a landed roster\'s own deployed fighters against its '
+            + 'carrier', async () => {
+                const carrierOutfits: OutfitsState = new Map([
+                    ['fighters', { count: 0 }], ['bayOutfit', { count: 1 }],
+                ]);
+                const fighterEntry = (source: string) => {
+                    const entity = new Entity('fighter');
+                    entity.components.set(SourceComponent, source);
+                    entity.components.set(ReturnWhenTargetRemovedComponent,
+                        undefined);
+                    entity.components.set(BayFighterComponent,
+                        { bayWeaponId: 'bay' });
+                    return entity;
+                };
+                const batch = [
+                    { uuid: 'carrier',
+                        entity: hiredEscort('carrier', carrierOutfits) },
+                    { uuid: 'f1', entity: fighterEntry('carrier') },
+                    { uuid: 'f2', entity: fighterEntry('carrier') },
+                    // Another carrier's fighter must not shrink this bay.
+                    { uuid: 'f3', entity: fighterEntry('somebody else') },
+                ];
+                await restockCarriedEscorts(batch, data);
+                // Stock 4 minus the carrier's own two still out.
+                expect(carrierOutfits.get('fighters')!.count).toEqual(2);
+            });
     });
 
     /**
      * Two ammo outfits can supply ONE launcher — the bay data model does
      * exactly this, with several fighter outfits whose ammoFor is the same
-     * bay. The launcher capacity is a single pool shared between them (the
-     * outfitter gates the SUM; see ammoCapacity/ownedAmmoCount in
-     * outfitter_rules.ts), so topping each supplying outfit to the full
-     * capacity on its own fills the launcher twice over.
+     * bay. Each refills to its own stock count, and the deployed rounds come
+     * off the group in sorted id order (bay_plugin's spend/refund order).
      */
-    it('shares one launcher capacity across every supplying outfit',
+    it('refills each supplying outfit of one launcher to its own stock',
         async () => {
-            const ammoA = outfit({ id: 'ammoA', ammoFor: 'launcher' });
-            const ammoB = outfit({ id: 'ammoB', ammoFor: 'launcher' });
-            const launcherOutfit = outfit({
-                id: 'launcherOutfit', weapons: { launcher: 1 },
-            });
-            const weapon = launcherWeapon({
-                id: 'launcher', maxAmmo: 10, ammoType: ['weapon', 'launcher'],
+            const ammoA = outfit({ id: 'ammoA', ammoFor: 'bay' });
+            const ammoB = outfit({ id: 'ammoB', ammoFor: 'bay' });
+            const bayOutfit = outfit({ id: 'bayOutfit', weapons: { bay: 1 } });
+            const bay = launcherWeapon({
+                id: 'bay', maxAmmo: 10, ammoType: ['weapon', 'bay'],
             });
             const outfits: OutfitsState = new Map([
-                ['ammoA', { count: 3 }],
-                ['ammoB', { count: 2 }],
-                ['launcherOutfit', { count: 1 }],
+                ['ammoA', { count: 0 }], ['ammoB', { count: 0 }],
+                ['bayOutfit', { count: 1 }],
             ]);
-            await restockEscortEntity(escortEntity(outfits),
-                gameDataOf([ammoA, ammoB, launcherOutfit], [weapon]));
-            // 10 rounds TOTAL, not 10 of each. The free space goes to the
-            // lowest-sorted supplying outfit, matching the bay's own
-            // consume/refund policy (bay_plugin).
-            expect(outfits.get('ammoA')!.count).toEqual(8);
+            await restockEscortEntity(hiredEscort('carrier', outfits),
+                gameDataOf([ammoA, ammoB, bayOutfit], [bay], [
+                    hull('carrier', 50, { bayOutfit: 1, ammoA: 2, ammoB: 3 }),
+                ]), new Map([['bay', 1]]));
+            // Stock 2 + 3, one out: 4 aboard, filled in sorted id order
+            // (the owned refill's order too), so the last is the short one.
+            expect(outfits.get('ammoA')!.count).toEqual(2);
             expect(outfits.get('ammoB')!.count).toEqual(2);
         });
 
-    it('adds nothing when the supplying outfits already fill the pool',
-        async () => {
-            const ammoA = outfit({ id: 'ammoA', ammoFor: 'launcher' });
-            const ammoB = outfit({ id: 'ammoB', ammoFor: 'launcher' });
-            const launcherOutfit = outfit({
-                id: 'launcherOutfit', weapons: { launcher: 1 },
-            });
-            const weapon = launcherWeapon({
-                id: 'launcher', maxAmmo: 6, ammoType: ['weapon', 'launcher'],
-            });
-            const outfits: OutfitsState = new Map([
-                ['ammoA', { count: 4 }],
-                ['ammoB', { count: 4 }],
-                ['launcherOutfit', { count: 1 }],
-            ]);
-            await restockEscortEntity(escortEntity(outfits),
-                gameDataOf([ammoA, ammoB, launcherOutfit], [weapon]));
-            // Overfull already: a restock tops up, it never trims.
-            expect(outfits.get('ammoA')!.count).toEqual(4);
-            expect(outfits.get('ammoB')!.count).toEqual(4);
-        });
-
-    /**
-     * A carrier escort that lands with its own fighters STILL DEPLOYED
-     * (landing does not stow them — see landed_escorts.ts) used to be
-     * restocked to full capacity, and the landed fighters then redeployed
-     * on top of the fresh ones. A launched fighter still occupies its bay
-     * slot, exactly as the outfitter's deployedCounts hook models it.
-     */
-    it('subtracts a carrier\'s still-deployed fighters from its bay ceiling',
-        async () => {
-            const fighters = outfit({ id: 'fighters', ammoFor: 'bay' });
-            const bayOutfit = outfit({ id: 'bayOutfit', weapons: { bay: 1 } });
-            const bay = launcherWeapon({
-                id: 'bay', maxAmmo: 4, ammoType: ['weapon', 'bay'],
-            });
-            const outfits: OutfitsState = new Map([
-                ['fighters', { count: 1 }], ['bayOutfit', { count: 1 }],
-            ]);
-            await restockEscortEntity(escortEntity(outfits),
-                gameDataOf([fighters, bayOutfit], [bay]),
-                new Map([['bay', 2]]));
-            // Capacity 4, two fighters out: only two slots to fill.
-            expect(outfits.get('fighters')!.count).toEqual(2);
-        });
-
-    it('charges deployed fighters only against the bay they came out of',
-        async () => {
-            const alpha = outfit({ id: 'alpha', ammoFor: 'bayA' });
-            const beta = outfit({ id: 'beta', ammoFor: 'bayB' });
-            const bayAOutfit = outfit({
-                id: 'bayAOutfit', weapons: { bayA: 1 },
-            });
-            const bayBOutfit = outfit({
-                id: 'bayBOutfit', weapons: { bayB: 1 },
-            });
-            const bayA = launcherWeapon({
-                id: 'bayA', maxAmmo: 4, ammoType: ['weapon', 'bayA'],
-            });
-            const bayB = launcherWeapon({
-                id: 'bayB', maxAmmo: 4, ammoType: ['weapon', 'bayB'],
-            });
-            const outfits: OutfitsState = new Map([
-                ['alpha', { count: 0 }], ['beta', { count: 0 }],
-                ['bayAOutfit', { count: 1 }], ['bayBOutfit', { count: 1 }],
-            ]);
-            await restockEscortEntity(escortEntity(outfits),
-                gameDataOf([alpha, beta, bayAOutfit, bayBOutfit],
-                    [bayA, bayB]),
-                new Map([['bayA', 3]]));
-            expect(outfits.get('alpha')!.count).toEqual(1);
-            expect(outfits.get('beta')!.count).toEqual(4);
-        });
-
     it('restocks a whole batch', async () => {
-        const ammo = outfit({ id: 'ammo', ammoFor: 'gun', max: 9 });
+        const ammo = outfit({ id: 'ammo', ammoFor: 'gun', max: 90 });
         const weapon = launcherWeapon({ id: 'gun', maxAmmo: 0 });
         const first: OutfitsState = new Map([['ammo', { count: 1 }]]);
         const second: OutfitsState = new Map([['ammo', { count: 2 }]]);
         const batch = [
-            { entity: escortEntity(first, stat(0, 300)) },
-            { entity: escortEntity(second, stat(50, 300)) },
+            { entity: hiredEscort('boat', first) },
+            { entity: hiredEscort('boat', second) },
         ];
-        await restockCarriedEscorts(batch, gameDataOf([ammo], [weapon]));
+        batch[0].entity.components.set(FuelComponent, stat(0, 300));
+        batch[1].entity.components.set(FuelComponent, stat(50, 300));
+        await restockCarriedEscorts(batch, gameDataOf([ammo], [weapon],
+            [hull('boat', 50, { ammo: 9 })]));
         expect(first.get('ammo')!.count).toEqual(9);
         expect(second.get('ammo')!.count).toEqual(9);
         for (const { entity } of batch) {
             expect(entity.components.get(FuelComponent)!.current).toEqual(300);
         }
     });
-
-    /**
-     * The batch-level half of the deployed-fighter ceiling: the roster
-     * being restocked is where the still-deployed fighters are counted
-     * from, because a landed roster is the complete set of ships that came
-     * down together (a carrier escort's launched fighters land as roster
-     * entries in their own right).
-     */
-    it('counts a landed roster\'s own deployed fighters against its carrier',
-        async () => {
-            const fighters = outfit({ id: 'fighters', ammoFor: 'bay' });
-            const bayOutfit = outfit({ id: 'bayOutfit', weapons: { bay: 1 } });
-            const bay = launcherWeapon({
-                id: 'bay', maxAmmo: 4, ammoType: ['weapon', 'bay'],
-            });
-            const carrierOutfits: OutfitsState = new Map([
-                ['fighters', { count: 0 }], ['bayOutfit', { count: 1 }],
-            ]);
-            const fighterEntry = (source: string) => {
-                const entity = new Entity('fighter');
-                entity.components.set(SourceComponent, source);
-                entity.components.set(ReturnWhenTargetRemovedComponent,
-                    undefined);
-                entity.components.set(BayFighterComponent,
-                    { bayWeaponId: 'bay' });
-                return entity;
-            };
-            const batch = [
-                { uuid: 'carrier', entity: escortEntity(carrierOutfits) },
-                { uuid: 'f1', entity: fighterEntry('carrier') },
-                { uuid: 'f2', entity: fighterEntry('carrier') },
-                // Another carrier's fighter must not shrink this bay.
-                { uuid: 'f3', entity: fighterEntry('somebody else') },
-            ];
-            await restockCarriedEscorts(batch,
-                gameDataOf([fighters, bayOutfit], [bay]));
-            // Capacity 4 minus the carrier's own two still-deployed
-            // fighters. Restocking to 4 would put it 2 over capacity the
-            // moment those two came back out with it.
-            expect(carrierOutfits.get('fighters')!.count).toEqual(2);
-        });
 
     /**
      * Playtest 2026-11-24 (Matthew, plug-in "More Blasters CHEAT"): after a
@@ -457,7 +420,9 @@ describe('escort restock', () => {
         // use all of it, as in the data.
         const gun = outfit({ id: 'nova:230', physics: { freeMass: 15 } });
         const data = gameDataOf([sample, craneOutfit, gun], [crane],
-            [hull('nova:171', 19)]);
+            [hull('nova:171', 19, {
+                'nova:230': 1, 'More Blasters CHEAT:526': 1, [SAMPLE]: 4,
+            })]);
 
         function hyperioidEscort(samples: number): Entity {
             const entity = escortEntity(new Map([
@@ -514,14 +479,27 @@ describe('escort restock', () => {
             });
         });
 
-        it('never trims a hull that is already over its mass', async () => {
-            // A restock only tops up; the gate stops a pile growing.
-            const entity = hyperioidEscort(32000);
-            await restockEscortEntity(entity, data);
-            expect(samplesOf(entity)).toEqual(32000);
-        });
+        it('trims a hired escort\'s 32000 pile back to its stock 4',
+            async () => {
+                // A hired escort refills to exactly its hull class's stock
+                // (Matthew, 2026-11-27), so an earlier build's pile heals.
+                const entity = hyperioidEscort(32000);
+                await restockEscortEntity(entity, data);
+                expect(samplesOf(entity)).toEqual(4);
+            });
 
-        it('applies to a launcher\'s shared pool too', async () => {
+        it('stops at the free mass below a hired escort\'s stock',
+            async () => {
+                // Something else aboard grew: a second 15-ton gun leaves
+                // the hull 15 t short, so none of the 3 spent samples fit.
+                const entity = hyperioidEscort(1);
+                entity.components.get(OutfitsStateComponent)!
+                    .get('nova:230')!.count = 2;
+                await restockEscortEntity(entity, data);
+                expect(samplesOf(entity)).toEqual(1);
+            });
+
+        it('applies to a launcher\'s ammo too', async () => {
             const torpedo = outfit({
                 id: 'torp', ammoFor: 'tube', physics: { freeMass: 4 },
             });
@@ -536,9 +514,12 @@ describe('escort restock', () => {
             ]));
             entity.components.set(ShipComponent, { id: 'destroyer' });
             // 50 t free, 32 t of torpedoes aboard: 18 t left, 4 more fit
-            // (the launchers alone would take 12 more).
+            // (the stock alone would take 12 more).
+            // The class stocks 20 (more than its hull holds, so the gate
+            // shows).
             await restockEscortEntity(entity, gameDataOf(
-                [torpedo, tubeOutfit], [tube], [hull('destroyer', 50)]));
+                [torpedo, tubeOutfit], [tube],
+                [hull('destroyer', 50, { torp: 20, tubeOutfit: 1 })]));
             expect(entity.components.get(OutfitsStateComponent)!
                 .get('torp')!.count).toEqual(12);
         });
@@ -559,7 +540,7 @@ describe('escort restock', () => {
             await restockEscortEntity(entity, gameDataOf([heavy, light], [
                 launcherWeapon({ id: 'gunA', maxAmmo: 0 }),
                 launcherWeapon({ id: 'gunB', maxAmmo: 0 }),
-            ], [hull('boat', 11)]));
+            ], [hull('boat', 11, { 'a-heavy': 100, 'b-light': 100 })]));
             const outfits = entity.components.get(OutfitsStateComponent)!;
             // gunA first (sorted): 5 heavy rounds take 10 t, 1 light fits.
             expect(outfits.get('a-heavy')!.count).toEqual(5);
@@ -572,7 +553,7 @@ describe('escort restock', () => {
             entity.components.set(ShipComponent, { id: 'lightning' });
             await restockEscortEntity(entity, gameDataOf([missile],
                 [launcherWeapon({ id: 'irGun', maxAmmo: 0 })],
-                [hull('lightning', 0)]));
+                [hull('lightning', 0, { ir: 200 })]));
             expect(entity.components.get(OutfitsStateComponent)!
                 .get('ir')!.count).toEqual(200);
         });
@@ -583,7 +564,7 @@ describe('escort restock', () => {
  * Matthew's ruling (2026-11-24): an OWNED escort — provenance 'captured',
  * the player's own hull — rearms back up to the ammoStock snapshot taken
  * when it became an escort, never to capacity. Hired escorts are the
- * capacity specs above.
+ * stock-loadout specs above.
  */
 describe('owned escort restock', () => {
     const missile = outfit({ id: 'missile', ammoFor: 'launcher' });
@@ -705,17 +686,21 @@ describe('owned escort restock', () => {
             .toEqual([['missile', 9]]);
     });
 
-    it('a hired escort still refills to capacity', async () => {
+    it('a hired escort still refills to its class\'s stock', async () => {
         const outfits: OutfitsState = new Map([
             ['rack', { count: 1 }], ['missile', { count: 0 }],
         ]);
         const entity = escortEntity(outfits);
+        entity.components.set(ShipComponent, { id: 'boat' });
         entity.components.set(PlayerEscortComponent, {
             player: 'p', deal: NO_DEAL, provenance: 'hired',
             // Even a stray snapshot does not make a hire owned.
             ammoStock: [['missile', 3]],
         });
-        await restockEscortEntity(entity, data());
-        expect(outfits.get('missile')!.count).toEqual(20);
+        // Not the snapshot's 3, nor the launcher's 20: the class's 9.
+        await restockEscortEntity(entity, gameDataOf(
+            [missile, launcherOutfit], [launcher],
+            [hull('boat', 50, { rack: 1, missile: 9 })]));
+        expect(outfits.get('missile')!.count).toEqual(9);
     });
 });

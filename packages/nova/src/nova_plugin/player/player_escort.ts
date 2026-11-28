@@ -152,12 +152,13 @@ export const PlayerEscort = t.intersection([t.type({
      * not to capacity (spaceport/escort_restock.ts). See
      * {@link OWNED ESCORT AMMO} below for who writes it and when it goes.
      *
-     * Only 'captured' escorts carry one; a hired escort restocks to
-     * capacity and never has it. OPTIONAL, AND MISSING ON A CAPTURED ESCORT
+     * Only 'captured' escorts carry one; a hired escort restocks to its
+     * hull class's stock loadout (Matthew, 2026-11-27) and never has it.
+     * OPTIONAL, AND MISSING ON A CAPTURED ESCORT
      * MEANS "NOT YET TAKEN" (a save from before the field): the first
      * restock writes the escort's current counts as its target and adds
-     * nothing (escort_restock.ts), so such an escort never fills to
-     * capacity. No save-version bump: the field is additive.
+     * nothing (escort_restock.ts), so such an escort never fills past
+     * what it has. No save-version bump: the field is additive.
      */
     ammoStock: t.array(t.tuple([t.string, t.number])),
 })]);
@@ -295,8 +296,10 @@ export function durableEscortFields(existing: PlayerEscort | undefined):
  * (swapWithEscort) or for a prize ("Use As My Ship", boarding_plugin's
  * tradePlacesWithCaptain). It is the player's ship, so when it lands with them it
  * is rearmed back up to what it had aboard when it BECAME an escort — the
- * `ammoStock` snapshot — rather than to capacity, as a hired pilot's ship is
- * (Matthew's ruling, 2026-11-24). The refill happens at the same lift-offs
+ * `ammoStock` snapshot — rather than to its hull class's stock loadout, as
+ * a hired pilot's ship is (Matthew's rulings, 2026-11-24 and 2026-11-27:
+ * a custom escort refills to the ammo and bay quantities the player left
+ * it with). The refill happens at the same lift-offs
  * as a hired escort's (escort_restock.ts), under the same free-mass gate —
  * min(snapshot, what fits) — and fuel and hull repair are the same for
  * both.

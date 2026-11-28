@@ -19,7 +19,7 @@ import {
     OwnerComponent, SourceComponent,
 } from '../nova_plugin/combat/index.js';
 import {
-    FiringGroupComponent, ArmorComponent, makeShip, ShipPhysicsComponent, OutfitsStateComponent,
+    FiringGroupComponent, ArmorComponent, makeShip, ShipPhysicsComponent, OutfitsStateComponent, ShipComponent,
     WeaponsStateComponent,
 } from '../nova_plugin/ship/index.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
@@ -662,6 +662,7 @@ describe('the roster drain a system transition performs', () => {
         const escort = new Entity();
         const outfits = new Map([['ammo', { count: 3 }]]);
         escort.components.set(OutfitsStateComponent, outfits);
+        escort.components.set(ShipComponent, { id: 'test:boat' });
         const landed: CarriedEscort[] = [
             { player: PLAYER, uuid: 'l1', entity: escort },
         ];
@@ -675,7 +676,10 @@ describe('the roster drain a system transition performs', () => {
         await restockCarriedEscorts(batch, {
             getOutfit: async id => id === 'ammo' ? ammoOutfit : undefined,
             getWeapon: async () => undefined,
-            getShip: async () => undefined,
+            // Its hull class stocks 40 rounds.
+            getShip: async () => ({
+                ...getDefaultShipData(), id: 'test:boat', outfits: { ammo: 40 },
+            }),
         });
         expect(outfits.get('ammo')!.count).toEqual(40);
     });

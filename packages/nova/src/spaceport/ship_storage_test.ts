@@ -1,4 +1,5 @@
 import 'jasmine';
+import { isRight } from 'fp-ts/lib/Either.js';
 import { getDefaultOutfitData, OutfitData } from 'novadatainterface/outfit_data';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
@@ -8,8 +9,8 @@ import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
 import { BayFighterComponent } from '../nova_plugin/escorts/index.js';
 import {
     CreditsComponent, MissionShipComponent, MissionsComponent, NO_DEAL,
-    PlayerEscortComponent, PlayerNamesComponent, PlayerShipSelector,
-    StoredShip, StoredShipsComponent,
+    PlayerEscort, PlayerEscortComponent, PlayerNamesComponent,
+    PlayerShipSelector, StoredShip, StoredShipsComponent,
 } from '../nova_plugin/player/index.js';
 import {
     CargoComponent, FuelComponent, OutfitsStateComponent, ShipComponent,
@@ -490,6 +491,64 @@ describe('ship storage rules', () => {
                 expect(swapped.hull.components.has(PlayerEscortComponent))
                     .toBeFalse();
             });
+
+        /**
+         * Matthew (2026-11-27): a custom escort, a hull the player switched
+         * off of, refills to the ammo AND bay quantities the player left it
+         * with, not its class's stock loadout (a hired escort's target) nor
+         * capacity. The target is the marker's `ammoStock`, which rides the
+         * escort's saved entity, so it survives a save and load.
+         */
+        it('a swapped-out hull refills its missiles and its bay to what it '
+            + 'was left with, across a save, not to its class\'s stock',
+        async () => {
+            const BAY = 'nova:306';
+            const FIGHTERS = 'nova:307';
+            const outfits = new Map([...OUTFITS,
+                [BAY, outfit(BAY, { weapons: { 'nova:901': 1 } })],
+                [FIGHTERS, outfit(FIGHTERS, { ammoFor: 'nova:901' })],
+            ]);
+            const withBay: StorageLookups = {
+                getShip: id => SHIPS.get(id),
+                getOutfit: id => outfits.get(id),
+            };
+            const hull = pilot(FREIGHTER, {
+                outfits: [[RACK, 1], [MISSILE, 4], [BAY, 1], [FIGHTERS, 2]],
+            });
+            const prize = buildEscortFromRecord(stored(SHUTTLE, {
+                outfits: [[RACK, 1], [MISSILE, 9]],
+            }), PLAYER, withBay);
+            const { escort } = swapWithEscort(hull, prize, HERE, PLAYER,
+                withBay);
+            expect(stockOf(escort)).toEqual([[MISSILE, 4], [FIGHTERS, 2]]);
+
+            // The save: the marker goes out and back through its codec.
+            const marker = escort.components.get(PlayerEscortComponent)!;
+            const decoded = PlayerEscort.decode(JSON.parse(JSON.stringify(
+                PlayerEscort.encode(marker))));
+            expect(isRight(decoded)).toBeTrue();
+            const loaded = new Entity('loaded')
+                .addComponent(ShipComponent, { id: FREIGHTER })
+                .addComponent(PlayerEscortComponent,
+                    (decoded as { right: PlayerEscort }).right)
+                .addComponent(OutfitsStateComponent, new Map([
+                    [RACK, { count: 1 }], [MISSILE, { count: 0 }],
+                    [BAY, { count: 1 }], [FIGHTERS, { count: 0 }],
+                ]));
+
+            // Its class stocks 10 missiles and 5 fighters.
+            await restockCarriedEscorts([{ uuid: 'e', entity: loaded }], {
+                getOutfit: async (id: string) => outfits.get(id),
+                getWeapon: async () => undefined,
+                getShip: async (id: string) => id === FREIGHTER
+                    ? { ...SHIPS.get(FREIGHTER)!,
+                        outfits: { [MISSILE]: 10, [FIGHTERS]: 5 } }
+                    : undefined,
+            });
+            const counts = loaded.components.get(OutfitsStateComponent)!;
+            expect(counts.get(MISSILE)!.count).toBe(4);
+            expect(counts.get(FIGHTERS)!.count).toBe(2);
+        });
     });
 
     describe('buying a ship and keeping the old one', () => {
