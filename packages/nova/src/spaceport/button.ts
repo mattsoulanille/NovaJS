@@ -35,10 +35,15 @@ export const BUTTON_PICTS: readonly string[] = [...BUTTON_IDS.values()]
     .flatMap(({ left, middle, right }) => [left, middle, right])
     .concat(BUTTON_MASK_PICTS);
 
-// The cap sprites' inset. Tracker issue: derive this and the button
-// height below from the cap textures instead of constants (mirrored
-// as shipyard_content.ts BUTTON_CAP_WIDTH).
-const LEFT_POS = 13.2
+// The cap sprites' inset: the left cap (13 px wide) ends here and the
+// middle starts here, so the left cap's sprite starts at the container's
+// x. A whole pixel, so a button at a whole-pixel position draws its caps
+// and middle on the pixel grid (it was 13.2, which put every cap and
+// middle a fifth of a pixel off and let LINEAR sampling soften them).
+// Tracker issue: derive this and the button height below from the cap
+// textures instead of constants (mirrored as shipyard_content.ts
+// BUTTON_CAP_WIDTH).
+const LEFT_POS = 13;
 
 /** Modifier state of a button click. `option` is the option/alt key,
  * which the original uses for bulk buy/sell quantity entry. */
@@ -156,7 +161,8 @@ export class Button {
 
         const textMetrics = PIXI.TextMetrics.measureText(text,
             this.text.style as PIXI.TextStyle); // This required cast may be a types bug
-        this.width = width ?? textMetrics.width;
+        // A whole pixel too, so the right cap lands on the grid.
+        this.width = width ?? Math.round(textMetrics.width);
 
         const height = 25; // See the LEFT_POS note (tracker issue).
         this.text.position.x = LEFT_POS + this.width / 2;

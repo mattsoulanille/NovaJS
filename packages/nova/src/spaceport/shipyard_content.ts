@@ -102,7 +102,7 @@ export interface ShipyardButtonSpec {
  * texture's width (a tracker issue, noted at button.ts). Mirrored here so the
  * layout specs can reason about a pill's rendered extent.
  */
-export const BUTTON_CAP_WIDTH = 13.2;
+export const BUTTON_CAP_WIDTH = 13;
 
 /**
  * The shipyard's button row: "Info", "Buy Ship", "Done", measured off

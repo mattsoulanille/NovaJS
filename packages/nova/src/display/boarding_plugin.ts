@@ -102,12 +102,8 @@ export const CaptureShipEvent =
 const { x: ORIGIN_X, y: ORIGIN_Y } =
     frameOrigin(PLUNDER_FRAME.width, PLUNDER_FRAME.height);
 
-/**
- * A Button's sprite starts at container.x + 0.2 (its 13px left cap is
- * anchored to END at button.ts's LEFT_POS = 13.2). hail_layout quotes the
- * measured SPRITE left edge, so placing one takes that back off.
- */
-const BUTTON_CAP_INSET = 0.2;
+// A Button's sprite starts at its container.x (button.ts LEFT_POS), so
+// hail_layout's measured SPRITE left edges place the buttons as they are.
 
 /** Geneva 9.4 at the plunder readout's 14px pitch (PLUNDER_LINE_HEIGHT) —
  * the same bitmap face the comm dialogs and mission popups use. */
@@ -487,7 +483,7 @@ class PlunderDialog {
         for (const spec of PLUNDER_BUTTONS) {
             const button = new Button(this.displayAssets, spec.label,
                 spec.width, {
-                    x: ORIGIN_X + spec.x - BUTTON_CAP_INSET,
+                    x: ORIGIN_X + spec.x,
                     y: ORIGIN_Y + spec.y,
                 });
             const action = spec.action as ControlAction;
@@ -713,7 +709,7 @@ export class CaptureAssignmentDialog {
         CAPTURE_PROMPT_BUTTONS.forEach(({ label, answer: which }, row) => {
             const button = new Button(displayAssets, label,
                 CAPTURE_FRAME.buttonWidth, {
-                    x: CAP_ORIGIN_X + CAPTURE_FRAME.buttonX - BUTTON_CAP_INSET,
+                    x: CAP_ORIGIN_X + CAPTURE_FRAME.buttonX,
                     y: CAP_ORIGIN_Y + CAPTURE_FRAME.buttonTop
                         + row * CAPTURE_FRAME.buttonPitch,
                 });

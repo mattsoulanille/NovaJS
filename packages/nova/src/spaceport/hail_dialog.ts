@@ -617,15 +617,6 @@ const BODY_FONT: Partial<PIXI.ITextStyle> = {
     wordWrap: true, wordWrapWidth: 240, lineHeight: COMM_LINE_HEIGHT,
 };
 
-/**
- * A Button's container.x is not quite its sprite's left edge: the left cap
- * (13px wide) is anchored to END at container.x + 13.2 (button.ts's
- * LEFT_POS), so the sprite's left edge lands at container.x + 0.2.
- * hail_layout quotes the measured SPRITE left edge, so placing one takes
- * that fifth of a pixel back off.
- */
-const BUTTON_CAP_INSET = 0.2;
-
 /** The frame layout for a context/phase (see hail_layout.ts). */
 export function frameFor(phase: 'main' | 'haggle',
     variant: 'ship' | 'planet' | 'escort'): CommFrameLayout {
@@ -1398,13 +1389,13 @@ export class HailDialog {
     }
 
     /** Places a Button by its frame-local sprite box (hail_layout's
-     * coordinates are the SPRITE's left edge; a Button draws its left cap
-     * ending at container.x + BUTTON_CAP_INSET). */
+     * coordinates are the SPRITE's left edge, which is a Button's
+     * container.x: button.ts LEFT_POS). */
     private placeButton(label: string, frame: CommFrameLayout,
         originX: number, originY: number, row: number): Button {
         const button = new Button(this.displayAssets, label,
             frame.buttonWidth, {
-                x: originX + frame.buttonX - BUTTON_CAP_INSET,
+                x: originX + frame.buttonX,
                 y: originY + buttonRowY(frame, row),
             });
         button.setLabelFont(COMM_BUTTON_FONT);

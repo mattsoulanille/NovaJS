@@ -76,10 +76,8 @@ const WIDTH = PINFO_WIDTH;
 /** Frame-local left edges of the four tab button SPRITES. */
 const TAB_X = [7, 107, 207, 307];
 const TAB_WIDTH = 73;
-/** A Button's sprite starts at container.x + 0.2 (button.ts's LEFT_POS
- * anchors the 13px left cap to END at 13.2), so a measured sprite-left
- * is placed by taking that fifth of a pixel back off. */
-const BUTTON_CAP_INSET = 0.2;
+// A Button's sprite starts at its container.x (button.ts LEFT_POS), so the
+// measured sprite left edges above are the buttons' positions as they are.
 const DONE_X = 293;
 const DONE_WIDTH = 73;
 const JETTISON_X = 60;
@@ -440,7 +438,7 @@ export class PlayerInfoDialog {
 
         const tabButton = (label: string, page: Page, slot: number) => {
             const button = new Button(displayAssets, label, TAB_WIDTH, {
-                x: TAB_X[slot] - BUTTON_CAP_INSET,
+                x: TAB_X[slot],
                 y: PINFO_TAB_Y,
             });
             button.click.subscribe(() => this.showPage(page));
@@ -460,14 +458,14 @@ export class PlayerInfoDialog {
         // aboard). Live whenever the dialog was shown with an action;
         // its y, like Done's, follows the bottom strip (applyLayout).
         this.jettison = new Button(displayAssets, 'Jettison Cargo',
-            JETTISON_WIDTH, { x: JETTISON_X - BUTTON_CAP_INSET, y: 0 });
+            JETTISON_WIDTH, { x: JETTISON_X, y: 0 });
         this.jettison.state = 'grey';
         this.jettison.container.visible = false;
         this.jettison.click.subscribe(() => void this.jettisonCargo());
         this.frame.addChild(this.jettison.container);
 
         this.done = new Button(displayAssets, 'Done', DONE_WIDTH,
-            { x: DONE_X - BUTTON_CAP_INSET, y: 0 });
+            { x: DONE_X, y: 0 });
         this.done.click.subscribe(() => this.closed.next());
         this.frame.addChild(this.done.container);
 
