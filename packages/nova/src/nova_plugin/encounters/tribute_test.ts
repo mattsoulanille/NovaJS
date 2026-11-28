@@ -14,7 +14,9 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import { isIffHostile } from '../combat/index.js';
-import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
+import {
+    applyRoomRules, ENGINE_LIMITS, SimulationGameDataResource, SystemIdResource,
+} from '../core/index.js';
 import { makeSystem } from '../make_system.js';
 import {
     decodeSave, encodeSave, extractSaveData, restorePlayerState,
@@ -40,7 +42,8 @@ import {
 } from '../reputation/index.js';
 import {
     ArmorComponent, DamagedEvent, DisabledComponent, ExplodingComponent,
-    FiringGroupComponent, makeShip, SourceComponent, StellarDefenderComponent,
+    FiringGroupComponent, makeShip, ShipComponent, shipSlotFree,
+    SourceComponent, StellarDefenderComponent,
     TargetComponent,
 } from '../ship/index.js';
 import {
@@ -355,6 +358,41 @@ describe('Demand Tribute in the sim', () => {
                     world.resources.get(SystemIdResource))).toBeTrue();
             }
             expect(dominatedBy(world, 'a')).toEqual([]);
+        });
+
+    it('launches no defender into a full system (Max Ships In System), '
+        + 'and launches one as soon as a ship leaves', async () => {
+            const { world, gameData, addPlayer } = await build(8);
+            applyRoomRules(world, { limits: 'original' });
+            await addPlayer('a', PEER_A, 12_800);
+            const cap = ENGINE_LIMITS.original.ships;
+            const fillers: string[] = [];
+            expect(shipSlotFree(world)).toBeTrue();
+            while (shipSlotFree(world)) {
+                const filler = makeShip(
+                    gameData.data.Ship.map.get(PLAYER_HULL)!);
+                await completeEntity(world, filler);
+                filler.components.set(MovementStateComponent, {
+                    accelerating: 0,
+                    position: new Position(-3000, 40 * fillers.length),
+                    rotation: new Angle(0), turnBack: false, turning: 0,
+                    velocity: new Vector(0, 0),
+                });
+                const uuid = `filler ${fillers.length}`;
+                world.entities.set(uuid, filler);
+                fillers.push(uuid);
+            }
+            applyHail(world, PEER_A, { kind: 'demandTribute', target: FORT_UUID });
+            advance(world, DEFENSE_FIRST_LAUNCH_MS + 3_000);
+            expect(defenders(world).length).toBe(0);
+            expect(fleet(world)?.launched).toBe(0);
+            world.entities.delete(fillers[0]);
+            advance(world, 1_000);
+            expect(defenders(world).length).toBe(1);
+            expect(fleet(world)?.launched).toBe(1);
+            const ships = [...world.entities.values()].filter(entity =>
+                entity.components.has(ShipComponent)).length;
+            expect(ships).toBe(cap);
         });
 
     it('launches a new defender as one dies, until the whole fleet has '
