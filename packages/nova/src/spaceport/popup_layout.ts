@@ -96,10 +96,26 @@ export const OFFER_BUTTON_LABEL_PAD = 40;
 /** The lone Okay of a briefing or notice: a fixed 99 px pill. */
 export const POPUP_OKAY_WIDTH = POPUP_BUTTON_WIDTH + 2 * POPUP_BUTTON_CAP_WIDTH;
 /**
- * The centre of a can't-refuse offer's lone button, from the frame's left
- * edge (its pill is centred here at every width).
+ * Where an offer's buttons are anchored, from the frame's left edge: the
+ * refuse button's right edge (exclusive), the accept button's left edge,
+ * and the centre of a can't-refuse offer's lone button. The tiled frame's
+ * pair was measured at every width (refuse 116..215 / accept 225..324 at
+ * 100 px on 1_sigma_1_offer.png; 39..215 / 225..401 at 177 px) and its lone
+ * button at three (centre 222). The desc + pict frame (8527) puts the pair
+ * 7 px apart, refuse ending at 213 and accept from 221 (P1, 177 px); its
+ * lone offer button was not seen and is centred where the frame's notice
+ * Okay is (173..271 on 5_sigma_1_mission_text_with_pict.png: GUESS).
  */
-export const OFFER_SINGLE_CENTER = 222;
+export interface OfferButtonAnchors {
+    refuseRight: number;
+    acceptLeft: number;
+    singleCenter: number;
+}
+export const OFFER_BUTTON_ANCHORS: Record<'tiled' | 'pict',
+    OfferButtonAnchors> = {
+    tiled: { refuseRight: 216, acceptLeft: 225, singleCenter: 222 },
+    pict: { refuseRight: 214, acceptLeft: 221, singleCenter: 222 },
+};
 
 /** One button's sprite box: left edge from the frame's left edge, and its
  * whole width (both caps included). */
@@ -118,19 +134,22 @@ export function offerButtonWidth(labelWidths: readonly number[]): number {
 /**
  * Where an offer's buttons go: the accept button (and the refuse button,
  * when the offer can be refused), at `width` from offerButtonWidth. A lone
- * button's box is the width rounded down to even, centred on
- * OFFER_SINGLE_CENTER (the original insets its centre by half the width).
+ * button's box is the width rounded down to even, centred on the
+ * anchors' singleCenter (the original insets its centre by half the
+ * width).
  */
-export function offerButtonBoxes(width: number, refusable: boolean)
+export function offerButtonBoxes(width: number, refusable: boolean,
+    anchors: OfferButtonAnchors = OFFER_BUTTON_ANCHORS.tiled)
     : { accept: ButtonBox, refuse?: ButtonBox } {
     if (!refusable) {
         const half = Math.floor(width / 2);
-        return { accept: { x: OFFER_SINGLE_CENTER - half, width: 2 * half } };
+        return {
+            accept: { x: anchors.singleCenter - half, width: 2 * half },
+        };
     }
-    const refuseRight = POPUP_BUTTON_X.refuse + OFFER_BUTTON_MIN_WIDTH;
     return {
-        accept: { x: POPUP_BUTTON_X.accept, width },
-        refuse: { x: refuseRight - width, width },
+        accept: { x: anchors.acceptLeft, width },
+        refuse: { x: anchors.refuseRight - width, width },
     };
 }
 /** Frame bottom to the button sprite's top, per frame kind. */

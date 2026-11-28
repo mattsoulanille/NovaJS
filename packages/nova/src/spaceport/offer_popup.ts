@@ -24,6 +24,7 @@ import {
     ButtonBox,
     clampScroll,
     OFFER_BUTTON_MIN_WIDTH,
+    OFFER_BUTTON_ANCHORS,
     offerButtonBoxes,
     offerButtonWidth,
     PICT_BUTTON_BOTTOM_GAP,
@@ -371,9 +372,9 @@ export class OfferPopup {
      * buttons fit their labels, 2026-11-28").
      */
     private addButtons(buttons: PopupButtons, frame: PIXI.Rectangle,
-        buttonY: number) {
+        buttonY: number, kind: 'tiled' | 'pict') {
         const originX = frame.x;
-        const boxes = popupButtonBoxes(buttons);
+        const boxes = popupButtonBoxes(buttons, buttonLabelWidth, kind);
         const row = new PIXI.Container();
         this.container.addChild(row);
         const spill = [boxes.accept, boxes.refuse].some((box) => box
@@ -603,7 +604,7 @@ export class OfferPopup {
         const buttonY =
             originY + layout.totalHeight - POPUP_BUTTON_BOTTOM_GAP;
         this.addButtons(buttons, new PIXI.Rectangle(originX, originY,
-            POPUP_WIDTH, layout.totalHeight), buttonY);
+            POPUP_WIDTH, layout.totalHeight), buttonY, 'tiled');
         if (layout.maxScroll > 0) {
             this.addScrollButtons(sprite, textTop, layout.maxScroll,
                 originX, buttonY);
@@ -661,7 +662,7 @@ export class OfferPopup {
         const buttonY =
             originY + PICT_FRAME_HEIGHT - PICT_BUTTON_BOTTOM_GAP;
         this.addButtons(buttons, new PIXI.Rectangle(originX, originY,
-            PICT_FRAME_WIDTH, PICT_FRAME_HEIGHT), buttonY);
+            PICT_FRAME_WIDTH, PICT_FRAME_HEIGHT), buttonY, 'pict');
         if (lineCount > visibleLines) {
             this.addScrollButtons(sprite, textTop,
                 (lineCount - visibleLines) * POPUP_LINE_HEIGHT,
@@ -696,18 +697,21 @@ export const POPUP_OKAY = 'Okay';
  * (offerButtonWidth) and lays them out by offerButtonBoxes; any other
  * pair takes the offers' minimum width; a lone notice button is the fixed
  * briefing Okay. `measure` is the caption width in the buttons' face
- * (injectable for specs, which have no canvas).
+ * (injectable for specs, which have no canvas); `frame` picks the tiled
+ * or the desc + pict frame's anchors (OFFER_BUTTON_ANCHORS).
  */
 export function popupButtonBoxes(buttons: PopupButtons,
-    measure: (label: string) => number = buttonLabelWidth)
+    measure: (label: string) => number = buttonLabelWidth,
+    frame: 'tiled' | 'pict' = 'tiled')
     : { accept: ButtonBox, refuse?: ButtonBox } {
     const refusable = Boolean(buttons.refuse);
+    const anchors = OFFER_BUTTON_ANCHORS[frame];
     if (buttons.fitTo) {
         return offerButtonBoxes(
-            offerButtonWidth(buttons.fitTo.map(measure)), refusable);
+            offerButtonWidth(buttons.fitTo.map(measure)), refusable, anchors);
     }
     if (refusable) {
-        return offerButtonBoxes(OFFER_BUTTON_MIN_WIDTH, true);
+        return offerButtonBoxes(OFFER_BUTTON_MIN_WIDTH, true, anchors);
     }
     return { accept: { x: POPUP_BUTTON_X.single, width: POPUP_OKAY_WIDTH } };
 }

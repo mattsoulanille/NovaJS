@@ -165,6 +165,17 @@ describe('popupButtonBoxes', () => {
             .toEqual({ x: 121, width: 202 });
     });
 
+    it('anchors the desc + pict frame\'s pair 7 px apart, refuse ending at '
+        + '213 and accept from 221 (P1: 177 px at 37 and 221)', () => {
+        expect(popupButtonBoxes({
+            accept: 'Go after them right now', refuse: 'I need more time',
+            fitTo: ['Go after them right now', 'I need more time'],
+        }, measure, 'pict')).toEqual({
+            refuse: { x: 37, width: 177 },
+            accept: { x: 221, width: 177 },
+        });
+    });
+
     it('keeps a notice\'s lone Okay the fixed 99 px briefing pill at 173 '
         + '(2_sigma_1_accept)', () => {
         expect(popupButtonBoxes({ accept: 'Okay' }, measure))
