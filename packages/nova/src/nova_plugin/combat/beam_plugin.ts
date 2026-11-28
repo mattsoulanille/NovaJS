@@ -141,6 +141,10 @@ const LiveBeams = new Query([BeamDataComponent] as const, 'LiveBeams');
 
 class BeamWeaponEntry extends WeaponEntry {
     declare data: BeamWeaponData;
+
+    override refusalReloads(): boolean {
+        return engineLimitsOf(this.entities).beams.refusalReloads;
+    }
     protected pointDefenseRangeSquared: number;
 
     private hitTypes: Set<string>;
@@ -175,6 +179,7 @@ class BeamWeaponEntry extends WeaponEntry {
         // refused (engine_limits.ts).
         if (!spawnAllowed(this.runQuery(LiveBeams).length,
             engineLimitsOf(this.entities).beams, submunition)) {
+            this.capRefused = true;
             return undefined;
         }
         const { width, length } = this.data.beamAnimation;

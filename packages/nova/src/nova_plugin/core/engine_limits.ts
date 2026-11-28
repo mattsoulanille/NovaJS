@@ -35,16 +35,16 @@ import { LimitsRule, roomRulesOf } from './room_rules.js';
  *    generation, share this many spawns (ShotFamilyBudget below), so a
  *    self-replicating weapon stops growing however high its SubLimit.
  *
- * The numbers come from measurement (docs/novajs_enhancements.md, "Engine
- * limits"): the sim step and the browser frame with that many alive.
+ * The numbers come from measurement (docs/novajs_enhancements.md, "Room
+ * rules"): the sim step and the browser frame with that many alive.
  *
  * Where they apply: ProjectileWeaponEntry.fire (projectile_plugin.ts) and
  * BeamWeaponEntry.fire (beam_plugin.ts) check the cap for their own kind;
  * WeaponEntry.fireSubs (fire_weapon_plugin.ts) spends the family budget.
  * A refused shot is not a shot: the firing loop (weapon_plugin.ts) takes
- * no ammo and does not restart the reload for it, so the trigger fires
- * again on the first tick a slot is free. Bay fighters are ships, not
- * shots.
+ * no ammo for it, and unless the kind's `refusalReloads` says otherwise
+ * does not restart the reload either, so the trigger fires again on the
+ * first tick a slot is free. Bay fighters are ships, not shots.
  *
  * GUESS (both rules): a parent shot that expires into submunitions still
  * holds its own slot while its children spawn (it is removed right after
@@ -63,6 +63,12 @@ export interface SpawnCaps {
     readonly soft: number;
     /** A directly fired one is refused while this many are alive. */
     readonly hard: number;
+    /**
+     * Whether a directly fired shot the cap refuses still costs its
+     * weapon a reload (no ammo either way). False: the trigger fires again
+     * on the first tick a slot is free.
+     */
+    readonly refusalReloads: boolean;
 }
 
 export interface EngineLimits {
@@ -87,14 +93,14 @@ export interface EngineLimits {
  */
 export const ENGINE_LIMITS: Readonly<Record<LimitsRule, EngineLimits>> = {
     original: {
-        shots: { soft: 128, hard: 128 },
-        beams: { soft: 64, hard: 64 },
+        shots: { soft: 128, hard: 128, refusalReloads: false },
+        beams: { soft: 64, hard: 64, refusalReloads: false },
         familyBudget: Infinity,
         ships: 64,
     },
     novajs: {
-        shots: { soft: 256, hard: 512 },
-        beams: { soft: 128, hard: 256 },
+        shots: { soft: 256, hard: 512, refusalReloads: false },
+        beams: { soft: 128, hard: 256, refusalReloads: false },
         familyBudget: 256,
         ships: 128,
     },

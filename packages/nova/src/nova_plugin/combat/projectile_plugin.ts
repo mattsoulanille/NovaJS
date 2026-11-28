@@ -104,6 +104,10 @@ const LiveShots = new Query([ProjectileComponent] as const, 'LiveShots');
 
 class ProjectileWeaponEntry extends WeaponEntry {
     declare data: ProjectileWeaponData;
+
+    override refusalReloads(): boolean {
+        return engineLimitsOf(this.entities).shots.refusalReloads;
+    }
     private buildProjectile: () => Entity;
     protected pointDefenseRangeSquared: number;
 
@@ -202,6 +206,7 @@ class ProjectileWeaponEntry extends WeaponEntry {
         // shot is refused (engine_limits.ts).
         if (!spawnAllowed(this.runQuery(LiveShots).length,
             engineLimitsOf(this.entities).shots, submunition)) {
+            this.capRefused = true;
             return undefined;
         }
 

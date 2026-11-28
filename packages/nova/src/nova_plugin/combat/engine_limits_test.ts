@@ -17,7 +17,8 @@ import {
     completeEntity, loadWeaponsGameData,
 } from '../spawn/index.js';
 import { WeaponEntries } from './fire_weapon_plugin.js';
-import { makeShip } from '../ship/index.js';
+import { makeShip, WeaponsStateComponent } from '../ship/index.js';
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { makeSystem } from '../make_system.js';
 import {
     applyRoomRules, deriveEntityComponents, LimitsRule, ProjectileComponent,
@@ -182,8 +183,10 @@ describe('engine limits', () => {
         it('give the original the Bible\'s 128 shots and 64 beams, one '
             + 'cap for every spawn and no family budget', () => {
                 expect(MAX_SHOTS).toEqual(128);
-                expect(ORIGINAL.shots).toEqual({ soft: 128, hard: 128 });
-                expect(ORIGINAL.beams).toEqual({ soft: 64, hard: 64 });
+                expect(ORIGINAL.shots).toEqual(jasmine.objectContaining(
+                    { soft: 128, hard: 128 }));
+                expect(ORIGINAL.beams).toEqual(jasmine.objectContaining(
+                    { soft: 64, hard: 64 }));
                 expect(ORIGINAL.familyBudget).toEqual(Infinity);
             });
 
@@ -208,7 +211,7 @@ describe('engine limits', () => {
     describe('pure parts', () => {
         it('let a submunition in under the soft cap and a direct shot '
             + 'under the hard one', () => {
-                const caps = { soft: 4, hard: 6 };
+                const caps = { soft: 4, hard: 6, refusalReloads: false };
                 expect(spawnAllowed(3, caps, true)).toBeTrue();
                 expect(spawnAllowed(4, caps, true)).toBeFalse();
                 expect(spawnAllowed(4, caps, false)).toBeTrue();
@@ -368,6 +371,61 @@ describe('engine limits', () => {
                 }
                 expect(fire(BEAM)).toBeUndefined();
                 expect(liveBeams(world)).toEqual(NOVAJS.beams.hard);
+            });
+    });
+
+    describe('a refused directly fired shot', () => {
+        const HELD = 'test:held beam';
+        const RELOAD_MS = 1000;
+
+        /** Fills the beam table with 2 s beams, holds HELD's trigger, and
+         * returns how many ms after the table frees HELD's beam appears. */
+        async function delayAfterFree(refusalReloads: boolean) {
+            const caps = ENGINE_LIMITS.original.beams as {
+                refusalReloads: boolean };
+            const saved = caps.refusalReloads;
+            caps.refusalReloads = refusalReloads;
+            try {
+                const { world, fire } = await makeTestWorld([beam(BEAM),
+                    { ...beam(HELD, 100), reload: RELOAD_MS }], 'original');
+                for (let i = 0; i < ORIGINAL.beams.hard; i++) {
+                    fire(BEAM);
+                }
+                const ship = world.entities.get(SHIP_UUID)!;
+                ship.components.get(WeaponsStateComponent)!.get(HELD)!
+                    .firing = true;
+                const held = () => [...world.entities.values()].filter(
+                    entity => entity.components.get(BeamDataComponent)?.id
+                        === HELD).length;
+                let freedAt: number | undefined;
+                for (let i = 0; i < 300; i++) {
+                    await stepWorld(world, 1);
+                    const now = world.resources.get(TimeResource)!.time;
+                    const others = liveBeams(world) - held();
+                    if (freedAt === undefined && others < ORIGINAL.beams.hard) {
+                        freedAt = now;
+                    }
+                    if (held() > 0) {
+                        expect(freedAt).toBeDefined();
+                        return now - freedAt!;
+                    }
+                }
+                return Infinity;
+            } finally {
+                caps.refusalReloads = saved;
+            }
+        }
+
+        it('fires on the first tick a slot frees when a refusal costs '
+            + 'nothing', async () => {
+                expect(await delayAfterFree(false)).toBeLessThan(50);
+            });
+
+        it('waits out a whole reload after its last refusal when a refusal '
+            + 'costs the reload', async () => {
+                const delay = await delayAfterFree(true);
+                expect(delay).toBeGreaterThan(RELOAD_MS - 100);
+                expect(delay).toBeLessThan(RELOAD_MS + 100);
             });
     });
 

@@ -528,6 +528,12 @@ export const WeaponsSystem = new System({
                     destroyFiringShip(emit, uuid, time, armor);
                     return;
                 }
+            } else if (weapon.capRefused && weapon.refusalReloads()) {
+                // The room's engine limits refused the shot (a full
+                // table), and under this rule a refused shot still costs
+                // the weapon its reload, though no ammo
+                // (core/engine_limits.ts refusalReloads).
+                localState.lastFired = time.time;
             }
         }
     },

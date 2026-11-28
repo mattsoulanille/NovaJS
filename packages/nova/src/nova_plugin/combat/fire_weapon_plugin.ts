@@ -335,6 +335,19 @@ export abstract class WeaponEntry {
      */
     protected systemId: string | undefined;
     protected abstract pointDefenseRangeSquared: number;
+    /**
+     * Whether the last fireFromEntity was refused by the room's engine
+     * limits (a full shot or beam table, core/engine_limits.ts), as
+     * opposed to having nothing to fire at. Read by the firing loop
+     * (weapon_plugin.ts) straight after the call, to decide whether the
+     * refusal costs a reload (refusalReloads).
+     */
+    capRefused = false;
+
+    /** Whether a cap refusal of this weapon's shot costs a reload. */
+    refusalReloads(): boolean {
+        return false;
+    }
     constructor(public data: WeaponData, protected runQuery: RunQueryFunction) {
         let weaponEntries: Gettable<WeaponEntry | undefined>;
         [this.entities, this.emit, weaponEntries, this.random, this.ids,
@@ -524,6 +537,7 @@ export abstract class WeaponEntry {
      */
     fireFromEntity(source: string, inaccuracy = true,
         weaponTarget?: string): Entity | undefined {
+        this.capRefused = false;
         // A per-entity runQuery is answered from nova_ecs's query cache
         // (QueryCacheEntry.getResultForEntity), so this is cheap per shot.
         const results = this.runQuery(FireFromEntityQuery, source);
