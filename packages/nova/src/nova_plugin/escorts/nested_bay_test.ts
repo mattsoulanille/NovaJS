@@ -8,8 +8,8 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
-import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { World } from 'nova_ecs/world';
+import { countDeployedFighters } from '../../spaceport/deployed_outfits.js';
 import { CollisionEvent } from '../core/index.js';
 import { makeSystem } from '../make_system.js';
 import {
@@ -20,7 +20,7 @@ import {
 } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
 import {
-    BayFighterComponent, fighterHome, HangarComponent, ReturnComponent,
+    BayFighterComponent, fighterHome, ReturnComponent,
 } from './bay_plugin.js';
 
 /**
@@ -33,9 +33,13 @@ import {
  * escorts will try to return to the player's ship." Matthew's ruling: the
  * second-level fighter (a Dart) returns to ITS carrier (the Tender the
  * player launched) while that is in space; with the Tender docked or
- * destroyed it returns to the player's ship and is credited to the
- * Tender's bay, never to the player's own Dart bay (which the player
- * mounts here too, so a mix-up would show).
+ * destroyed it returns to the player's ship and is credited to nothing,
+ * never to the player's own Dart bay (which the player mounts here too,
+ * so a mix-up would show).
+ *
+ * And (Matthew's ruling, the same day): docking replenishes. A Tender
+ * that docks relaunches with a full magazine of Darts, whatever it spent
+ * or still has out.
  */
 
 const PLAYER = 'player';
@@ -110,7 +114,7 @@ async function makeWorld() {
     park(victim, 400, 0);
     world.entities.set('victim', victim);
     await step(world, 2);
-    return { world, player };
+    return { world, player, gameData };
 }
 
 function park(entity: Entity, x: number, y: number) {
@@ -217,7 +221,7 @@ describe('nested bays: return to ship', () => {
     });
 
     it('docks the Dart into the Tender, then the Tender into the player, '
-        + 'which keeps the Tender\'s magazine', async () => {
+        + 'which relaunches it full', async () => {
         const { world, player } = await makeWorld();
         const [tenderUuid, tender] = await launchTender(world, player);
         expect(count(player, TENDERS)).toBe(1);
@@ -238,16 +242,46 @@ describe('nested bays: return to ship', () => {
         expect(world.entities.has(tenderUuid)).toBeFalse();
         expect(count(player, TENDERS)).toBe(2);
         expect(count(player, DARTS)).toBe(playerDarts);
-        expect(player.components.get(HangarComponent)).toEqual([{
-            fighter: tenderUuid, bayWeaponId: TENDER_BAY,
-            bays: [{ weapon: DART_BAY, count: 1 }],
-            magazine: [{ outfit: DARTS, count: 3 }],
-        }]);
+
+        const [, relaunched] = await launchTender(world, player);
+        expect(count(relaunched, DARTS)).toBe(3);
     });
 
-    it('with the Tender already docked, the Dart docks at the player, is '
-        + 'credited to the Tender\'s bay, and relaunches with it',
-    async () => {
+    it('relaunches a Tender that docked with spent Darts full', async () => {
+        const { world, player } = await makeWorld();
+        const [tenderUuid, tender] = await launchTender(world, player);
+        // Its Dart is shot down: the Tender's magazine is one short.
+        const [dartUuid] = await launchDart(world, tenderUuid, tender);
+        world.entities.delete(dartUuid);
+        expect(count(tender, DARTS)).toBe(2);
+
+        recall(tender);
+        await step(world, 2);
+        dock(world, tenderUuid, PLAYER);
+        await step(world, 1);
+        expect(count(player, TENDERS)).toBe(2);
+
+        const [, relaunched] = await launchTender(world, player);
+        expect(count(relaunched, DARTS)).toBe(3);
+    });
+
+    it('relaunches a Tender that docked with an EMPTY magazine full',
+        async () => {
+            const { world, player } = await makeWorld();
+            const [tenderUuid, tender] = await launchTender(world, player);
+            tender.components.get(OutfitsStateComponent)!.get(DARTS)!.count
+                = 0;
+            recall(tender);
+            await step(world, 2);
+            dock(world, tenderUuid, PLAYER);
+            await step(world, 1);
+
+            const [, relaunched] = await launchTender(world, player);
+            expect(count(relaunched, DARTS)).toBe(3);
+        });
+
+    it('with the Tender already docked, the Dart docks at the player and '
+        + 'is credited to nothing', async () => {
         const { world, player } = await makeWorld();
         const [tenderUuid, tender] = await launchTender(world, player);
         const [dartUuid, dart] = await launchDart(world, tenderUuid, tender);
@@ -258,33 +292,32 @@ describe('nested bays: return to ship', () => {
         // The Tender gets home first, its Dart still out.
         dock(world, tenderUuid, PLAYER);
         await step(world, 1);
-        expect(player.components.get(HangarComponent)![0].magazine)
-            .toEqual([{ outfit: DARTS, count: 2 }]);
+        expect(count(player, TENDERS)).toBe(2);
 
         // The Dart now flies to the player's ship...
         await step(world, 1);
         expect(fighterHome(dart, world.entities)).toBe(PLAYER);
         expect(dart.components.get(MovementStateComponent)!.turnTo)
             .toBe(PLAYER);
-        // ...and docks there, into the Tender's bay, not the player's.
+        // ...and docks there, credited neither to the player's own Dart
+        // bay nor to anything else.
         dock(world, dartUuid, PLAYER);
         await step(world, 1);
         expect(world.entities.has(dartUuid)).toBeFalse();
         expect(count(player, DARTS)).toBe(playerDarts);
-        expect(player.components.get(HangarComponent)![0].magazine)
-            .toEqual([{ outfit: DARTS, count: 3 }]);
+        expect(count(player, TENDERS)).toBe(2);
 
-        // Relaunching the Tender brings its Dart back out with it.
+        // The Tender relaunches with its full three Darts.
         const [, relaunched] = await launchTender(world, player);
         expect(count(relaunched, DARTS)).toBe(3);
-        expect(player.components.has(HangarComponent)).toBeFalse();
     });
 
-    it('relaunches a docked Tender with its short magazine, and its '
-        + 'still-deployed Dart comes home to the new Tender', async () => {
+    it('relaunches a docked Tender full though its Dart is still out, and '
+        + 'that Dart, ordered home, docks at the player', async () => {
         const { world, player } = await makeWorld();
         const [tenderUuid, tender] = await launchTender(world, player);
         const [dartUuid, dart] = await launchDart(world, tenderUuid, tender);
+        const playerDarts = count(player, DARTS);
 
         recall(tender);
         await step(world, 2);
@@ -292,41 +325,44 @@ describe('nested bays: return to ship', () => {
         await step(world, 1);
 
         const [newUuid, relaunched] = await launchTender(world, player);
-        // Two Darts aboard, not a fresh three: the third is still out.
-        expect(count(relaunched, DARTS)).toBe(2);
-        expect(dart.components.get(SourceComponent)).toBe(newUuid);
+        // A fresh three, not two: docking replenished it.
+        expect(count(relaunched, DARTS)).toBe(3);
+        // The old Dart is not re-pointed at the new Tender.
+        expect(dart.components.get(SourceComponent)).toBe(tenderUuid);
+        recall(dart);
         await step(world, 1);
-        expect(dart.components.get(MovementStateComponent)!.turnTo)
-            .toBe(newUuid);
+        expect(fighterHome(dart, world.entities)).toBe(PLAYER);
         dock(world, dartUuid, newUuid);
+        await step(world, 1);
+        expect(world.entities.has(dartUuid)).toBeTrue();
+        dock(world, dartUuid, PLAYER);
         await step(world, 1);
         expect(world.entities.has(dartUuid)).toBeFalse();
         expect(count(relaunched, DARTS)).toBe(3);
+        expect(count(player, DARTS)).toBe(playerDarts);
     });
 
     /**
-     * GUESS (the brief leaves it open): a Dart whose Tender was destroyed
-     * flies to the player's ship, as ruled, and goes aboard the first
-     * docked sister Tender with room for it; with none it docks and is
-     * lost. Never into the player's own Dart bay.
+     * Carrier destroyed (left as the nested-bay change made it, the
+     * sister-record credit aside): a Dart whose Tender was destroyed
+     * flies to the player's ship, as ruled, and docks there, credited to
+     * nothing. A docked sister Tender relaunches full regardless.
      */
-    async function orphanDart(withDockedSister: boolean) {
+    it('with its Tender destroyed, the Dart docks at the player and is '
+        + 'credited to nothing', async () => {
         const { world, player } = await makeWorld();
         const [tenderUuid, tender] = await launchTender(world, player);
         const [sisterUuid, sister] = await launchTender(world, player);
         const [dartUuid, dart] = await launchDart(world, tenderUuid, tender);
-        if (withDockedSister) {
-            // The sister launches a Dart and docks one short of full.
-            const [sisterDart] = await launchDart(world, sisterUuid, sister);
-            world.entities.delete(sisterDart);
-            recall(sister);
-            await step(world, 2);
-            dock(world, sisterUuid, PLAYER);
-            await step(world, 1);
-            expect(player.components.get(HangarComponent)![0].magazine)
-                .toEqual([{ outfit: DARTS, count: 2 }]);
-        }
+        // The sister launches a Dart, loses it, and docks one short.
+        const [sisterDart] = await launchDart(world, sisterUuid, sister);
+        world.entities.delete(sisterDart);
+        recall(sister);
+        await step(world, 2);
+        dock(world, sisterUuid, PLAYER);
+        await step(world, 1);
         const playerDarts = count(player, DARTS);
+        const playerTenders = count(player, TENDERS);
 
         // The Tender is destroyed with its Dart out.
         world.entities.delete(tenderUuid);
@@ -339,25 +375,26 @@ describe('nested bays: return to ship', () => {
         await step(world, 1);
         expect(world.entities.has(dartUuid)).toBeFalse();
         expect(count(player, DARTS)).toBe(playerDarts);
-        return player;
-    }
+        expect(count(player, TENDERS)).toBe(playerTenders);
 
-    it('GUESS: with its Tender destroyed, the Dart docks at the player '
-        + 'into a docked sister Tender with room', async () => {
-        const player = await orphanDart(true);
-        expect(player.components.get(HangarComponent)![0].magazine)
-            .toEqual([{ outfit: DARTS, count: 3 }]);
+        const [, relaunched] = await launchTender(world, player);
+        expect(count(relaunched, DARTS)).toBe(3);
     });
 
-    it('GUESS: with its Tender destroyed and no sister docked, the Dart '
-        + 'docks at the player and is lost', async () => {
-        const player = await orphanDart(false);
-        expect(player.components.has(HangarComponent)).toBeFalse();
-    });
+    it('still charges a deployed Tender to the outfitter\'s Tender cap, '
+        + 'and stops once it docks', async () => {
+        const { world, player, gameData } = await makeWorld();
+        const deployed = () => countDeployedFighters(world.entities, PLAYER,
+            id => gameData.data.Outfit.map.get(id))([TENDERS, DARTS]);
+        const [tenderUuid] = await launchTender(world, player);
+        expect(count(player, TENDERS)).toBe(1);
+        expect(deployed().get(TENDERS)).toBe(1);
 
-    it('registers the hangar as synced simulation state', async () => {
-        const { world } = await makeWorld();
-        expect(world.resources.get(SerializerResource)!
-            .hasComponent(HangarComponent)).toBeTrue();
+        recall(world.entities.get(tenderUuid)!);
+        await step(world, 2);
+        dock(world, tenderUuid, PLAYER);
+        await step(world, 1);
+        expect(count(player, TENDERS)).toBe(2);
+        expect(deployed().get(TENDERS)).toBeUndefined();
     });
 });

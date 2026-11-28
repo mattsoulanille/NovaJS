@@ -1109,6 +1109,20 @@ export const STATE_HASH_INTERVAL = 60;
 //    (8057c916e5bb0080 -> 624186b4119d5d2b), and the join gate keeps older
 //    and newer builds apart.
 //    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): docking replenishes (Matthew's ruling,
+//    2026-11-27: "Docking an escort with ammo (including fighters) should
+//    replenish the ammo, for now at least."). The serializer-registered
+//    Hangar component (the nested-bay change above) is gone: a fighter
+//    that docks is only the round credited back to its carrier's bay, and
+//    relaunches as a fresh hull with a full magazine and a full bay of its
+//    own. Sim-rule changes alongside: a launch no longer restores a docked
+//    fighter's magazine nor re-points its still-deployed wing, and a
+//    nested fighter whose carrier is gone docks at the player's ship
+//    credited to nothing (no sister-record credit). No input or message
+//    kind changes. The derived wire schema fingerprint changes
+//    (624186b4119d5d2b -> f2bdf94c937def1d), and the join gate keeps older
+//    and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
 //    schema-only changes): the multi-jump's arrival (reference "The
 //    multi-jump outfit (the hub's item 3, oütf ModType 32), wave 52": the
 //    ship arrives on its DEPARTURE heading, not from the last system it

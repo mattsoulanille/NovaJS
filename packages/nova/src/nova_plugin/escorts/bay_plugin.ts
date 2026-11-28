@@ -142,55 +142,29 @@ export function refundFighterToBay(carrier: Entity, bayWeaponId: string,
  *  - A second-level fighter returns to ITS OWN carrier, the first-level
  *    fighter, while that carrier is in space ({@link fighterHome}).
  *  - With its carrier gone (docked into the player's ship, or destroyed)
- *    it returns to the player's ship instead, and is NEVER credited to the
- *    player's own bay, even one of the same type: it belongs to its
- *    carrier's bay. A carrier docked in the player's ship is credited
- *    (its {@link DockedFighter} record below), so it relaunches later with
- *    that fighter aboard.
+ *    it returns to the player's ship instead, docks there and is credited
+ *    to nothing: it is NEVER credited to the player's own bay, even one of
+ *    the same type, since it belongs to its carrier's bay.
  *
- * WHY THE HANGAR. A docked fighter is otherwise nothing but one round of
- * its carrier's bay ammo: the entity is deleted and a relaunch builds a
- * fresh hull with its default outfits, so its own magazine (and anything
- * still deployed from it) was simply forgotten, and a fighter whose
- * second-level wing was still out came back with a full magazine. The
- * carrier now keeps a record (HangarComponent) for each docked fighter
- * that mounts a bay of its own: which uuid it had, which of the carrier's
- * bays it went into, its bays and its magazine. A plain fighter (every
- * stock one) leaves no record, so ordinary docking is untouched.
+ * DOCKING REPLENISHES (Matthew's ruling, 2026-11-27: "Docking an escort
+ * with ammo (including fighters) should replenish the ammo, for now at
+ * least. This is what the base game does I believe."). A docked fighter
+ * is nothing but one round of its carrier's bay ammo (the carrier's own
+ * OutfitsState count, credited by refundFighterToBay): the entity is
+ * deleted, and a relaunch builds a fresh hull with its ship's default
+ * outfits, so it comes back out with a full magazine and a full bay of
+ * its own fighters, whatever it spent before docking. Nothing about a
+ * docked fighter is kept but that count, so nothing about it rides
+ * snapshots, the wire or a pilot save. A second-level fighter still out
+ * when its carrier docks is not re-pointed at the relaunched carrier:
+ * ordered home, it flies to the player's ship (fighterHome) and docks
+ * there, credited to nothing, and the relaunched carrier comes out with
+ * its bay full anyway.
  *
- * A record is consumed by the next launch from that bay, oldest first
- * (FIFO): the new fighter takes the recorded magazine, and every
- * still-deployed fighter that names the docked uuid as its carrier is
- * re-pointed at the new one, so it comes home to it. A record is kept
- * on the carrier's entity like any other synced component (snapshots,
- * the desync hash, the wire); it is not written to the save, so a
- * restored pilot's docked fighters come back with fresh magazines (and a
- * still-deployed second-level fighter is then dropped by the save's
- * phantom-fighter cleanup, save_game.ts, since its carrier names no
- * saved ship). GUESS: no landing restocks a docked fighter's magazine;
- * a fighter is restocked only when it lands with the player as an
- * escort (escort_restock.ts), as it always was.
+ * (An earlier version kept a per-carrier Hangar record of each docked
+ * fighter's bays and magazine so a relaunch restored them; the ruling
+ * above removed it.)
  */
-export const DockedFighter = t.type({
-    /** The uuid the fighter had in space (what its own fighters name as
-     * their SourceComponent). */
-    fighter: t.string,
-    /** The carrier's bay wëap it docked into. */
-    bayWeaponId: t.string,
-    /** Its own bays: wëap id and how many it mounts, sorted by id. */
-    bays: t.array(t.type({ weapon: t.string, count: t.number })),
-    /** Its ammunition for those bays: oütf id and count, sorted by id
-     * (zero-count entries kept, as consumeAmmo keeps them). */
-    magazine: t.array(t.type({ outfit: t.string, count: t.number })),
-});
-export type DockedFighter = t.TypeOf<typeof DockedFighter>;
-export const Hangar = t.array(DockedFighter);
-export type Hangar = t.TypeOf<typeof Hangar>;
-/**
- * A carrier's docked fighters that carry bays of their own, in docking
- * order. Replaced, never mutated in place.
- */
-export const HangarComponent = new Component<Hangar>('Hangar');
 
 /** Whether `entity` is in space and can take a fighter aboard: present and
  * not in its death sequence. */
@@ -219,205 +193,6 @@ export function fighterHome(fighter: Entity,
         return player;
     }
     return undefined;
-}
-
-/** The bays `ship` mounts, sorted by wëap id. */
-function mountedBays(ship: Entity, gameData: SimulationGameDataInterface):
-    DockedFighter['bays'] {
-    const bays: DockedFighter['bays'] = [];
-    for (const [id, weapon] of ship.components.get(WeaponsStateComponent)
-        ?? []) {
-        if (weapon.count > 0
-            && gameData.data.Weapon.getCached(id)?.type === 'BayWeaponData') {
-            bays.push({ weapon: id, count: weapon.count });
-        }
-    }
-    return bays.sort((a, b) => a.weapon < b.weapon ? -1
-        : a.weapon > b.weapon ? 1 : 0);
-}
-
-/**
- * Whether a magazine holding `held` rounds for `bayWeaponId`, in `bays`
- * such bays, has room for one more: the same ceiling as
- * refundFighterToBay (MaxAmmo per bay; MaxAmmo <= 0 is uncapped here).
- */
-function magazineHasRoom(held: number, bays: number, bayWeaponId: string,
-    gameData: SimulationGameDataInterface): boolean {
-    const bay = gameData.data.Weapon.getCached(bayWeaponId);
-    return !(bay && bay.maxAmmo > 0 && held >= bay.maxAmmo * bays);
-}
-
-/**
- * Records `fighter` (just docked into `carrier`'s `bayWeaponId`, its round
- * already credited) in the carrier's hangar, when it mounts a bay of its
- * own. Also keeps the hangar honest: a bay never has more records than
- * rounds (an outfitter sale can take rounds away under them), so the
- * oldest extras are dropped.
- */
-function stowInHangar(carrier: Entity, uuid: string, fighter: Entity,
-    bayWeaponId: string, gameData: SimulationGameDataInterface) {
-    const bays = mountedBays(fighter, gameData);
-    if (bays.length === 0) {
-        return;
-    }
-    const weapons = new Set(bays.map(bay => bay.weapon));
-    const magazine: DockedFighter['magazine'] = [];
-    for (const [id, outfit] of fighter.components.get(OutfitsStateComponent)
-        ?? []) {
-        const ammoFor = gameData.data.Outfit.getCached(id)?.ammoFor;
-        if (ammoFor && weapons.has(ammoFor)) {
-            magazine.push({ outfit: id, count: outfit.count });
-        }
-    }
-    magazine.sort((a, b) => a.outfit < b.outfit ? -1
-        : a.outfit > b.outfit ? 1 : 0);
-    const hangar = [...(carrier.components.get(HangarComponent) ?? []),
-        { fighter: uuid, bayWeaponId, bays, magazine }];
-    let rounds = 0;
-    for (const [id, outfit] of carrier.components.get(OutfitsStateComponent)
-        ?? []) {
-        if (gameData.data.Outfit.getCached(id)?.ammoFor === bayWeaponId) {
-            rounds += outfit.count;
-        }
-    }
-    let excess = hangar.filter(record => record.bayWeaponId === bayWeaponId)
-        .length - rounds;
-    const trimmed = hangar.filter(record => {
-        if (excess > 0 && record.bayWeaponId === bayWeaponId) {
-            excess--;
-            return false;
-        }
-        return true;
-    });
-    carrier.components.set(HangarComponent, trimmed);
-}
-
-/**
- * Credits one round of `bayWeaponId` to a docked fighter's record, if it
- * mounts that bay and has room: the record version of
- * refundFighterToBay (lowest-sorted supplying outfit, never past the
- * ceiling). Returns the updated record, or undefined.
- */
-function creditRecord(record: DockedFighter, bayWeaponId: string,
-    gameData: SimulationGameDataInterface): DockedFighter | undefined {
-    const bays = record.bays.find(bay => bay.weapon === bayWeaponId)?.count
-        ?? 0;
-    if (bays <= 0) {
-        return undefined;
-    }
-    let held = 0;
-    let first = -1;
-    record.magazine.forEach((entry, index) => {
-        if (gameData.data.Outfit.getCached(entry.outfit)?.ammoFor
-            === bayWeaponId) {
-            held += entry.count;
-            if (first < 0) {
-                first = index;
-            }
-        }
-    });
-    if (first < 0 || !magazineHasRoom(held, bays, bayWeaponId, gameData)) {
-        return undefined;
-    }
-    return {
-        ...record,
-        magazine: record.magazine.map((entry, index) => index === first
-            ? { ...entry, count: entry.count + 1 } : entry),
-    };
-}
-
-/**
- * A second-level fighter whose carrier (`carrierUuid`) is no longer in
- * space docked with the player's ship `home`. It is credited to its
- * carrier's record in `home`'s hangar when the carrier is docked there,
- * never to `home`'s own bay. Returns whether it was credited anywhere.
- *
- * GUESS (the brief's open case: the carrier was destroyed, or its record
- * is gone with a save restore): the fighter goes into the first docked
- * fighter in `home`'s hangar (docking order) that mounts the same bay and
- * has room for it, the way a pilot whose carrier died would be taken
- * aboard a sister ship; with none, it docks and is lost, credited to
- * nothing.
- */
-function creditStrayFighter(home: Entity, carrierUuid: string,
-    bayWeaponId: string, gameData: SimulationGameDataInterface): boolean {
-    const hangar = home.components.get(HangarComponent);
-    if (!hangar) {
-        return false;
-    }
-    const own = hangar.findIndex(record => record.fighter === carrierUuid);
-    const order = own < 0 ? [...hangar.keys()]
-        : [own, ...[...hangar.keys()].filter(index => index !== own)];
-    for (const index of order) {
-        const credited = creditRecord(hangar[index], bayWeaponId, gameData);
-        if (credited) {
-            home.components.set(HangarComponent, hangar.map(
-                (record, i) => i === index ? credited : record));
-            return true;
-        }
-    }
-    return false;
-}
-
-/**
- * Takes the oldest record docked in `carrier`'s `bayWeaponId` out of its
- * hangar, for the fighter that bay is launching. Undefined when the bay
- * holds no recorded fighter (a plain fighter launches as before).
- */
-function takeDockedFighter(carrier: Entity, bayWeaponId: string):
-    DockedFighter | undefined {
-    const hangar = carrier.components.get(HangarComponent);
-    const index = hangar?.findIndex(record =>
-        record.bayWeaponId === bayWeaponId) ?? -1;
-    if (!hangar || index < 0) {
-        return undefined;
-    }
-    const remaining = hangar.filter((_, i) => i !== index);
-    if (remaining.length > 0) {
-        carrier.components.set(HangarComponent, remaining);
-    } else {
-        carrier.components.delete(HangarComponent);
-    }
-    return hangar[index];
-}
-
-/** Gives a freshly built fighter the magazine its docked record kept. */
-function restoreMagazine(ship: Entity, record: DockedFighter) {
-    const outfits = ship.components.get(OutfitsStateComponent);
-    if (!outfits) {
-        return;
-    }
-    for (const { outfit, count } of record.magazine) {
-        const state = outfits.get(outfit);
-        if (state) {
-            state.count = count;
-        } else {
-            outfits.set(outfit, { count });
-        }
-    }
-}
-
-/**
- * Re-points every still-deployed fighter that names the docked fighter
- * `from` as its carrier at `to`, the fighter it relaunched as. Each
- * write depends only on that fighter's own state, so entity order does
- * not matter.
- */
-function relinkWing(entities: Iterable<[string, Entity]>, from: string,
-    to: string) {
-    for (const [, other] of entities) {
-        if (!other.components.has(BayFighterComponent)) {
-            continue;
-        }
-        if (other.components.get(SourceComponent) === from) {
-            other.components.set(SourceComponent, to);
-        }
-        const formation = other.components.get(FormationComponent);
-        if (formation?.leader === from) {
-            other.components.set(FormationComponent,
-                { ...formation, leader: to });
-        }
-    }
 }
 
 /**
@@ -717,21 +492,11 @@ class BayWeaponEntry extends WeaponEntry {
                     }
                     : { bayWeaponId: this.data.id, launchBrake: true });
         }
-        // A fighter docked with a magazine of its own comes back out with
-        // it, and its still-deployed wing is re-pointed at it (nested
-        // bays, see DockedFighter).
-        const carrierEntity = this.entities.get(source);
-        const docked = carrierEntity
-            && takeDockedFighter(carrierEntity, this.data.id);
-        if (docked) {
-            restoreMagazine(ship, docked);
-        }
-        const uuid = this.ids.next(`bay:${multiplayerOwner}`);
-        this.entities.set(uuid, ship);
-        if (docked) {
-            relinkWing(this.entities, docked.fighter, uuid);
-        }
-        const ownerVuln = carrierEntity?.components
+        // A fresh hull with its default outfits: a fighter that docked
+        // earlier comes back out fully stocked (docking replenishes, see
+        // fighterHome's section above).
+        this.entities.set(this.ids.next(`bay:${multiplayerOwner}`), ship);
+        const ownerVuln = this.entities.get(source)?.components
             .get(CollisionVulnerabilityComponent);
         ownerVuln?.vulnerableTo.add(`return_escorts`);
 
@@ -883,22 +648,14 @@ const CollectableEscortAI = new System({
         // from a peer that predates it, or a collectable escort that a
         // bay never launched) just docks and vanishes, exactly as
         // before.
+        // Only its own carrier's bay takes the round back. A nested
+        // fighter whose carrier is gone docks at the player's ship and is
+        // credited to nothing: never to the player's own bay, and a
+        // carrier that docked comes back out with a full bay anyway
+        // (docking replenishes, see fighterHome's section).
         const carrier = entities.get(home);
-        if (bayFighter && carrier) {
-            if (home === source) {
-                if (refundFighterToBay(carrier, bayFighter.bayWeaponId,
-                    gameData)) {
-                    // A fighter with bays of its own keeps its magazine
-                    // (and its identity, for its still-deployed wing).
-                    stowInHangar(carrier, uuid, entity,
-                        bayFighter.bayWeaponId, gameData);
-                }
-            } else {
-                // Its carrier is gone: the round belongs to the carrier's
-                // bay, never to the player's own (creditStrayFighter).
-                creditStrayFighter(carrier, source, bayFighter.bayWeaponId,
-                    gameData);
-            }
+        if (bayFighter && carrier && home === source) {
+            refundFighterToBay(carrier, bayFighter.bayWeaponId, gameData);
         }
         entities.delete(uuid);
         // Tell the display this deletion was a docking (issue #258):
@@ -1096,10 +853,6 @@ export const BayPlugin: Plugin = {
             throw new Error('Expected delta maker resource to exist');
         }
         world.addComponent(BayFighterComponent);
-        // A carrier's docked fighters with bays of their own (nested
-        // bays, DockedFighter): simulation state, so it rides snapshots,
-        // the desync hash and the wire.
-        serializer?.addComponent(HangarComponent, Hangar);
         deltaMaker.addComponent(BayFighterComponent, {
             componentType: BayFighter,
         });
