@@ -11,10 +11,13 @@ import {
 import { TimePlugin, useFixedTimestep } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import { SIMULATION_STEP_MS } from '../make_system.js';
-import { BayFighterComponent, ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
+import {
+    BayFighterComponent, DisabledComponent, ShipDataComponent,
+    ShipPhysicsComponent,
+} from '../ship/index.js';
 import {
     FormationCell, FormationComponent, FORMATION_SLOT_DEADBAND,
-    formationSlotPosition, formationSpacing,
+    formationSlotPosition, formationsIn, formationSpacing, nextFormationSlot,
 } from './npc_formation.js';
 import { FormationSystem } from './npc_formation_system.js';
 
@@ -70,6 +73,7 @@ async function formationWorld(leaderWidth: number, escortWidths: number[]) {
     world.addComponent(ShipDataComponent);
     world.addComponent(ShipPhysicsComponent);
     world.addComponent(BayFighterComponent);
+    world.addComponent(DisabledComponent);
     world.addSystem(FormationSystem);
     // The leader at rest at the origin facing "up" (angle 0).
     world.entities.set(LEADER, ship(hull(leaderWidth), new Position(0, 0)));
@@ -221,6 +225,133 @@ describe('FormationSystem count layouts (reference F1c)', () => {
             near(1, [1, -1]);
             near(2, [1, 1]);
             near(0, [2, 0]);
+        });
+});
+
+/**
+ * ============================================================================
+ * A DISABLED follower gives up its station until it is repaired (Matthew,
+ * 2026-11-27: "Ships that are disabled should no longer take a 'slot' in
+ * the escort formation (until they're repaired)")
+ * ============================================================================
+ *
+ * The disabled ship keeps its FormationComponent and slot NUMBER (so no
+ * newcomer is handed it) but drops out of the ranks, the count and the
+ * group spacing; the rest close up to the smaller count's layout. Repair
+ * only deletes DisabledComponent, and the ship ranks again by its old slot.
+ */
+describe('FormationSystem with a DISABLED follower', () => {
+    const a = 23.5;
+    const disable = (world: World, uuid: string) => world.entities.get(uuid)!
+        .components.set(DisabledComponent, { repairAt: null });
+    const repair = (world: World, uuid: string) => world.entities.get(uuid)!
+        .components.delete(DisabledComponent);
+
+    it('closes the two others up when the middle of three is disabled, '
+        + 'and takes it back in the same order when it is repaired',
+        async () => {
+            const world = await formationWorld(24, [24, 24, 24]);
+            stepSeconds(world, 30);
+            // The 3-layout: slot 0 left, slot 1 right, slot 2 row 2 centre.
+            const three: FormationCell[] = [[1, -1], [1, 1], [2, 0]];
+            three.forEach((cell, slot) => expectParked(world,
+                `escort-${slot}`, startOf(slot), expected(cell, a)));
+
+            const before = [0, 1, 2].map(slot =>
+                positionOf(world, `escort-${slot}`));
+            disable(world, 'escort-1');
+            stepSeconds(world, 30);
+            // Two followers: slot 0 keeps row 1 left (its station did not
+            // move: it stays put), slot 2 moves up into the empty right
+            // station; the hulk drifts where it was, holding no station.
+            expect(positionOf(world, 'escort-0')).toEqual(before[0]!);
+            expectParked(world, 'escort-2', before[2]!, expected([1, 1], a),
+                'escort-2 closed up');
+            expect(positionOf(world, 'escort-1')).toEqual(before[1]!);
+            expect(world.entities.get('escort-1')!.components
+                .get(FormationComponent)).toEqual(jasmine.objectContaining(
+                    { leader: LEADER, slot: 1 }));
+
+            // Repaired: back to three, by the same slot order, so slot 1
+            // retakes the right station and slot 2 drops back to the centre.
+            const closed = positionOf(world, 'escort-2');
+            repair(world, 'escort-1');
+            stepSeconds(world, 30);
+            expect(positionOf(world, 'escort-0')).toEqual(before[0]!);
+            // Escort 1 sits inside its band already (it was disabled ON its
+            // station, which never moved).
+            expect(positionOf(world, 'escort-1')).toEqual(before[1]!);
+            expectParked(world, 'escort-2', closed, expected([2, 0], a),
+                'escort-2 back');
+        });
+
+    it('keeps the disabled ship\'s slot NUMBER: an escort joining while it '
+        + 'is down gets a fresh one and ranks behind it once repaired',
+        async () => {
+            const world = await formationWorld(24, [24, 24, 24]);
+            stepSeconds(world, 30);
+            disable(world, 'escort-1');
+            stepSeconds(world, 30);
+            const slot = nextFormationSlot(formationsIn(world.entities),
+                LEADER);
+            expect(slot).toBe(3);
+            const joiner = ship(hull(24), new Position(0, 120));
+            joiner.components.set(FormationComponent, { leader: LEADER, slot });
+            world.entities.set('escort-3', joiner);
+            stepSeconds(world, 30);
+            // Three live followers (slots 0, 2, 3): the 3-layout.
+            const live = new Map<number, [number, number]>([
+                [0, positionOf(world, 'escort-0')],
+                [2, positionOf(world, 'escort-2')],
+                [3, positionOf(world, 'escort-3')],
+            ]);
+            expect(Math.hypot(live.get(3)![0], live.get(3)![1] - 2 * a))
+                .toBeLessThanOrEqual(FORMATION_SLOT_DEADBAND);
+
+            repair(world, 'escort-1');
+            stepSeconds(world, 40);
+            // Four, ranked 0, 1, 2, 3 by slot: the 4-layout.
+            const four: FormationCell[] = [[1, -1], [1, 1], [2, -2], [2, 2]];
+            four.forEach((cell, rank) => {
+                const uuid = `escort-${rank}`;
+                const station = expected(cell, a);
+                const [x, y] = positionOf(world, uuid);
+                expect(Math.hypot(-station[1] - x, station[0] - y))
+                    .withContext(uuid)
+                    .toBeLessThanOrEqual(FORMATION_SLOT_DEADBAND);
+            });
+        });
+
+    it('drops a disabled follower\'s frame from the group spacing',
+        async () => {
+            const world = await formationWorld(24, [24, 96]);
+            stepSeconds(world, 30);
+            expectParked(world, 'escort-0', startOf(0), [56.6, 56.6]);
+            const parked = positionOf(world, 'escort-0');
+            disable(world, 'escort-1');
+            stepSeconds(world, 30);
+            expectParked(world, 'escort-0', parked, [23.5, 23.5]);
+            const closed = positionOf(world, 'escort-0');
+            repair(world, 'escort-1');
+            stepSeconds(world, 30);
+            expectParked(world, 'escort-0', closed, [56.6, 56.6]);
+        });
+
+    it('ranks the same whatever order the entities were inserted in',
+        async () => {
+            // Same three, inserted in reverse: slot order, not map order,
+            // decides the ranks.
+            const world = await formationWorld(24, []);
+            for (const slot of [2, 1, 0]) {
+                const escort = ship(hull(24), new Position(...startOf(slot)));
+                escort.components.set(FormationComponent,
+                    { leader: LEADER, slot });
+                world.entities.set(`escort-${slot}`, escort);
+            }
+            disable(world, 'escort-1');
+            stepSeconds(world, 30);
+            expectParked(world, 'escort-0', startOf(0), expected([1, -1], a));
+            expectParked(world, 'escort-2', startOf(2), expected([1, 1], a));
         });
 });
 

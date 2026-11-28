@@ -5,6 +5,7 @@ import {
 } from 'nova_ecs/plugins/movement_plugin';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
+import { ShipData } from 'novadatainterface/ship_data';
 import { System } from 'nova_ecs/system';
 import { BayFighterComponent, DisabledComponent } from '../ship/index.js';
 import { EscortCommandComponent } from '../player/index.js';
@@ -12,8 +13,8 @@ import { JumpComponent } from '../travel/index.js';
 import { NpcComponent } from './npc_component.js';
 import { NpcDecisionSystem } from './npc_decision.js';
 import {
-    FormationComponent, formationRanks, formationSpacing, offFormationBusiness,
-    steerFormation,
+    Formation, FormationComponent, formationRanks, formationSpacing,
+    offFormationBusiness, steerFormation,
 } from './npc_formation.js';
 import { EscortLandingComponent } from '../player/index.js';
 import { ShipDataComponent, ShipPhysicsComponent, unchargedTurnRate } from '../ship/index.js';
@@ -24,11 +25,40 @@ import { ShipDataComponent, ShipPhysicsComponent, unchargedTurnRate } from '../s
  */
 
 /** Every formation member, with its hull's data for the group spacing
- * (ShipData.spriteFrameWidth) and whether it is a bay fighter (they rank
- * behind the hired escorts, reference F1c). */
+ * (ShipData.spriteFrameWidth), whether it is a bay fighter (they rank
+ * behind the hired escorts, reference F1c) and whether it is disabled
+ * (it holds no station while it is: formationMembers). */
 export const AllFormationsQuery = new Query(
     [FormationComponent, Optional(ShipDataComponent),
-        Optional(BayFighterComponent)] as const);
+        Optional(BayFighterComponent), Optional(DisabledComponent)] as const);
+
+/**
+ * The followers of `leader` that hold a station in its formation: every
+ * formation on it EXCEPT the disabled ones (Matthew, 2026-11-27: "Ships
+ * that are disabled should no longer take a 'slot' in the escort formation
+ * (until they're repaired)"). A disabled follower drifts where it was hit
+ * (FormationSystem's own bail), so keeping its rank left a hole in the V
+ * that the others flew round; dropped from the ranks, the count and the
+ * group spacing, the rest close up on the next tick to the smaller
+ * count's layout.
+ *
+ * It KEEPS its FormationComponent and its persistent slot number, so
+ * nextFormationSlot (a max over every formation, disabled or not) never
+ * hands that number to a newcomer, and when it is repaired it ranks again
+ * by that same slot and the group re-flows back to the order it had. Every
+ * repair path just deletes DisabledComponent, so none needs to know about
+ * formations: the ModType 49 self-repair timer and armor restored from
+ * outside (disabled_plugin), a boarding repair or capture (boarding_plugin),
+ * a landed restock (escort_restock), an escort upgrade's hull swap
+ * (escort_action). Deterministic: a filter on synced components, then
+ * formationRanks' tie-free sort.
+ */
+export function formationMembers(
+    allFormations: ReadonlyArray<readonly [Formation, ShipData | undefined,
+        unknown, unknown]>, leader: string) {
+    return allFormations.filter(([other, , , disabled]) =>
+        other.leader === leader && disabled === undefined);
+}
 
 export const FormationSystem = new System({
     name: 'FormationSystem',
@@ -101,8 +131,9 @@ export const FormationSystem = new System({
         // values) and cheap (formations are tiny); an escort leaving
         // moves the ones behind it up and re-flows the group to the new
         // count's layout.
-        const siblings = allFormations
-            .filter(([other]) => other.leader === formation.leader);
+        // Disabled followers hold no station (formationMembers): this one
+        // returned above, and its disabled siblings do not count.
+        const siblings = formationMembers(allFormations, formation.leader);
         const siblingSlots = formationRanks(siblings.map(
             ([other, , fighter]) => [other.slot, fighter !== undefined] as const));
         const rank = siblingSlots.indexOf(formation.slot);
