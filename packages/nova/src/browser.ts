@@ -56,6 +56,7 @@ import {
 } from "./display/screen_size_plugin.js";
 import { installMaxBlend } from "./display/max_blend.js";
 import { installNoLigatures } from "./display/no_ligatures.js";
+import { disablePixiAccessibility } from "./display/pixi_accessibility.js";
 import { Stage } from "./display/stage_resource.js";
 import { showStatusMessage } from "./display/status_message_plugin.js";
 import { ControlEvent, Controls, SavedControls } from './nova_plugin/core/index.js';
@@ -116,6 +117,10 @@ installNoLigatures();
 // TODO: Using WebGL 1 (instead of 2) seems to make the game smoother, but
 // this will likely change in the future.
 //PIXI.settings.PREFER_ENV = PIXI.ENV.WEBGL2;
+// Tab is a game key; PIXI's AccessibilityManager would turn the first Tab
+// into a transparent overlay that eats clicks until the mouse moves
+// (display/pixi_accessibility.ts). Before the renderer exists.
+disablePixiAccessibility();
 const app = new PIXI.Application({
     width: scaleLayout.worldWidth,
     height: scaleLayout.worldHeight,
