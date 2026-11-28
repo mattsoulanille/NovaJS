@@ -39,16 +39,72 @@ storedAt}`.
 | Kept | Not kept |
 |---|---|
 | hull class, its class name (`name`, so the hangar can list a ship whose class no longer loads), and the ship's own name (`shipName`, see Names below) | shield, armor, ionization: a stored ship comes back fully repaired, like a hull from the shipyard (the player's hull is repaired at lift-off anyway, and escorts at the port) |
-| every outfit aboard at its count, ammunition and mass-scaled outfits included | the pilot's **persistent** outfits (oütf 0x0004): they follow the pilot |
+| every outfit aboard at its count, ammunition and mass-scaled outfits included, and **persistent outfits with Mass** (they are hardware: see the mass rule below) | the pilot's **weightless persistent** outfits (oütf 0x0004, Mass 0) and the ammo of their launchers: they follow the pilot |
 | the hold | an escort's queued upgrade or sale (dropped when the escort is stored or swapped) |
 | fuel | an escort's damage, AI memory, formation slot |
 
-**Persistent outfits follow the pilot.** 0x0004 means "stays with you when you
-trade ships", and licences, the Vell-os powers and the like are the pilot's.
-Putting a hull away (into storage or the escort roster) takes them off it and
-puts them on the hull taken out, ignoring that hull's hardpoint and mass
-limits. That is the shipyard's judgment call 6 (`shipyard_rules.ts`); a limit
-check would destroy plot items.
+**The mass rule: weightless persistent outfits follow the pilot, heavy ones
+stay on their hull** (Matthew, 2026-11-27: "Let's go with the mass rule for
+outfits that stay across ship purchases"). 0x0004 means "stays with you when
+you trade ships". Licences, the Vell-os powers, bank accounts, hired
+officers and the like weigh nothing and are the pilot's; a cloaking device or
+a gun that weighs 15 t is part of the ship. So on every swap
+(`outfitsFollowingPilot` in `ship_storage.ts`):
+
+- A **persistent outfit with Mass 0** comes off the hull being put away (into
+  storage or the escort roster) and onto the hull taken out, ignoring that
+  hull's hardpoint limits (a limit check would destroy plot items, as in the
+  shipyard's judgment call 6).
+- A **persistent outfit with any other Mass** stays installed on its hull: it
+  is stored with it, goes out with it as an escort, and comes back when the
+  pilot swaps back. "Any other" includes negative Mass, so a persistent mass
+  expansion would keep its room on the hull it expands (no such outfit
+  exists in the stock data or the plug-ins seen).
+- **Everything else** stays with its hull, as before.
+- **Ammunition goes with its launcher.** When every outfit aboard that mounts
+  an ammo's weapon is on one side, the ammo is on that side too. So a
+  weightless Vell-os bay's fighters follow it, and the stock Dart (oütf 226,
+  NOT persistent) follows the persistent, weightless Create Dart (225) rather
+  than being left in a hull with no launcher. That pair is the only ammo in
+  the stock data and the plug-ins seen whose own flags and its launcher's
+  disagree. Ammo with Mass never moves. Ammo with no launcher aboard, or with
+  launchers on both sides, goes by its own flags.
+
+**A swap never leaves a hull over-full.** Nothing that weighs anything
+moves, so each hull keeps exactly the tonnage it had: the hull taken out has
+the free mass it was stored with, and the hull put away keeps its own. The
+stock case that prompted the rule: the Fed Cloaking Device (oütf 211, 15 t,
+granted by mïsn 466 and never sold) used to follow the pilot from a
+Starbridge into a Shuttle with 8 t free, leaving -7 t
+(`spaceport/ship_storage_mass_rule_stock_test.ts`).
+
+What the rule gives up: in the original every persistent outfit follows the
+pilot to a new hull, and a few heavy ones cannot be bought again (the Fed
+Cloaking Device; plug-in rewards such as arpia's Hogun Beam or Extra
+Outfits' Self-Made Energon Cannon). Under the rule they stay on the hull
+they were installed on, and the pilot flies that hull to use them.
+Plug-in data the rule reads oddly is left as it is (Matthew): the Starbridge
+Bay plug-in's weightless bay and fighters (a plug-in bug) follow the pilot,
+and Extra Outfits' weightless Loaded Bremesol follows the pilot even though
+its 10 t Bremesol Storage tank stays on the hull.
+
+**A shipyard purchase is not a swap.** Trading the old hull in keeps the
+original's rule: every persistent outfit moves, whatever it weighs, and the
+new hull can be left with negative free mass. The original does exactly
+that, with no warning, and its outfitter then reads "Available: 0 tons"
+(`docs/reference_experiments.md`, "Persistent heavy outfits across a ship
+purchase"). Buy and keep (below) puts the old hull away instead of trading it
+in, so it follows the mass rule: a heavy persistent outfit stays on the
+kept hull.
+
+**Pilots saved under the old rule.** Nothing is migrated, and every saved
+stored ship still loads. Under the old rule a heavy persistent outfit always
+ended up on the hull being flown (a stored record never held the pilot's
+persistent outfits), so after the update it is on that hull and stays there
+at the next swap. If an old swap left that hull over-full, it stays over-full
+until the pilot sells something from it (as after a purchase in the
+original). Stored records that do hold persistent outfits (a captured escort
+put away with its own) come out with them as before.
 
 **Cargo: each hull has its own hold, and nothing is destroyed.** On a swap the
 pilot's hold and the incoming hull's hold are pooled. The incoming hold takes
@@ -107,8 +163,9 @@ Ship calls the fifth.
 
 1. **Swap with a stored ship.** The current hull is snapshotted into the
    stored ship's slot, and a new hull is built from the stored one (class,
-   outfits, the pilot's persistent outfits, pooled cargo, fuel) carrying the
-   pilot's state, exactly like `buildPurchasedShip`. No credits move.
+   outfits, the outfits that follow the pilot by the mass rule, pooled cargo,
+   fuel) carrying the pilot's state, like `buildPurchasedShip`. No credits
+   move.
 2. **Swap with a captured escort.** The same, with the escort's ship as the
    incoming hull. The old player hull becomes a new escort entity in the
    escort's roster slot (same roster uuid), so the escort cap does not change.
@@ -124,7 +181,9 @@ Ship calls the fifth.
    any purchase (`ship_name_prompt.ts`): OK buys it under the typed name, and
    Cancel buys and stores nothing. The new hull costs its full asking price,
    with no trade-in, and the hull being flown goes to the end of the stored
-   list under its own name. The shipyard's hint line says how to do it
+   list under its own name, with every outfit the mass rule leaves on it
+   (a heavy persistent one included; the new hull gets its stock loadout plus
+   what follows the pilot). The shipyard's hint line says how to do it
    whenever a buyable ship is selected. The bought class's `OnPurchase` runs
    as in any purchase; the kept class's `OnRetire` does not, because it was
    not sold. The keyboard's buy is always the ordinary trade-in. Matthew
@@ -165,9 +224,9 @@ next time it goes out as an escort it takes a new one.
 hangar (or the shipyard's ship info or name prompt) is open, the shop
 search's Cmd/Ctrl+F stands down, so it cannot take the dialog's keys. Before
 the first grid is drawn the hangar loads every class and outfit it may need,
-the flown hull's own outfits included: a swap decides by their oütf flags
-which are the pilot's persistent outfits, and an uncached one would be put
-away with the hull (review finding 3). A teardown while it is open or still
+the flown hull's own outfits included: a swap decides by their oütf flags,
+Mass and launchers which of them follow the pilot, and an uncached one would
+be put away with the hull (review finding 3). A teardown while it is open or still
 loading releases its keys for good and redraws nothing (review finding 4).
 Closing it repopulates the shipyard's grid, since a swap can change what the
 shipyard stocks (the hull's Contribute bits).

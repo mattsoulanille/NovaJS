@@ -21,7 +21,7 @@ import {
 import { makeNpcShip } from '../nova_plugin/spawn/index.js';
 import {
     buildShipEntity, deployedUnitCount, isPersistent,
-    newShipCargoCapacity, outfitsForNewShip, partitionOutfits,
+    newShipCargoCapacity,
     ShipPurchaseContext, ShipyardCheck, shipListPrice,
 } from './shipyard_rules.js';
 
@@ -48,9 +48,24 @@ import {
  * the ship's own name (player_names.ts) when it has one, every outfit
  * aboard at its count, the hold and the fuel. Shield, armor and
  * ionization are not kept — a stored ship comes back fully repaired, as a
- * hull from the shipyard does — and the pilot's PERSISTENT outfits (oütf
- * 0x0004) are never stored: they follow the pilot onto whatever hull they
- * fly next, past that hull's limits (shipyard_rules judgment call 6).
+ * hull from the shipyard does — and the outfits that FOLLOW THE PILOT
+ * (outfitsFollowingPilot) are never stored: they go onto whatever hull
+ * the pilot takes out, past that hull's limits.
+ *
+ * WHAT FOLLOWS THE PILOT: THE MASS RULE (Matthew, 2026-11-27: "Let's go
+ * with the mass rule for outfits that stay across ship purchases"). A
+ * PERSISTENT outfit (oütf 0x0004, "stays with you when you trade ships")
+ * that weighs NOTHING (oütf Mass 0 as written) follows the pilot; one with
+ * any other Mass, negative included, is hardware and stays installed on
+ * its hull, stored with it and back when the pilot swaps back. Everything
+ * else stays with its hull, as always. Ammunition goes with its launcher
+ * (see outfitsFollowingPilot). Nothing that weighs anything ever moves, so
+ * a swap cannot push a hull's free mass below zero: each hull keeps
+ * exactly the tonnage it had. A shipyard PURCHASE (trading the old hull
+ * in) is not a swap and keeps the original's rule, every persistent outfit
+ * moving whatever it weighs (shipyard_rules judgment call 6, measured on
+ * the original: docs/reference_experiments.md, "Persistent heavy outfits
+ * across a ship purchase").
  *
  * THE HOLD: each hull has its own, and a swap destroys nothing. The pilot's
  * hold and the incoming hull's are pooled; the incoming hull takes every ton
@@ -119,7 +134,8 @@ function outfitCounts(entity: Entity): Map<string, number> {
 /**
  * A hull as a stored-ship record: its class, name, every outfit aboard,
  * its hold and its fuel. `strip` is the outfits to leave OUT (the pilot's
- * persistent ones, when it is the pilot's hull being put away), and `cargo`
+ * outfits that follow the pilot, when it is the pilot's hull being put
+ * away), and `cargo`
  * the hold to record in place of the entity's own (the pooled leftovers of
  * a swap).
  */
@@ -182,27 +198,73 @@ export function recordOutfitsLoaded(record: StoredShip,
     return record.outfits.every(([id]) => lookups.getOutfit(id) !== undefined);
 }
 
-/** The pilot's persistent outfits aboard `hull`: what follows the pilot. */
-export function persistentOutfits(hull: Entity, lookups: StorageLookups):
+/**
+ * Whether ONE oütf follows the pilot across a storage swap on its own
+ * terms: persistent (0x0004) and weightless (Mass 0 as written; flag
+ * 0x0400 only ever scales a positive Mass, so a weightless item weighs
+ * nothing on any hull). A persistent outfit of any other Mass is hardware
+ * and stays on its hull. `!== 0` rather than `> 0`, so that a persistent
+ * mass expansion (negative Mass; none exists in the stock data or the
+ * plug-ins seen) would keep its extra room on the hull it expands. An
+ * outfit that is not loaded stays with the hull.
+ */
+export function followsPilotOnSwap(outfit: OutfitData | undefined): boolean {
+    return isPersistent(outfit) && outfit?.physics.freeMass === 0;
+}
+
+/**
+ * The outfits aboard `hull` that FOLLOW THE PILOT onto the hull they swap
+ * into (a stored ship, an escort, buy-and-keep): see the module comment's
+ * mass rule. Each outfit goes by followsPilotOnSwap, except AMMUNITION (an
+ * `ammoFor`), which goes with its launcher: when every outfit aboard that
+ * mounts the ammo's weapon is on the same side, the ammo is on that side
+ * too. So a weightless Vell-os bay's fighters go where the bay goes, and
+ * the stock Dart (oütf 226, NOT persistent) follows the persistent,
+ * weightless Create Dart (225) instead of staying in a hull with no
+ * launcher. Ammo that weighs anything still never moves (the free-mass
+ * guarantee), and ammo with no launcher aboard, or launchers on both
+ * sides, goes by its own flags.
+ */
+export function outfitsFollowingPilot(hull: Entity, lookups: StorageLookups):
     Map<string, number> {
-    const kept = new Map<string, number>();
-    for (const [id, count] of outfitCounts(hull)) {
-        if (count > 0 && isPersistent(lookups.getOutfit(id))) {
-            kept.set(id, count);
+    const aboard = [...outfitCounts(hull)]
+        .filter(([, count]) => count > 0)
+        .map(([id, count]) => ({ id, count, outfit: lookups.getOutfit(id) }));
+    // Weapon id -> the sides of the launchers aboard that mount it.
+    const launcherSides = new Map<string, Set<boolean>>();
+    for (const { outfit } of aboard) {
+        for (const [weapon, count] of Object.entries(outfit?.weapons ?? {})) {
+            if (count > 0) {
+                const sides = launcherSides.get(weapon) ?? new Set<boolean>();
+                sides.add(followsPilotOnSwap(outfit));
+                launcherSides.set(weapon, sides);
+            }
         }
     }
-    return kept;
+    const following = new Map<string, number>();
+    for (const { id, count, outfit } of aboard) {
+        let follows = followsPilotOnSwap(outfit);
+        const sides = outfit?.ammoFor
+            ? launcherSides.get(outfit.ammoFor) : undefined;
+        if (sides?.size === 1) {
+            follows = sides.has(true) && outfit?.physics.freeMass === 0;
+        }
+        if (follows) {
+            following.set(id, count);
+        }
+    }
+    return following;
 }
 
 /**
  * The outfits aboard the hull being taken out: its stored loadout plus the
- * pilot's persistent outfits (counts add where both have one).
+ * outfits that follow the pilot (counts add where both have one).
  */
 export function incomingOutfits(record: StoredShip,
-    persistent: ReadonlyMap<string, number>):
+    following: ReadonlyMap<string, number>):
     Map<string, { count: number }> {
     const merged = new Map<string, { count: number }>();
-    for (const [id, count] of [...record.outfits, ...persistent]) {
+    for (const [id, count] of [...record.outfits, ...following]) {
         if (count > 0) {
             merged.set(id, { count: (merged.get(id)?.count ?? 0) + count });
         }
@@ -249,7 +311,7 @@ function fuelStat(units: number, capacity: number): Stat {
 
 /**
  * The hull the pilot flies away in, built from a record: the record's class,
- * its outfits plus the pilot's persistent ones, the pooled hold, its fuel,
+ * its outfits plus the ones that follow the pilot, the pooled hold, its fuel,
  * and every piece of pilot state the old hull carried (buildShipEntity's
  * CARRIED_COMPONENTS — credits, missions, bits, ranks, records, the stored
  * list, this landing's hires). No credits move: storage is free. The old
@@ -258,13 +320,13 @@ function fuelStat(units: number, capacity: number): Stat {
  * Returns the hull and what of the pilot's pooled hold did NOT go aboard it.
  */
 export function buildHullFromRecord(oldHull: Entity, record: StoredShip,
-    persistent: ReadonlyMap<string, number>, lookups: StorageLookups):
+    following: ReadonlyMap<string, number>, lookups: StorageLookups):
     { hull: Entity, leftBehind: Cargo } {
     const shipData = lookups.getShip(record.ship);
     if (!shipData) {
         throw new Error(`Ship ${record.ship} is not loaded`);
     }
-    const outfits = incomingOutfits(record, persistent);
+    const outfits = incomingOutfits(record, following);
     const { aboard, leftBehind } = exchangeHolds(
         oldHull.components.get(CargoComponent) ?? new Map(), record.cargo,
         newShipCargoCapacity(shipData, outfits, lookups));
@@ -294,10 +356,10 @@ export function swapWithStored(hull: Entity, index: number, storedAt: string,
     if (!record) {
         throw new Error(`No stored ship at ${index}`);
     }
-    const persistent = persistentOutfits(hull, lookups);
-    const built = buildHullFromRecord(hull, record, persistent, lookups);
+    const following = outfitsFollowingPilot(hull, lookups);
+    const built = buildHullFromRecord(hull, record, following, lookups);
     const outgoing = snapshotHull(hull, storedAt, lookups,
-        { strip: persistent, cargo: built.leftBehind });
+        { strip: following, cargo: built.leftBehind });
     setStoredShips(built.hull, list.map((entry, i) =>
         i === index ? outgoing : entry));
     return built.hull;
@@ -318,13 +380,13 @@ export function swapHoldRefusal(hull: Entity, incoming: StoredShip,
     if (!incomingData || !outgoingData) {
         return undefined;
     }
-    const persistent = persistentOutfits(hull, lookups);
+    const following = outfitsFollowingPilot(hull, lookups);
     const { leftBehind } = exchangeHolds(
         hull.components.get(CargoComponent) ?? new Map(), incoming.cargo,
         newShipCargoCapacity(incomingData,
-            incomingOutfits(incoming, persistent), lookups));
+            incomingOutfits(incoming, following), lookups));
     const kept = outfitCounts(hull);
-    for (const [id, count] of persistent) {
+    for (const [id, count] of following) {
         kept.set(id, (kept.get(id) ?? 0) - count);
     }
     const outgoingCapacity = newShipCargoCapacity(outgoingData,
@@ -413,8 +475,8 @@ export function buildEscortFromRecord(record: StoredShip, player: string,
 
 /**
  * THE PLAYER SWAPS SHIPS WITH A CAPTURED ESCORT: the pilot flies away in the
- * escort's hull (its outfits, hold and fuel, plus the pilot's persistent
- * outfits and as much of the pilot's hold as fits), and the hull they were
+ * escort's hull (its outfits, hold and fuel, plus the outfits that follow
+ * the pilot and as much of the pilot's hold as fits), and the hull they were
  * flying becomes the escort in its place (with the hold's overflow). Returns
  * both; neither input is changed, and the caller puts `escort` into the
  * roster entry the old escort had, so the escort count does not move.
@@ -423,10 +485,10 @@ export function swapWithEscort(hull: Entity, escort: Entity, storedAt: string,
     player: string, lookups: StorageLookups):
     { hull: Entity, escort: Entity } {
     const incoming = snapshotHull(escort, storedAt, lookups);
-    const persistent = persistentOutfits(hull, lookups);
-    const built = buildHullFromRecord(hull, incoming, persistent, lookups);
+    const following = outfitsFollowingPilot(hull, lookups);
+    const built = buildHullFromRecord(hull, incoming, following, lookups);
     const outgoing = snapshotHull(hull, storedAt, lookups,
-        { strip: persistent, cargo: built.leftBehind });
+        { strip: following, cargo: built.leftBehind });
     return {
         hull: built.hull,
         escort: buildEscortFromRecord(outgoing, player, lookups),
@@ -471,18 +533,28 @@ export function escortToStorage(hull: Entity, escort: Entity, storedAt: string,
  * BUY AND KEEP (Option-click Buy Ship, while ship storage is on): the new
  * hull at its full asking price — there is no trade-in, because nothing is
  * traded — and the hull the pilot was flying goes into storage at the END of
- * the list. Otherwise exactly a purchase: the bought class's stock loadout
- * plus the pilot's persistent outfits (outfitsForNewShip), the pilot's state
- * carried (buildShipEntity), and the hold handled as every storage swap
- * handles it (exchangeHolds: what does not fit stays aboard the old hull,
- * never jettisoned). The caller has checked {@link canBuyAndKeep} and runs
- * the shïp OnPurchase as the shipyard does; the old class's OnRetire is NOT
+ * the list. Otherwise a purchase: the bought class's stock loadout, the
+ * pilot's state carried (buildShipEntity), and the hold handled as every
+ * storage swap handles it (exchangeHolds: what does not fit stays aboard the
+ * old hull, never jettisoned). The old hull is PUT AWAY, not traded in, so
+ * what comes along is what a storage swap brings (outfitsFollowingPilot,
+ * the mass rule), not every persistent outfit as a trade-in's
+ * outfitsForNewShip brings: a heavy persistent outfit stays installed on
+ * the kept hull. The caller has checked {@link canBuyAndKeep} and runs the
+ * shïp OnPurchase as the shipyard does; the old class's OnRetire is NOT
  * run, since it was not sold. `oldHull` is not changed.
  */
 export function buyAndKeep(oldHull: Entity, newShip: ShipData,
     context: ShipPurchaseContext, storedAt: string, lookups: StorageLookups):
     Entity {
-    const outfits = outfitsForNewShip(newShip, context);
+    const following = outfitsFollowingPilot(oldHull, lookups);
+    const outfits = new Map<string, { count: number }>();
+    for (const [id, count] of [...Object.entries(newShip.outfits),
+        ...following]) {
+        if (count > 0) {
+            outfits.set(id, { count: (outfits.get(id)?.count ?? 0) + count });
+        }
+    }
     const { aboard, leftBehind } = exchangeHolds(
         oldHull.components.get(CargoComponent) ?? new Map(), [],
         newShipCargoCapacity(newShip, outfits, context));
@@ -490,7 +562,7 @@ export function buyAndKeep(oldHull: Entity, newShip: ShipData,
         context.credits - shipListPrice(newShip, context), context.getOutfit);
     hull.components.set(CargoComponent, aboard);
     const outgoing = snapshotHull(oldHull, storedAt, lookups, {
-        strip: partitionOutfits(context).kept, cargo: leftBehind,
+        strip: following, cargo: leftBehind,
     });
     setStoredShips(hull, [...storedShipsOf(oldHull), outgoing]);
     return hull;

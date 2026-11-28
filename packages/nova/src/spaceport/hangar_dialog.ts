@@ -381,9 +381,10 @@ export class HangarDialog {
         const outfitIds = new Set<string>();
         const hull = this.context?.hull();
         // The hull being flown's own outfits too: a swap decides which of
-        // them are the pilot's persistent ones (isPersistent over the
-        // cache), and an uncached one would read as not persistent and be
-        // put away with the hull (review finding 3; the shipyard's own
+        // them follow the pilot (outfitsFollowingPilot reads their oütf
+        // flags, Mass and launchers from the cache), and an uncached one
+        // would read as staying and be put away with the hull (review
+        // finding 3; the shipyard's own
         // outfit load is not awaited before the hangar can open).
         for (const id of hull?.components.get(OutfitsStateComponent)
             ?.keys() ?? []) {

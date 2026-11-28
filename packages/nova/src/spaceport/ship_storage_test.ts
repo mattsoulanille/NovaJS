@@ -40,6 +40,12 @@ describe('ship storage rules', () => {
     const TANK = 'nova:303';
     const MISSILE = 'nova:304';
     const RACK = 'nova:305';
+    const CLOAK = 'nova:306';
+    const EXPANSION = 'nova:307';
+    const CREATE_DART = 'nova:308';
+    const DART = 'nova:309';
+    const HEAVY_DART = 'nova:310';
+    const PERSISTENT_MISSILE = 'nova:311';
 
     function ship(id: string, name: string, freeCargo: number,
         outfits: Record<string, number> = {}): ShipData {
@@ -71,6 +77,27 @@ describe('ship storage rules', () => {
         // A launcher and its ammunition (the owned-escort ammo specs).
         [RACK, outfit(RACK, { weapons: { 'nova:900': 1 } })],
         [MISSILE, outfit(MISSILE, { ammoFor: 'nova:900' })],
+        // The mass rule's cases: persistent hardware (15 t, a cloak),
+        // a persistent mass expansion (-10 t), a weightless persistent
+        // launcher with NON-persistent ammo (the stock Create Dart / Dart
+        // pair), persistent weightless ammo for a hull launcher, and
+        // persistent ammo that weighs something for the weightless one.
+        [CLOAK, outfit(CLOAK, {
+            persistent: true, physics: { freeMass: 15 },
+        } as Partial<OutfitData>)],
+        [EXPANSION, outfit(EXPANSION, {
+            persistent: true, physics: { freeMass: -10 },
+        } as Partial<OutfitData>)],
+        [CREATE_DART, outfit(CREATE_DART, {
+            persistent: true, weapons: { 'nova:902': 1 },
+        })],
+        [DART, outfit(DART, { ammoFor: 'nova:902' })],
+        [HEAVY_DART, outfit(HEAVY_DART, {
+            persistent: true, ammoFor: 'nova:902', physics: { freeMass: 1 },
+        } as Partial<OutfitData>)],
+        [PERSISTENT_MISSILE, outfit(PERSISTENT_MISSILE, {
+            persistent: true, ammoFor: 'nova:900',
+        })],
     ]);
     const lookups: StorageLookups = {
         getShip: id => SHIPS.get(id),
@@ -191,8 +218,8 @@ describe('ship storage rules', () => {
             expect(hull.components.get(ShipComponent)).toEqual({ id: SHUTTLE });
         });
 
-        it('moves the pilot\'s PERSISTENT outfits onto the hull taken out',
-            () => {
+        it('moves the pilot\'s weightless PERSISTENT outfits onto the hull '
+            + 'taken out', () => {
                 const hull = pilot(SHUTTLE, {
                     outfits: [[LICENCE, 1], [BLASTER, 1]],
                     stored: [stored(FREIGHTER, { outfits: [[BLASTER, 2]] })],
@@ -203,6 +230,142 @@ describe('ship storage rules', () => {
                 expect(storedShipsOf(flown)[0].outfits)
                     .toEqual([[BLASTER, 1]]);
             });
+
+        describe('the mass rule', () => {
+            it('leaves a persistent outfit with mass on its hull, stored '
+                + 'with it, and brings it back on the swap back', () => {
+                const hull = pilot(SHUTTLE, {
+                    outfits: [[LICENCE, 1], [CLOAK, 1], [BLASTER, 1]],
+                    stored: [stored(FREIGHTER)],
+                });
+                const there = swapWithStored(hull, 0, HERE, lookups);
+                expect(there.components.get(OutfitsStateComponent)).toEqual(
+                    new Map([[LICENCE, { count: 1 }]]));
+                expect(storedShipsOf(there)[0].outfits)
+                    .toEqual([[BLASTER, 1], [CLOAK, 1]]);
+                const back = swapWithStored(there, 0, HERE, lookups);
+                expect(back.components.get(OutfitsStateComponent)).toEqual(
+                    new Map([[BLASTER, { count: 1 }], [CLOAK, { count: 1 }],
+                        [LICENCE, { count: 1 }]]));
+                expect(storedShipsOf(back)[0].outfits).toEqual([]);
+            });
+
+            it('keeps a persistent NEGATIVE-mass outfit (a mass expansion) '
+                + 'on the hull it expands', () => {
+                const hull = pilot(SHUTTLE, {
+                    outfits: [[EXPANSION, 2]], stored: [stored(FREIGHTER)],
+                });
+                const there = swapWithStored(hull, 0, HERE, lookups);
+                expect(there.components.get(OutfitsStateComponent))
+                    .toEqual(new Map());
+                expect(storedShipsOf(there)[0].outfits)
+                    .toEqual([[EXPANSION, 2]]);
+            });
+
+            it('sends ammunition where its launcher goes: non-persistent '
+                + 'Darts follow a weightless persistent Create Dart, '
+                + 'persistent missiles stay with a hull\'s rack', () => {
+                const hull = pilot(SHUTTLE, {
+                    outfits: [[CREATE_DART, 1], [DART, 6], [RACK, 1],
+                        [PERSISTENT_MISSILE, 4], [MISSILE, 2]],
+                    stored: [stored(FREIGHTER)],
+                });
+                const there = swapWithStored(hull, 0, HERE, lookups);
+                expect(there.components.get(OutfitsStateComponent)).toEqual(
+                    new Map([[CREATE_DART, { count: 1 }], [DART, { count: 6 }]]));
+                expect(storedShipsOf(there)[0].outfits).toEqual([
+                    [MISSILE, 2], [RACK, 1], [PERSISTENT_MISSILE, 4]]);
+            });
+
+            it('never moves ammunition that weighs something, even after a '
+                + 'weightless launcher', () => {
+                const hull = pilot(SHUTTLE, {
+                    outfits: [[CREATE_DART, 1], [HEAVY_DART, 3]],
+                    stored: [stored(FREIGHTER)],
+                });
+                const there = swapWithStored(hull, 0, HERE, lookups);
+                expect(there.components.get(OutfitsStateComponent)).toEqual(
+                    new Map([[CREATE_DART, { count: 1 }]]));
+                expect(storedShipsOf(there)[0].outfits)
+                    .toEqual([[HEAVY_DART, 3]]);
+            });
+
+            it('goes by the ammo\'s own flags with no launcher aboard, or '
+                + 'launchers on both sides', () => {
+                const bare = pilot(SHUTTLE, {
+                    outfits: [[DART, 5], [PERSISTENT_MISSILE, 2]],
+                    stored: [stored(FREIGHTER)],
+                });
+                const there = swapWithStored(bare, 0, HERE, lookups);
+                expect(there.components.get(OutfitsStateComponent)).toEqual(
+                    new Map([[PERSISTENT_MISSILE, { count: 2 }]]));
+                expect(storedShipsOf(there)[0].outfits).toEqual([[DART, 5]]);
+
+                // A hull launcher of the Darts' weapon as well as the
+                // pilot's Create Dart: the Darts stay (not persistent).
+                const OTHER_LAUNCHER = 'nova:312';
+                const mixedLookups: StorageLookups = {
+                    getShip: lookups.getShip,
+                    getOutfit: id => id === OTHER_LAUNCHER
+                        ? outfit(OTHER_LAUNCHER, { weapons: { 'nova:902': 1 } })
+                        : lookups.getOutfit(id),
+                };
+                const mixed = pilot(SHUTTLE, {
+                    outfits: [[CREATE_DART, 1], [OTHER_LAUNCHER, 1],
+                        [DART, 5]],
+                    stored: [stored(FREIGHTER)],
+                });
+                const swapped = swapWithStored(mixed, 0, HERE, mixedLookups);
+                expect(swapped.components.get(OutfitsStateComponent))
+                    .toEqual(new Map([[CREATE_DART, { count: 1 }]]));
+            });
+
+            it('a heavy persistent outfit goes along with the hull that '
+                + 'becomes an escort', () => {
+                const hull = pilot(FREIGHTER, {
+                    outfits: [[LICENCE, 1], [CLOAK, 1]],
+                });
+                const prize = buildEscortFromRecord(stored(SHUTTLE),
+                    'player-uuid', lookups);
+                const swapped = swapWithEscort(hull, prize, HERE,
+                    'player-uuid', lookups);
+                expect(swapped.hull.components.get(OutfitsStateComponent))
+                    .toEqual(new Map([[LICENCE, { count: 1 }]]));
+                expect(swapped.escort.components.get(OutfitsStateComponent))
+                    .toEqual(new Map([[CLOAK, { count: 1 }]]));
+            });
+
+            it('keeps the hold check on the hull put away in step: a heavy '
+                + 'persistent outfit that adds hold stays and counts there',
+            () => {
+                // A 15 t persistent cargo pod (+20 t of hold) on a Shuttle:
+                // under the old rule it left with the pilot and the Shuttle
+                // could not keep the overflow; it stays now, and so does the
+                // room it makes.
+                const BIG_POD = 'nova:313';
+                const podLookups: StorageLookups = {
+                    getShip: lookups.getShip,
+                    getOutfit: id => id === BIG_POD
+                        ? outfit(BIG_POD, {
+                            persistent: true,
+                            physics: { freeMass: 15, freeCargo: 20 },
+                        } as Partial<OutfitData>)
+                        : lookups.getOutfit(id),
+                };
+                const hull = pilot(SHUTTLE, {
+                    outfits: [[BIG_POD, 1]], cargo: [['cargo:0', 30]],
+                    stored: [stored(FREIGHTER, {
+                        cargo: [['cargo:1', 100]],
+                    })],
+                });
+                expect(swapHoldRefusal(hull, storedShipsOf(hull)[0],
+                    podLookups)).toBeUndefined();
+                const there = swapWithStored(hull, 0, HERE, podLookups);
+                expect(storedShipsOf(there)[0]).toEqual(jasmine.objectContaining({
+                    outfits: [[BIG_POD, 1]], cargo: [['cargo:1', 30]],
+                }));
+            });
+        });
 
         it('leaves the commodities a smaller hold cannot take aboard the '
             + 'ship put away; mission cargo always comes along', () => {
@@ -587,6 +750,20 @@ describe('ship storage rules', () => {
                 cargo: [], fuel: 80, storedAt: HERE,
             }]);
             expect(storedShipsOf(hull)).toEqual([earlier]);
+        });
+
+        it('keeps a heavy persistent outfit installed on the hull it puts '
+            + 'away, as a storage swap does (no trade-in)', () => {
+            const hull = pilot(SHUTTLE, {
+                outfits: [[LICENCE, 1], [CLOAK, 1], [CREATE_DART, 1],
+                    [DART, 3]],
+            });
+            const bought = buyAndKeep(hull, BIG, context(hull, 1234), HERE,
+                lookups);
+            expect(bought.components.get(OutfitsStateComponent)).toEqual(
+                new Map([[BLASTER, { count: 2 }], [LICENCE, { count: 1 }],
+                    [CREATE_DART, { count: 1 }], [DART, { count: 3 }]]));
+            expect(storedShipsOf(bought)[0].outfits).toEqual([[CLOAK, 1]]);
         });
 
         it('refuses what the trade-in would make affordable but the full '
