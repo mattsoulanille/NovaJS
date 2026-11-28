@@ -1,6 +1,6 @@
 import { Entity } from 'nova_ecs/entity';
 import { Plugin } from 'nova_ecs/plugin';
-import { World } from 'nova_ecs/world';
+import { SingletonComponent, World } from 'nova_ecs/world';
 import { Query } from 'nova_ecs/query';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
@@ -916,6 +916,17 @@ class BoardingUi {
 
     update(boarding: BoardingState | undefined, target: Entity | undefined,
         playerCrew: number, atEscortCap = false) {
+        // Fast idle path: when no boarding session is active and no dialog or
+        // capture state is open, skip repositioning and closing every frame.
+        if (!boarding && this.current === undefined && this.holding === undefined
+            && this.renaming === undefined && this.offered.size === 0
+            && this.made.size === 0 && this.ended.size === 0
+            && this.shipDoneTried.size === 0 && this.tradedFor.size === 0
+            && this.settleFrames === 0
+            && !this.plunder.container.visible
+            && !this.assignment.container.visible) {
+            return;
+        }
         this.reposition();
         this.current = boarding?.target;
         if (boarding && this.offerMission
@@ -1177,7 +1188,8 @@ const PlayerBoardingQuery = new Query(
         Optional(ShipDataComponent), UUID] as const);
 export const BoardingUiSystem = new System({
     name: 'BoardingUiSystem',
-    args: [BoardingUiResource, PlayerBoardingQuery, Entities] as const,
+    args: [BoardingUiResource, PlayerBoardingQuery, Entities,
+        SingletonComponent] as const,
     step(ui, players, entities) {
         const boarding = players[0]?.[1] ?? undefined;
         const playerCrew = players[0]?.[2]?.crew ?? 0;

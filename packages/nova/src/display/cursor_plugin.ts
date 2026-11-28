@@ -1,8 +1,9 @@
-import { Entities } from 'nova_ecs/arg_types';
-import { EntityMap } from 'nova_ecs/entity_map';
+import { GetEntity, UUID } from 'nova_ecs/arg_types';
+import { Entity } from 'nova_ecs/entity';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
+import { Query } from 'nova_ecs/query';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from 'nova_ecs/world';
@@ -10,6 +11,8 @@ import * as PIXI from 'pixi.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { DisplayAssetDataResource } from '../nova_plugin/core/index.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
+import { ShipComponent } from '../nova_plugin/ship/index.js';
+import { PlanetComponent } from '../nova_plugin/travel/index.js';
 import { pickNearest } from '../tap_targeting.js';
 import { PixiAppResource } from './pixi_app_resource.js';
 import {
@@ -58,12 +61,20 @@ const MENU_CONTAINER_NAMES = new Set(
  * identifies "a modal overlay is open". */
 const MODAL_SHIELD_MIN_EXTENT = 6000;
 
+/** Named stage containers that are never modal dialogs (skipping them avoids
+ * running getLocalBounds() on StatusBar radar/gauges graphics every frame). */
+const NON_MODAL_STAGE_CONTAINERS = new Set(
+    ['Space', 'StatusBar', 'Starfield', 'GameCursor', 'MiniMap', 'StatusLine']);
+
 /** Whether a visible stage child is a modal dialog: it carries a screen-
  * covering interactive shield. Detecting the shield rather than enumerating
  * dialog names keeps the rule general — any current or future shielded dialog
  * reverts the OS cursor without being listed here. */
 function hasModalShield(container: PIXI.DisplayObject): boolean {
     if (!(container instanceof PIXI.Container)) {
+        return false;
+    }
+    if (container.name !== null && NON_MODAL_STAGE_CONTAINERS.has(container.name)) {
         return false;
     }
     for (const child of container.children) {
@@ -143,13 +154,25 @@ function menuOpen(stage: PIXI.Container): boolean {
             || hasModalShield(child)));
 }
 
-/** Entities the cursor considers hover-selectable: everything tap targeting
- * would pick except the player's own ship. */
-function* selectableEntities(entities: EntityMap) {
-    for (const pair of entities) {
-        if (!pair[1].components.has(PlayerShipSelector)) {
-            yield pair;
+const SelectableShipsQuery = new Query(
+    [UUID, GetEntity, ShipComponent] as const, 'CursorSelectableShips');
+const SelectablePlanetsQuery = new Query(
+    [UUID, GetEntity, PlanetComponent] as const, 'CursorSelectablePlanets');
+
+/** Entities the cursor considers hover-selectable: ships and planets (never
+ * projectiles, explosions, or asteroids) except the player's own ship. */
+function* selectableEntities(
+    ships: readonly (readonly [string, Entity, unknown])[],
+    planets: readonly (readonly [string, Entity, unknown])[],
+): Generator<[string, Entity]> {
+    for (let i = 0; i < ships.length; i++) {
+        const [uuid, entity] = ships[i];
+        if (!entity.components.has(PlayerShipSelector)) {
+            yield [uuid, entity];
         }
+    }
+    for (let i = 0; i < planets.length; i++) {
+        yield [planets[i][0], planets[i][1]];
     }
 }
 
@@ -172,10 +195,11 @@ function setOsCursorHidden(app: PIXI.Application | undefined, hidden: boolean) {
 
 const DrawCursorSystem = new System({
     name: 'DrawCursorSystem',
-    args: [GameCursorResource, TimeResource, Space, Stage, Entities,
+    args: [GameCursorResource, TimeResource, Space, Stage,
+        SelectableShipsQuery, SelectablePlanetsQuery,
         DisplayScaleResource, Optional(PixiAppResource),
         SingletonComponent] as const,
-    step(cursor, time, space, stage, entities, scale, app) {
+    step(cursor, time, space, stage, ships, planets, scale, app) {
         if (cursor.movedSinceStep) {
             cursor.movedSinceStep = false;
             cursor.lastMove = time.time;
@@ -197,14 +221,23 @@ const DrawCursorSystem = new System({
             clientToUi(cursor.mouse.x, scale),
             clientToUi(cursor.mouse.y, scale));
 
+        // An untouched mouse fades into the background; any movement snaps
+        // it back.
+        const idle = time.time - cursor.lastMove;
+        const alpha = idle <= FADE_DELAY_MS ? 1
+            : Math.max(0, 1 - (idle - FADE_DELAY_MS) / FADE_MS);
+        cursor.container.alpha = alpha;
+
         // Hovering something selectable animates the cursor through its
-        // frames; idle over nothing pins the first frame. Screen -> world is
-        // a subtraction because the camera only translates (see
-        // tap_targeting.ts).
+        // frames; idle over nothing pins the first frame. Skip hover picking
+        // while the cursor is completely faded out.
+        if (alpha <= 0) {
+            return;
+        }
         const worldX = clientToWorld(cursor.mouse.x, scale) - space.position.x;
         const worldY = clientToWorld(cursor.mouse.y, scale) - space.position.y;
         const { bestShip, bestPlanet } = pickNearest(
-            selectableEntities(entities), undefined, worldX, worldY);
+            selectableEntities(ships, planets), undefined, worldX, worldY);
         if (bestShip || bestPlanet) {
             if (time.time - cursor.lastAdvance >= CURSOR_FRAME_MS
                 && cursor.textures.length > 0) {
@@ -215,12 +248,6 @@ const DrawCursorSystem = new System({
             cursor.frame = 0;
         }
         cursor.setFrame(cursor.frame);
-
-        // An untouched mouse fades into the background; any movement snaps
-        // it back.
-        const idle = time.time - cursor.lastMove;
-        cursor.container.alpha = idle <= FADE_DELAY_MS ? 1
-            : Math.max(0, 1 - (idle - FADE_DELAY_MS) / FADE_MS);
     },
     // #156 pin (shared: *): CursorPlugin registers last.
     after: [JumpFadeSystem],

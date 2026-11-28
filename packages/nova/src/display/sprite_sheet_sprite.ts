@@ -20,6 +20,18 @@ export class SpriteSheetSprite {
     private textureSet: AnimationImageIndex;
     private wrappedRotation: number;
     private wrappedFrame: number = 0;
+    /**
+     * What the rotation setter last applied — its input (angle, texture
+     * set) and its output (frame, residual sprite rotation) — so an
+     * unchanged heading skips the recomputation. The output is checked
+     * too: other systems repaint a sprite after ObjectDrawSystem (a
+     * spinning shot's frame, a tumbling rock's, a gate's, an explosion's
+     * progress), and their write must not survive a frame in which they
+     * do not run.
+     */
+    private lastRotationSet?: AnimationImageIndex;
+    private lastRotationFrame = -1;
+    private lastPixiRotation = NaN;
     size = { x: 0, y: 0 };
 
     constructor({ displayAssets, image }: { displayAssets: DisplayAssetDataInterface, image: AnimationImage }) {
@@ -125,9 +137,13 @@ export class SpriteSheetSprite {
             console.warn('frame must be an integer');
             return;
         }
+        const texture = this.textures[frame];
+        if (this.wrappedFrame === frame && this.pixiSprite.texture === texture) {
+            return;
+        }
 
         this.wrappedFrame = frame;
-        this.pixiSprite.texture = this.textures[frame];
+        this.pixiSprite.texture = texture;
     }
 
     set rotation(angle: number) {
@@ -136,6 +152,13 @@ export class SpriteSheetSprite {
         }
         // Divide rotation equally among the available rotation textures
         angle = mod(angle, TWO_PI);
+        if (this.wrappedRotation === angle
+            && this.lastRotationSet === this.textureSet
+            && this.wrappedFrame === this.lastRotationFrame
+            && this.pixiSprite.rotation === this.lastPixiRotation
+            && this.pixiSprite.texture === this.textures[this.wrappedFrame]) {
+            return;
+        }
         const count = this.textureSet.length;
 
         // Center the textures around the rotations they
@@ -145,6 +168,9 @@ export class SpriteSheetSprite {
         this.frame = textureSetLocalIndex + this.textureSet.start;
         this.pixiSprite.rotation = r.angle;
         this.wrappedRotation = angle;
+        this.lastRotationSet = this.textureSet;
+        this.lastRotationFrame = this.wrappedFrame;
+        this.lastPixiRotation = this.pixiSprite.rotation;
     }
 
     get rotation() {

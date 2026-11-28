@@ -11,8 +11,9 @@ import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import { AnimationGraphic } from './animation_graphic.js';
 import {
-    AnimationGraphicComponent, ObjectDrawSystem,
+    AnimationGraphicComponent, ObjectDrawSystem, VIEWPORT_CULL_PADDING_PX,
 } from './animation_graphic_plugin.js';
+import { WorldScreenSize } from './screen_size_plugin.js';
 import {
     BANK_DELAY_MS, BANK_GAP_HOLD_MS, BankState, FrameSetName, GLOW_FADE_MS,
     GlowState, ShipMotionDisplayState, stepBank, stepGlow,
@@ -311,5 +312,41 @@ describe('ObjectDrawSystem bank and glow (#357)', () => {
             step(0, 0);
         }
         expect(glow.pixiSprite.alpha).toEqual(0);
+    });
+
+    it('hides off-screen graphics when WorldScreenSize is set and unhides them when they enter view', () => {
+        const world = new World('object-draw-cull-test');
+        const camera = { x: 0, y: 0 };
+        world.resources.set(CameraFocus, camera);
+        world.resources.set(WorldScreenSize, { x: 1000, y: 800 });
+        world.resources.set(TimeResource, { time: 16, delta_ms: 16, delta_s: 0.016, frame: 1 });
+        world.addSystem(ObjectDrawSystem);
+
+        const hull = fakeLayer();
+        const graphic = Object.create(AnimationGraphic.prototype) as AnimationGraphic;
+        Object.assign(graphic, {
+            container: new PIXI.Container(),
+            sprites: new Map([['baseImage', hull]]),
+            size: { x: 64, y: 64 },
+        });
+        const movement: MovementState = {
+            accelerating: 0, position: new Position(3000, 0),
+            rotation: new Angle(0), turnBack: false, turning: 0,
+            velocity: new Vector(0, 0),
+        };
+        world.entities.set('far', new Entity('far')
+            .addComponent(MovementStateComponent, movement)
+            .addComponent(AnimationGraphicComponent, graphic));
+
+        // 3000 px away exceeds half-width (500) + radius + padding -> culled.
+        world.step();
+        expect(graphic.container.visible).toBeFalse();
+        // Single-layer non-turning/non-thrusting entity skips motionDisplay allocation.
+        expect(graphic.motionDisplay).toBeUndefined();
+
+        // Inside viewport + padding -> visible.
+        movement.position = new Position(500 + VIEWPORT_CULL_PADDING_PX, 0);
+        world.step();
+        expect(graphic.container.visible).toBeTrue();
     });
 });

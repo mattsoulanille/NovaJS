@@ -530,8 +530,11 @@ export const StarmapPlugin: Plugin = {
                     return;
                 }
                 const statusBar = world.resources.get(StatusBarResource);
+                // Read the cached background width instead of container.width,
+                // which runs recursive getLocalBounds() across every status bar
+                // text and graphics child every frame.
                 const { x, y } = miniMapPosition(screenSize,
-                    statusBar?.container.width ?? 0);
+                    statusBar?.width ?? 0);
                 miniMap.container.position.set(x, y);
             },
         });

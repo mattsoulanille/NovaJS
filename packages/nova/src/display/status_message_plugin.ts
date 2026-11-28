@@ -1,5 +1,6 @@
-import { Emit, Entities, UUID } from "nova_ecs/arg_types";
+import { Emit, Entities, GetEntity, UUID } from "nova_ecs/arg_types";
 import { Plugin } from "nova_ecs/plugin";
+import { Query } from "nova_ecs/query";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
@@ -21,7 +22,7 @@ import {
 import { Optional } from 'nova_ecs/optional';
 import { ArrivalRoute, bayCaptureMessage, boardingBlockedMessage, captureAssignedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, JUMP_COLLAPSED_MESSAGE, jumpArrivalMessage, landingBlockedMessage, landingRequestMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage, SHIP_DISABLED_MESSAGE, SHIP_REPAIRED_MESSAGE, stellarClearedMessage } from "./status_bar_content.js";
 import { LandingBlockedEvent, LandingClearedEvent, LandingRequestEvent } from "../nova_plugin/travel/index.js";
-import { BayCaptureEvent, BOARD_SOUND, CaptureAssignedEvent, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, PlunderSelfDestructEvent, SentHailComponent, ShipDisabledEvent, ShipRepairedEvent } from "../nova_plugin/encounters/index.js";
+import { BayCaptureEvent, BOARD_SOUND, CaptureAssignedEvent, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, PlunderSelfDestructEvent, SentHail, SentHailComponent, ShipDisabledEvent, ShipRepairedEvent } from "../nova_plugin/encounters/index.js";
 import { missionCargoName } from '../nova_plugin/missions/index.js';
 import {
     ContrabandScanEvent, DistressCallEvent, distressCallMessage, distressLine,
@@ -550,20 +551,33 @@ export const SeenPlayerHailsResource =
  * Pure display: it reads mirrored sim state and never writes it. The
  * freshness test reads the MIRRORED SIM CLOCK (SentHail.at is sim time).
  */
+const SentHailQuery = new Query(
+    [UUID, GetEntity, SentHailComponent] as const, 'SentHailQuery');
+
 export const ShowPlayerHailMessage = new System({
     name: 'ShowPlayerHailMessage',
-    args: [Entities, UUID, StatusLineResource, TimeResource,
+    args: [SentHailQuery, UUID, StatusLineResource, TimeResource,
         SimulationTimeResource, SeenPlayerHailsResource,
         PlayerShipSelector] as const,
-    step(entities, me, statusLine, { time }, simulationTime, seen) {
+    step(sentHails, me, statusLine, { time }, simulationTime, seen) {
+        if (sentHails.length === 0) {
+            return;
+        }
         // Sorted, so two hails landing in the same frame print in the same
         // order on every client (the second one wins the line).
-        const senders = [...entities]
-            .filter(([uuid, entity]) => uuid !== me
-                && entity.components.get(SentHailComponent)?.to === me)
-            .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
-        for (const [uuid, entity] of senders) {
-            const hail = entity.components.get(SentHailComponent)!;
+        const senders: [string, Entity, SentHail][] = [];
+        for (const [uuid, entity, hail] of sentHails) {
+            if (uuid !== me && hail.to === me) {
+                senders.push([uuid, entity, hail]);
+            }
+        }
+        if (senders.length === 0) {
+            return;
+        }
+        if (senders.length > 1) {
+            senders.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+        }
+        for (const [uuid, entity, hail] of senders) {
             if (seen.get(uuid) === hail.seq) {
                 continue;
             }
