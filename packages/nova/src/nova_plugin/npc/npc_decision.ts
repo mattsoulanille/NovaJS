@@ -984,19 +984,39 @@ export const NpcDecisionSystem = new System({
                 if (aggressorEntry) {
                     engageable.push([aggressorEntry[0], aggressorEntry[1]]);
                 }
-                const chosen = chooseNearest(engageable);
-                // MaxOdds: engage only while the fight looks favorable
-                // (per-pair simplification of the Bible's
-                // friends-vs-enemies strength sums).
-                let favorable = false;
-                if (chosen) {
-                    const chosenEntry = ships.find(([u]) => u === chosen);
-                    const chosenStrength = chosenEntry ? effectiveStrength(
-                        chosenEntry[3].strength,
-                        shieldFraction(chosenEntry[5])) : 0;
-                    favorable = oddsFavorable(govtData?.maxOdds ?? 100,
-                        myStrength, chosenStrength);
+                let chosen = chooseNearest(engageable);
+                // MaxOdds: an unprovoked hunt starts only while the fight
+                // looks favorable (per-pair simplification of the Bible's
+                // friends-vs-enemies strength sums; reference wave 32/33:
+                // Strength-10 hunters of MaxOdds 100 never went for
+                // Strength-500 preys).
+                const favorableAgainst = (other: string) => {
+                    const entry = ships.find(([u]) => u === other);
+                    const strength = entry ? effectiveStrength(
+                        entry[3].strength, shieldFraction(entry[5])) : 0;
+                    return oddsFavorable(govtData?.maxOdds ?? 100,
+                        myStrength, strength);
+                };
+                let favorable = chosen !== undefined
+                    && favorableAgainst(chosen);
+                // ...but a warship FIGHTS BACK whatever the odds: its
+                // aggressor is engaged even when MaxOdds calls that fight
+                // unfavorable (reference "Scourge: an AI 3 of a MaxOdds 0
+                // / MaxOdds 1 govt fights back", 2026-11-28: the tickled
+                // AI Subject Disc closed in and wore the player's shield
+                // down for 2 minutes at both, as at MaxOdds 1000, while a
+                // xenophobic MaxOdds 0 one never came at an idle player).
+                // When the nearest candidate is an unfavorable hostile, the
+                // aggressor is the one taken on. `favorable` stays the odds
+                // call, so gövt 0x0010's "losing" (npc_retreat.ts) still
+                // reads a too-strong attacker as losing.
+                if (!favorable && aggressorEntry !== undefined
+                    && chosen !== aggressorEntry[0]) {
+                    chosen = aggressorEntry[0];
+                    favorable = favorableAgainst(chosen);
                 }
+                const retaliating = chosen !== undefined
+                    && chosen === aggressorEntry?.[0];
                 // gövt Flags 0x0010: under 25% shield AND losing, one PRNG
                 // draw decides jump out or stand off while losing
                 // (npc_retreat.ts; the reference showed the shield level
@@ -1019,7 +1039,7 @@ export const NpcDecisionSystem = new System({
                         return;
                     }
                 }
-                if (chosen && favorable) {
+                if (chosen && (favorable || retaliating)) {
                     engage(uuid, npc, target, chosen, emit);
                     return;
                 }

@@ -55,7 +55,9 @@ import { DistressCallEvent, DistressCallEventType } from './distress.js';
  *                   it also flees once an attacker that had been
  *                   within its longest weapon reach is beyond it.
  *  3 warship:       hunts govt enemies (disposition via GovtData
- *                   classes/allies/enemies); patrols waypoints when
+ *                   classes/allies/enemies) while the MaxOdds call is
+ *                   favorable, and fights its attacker back whatever
+ *                   the odds; patrols waypoints when
  *                   there is nothing to hunt; jumps out eventually.
  *                   With gövt Flags 0x0010, under 25% shield and
  *                   losing, one draw decides: jump out at once, or

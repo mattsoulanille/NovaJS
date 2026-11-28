@@ -452,13 +452,15 @@ describe('NPC friendly fire between same-govt / allied ships '
             expect(targetOf(victim)).toBe('shooter');
             expect(npcOf(escort).aggressor).toBe('shooter');
             // The escort weighs the shooter (134 px away) against the
-            // player (335 px) and picks the nearer; a Skiff facing a
-            // Corsair has no odds (MaxOdds), so it breaks off and holds
-            // formation rather than going on hunting the player.
+            // player (335 px) and picks the nearer. A Skiff facing a
+            // Corsair has no odds (MaxOdds), but the shooter is its
+            // AGGRESSOR, and a warship fights back whatever the odds
+            // (reference "Scourge: MaxOdds and fighting back",
+            // 2026-11-28), so it goes for the shooter.
             expect(targetOf(escort))
-                .withContext('no longer after the player')
-                .toBeUndefined();
-            expect(npcOf(escort).mode).toBe('patrol');
+                .withContext('after the shooter, not the player')
+                .toBe('shooter');
+            expect(npcOf(escort).mode).toBe('attack');
         });
 
     /**
