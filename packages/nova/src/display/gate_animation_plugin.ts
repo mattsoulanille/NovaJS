@@ -9,7 +9,7 @@ import { Query } from 'nova_ecs/query';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import {
-    GATE_EMERGENCE_DISTANCE, PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
+    PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
     holdsGateClearance, stellarClearanceFor, StellarBribesComponent,
 } from '../nova_plugin/travel/index.js';
 import { Optional } from 'nova_ecs/optional';
@@ -204,10 +204,17 @@ const GateQuery = new Query([PlanetComponent, PlanetDataComponent,
     MovementStateComponent] as const);
 
 /**
- * A ship appearing out of nowhere at a gate's emergence point just arrived
- * through it (remote players' transits give this peer no earlier signal):
- * hold that gate open. The margin over the emergence distance allows for the
- * ship coasting outward before this peer first saw it.
+ * How near a gate's centre a ship that appears out of nowhere must be for
+ * this peer to take it as just arrived through that gate. Ships emerge AT
+ * the centre (GateArrivalSystem, reference wave 59) and coast out at half
+ * their top speed, so the radius is the coast this peer may miss before it
+ * first sees the ship (the 600 px the old 300 px emergence point allowed).
+ */
+export const GATE_ARRIVAL_SIGHTING_RADIUS = 600;
+
+/**
+ * A ship appearing out of nowhere at a gate just arrived through it (remote
+ * players' transits give this peer no earlier signal): hold that gate open.
  */
 const ShipArrivedAtGateSystem = new System({
     name: 'ShipArrivedAtGateSystem',
@@ -221,7 +228,7 @@ const ShipArrivedAtGateSystem = new System({
             }
             const distance = movement.position
                 .subtract(gateMovement.position).length;
-            if (distance < GATE_EMERGENCE_DISTANCE * 2) {
+            if (distance < GATE_ARRIVAL_SIGHTING_RADIUS) {
                 anticipation.set(planet.id, time.time + GATE_ARRIVAL_HOLD_MS);
             }
         }

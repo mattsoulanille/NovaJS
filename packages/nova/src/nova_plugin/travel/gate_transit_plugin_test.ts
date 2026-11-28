@@ -14,7 +14,7 @@ import { PlayerSoundEvent } from "../core/index.js";
 import { WARP_OUT_SOUND } from "./jump_plugin.js";
 import { ShipPhysicsComponent, getShipMovementPhysics } from "../ship/index.js";
 import {
-    GateArrivalComponent, GateTransit, GateTransitEvent, GATE_EMERGENCE_DISTANCE,
+    GateArrivalComponent, GateTransit, GateTransitEvent, GATE_EMERGENCE_SPEED_FRACTION,
 } from "./gate_transit_plugin.js";
 import { GateDestinationResolver } from "./gate_destination_resolver.js";
 import type {
@@ -186,21 +186,26 @@ describe('gate transit', () => {
         destWorld.step();
         expect(ship.components.has(GateArrivalComponent)).toBeFalse();
 
-        // Positioned at the emergence distance from the gate (it may have
+        // Positioned AT the gate's centre (reference wave 59; it may have
         // coasted outward for a tick before we observe it)...
         const gatePlanet = destWorld.entities.get(`planet ${GATE_B_SPOB}`)!;
         const gatePos = gatePlanet.components.get(MovementStateComponent)!.position;
         const movement = ship.components.get(MovementStateComponent)!;
         const offset = movement.position.subtract(gatePos);
         const physics = ship.components.get(ShipPhysicsComponent)!;
-        const speed = getShipMovementPhysics(physics).maxVelocity;
-        expect(offset.length).toBeGreaterThanOrEqual(GATE_EMERGENCE_DISTANCE - 1e-6);
-        expect(offset.length).toBeLessThan(GATE_EMERGENCE_DISTANCE + speed * 0.05);
+        const speed = getShipMovementPhysics(physics).maxVelocity
+            * GATE_EMERGENCE_SPEED_FRACTION;
+        expect(GATE_EMERGENCE_SPEED_FRACTION).toBe(0.5);
+        expect(offset.length).toBeLessThan(speed * 0.05 + 1e-6);
 
-        // ...flying outward at the ship's regular top speed, facing out...
+        // ...coasting outward at HALF the ship's top speed, facing the way
+        // it flies...
         expect(movement.velocity.length).toBeCloseTo(speed, 3);
-        // Velocity is along the emergence offset (outward, not inward).
-        expect(movement.velocity.dot(offset)).toBeGreaterThan(0);
+        expect(movement.targetSpeed).toBeCloseTo(speed, 6);
+        if (offset.length > 1e-6) {
+            // Any coast so far is outward, along the velocity.
+            expect(movement.velocity.dot(offset)).toBeGreaterThan(0);
+        }
         expect(movement.rotation.angle)
             .toBeCloseTo(movement.velocity.angle.angle, 6);
 
@@ -278,12 +283,10 @@ describe('gate transit', () => {
         const movement = ship.components.get(MovementStateComponent)!;
         const offset = movement.position.subtract(gatePos);
         const physics = ship.components.get(ShipPhysicsComponent)!;
-        const speed = getShipMovementPhysics(physics).maxVelocity;
-        expect(offset.length)
-            .toBeGreaterThanOrEqual(GATE_EMERGENCE_DISTANCE - 1e-6);
-        expect(offset.length)
-            .toBeLessThan(GATE_EMERGENCE_DISTANCE + speed * 0.05);
-        expect(movement.velocity.dot(offset)).toBeGreaterThan(0);
+        const speed = getShipMovementPhysics(physics).maxVelocity
+            * GATE_EMERGENCE_SPEED_FRACTION;
+        expect(offset.length).toBeLessThan(speed * 0.05 + 1e-6);
+        expect(movement.velocity.length).toBeCloseTo(speed, 3);
     }, 60_000);
 
     it('resolves a hypergate pair end-to-end (system and position)',

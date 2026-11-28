@@ -43,7 +43,7 @@ import { PlayerSoundEvent } from '../core/index.js';
  *   closing the map without a pick relaunches the ship at the origin gate.
  *
  * Arrival in the destination system is positioned by {@link GateArrivalSystem}:
- * the ship appears flying out of the arrival gate — the sim world there
+ * the ship appears at the arrival gate's centre, flying out — the sim world there
  * already has that gate loaded as a planet entity, so no cross-system data
  * lookup is needed mid-step.
  *
@@ -55,11 +55,14 @@ import { PlayerSoundEvent } from '../core/index.js';
  */
 
 /**
- * How far outside the destination gate a ship emerges, in pixels. Far enough
- * that the arriving ship is clear of the gate's own landing radius (so a held
- * land key doesn't immediately re-transit) but still visually "at" the gate.
+ * A ship emerges AT the destination gate's centre and coasts straight out of
+ * it at this fraction of its top speed (reference "Hypergate emergence, wave
+ * 59": on the original the first frame put the ship within a few px of the
+ * gate's centre for 40, 150 and 325 px gate art alike, then it coasted at
+ * 0.49-0.52 of the hull's top speed, a Leviathan 22 px/s and a Starbridge
+ * 87-91, inertial or inertialess, facing the way it flew).
  */
-export const GATE_EMERGENCE_DISTANCE = 300;
+export const GATE_EMERGENCE_SPEED_FRACTION = 0.5;
 
 /**
  * Rides on a transiting ship to its destination system and positions it at the
@@ -201,13 +204,16 @@ export const GateDepartureSystem = new System({
 
 /**
  * The first tick after a transiting ship arrives in the destination system.
- * The ship appears FLYING OUT of the arrival gate (matched by spöb global id
- * among the system's planet entities): teleported to the gate's emergence
- * point, facing outward, coasting outward at its regular top speed, with the
- * "jump in" sound (snd 130 "Warp out" — the same sound a hyperspace arrival
- * plays; the data has no gate-specific sound). The emergence angle (from the
- * source gate's CustSndID) decides the fly-out direction; a null angle means
- * "random direction", chosen deterministically from the replicated randomDraw.
+ * The ship appears AT the arrival gate's centre (matched by spöb global id
+ * among the system's planet entities), facing the emergence direction and
+ * coasting along it at half its top speed (GATE_EMERGENCE_SPEED_FRACTION),
+ * with the "jump in" sound (snd 130 "Warp out" — the same sound a hyperspace
+ * arrival plays; the data has no gate-specific sound). The DESTINATION
+ * gate's CustSndID decides the direction (0-359 an exact clock angle; every
+ * stock gate says 120); anything else means "random", chosen
+ * deterministically from the replicated randomDraw. On the original a random
+ * gate's direction does not follow the departure heading (wave 59: six
+ * departures at 140-170 deg came out at 100, 290, 150, 100, 320 and 310).
  *
  * The sound is emitted targeted at the ship, so only that ship's own pilot
  * hears it (the display's PlayerSoundSystem plays player-targeted sounds for
@@ -242,19 +248,19 @@ export const GateArrivalSystem = new System({
         }
 
         if (gatePosition) {
-            // Emerge a fixed distance from the gate, at the emergence angle
-            // (or a seeded-random direction when the angle is unspecified),
-            // flying outward.
+            // Emerge at the gate's centre, facing the emergence angle (or a
+            // seeded-random direction when the angle is unspecified) and
+            // coasting along it at half the hull's top speed; targetSpeed
+            // keeps an inertialess hull coasting too, as on the original.
             const angle = gateAngle !== null
                 ? new Angle(gateAngle * Math.PI / 180)
                 : new Angle(arrival.randomDraw * 2 * Math.PI - Math.PI);
-            const unit = angle.getUnitVector();
             const speed = shipPhysics
-                ? getShipMovementPhysics(shipPhysics).maxVelocity : 0;
-            teleport(movement,
-                new Position(gatePosition.x + unit.x * GATE_EMERGENCE_DISTANCE,
-                    gatePosition.y + unit.y * GATE_EMERGENCE_DISTANCE),
-                unit.scale(speed));
+                ? getShipMovementPhysics(shipPhysics).maxVelocity
+                    * GATE_EMERGENCE_SPEED_FRACTION
+                : 0;
+            teleport(movement, new Position(gatePosition.x, gatePosition.y),
+                angle.getUnitVector().scale(speed));
             movement.rotation = angle;
             movement.targetSpeed = speed;
         }

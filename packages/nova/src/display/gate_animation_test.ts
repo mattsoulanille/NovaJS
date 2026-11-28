@@ -14,13 +14,13 @@ import { SimulationGameDataResource } from "../nova_plugin/core/index.js";
 import { ActiveRanksComponent } from "../nova_plugin/ncb/index.js";
 import { LegalRecordsComponent } from "../nova_plugin/reputation/index.js";
 import {
-    GATE_EMERGENCE_DISTANCE, PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
+    PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
 } from '../nova_plugin/travel/index.js';
 import { ShipComponent } from "../nova_plugin/ship/index.js";
 import { AnimationGraphicComponent } from "./animation_graphic_plugin.js";
 import {
     GateAnimationComponent, GateAnimationPlugin, GateAnimationState,
-    GateAnticipationResource, GateArrivalAnticipationEvent, GATE_FRAME_MS,
+    GateAnticipationResource, GateArrivalAnticipationEvent, GATE_ARRIVAL_SIGHTING_RADIUS, GATE_FRAME_MS,
     stepGateAnimation,
 } from "./gate_animation_plugin.js";
 
@@ -344,8 +344,10 @@ describe('GateAnimationSystem triggers', () => {
         step();
         const arriving = new Entity('arriving ship');
         arriving.components.set(ShipComponent, { id: 'nova:128' });
+        // Ships emerge AT the gate's centre (wave 59) and coast out; this
+        // peer first sees one a little way along its coast.
         arriving.components.set(MovementStateComponent, {
-            position: new Position(GATE_EMERGENCE_DISTANCE, 0),
+            position: new Position(40, 0),
             velocity: new Vector(0, 0), rotation: new Angle(0),
             accelerating: 0, turnBack: false, turning: 0,
         });
@@ -356,5 +358,21 @@ describe('GateAnimationSystem triggers', () => {
         // The anticipation was recorded for this gate.
         expect(world.resources.get(GateAnticipationResource)!
             .has('nova:1401')).toBeTrue();
+    });
+
+    it('stays closed for a ship that appears beyond the sighting radius',
+        () => {
+        step();
+        const far = new Entity('far ship');
+        far.components.set(ShipComponent, { id: 'nova:128' });
+        far.components.set(MovementStateComponent, {
+            position: new Position(GATE_ARRIVAL_SIGHTING_RADIUS + 50, 0),
+            velocity: new Vector(0, 0), rotation: new Angle(0),
+            accelerating: 0, turnBack: false, turning: 0,
+        });
+        world.entities.set('far uuid', far);
+        step();
+        step();
+        expect(gateState().mode).toBe('closed');
     });
 });
