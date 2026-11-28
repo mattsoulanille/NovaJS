@@ -397,4 +397,38 @@ describe('nested bays: return to ship', () => {
         expect(count(player, TENDERS)).toBe(2);
         expect(deployed().get(TENDERS)).toBeUndefined();
     });
+
+    it('does not charge the Tender\'s Dart to the player\'s own Dart bay '
+        + 'cap, in flight or after its Tender docks', async () => {
+        // RULING (Matthew, 2026-11-27): "Another carrier escort's dart
+        // should not count against your limit." The player mounts a Dart
+        // bay supplied by the very outfit the Tender's Dart came from.
+        const { world, player, gameData } = await makeWorld();
+        const deployed = () => countDeployedFighters(world.entities, PLAYER,
+            id => gameData.data.Outfit.map.get(id))([TENDERS, DARTS]);
+        const [tenderUuid, tender] = await launchTender(world, player);
+        await launchDart(world, tenderUuid, tender);
+        expect(deployed().get(TENDERS)).toBe(1);
+        expect(deployed().get(DARTS)).toBeUndefined();
+
+        // The player's OWN Dart does count.
+        const before = launchedFrom(world, PLAYER).length;
+        const dartBay = player.components.get(WeaponsStateComponent)!
+            .get(DART_BAY)!;
+        dartBay.firing = true;
+        await step(world, 2);
+        dartBay.firing = false;
+        expect(launchedFrom(world, PLAYER).length).toBe(before + 1);
+        expect(deployed().get(DARTS)).toBe(1);
+
+        // With the Tender home, its orphaned Dart flies to the player but
+        // is still not the player's: credited to nothing on docking, so
+        // it holds no slot of the player's bay while it is out.
+        recall(tender);
+        await step(world, 2);
+        dock(world, tenderUuid, PLAYER);
+        await step(world, 1);
+        expect(deployed().get(TENDERS)).toBeUndefined();
+        expect(deployed().get(DARTS)).toBe(1);
+    });
 });

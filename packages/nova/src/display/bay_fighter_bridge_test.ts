@@ -158,31 +158,24 @@ describe('countDeployedFighters', () => {
                 .toEqual(new Map([['nova:158', 1]]));
         });
 
-    it('follows the owner chain up to the carrier', () => {
-        // A fighter whose Source is an intermediate escort that itself
-        // belongs to the docked player.
-        const escort = new Entity().addComponent(SourceComponent, CARRIER);
-        const entities = new Map([
-            ['escort', escort],
-            ['f1', fighter(BAY, 'escort')],
-        ]);
-        const counts = countDeployedFighters(entities, CARRIER,
-            outfits(['nova:158', BAY]));
-        expect(counts(['nova:158'])).toEqual(new Map([['nova:158', 1]]));
-    });
-
-    it('terminates on a cycle in the owner chain', () => {
-        const a = new Entity().addComponent(SourceComponent, 'b');
-        const b = new Entity().addComponent(SourceComponent, 'a');
-        const entities = new Map([
-            ['a', a], ['b', b], ['f1', fighter(BAY, 'a')],
-        ]);
-        const counts = countDeployedFighters(entities, CARRIER,
-            outfits(['nova:158', BAY]));
-        // Never resolves to the carrier, so it goes uncounted — and,
-        // crucially, does not hang.
-        expect(counts(['nova:158']).size).toBe(0);
-    });
+    it('does NOT follow the owner chain: a carrier escort\'s fighter is '
+        + 'not charged to the player\'s own bay', () => {
+            // RULING (Matthew, 2026-11-27): "Another carrier escort's dart
+            // should not count against your limit." The escort here is
+            // the player's own (a Tender it launched, or a hired
+            // carrier); its Dart draws on the escort's outfits even
+            // though the player also mounts a Dart bay supplied by the
+            // same outfit.
+            const escort = new Entity().addComponent(SourceComponent, CARRIER);
+            const entities = new Map([
+                ['escort', escort],
+                ['own', fighter(BAY, CARRIER)],
+                ['escortsDart', fighter(BAY, 'escort')],
+            ]);
+            const counts = countDeployedFighters(entities, CARRIER,
+                outfits(['nova:158', BAY]));
+            expect(counts(['nova:158'])).toEqual(new Map([['nova:158', 1]]));
+        });
 
     it('skips a fighter whose bay matches no owned outfit', () => {
         const entities = new Map([['f1', fighter(BAY, CARRIER)]]);

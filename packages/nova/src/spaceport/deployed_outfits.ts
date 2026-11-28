@@ -35,7 +35,7 @@
 import { OutfitData } from 'novadatainterface/outfit_data';
 import { Entity } from 'nova_ecs/entity';
 import { BayFighterComponent } from '../nova_plugin/escorts/index.js';
-import { OwnerComponent, SourceComponent } from '../nova_plugin/ship/index.js';
+import { SourceComponent } from '../nova_plugin/ship/index.js';
 
 /**
  * Outfit global id -> how many units of it the player owns that are not
@@ -69,23 +69,45 @@ export function mergeDeployedCounts(...providers: DeployedOutfitCounts[]):
 }
 
 /**
- * Walks an entity's owner chain to the ship that ultimately launched or
- * hired it. Bounded so a cycle in replicated state cannot hang the
- * outfitter.
+ * Bay weapon id -> the owned outfit that supplies it: the LOWEST-sorted
+ * owned outfit whose `ammoFor` is that bay. Shared by both counters so
+ * their attribution cannot drift apart.
  */
-function ownerRoot(uuid: string, entities: ReadonlyMap<string, Entity>,
-    limit = 8): string {
-    let current = uuid;
-    for (let i = 0; i < limit; i++) {
-        const entity = entities.get(current);
-        const next = entity?.components.get(SourceComponent)
-            ?? entity?.components.get(OwnerComponent)?.owner;
-        if (next === undefined || next === current) {
-            return current;
+function ammoOutfitIndex(ownedOutfitIds: Iterable<string>,
+    getOutfit: (id: string) => OutfitData | undefined):
+    Map<string, string> {
+    const ammoOutfitFor = new Map<string, string>();
+    for (const id of [...ownedOutfitIds].sort()) {
+        const ammoFor = getOutfit(id)?.ammoFor;
+        if (ammoFor && !ammoOutfitFor.has(ammoFor)) {
+            ammoOutfitFor.set(ammoFor, id);
         }
-        current = next;
     }
-    return current;
+    return ammoOutfitFor;
+}
+
+/**
+ * The outfit a bay fighter is charged to on the docked ship, or
+ * undefined when it is not one of the docked ship's own.
+ *
+ * Only a fighter launched straight from the docked ship's OWN bays
+ * counts (SourceComponent === the docked ship's uuid). A fighter from a
+ * carrier ESCORT's bays — even a level-2 Dart whose Tender the player
+ * launched — draws on that escort's outfits, never the player's: it is
+ * not refunded to the player's magazine when it docks (bay_plugin's
+ * nested-bay rules credit it to its own carrier, or to nothing), so it
+ * must not hold a slot of the player's own bay either. RULING (Matthew,
+ * 2026-11-27): "Another carrier escort's dart should not count against
+ * your limit." The owner chain is therefore deliberately NOT walked.
+ */
+function chargedOutfit(entity: Entity, carrierUuid: string,
+    ammoOutfitFor: ReadonlyMap<string, string>): string | undefined {
+    const fighter = entity.components.get(BayFighterComponent);
+    if (!fighter
+        || entity.components.get(SourceComponent) !== carrierUuid) {
+        return undefined;
+    }
+    return ammoOutfitFor.get(fighter.bayWeaponId);
 }
 
 /**
@@ -105,6 +127,11 @@ function ownerRoot(uuid: string, entities: ReadonlyMap<string, Entity>,
  * id. In practice consumeAmmo leaves spent entries at zero rather than
  * deleting them, so the id is present.
  *
+ * Only fighters launched from the docked ship's OWN bays count; a
+ * carrier escort's fighters do not, even on a bay the player also
+ * mounts (see chargedOutfit). countLandedFighters applies the same rule
+ * to the landed roster, so a fighter counts the same in flight or down.
+ *
  * `carrierUuid` is the docked ship's uuid. It is still meaningful even
  * though the ship itself has been pulled out of the display world
  * (browser.ts removes it before opening the spaceport): the fighters
@@ -115,29 +142,13 @@ export function countDeployedFighters(
     carrierUuid: string,
     getOutfit: (id: string) => OutfitData | undefined): DeployedOutfitCounts {
     return ownedOutfitIds => {
-        // bay weapon id -> the owned outfit that supplies it.
-        const ammoOutfitFor = new Map<string, string>();
-        for (const id of [...ownedOutfitIds].sort()) {
-            const ammoFor = getOutfit(id)?.ammoFor;
-            if (ammoFor && !ammoOutfitFor.has(ammoFor)) {
-                ammoOutfitFor.set(ammoFor, id);
-            }
-        }
-
+        const ammoOutfitFor = ammoOutfitIndex(ownedOutfitIds, getOutfit);
         const counts = new Map<string, number>();
-        for (const [uuid, entity] of entities) {
-            const fighter = entity.components.get(BayFighterComponent);
-            if (!fighter) {
-                continue;
+        for (const entity of entities.values()) {
+            const outfitId = chargedOutfit(entity, carrierUuid, ammoOutfitFor);
+            if (outfitId !== undefined) {
+                counts.set(outfitId, (counts.get(outfitId) ?? 0) + 1);
             }
-            if (ownerRoot(uuid, entities) !== carrierUuid) {
-                continue;
-            }
-            const outfitId = ammoOutfitFor.get(fighter.bayWeaponId);
-            if (outfitId === undefined) {
-                continue;
-            }
-            counts.set(outfitId, (counts.get(outfitId) ?? 0) + 1);
         }
         return counts;
     };
@@ -170,29 +181,16 @@ export function countLandedFighters(
     carrierUuid: string,
     getOutfit: (id: string) => OutfitData | undefined): DeployedOutfitCounts {
     return ownedOutfitIds => {
-        const ammoOutfitFor = new Map<string, string>();
-        for (const id of [...ownedOutfitIds].sort()) {
-            const ammoFor = getOutfit(id)?.ammoFor;
-            if (ammoFor && !ammoOutfitFor.has(ammoFor)) {
-                ammoOutfitFor.set(ammoFor, id);
-            }
-        }
-
+        const ammoOutfitFor = ammoOutfitIndex(ownedOutfitIds, getOutfit);
         const counts = new Map<string, number>();
         for (const { player, entity } of roster()) {
             if (player !== carrierUuid) {
                 continue;
             }
-            const fighter = entity.components.get(BayFighterComponent);
-            if (!fighter
-                || entity.components.get(SourceComponent) !== carrierUuid) {
-                continue;
+            const outfitId = chargedOutfit(entity, carrierUuid, ammoOutfitFor);
+            if (outfitId !== undefined) {
+                counts.set(outfitId, (counts.get(outfitId) ?? 0) + 1);
             }
-            const outfitId = ammoOutfitFor.get(fighter.bayWeaponId);
-            if (outfitId === undefined) {
-                continue;
-            }
-            counts.set(outfitId, (counts.get(outfitId) ?? 0) + 1);
         }
         return counts;
     };
