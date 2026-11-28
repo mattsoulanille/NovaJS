@@ -1,7 +1,7 @@
 import { ProjectileWeaponData, WeaponData } from 'novadatainterface/weapon_data';
 import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
 import { Angle } from 'nova_ecs/datatypes/angle';
-import { Position } from 'nova_ecs/datatypes/position';
+import { Position, wrapNearestDelta } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { Optional } from 'nova_ecs/optional';
@@ -700,8 +700,11 @@ const FRONT_QUADRANT_HALF_ANGLE = Math.PI / 4;
  */
 export function inFrontQuadrant(movement: MovementState,
     targetPosition: { x: number, y: number }): boolean {
-    const toTarget = new Vector(targetPosition.x - movement.position.x,
-        targetPosition.y - movement.position.y);
+    // The shortest way round the toroidal system, as inRearQuadrant's
+    // Position arithmetic measures it.
+    const toTarget = new Vector(
+        wrapNearestDelta(targetPosition.x - movement.position.x),
+        wrapNearestDelta(targetPosition.y - movement.position.y));
     if (toTarget.lengthSquared < 1e-12) {
         return true;
     }

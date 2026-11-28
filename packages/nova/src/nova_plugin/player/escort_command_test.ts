@@ -1100,6 +1100,14 @@ describe('inFrontQuadrant', () => {
         expect(inFrontQuadrant(movement, { x: -100, y: 0 })).toBeFalse();
         expect(inFrontQuadrant(movement, { x: 100, y: 110 })).toBeFalse();
     });
+
+    it('measures across the system\'s wrap seam the short way', () => {
+        // Facing +x just inside the +x edge: a ship just over the seam
+        // (at the -x edge) is 200 px dead ahead, not 19,800 px behind.
+        const nearEdge = { ...movement, position: new Position(9900, 0) };
+        expect(inFrontQuadrant(nearEdge, { x: -9900, y: 0 })).toBeTrue();
+        expect(inFrontQuadrant(nearEdge, { x: 9700, y: 0 })).toBeFalse();
+    });
 });
 
 describe('inRearQuadrant', () => {

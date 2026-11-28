@@ -1,6 +1,6 @@
 import { GovtData } from 'novadatainterface/govt_data';
 import { ShipData } from 'novadatainterface/ship_data';
-import { Position } from 'nova_ecs/datatypes/position';
+import { Position, wrapNearestDelta } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Random } from 'nova_ecs/plugins/random_plugin';
 import { govtDisposition } from '../reputation/index.js';
@@ -143,8 +143,8 @@ export function shuttleLaneEnd(stops: readonly PlanetEntry[], from: string,
         if (uuid === from) {
             continue;
         }
-        const dx = movement.position.x - origin.x;
-        const dy = movement.position.y - origin.y;
+        const dx = wrapNearestDelta(movement.position.x - origin.x);
+        const dy = wrapNearestDelta(movement.position.y - origin.y);
         const d2 = dx * dx + dy * dy;
         if (d2 < best) {
             best = d2;

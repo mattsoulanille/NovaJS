@@ -16,6 +16,7 @@ import { DisabledComponent } from '../ship/index.js';
 import { ShipCargoProvider, ShipExplosionComponent } from '../ship/index.js';
 import { insideShipExplosion, shipExplosionReach } from '../ship/index.js';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import { wrapNearestDelta } from 'nova_ecs/datatypes/position';
 
 
 export { BlastDamageComponent, BlastIgnoreComponent } from '../ship/index.js';
@@ -40,8 +41,9 @@ export const BlastCollisionSystem = new System({
         if (shipExplosion && movement) {
             const at = other?.components.get(MovementStateComponent)
                 ?.position;
-            if (!at || !insideShipExplosion(at.x - movement.position.x,
-                at.y - movement.position.y,
+            if (!at || !insideShipExplosion(
+                wrapNearestDelta(at.x - movement.position.x),
+                wrapNearestDelta(at.y - movement.position.y),
                 shipExplosionReach(shipExplosion.mass))) {
                 return;
             }

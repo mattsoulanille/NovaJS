@@ -3,7 +3,7 @@ import { ProjectileWeaponData, WeaponData, WeaponDamage } from 'novadatainterfac
 import { ArgsToData, Emit, EmitFunction, EmitNow, Entities, GetEntity, GetWorld, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { EntityMap } from 'nova_ecs/entity_map';
 import { Angle } from 'nova_ecs/datatypes/angle';
-import { Position, PositionType } from 'nova_ecs/datatypes/position';
+import { Position, PositionType, wrapNearestDelta } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
@@ -748,8 +748,8 @@ export const ProjectileProximityFuseSystem = new System({
             if (!vulnerable) {
                 continue;
             }
-            const dx = otherMovement.position.x - x;
-            const dy = otherMovement.position.y - y;
+            const dx = wrapNearestDelta(otherMovement.position.x - x);
+            const dy = wrapNearestDelta(otherMovement.position.y - y);
             const distanceSquared = dx * dx + dy * dy;
             const reach = proximityFuseReach(projectileData.proxRadius,
                 hullRadius(hull));

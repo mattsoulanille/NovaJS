@@ -5,7 +5,7 @@ import { SystemData } from 'novadatainterface/system_data';
 import { Emit, Entities, GetWorld, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
-import { Position } from 'nova_ecs/datatypes/position';
+import { Position, wrapNearestDelta } from 'nova_ecs/datatypes/position';
 import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
 import { Optional } from 'nova_ecs/optional';
@@ -569,7 +569,8 @@ function considerCall(side: string, opponent: string, context: CallContext)
     const from = getEntity(opponent)?.components
         .get(MovementStateComponent)?.position;
     const distanceSquared = at && from
-        ? (from.x - at.x) ** 2 + (from.y - at.y) ** 2 : undefined;
+        ? wrapNearestDelta(from.x - at.x) ** 2
+            + wrapNearestDelta(from.y - at.y) ** 2 : undefined;
     if (!reinforcementCallInRange(npc.aiType, distanceSquared)) {
         return;
     }

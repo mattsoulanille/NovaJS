@@ -1,6 +1,6 @@
 import { Entity } from 'nova_ecs/entity';
 import { Emit, EmitFunction, Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
-import { Position } from 'nova_ecs/datatypes/position';
+import { Position, wrapNearestDelta } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { EcsEvent } from 'nova_ecs/events';
 import { Optional } from 'nova_ecs/optional';
@@ -1038,7 +1038,8 @@ export const NpcDecisionSystem = new System({
                     }
                     const [x, y] = npc.waypoint ?? [0, 0];
                     const reached = npc.waypoint === undefined
-                        || new Vector(x - position.x, y - position.y)
+                        || new Vector(wrapNearestDelta(x - position.x),
+                            wrapNearestDelta(y - position.y))
                             .lengthSquared < WAYPOINT_RADIUS * WAYPOINT_RADIUS;
                     if (reached) {
                         npc.waypoint = [

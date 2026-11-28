@@ -296,6 +296,18 @@ describe('In-system shuttles (shïp Flags3 0x0002 without a scoop)', () => {
                     .toEqual([MARKER, MARKET, NEUTRAL_PORT].sort());
             });
 
+        it('measures across the system\'s wrap seam the short way', () => {
+            const at = (id: string, x: number): PlanetEntry =>
+                [id, { position: new Position(x, 0) } as never, undefined,
+                    undefined as never];
+            // 'edge' is 150 px from 'over' across the seam and 400 px
+            // from 'inside' the plain way.
+            const stops = [at('edge', 9900), at('over', -9950),
+                at('inside', 9500)];
+            expect(shuttleLaneEnd(stops, 'edge', countingRandom(1).random))
+                .toBe('over');
+        });
+
         it('the lane is a stellar and its NEAREST neighbour, whatever '
             + 'the list order or the player\'s stellar (wave 16, '
             + 'measured)', () => {

@@ -4,6 +4,7 @@ import { Entities, GetEntity } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { CommunicatorResource, MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
+import { wrapNearestDelta } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { Optional } from 'nova_ecs/optional';
@@ -921,11 +922,13 @@ function setMercyHaggle(target: Entity, playerUuid: string, channel: number,
     }
 }
 
-/** Point-and-thrust steering toward a position (assist rendezvous). */
-function steerToward(movement: MovementState,
+/** Point-and-thrust steering toward a position (assist rendezvous), the
+ * shortest way round the toroidal system. */
+export function steerToward(movement: MovementState,
     targetPos: { x: number, y: number }) {
-    const toTarget = new Vector(targetPos.x - movement.position.x,
-        targetPos.y - movement.position.y);
+    const toTarget = new Vector(
+        wrapNearestDelta(targetPos.x - movement.position.x),
+        wrapNearestDelta(targetPos.y - movement.position.y));
     movement.turnTo = toTarget.angle;
     movement.turnBack = false;
     movement.accelerating = toTarget.length > ASSIST_STANDOFF ? 1 : 0;

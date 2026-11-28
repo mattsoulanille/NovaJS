@@ -31,6 +31,7 @@ import {
 import { JumpComponent } from '../travel/index.js';
 import {
     applyHail, bribedShipLeaves, isSomeoneElsesEscort, SentHailComponent,
+    steerToward,
 } from './hail_plugin.js';
 import { FormationComponent } from '../npc/index.js';
 import { OwnerComponent } from '../combat/index.js';
@@ -1805,4 +1806,24 @@ describe('applyHail: a NEUTRAL ship (reference H1 waves 16 and 17)', () => {
             applyHail(stranger.world, PEER, assist);
             expect(credits(stranger.world)).toBe(100_000 - 1000);
         });
+});
+
+describe('steerToward (assist rendezvous)', () => {
+    it('heads across the system\'s wrap seam the short way', () => {
+        // A helper just inside the +x edge, its client just over the seam
+        // at the -x edge: 300 px ahead along +x, not 19,700 px back.
+        const movement = {
+            position: new Position(9850, 0),
+            velocity: new Vector(0, 0),
+            rotation: new Angle(0),
+            accelerating: 0,
+            turning: 0,
+            turnBack: false,
+            turnTo: null,
+        } as unknown as Parameters<typeof steerToward>[0];
+        steerToward(movement, { x: -9850, y: 0 });
+        const heading = movement.turnTo as Angle;
+        expect(heading.getUnitVector().x).toBeCloseTo(1, 9);
+        expect(movement.accelerating).toBe(1);
+    });
 });
