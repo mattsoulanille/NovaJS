@@ -6,7 +6,7 @@ import { beginPixiTextEntry } from '../input_focus.js';
 import type { ControlEvent } from '../nova_plugin/core/index.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { MenuControls } from './menu_controls.js';
-import { OfferPopup } from './offer_popup.js';
+import { OfferPopup, PopupChoice } from './offer_popup.js';
 
 /**
  * Return on a mission-text popup presses its accept button, the
@@ -43,7 +43,7 @@ describe('OfferPopup Return key', () => {
         const popup = new OfferPopup(displayAssets(),
             new Subject<ControlEvent>());
         raised.push(popup);
-        let answer: 'accept' | 'refuse' | undefined;
+        let answer: PopupChoice | undefined;
         const shown = popup.show('Will you carry the cargo?', buttons)
             .then(choice => { answer = choice; });
         return { shown, answer: () => answer };

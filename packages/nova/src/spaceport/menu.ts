@@ -139,15 +139,36 @@ export abstract class Menu<T> {
 
     /**
      * Closes the menu from OUTSIDE (the owning display world is being torn
-     * down — a jump or gate transit while the map is open). Resolves the
+     * down — a jump or gate transit while the map is open — or the player
+     * docked with it up: display/flight_overlays.ts). Resolves the
      * pending show() with the current input so the MenuControls binding is
      * released; a menu left bound after its world died kept the keyboard
      * for good, and the ship could not be flown in the next system.
-     * No-op when not shown.
+     * No-op when not shown, except that an open still on its way up (see
+     * {@link takeOpenTicket}) is called off.
      */
     dismiss() {
+        this.openTicket++;
         if (this.container.visible) {
             this.done();
         }
+    }
+
+    /**
+     * Bumped by every {@link dismiss}. A subclass whose show() awaits its
+     * data before calling `super.show` takes a ticket first
+     * ({@link takeOpenTicket}) and gives up if a dismissal came in the
+     * meantime ({@link openCancelled}): dismissed while still on its way
+     * up, it must not then bind its keys over whatever took the screen
+     * (a landing with the map opening: client display/flight_overlays.ts).
+     */
+    private openTicket = 0;
+
+    protected takeOpenTicket(): number {
+        return this.openTicket;
+    }
+
+    protected openCancelled(ticket: number): boolean {
+        return ticket !== this.openTicket || !this.alive;
     }
 }

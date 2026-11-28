@@ -26,6 +26,7 @@ import {
 import {
     keepCentred, ScreenSize, stopCentring,
 } from './screen_size_plugin.js';
+import { flightOverlays } from './flight_overlays.js';
 import { Stage } from './stage_resource.js';
 import { showStatusMessage } from './status_message_plugin.js';
 import { BEEP_MISSION_CLOSE, BEEP_MISSION_OPEN, playUiSound } from './ui_sound.js';
@@ -256,8 +257,14 @@ export const MissionInfoPlugin: Plugin = {
             }));
         world.resources.set(DeferredAutoAbortSentResource, new Set());
         world.addSystem(DeferredAutoAbortSystem);
+        // Docking closes it (display/flight_overlays.ts): opened in flight
+        // it shows the in-world ship and aborts through the simulation,
+        // neither of which holds once the ship is out of the world.
+        flightOverlays(world).register('mission info',
+            () => dialog.dismiss());
     },
     remove(world) {
+        flightOverlays(world).unregister('mission info');
         world.removeSystem(DeferredAutoAbortSystem);
         world.resources.delete(DeferredAutoAbortSentResource);
         world.resources.get(MissionInfoControlsSubscription)?.unsubscribe();

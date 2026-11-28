@@ -1,4 +1,4 @@
-import { Emit } from 'nova_ecs/arg_types';
+import { Emit, GetWorld } from 'nova_ecs/arg_types';
 import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
@@ -25,6 +25,7 @@ import { MissionUniverse } from '../spaceport/mission_universe.js';
 import {
     ResizeEvent, ScreenSize, screenCentre,
 } from './screen_size_plugin.js';
+import { closeFlightOverlays } from './flight_overlays.js';
 import { SimulationTimeResource } from './simulation_time.js';
 import { Stage } from './stage_resource.js';
 import { HYPERGATE_JUMP_CANCELLED_MESSAGE } from './status_bar_content.js';
@@ -106,9 +107,13 @@ const OpenGateMapSystem = new System({
     name: 'OpenGateMapSystem',
     events: [OpenGateMapEvent],
     args: [OpenGateMapEvent, GateMapResource, GateMapUniverseResource,
-        GateMapSimClock, ScreenSize, Emit, SingletonComponent] as const,
+        GateMapSimClock, ScreenSize, Emit, GetWorld,
+        SingletonComponent] as const,
     step({ gateSpob, systemId, ship }, gateMap, universe, simClock, screen,
-        emit) {
+        emit, world) {
+        // Docking at the gate closes what was open over space, as a
+        // spaceport landing does (display/flight_overlays.ts).
+        closeFlightOverlays(world);
         const now = simClock();
         const centre = screenCentre(screen);
         gateMap.container.position.x = centre.x;

@@ -201,20 +201,28 @@ export class MissionInfoDialog {
 
     /**
      * Closes the dialog from outside (its display world is being torn
-     * down mid-jump), releasing the MenuControls binding. No-op when
-     * not shown.
+     * down mid-jump, or the player landed with it up), releasing the
+     * MenuControls binding. No-op when not shown, except that an open
+     * still loading is called off.
      */
     dismiss() {
+        this.openTicket++;
         if (this.container.visible) {
             this.closed.next();
         }
     }
+
+    /** Bumped by {@link dismiss}: a show() still loading when it comes
+     * gives up rather than bind over whatever took the screen (a landing:
+     * display/flight_overlays.ts). */
+    private openTicket = 0;
 
     /**
      * Shows the dialog for a ship entity; resolves when dismissed.
      * Abort works through `abort`; without one the button stays greyed.
      */
     async show(entity: Entity, abort?: MissionInfoAbort): Promise<void> {
+        const ticket = this.openTicket;
         this.entity = entity;
         this.abortAction = abort;
         this.identity = await playerIdentitySubs(this.universe,
@@ -232,6 +240,9 @@ export class MissionInfoDialog {
         this.date.text = date ? formatMapDate(date) : '';
         this.selectedIndex = 0;
 
+        if (ticket !== this.openTicket || this.container.destroyed) {
+            return;
+        }
         this.refreshList();
         this.refreshDescription();
 

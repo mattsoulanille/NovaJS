@@ -1135,12 +1135,14 @@ export class HailDialog {
 
     /** Shows the dialog for a computed context; resolves when dismissed. */
     async show(context: HailContext): Promise<void> {
+        const ticket = this.openTicket;
         this.context = context;
         this.opening = context;
         this.phase = 'main';
         await this.render();
-        if (this.dismissed) {
-            // Torn down while the frame art loaded: nothing to open.
+        if (this.dismissed || ticket !== this.openTicket) {
+            // Torn down, or withdrawn, while the frame art loaded:
+            // nothing to open.
             return;
         }
         this.container.visible = true;
@@ -1295,6 +1297,23 @@ export class HailDialog {
         this.controls.release();
         this.close();
     }
+
+    /**
+     * Closes the channel from OUTSIDE but keeps the dialog for later: the
+     * player docked with it up (display/flight_overlays.ts). Settles the
+     * pending show() as Close Channel does, and calls off one still
+     * rendering, which would otherwise bind over the spaceport once its
+     * art loaded. No-op when nothing is open.
+     */
+    withdraw() {
+        this.openTicket++;
+        if (this.container.visible) {
+            this.close();
+        }
+    }
+
+    /** Bumped by {@link withdraw}; see show(). */
+    private openTicket = 0;
 
     /** Local UI beep for a button press (not the closing "Close Channel",
      * whose close beep already covers it). */

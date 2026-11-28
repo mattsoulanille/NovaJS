@@ -38,6 +38,7 @@ import {
 } from '../spaceport/mini_map.js';
 import type { SystemGraph } from '../spaceport/system_graph.js';
 import { DockedPlayerEditedEvent, DockedShipResource } from './docked_ship.js';
+import { flightOverlays } from './flight_overlays.js';
 import { SimulationTimeResource } from './simulation_time.js';
 import {
     keepCentred, ScreenSize, stopCentring,
@@ -147,12 +148,13 @@ const persistentRouteStore: RouteStateStore = { state: emptyRouteState() };
 const miniMapPeek: MiniMapPeek = { until: -Infinity };
 
 /** The in-flight minimap's per-world state, refreshed every frame. */
-interface MiniMapState {
+export interface MiniMapState {
     miniMap: MiniMap;
     /** Re-derives visibility and position (see DrawMiniMap). */
     update(): void;
 }
-const MiniMapResource = new Resource<MiniMapState>('MiniMap');
+/** Exported for specs, which have no `window.novaMiniMap`. */
+export const MiniMapResource = new Resource<MiniMapState>('MiniMap');
 
 /**
  * Keeps the minimap's visibility and place current: usable (drawn and
@@ -561,6 +563,14 @@ export const StarmapPlugin: Plugin = {
         }
         world.resources.set(OpenStarmapResource, openStarmap);
         world.resources.set(StarmapDisposer, () => { disposed = true; });
+        // Docking closes both maps (display/flight_overlays.ts): the full
+        // map as its Done would (its route is committed onto the docked
+        // ship), and whatever is left of an `h` peek, which would
+        // otherwise run on over the lift-off.
+        flightOverlays(world).register('star map', () => {
+            starmap.dismiss();
+            miniMapPeek.until = -Infinity;
+        });
         world.resources.set(StarmapControlsSubscription, controls.subscribe(({ action, state }) => {
             if (action === 'smallMap' && state === 'start') {
                 // In flight only, like 'm': a landed menu, or the full
@@ -593,6 +603,7 @@ export const StarmapPlugin: Plugin = {
         }));
     },
     remove(world) {
+        flightOverlays(world).unregister('star map');
         world.resources.get(StarmapControlsSubscription)?.unsubscribe();
         world.resources.get(StarmapJumpSubscription)?.unsubscribe();
         world.resources.get(StarmapDockedEditSubscription)?.unsubscribe();

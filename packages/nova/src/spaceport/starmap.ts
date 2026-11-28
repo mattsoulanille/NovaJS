@@ -688,6 +688,7 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
     }
 
     override async show(route: string[]) {
+        const ticket = this.takeOpenTicket();
         await this.buildPromise
         // Cheap once loaded (the same resolved promise); after a failed
         // load during build (#66) this is the retry, and a map without
@@ -695,6 +696,12 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         // the opener, which warns, exactly as a rejected buildPromise did,
         // except that the NEXT open can succeed.
         await this.universe.load();
+        if (this.openCancelled(ticket)) {
+            // Dismissed (a landing, a teardown) while the data loaded:
+            // the route as it was (a copy: the caller edits what it gets).
+            this.openOptions = {};
+            return [...route];
+        }
         // The player's bits may have changed (missions, outfits) since
         // the graph was built; refilter NCB-gated systems. A landed
         // caller's bits win over the plugin's lookup (#29).
@@ -716,6 +723,19 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             // Viewed-mission marks only last for the open that set them.
             this.openOptions = {};
         }
+    }
+
+    /**
+     * Closes the map from outside (a landing, a teardown) — and the Find
+     * dialog over it first: left up, it would keep its keys bound and its
+     * text entry claimed (input_focus.ts), and every key in the game
+     * would be dropped from then on.
+     */
+    override dismiss() {
+        if (this.findDialog.shown) {
+            this.findDialog.cancel();
+        }
+        super.dismiss();
     }
 
     override done() {

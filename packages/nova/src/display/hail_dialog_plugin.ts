@@ -87,6 +87,7 @@ import { ShipData } from 'novadatainterface/ship_data';
 import {
     keepCentred, ScreenSize, stopCentring,
 } from './screen_size_plugin.js';
+import { flightOverlays, landedIn } from './flight_overlays.js';
 import { Stage } from './stage_resource.js';
 import { presentShipOffer } from './ship_mission_offer_plugin.js';
 import { showStatusMessage } from './status_message_plugin.js';
@@ -1820,6 +1821,10 @@ export const HailDialogPlugin: Plugin = {
         if (typeof window !== 'undefined') {
             window.novaHailDialog = dialog;
         }
+        // Docking closes the channel as Close Channel would, and calls off
+        // one still rendering (display/flight_overlays.ts).
+        flightOverlays(world).register('hail channel',
+            () => dialog.withdraw());
 
         /**
          * The refusal an unanswerable hail gets instead of a comm dialog:
@@ -1900,6 +1905,11 @@ export const HailDialogPlugin: Plugin = {
                     }
                     return;
                 }
+                // Landed while the context was computed: the channel
+                // belongs to flight (display/flight_overlays.ts).
+                if (landedIn(world) || MenuControls.focused) {
+                    return;
+                }
                 currentTarget = computed.target;
                 currentReplies = computed.replies;
                 currentChannel = lastChannel = channel;
@@ -1962,6 +1972,7 @@ export const HailDialogPlugin: Plugin = {
             }));
     },
     remove(world) {
+        flightOverlays(world).unregister('hail channel');
         world.resources.get(HailControlsSubscription)?.unsubscribe();
         const dialog = world.resources.get(HailDialogResource);
         // A channel still open while its world dies (a jump completing

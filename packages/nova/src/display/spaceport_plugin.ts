@@ -1,5 +1,7 @@
 import * as PIXI from "pixi.js";
-import { Emit, Entities, GetEntity, RunQuery } from 'nova_ecs/arg_types';
+import {
+    Emit, Entities, GetEntity, GetWorld, RunQuery,
+} from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
 import { Optional } from 'nova_ecs/optional';
@@ -18,6 +20,7 @@ import {
 } from '../spaceport/deployed_outfits.js';
 import { Spaceport } from '../spaceport/spaceport.js';
 import { DockedShip, DockedShipResource } from './docked_ship.js';
+import { closeFlightOverlays } from './flight_overlays.js';
 import { OpenMissionInfoResource } from './mission_info_plugin.js';
 import { OpenPlayerInfoResource } from './player_info_plugin.js';
 import {
@@ -91,16 +94,22 @@ const OpenSpaceportSystem = new System({
         DockedShipResource, Entities, SimulationGameDataResource,
         DisplayAssetDataResource, ControlsSubject, Stage, OpenStarmapResource,
         OpenPlayerInfoResource, Optional(OpenMissionInfoResource),
-        Optional(WorldLayer), SingletonComponent] as const,
+        Optional(WorldLayer), GetWorld, SingletonComponent] as const,
     step({ planetId, ship, uuid, landedEscorts, onShipSwap }, runQuery,
         { x, y }, emit, dockedHolder, entities, gameData, displayAssets,
         controls, stage, openStarmap, openPlayerInfo, openMissionInfo,
-        worldLayer) {
+        worldLayer, world) {
         const landedAt = runQuery(PlanetSpaceportQuery)
             .find(([, { id }]) => id === planetId);
         if (!landedAt) {
             return;
         }
+        // The landing closes what was open over space — the map, mission
+        // and player info, a hail channel, an offer — before the spaceport
+        // takes the keyboard: left up, each stayed bound under it, and its
+        // key refused to open it again on the planet (Matthew: landing
+        // with the map open, by autopilot, left `m` dead there).
+        closeFlightOverlays(world);
         const [planet, , existing] = landedAt;
         // The original draws NOTHING of space while the player is landed:
         // the spaceport sits on a black screen with only the status bar

@@ -541,13 +541,14 @@ export class PlayerInfoDialog {
             this.getScreenSize?.().y ?? Infinity));
     }
 
-    /** Shows the dialog and resolves when the player dismisses it. */
     /**
      * Closes the dialog from outside (its display world is being torn
-     * down mid-jump), releasing the MenuControls binding. No-op when
-     * not shown.
+     * down mid-jump, or the player landed with it up), releasing the
+     * MenuControls binding. No-op when not shown, except that an open
+     * still loading is called off.
      */
     dismiss() {
+        this.openTicket++;
         if (this.jettisonConfirm.shown) {
             this.jettisonConfirm.cancel();
         }
@@ -556,13 +557,23 @@ export class PlayerInfoDialog {
         }
     }
 
+    /** Bumped by {@link dismiss}: a show() still loading when it comes
+     * gives up rather than bind over whatever took the screen (a landing:
+     * display/flight_overlays.ts). */
+    private openTicket = 0;
+
+    /** Shows the dialog and resolves when the player dismisses it. */
     async show(entity: Entity, jettison?: PlayerInfoJettison): Promise<void> {
+        const ticket = this.openTicket;
         this.entity = entity;
         this.jettisonAction = jettison;
         try {
             await this.load(entity);
         } catch (e) {
             console.warn('Player info failed to load game data:', e);
+        }
+        if (ticket !== this.openTicket || this.container.destroyed) {
+            return;
         }
         this.showPage(this.page);
         this.container.visible = true;

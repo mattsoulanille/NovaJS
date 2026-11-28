@@ -98,6 +98,14 @@ export function popupDepartChoice(hasRefuse: boolean):
     return hasRefuse ? undefined : 'accept';
 }
 
+/**
+ * How a popup was answered: by its Accept or Refuse button (or the keys
+ * that press them), or WITHDRAWN from outside without an answer — the
+ * player docked with an in-flight popup up ({@link OfferPopup.withdraw}).
+ * A withdrawn offer is neither accepted nor refused.
+ */
+export type PopupChoice = 'accept' | 'refuse' | 'withdrawn';
+
 /** Optional rendering choices for a mission-text popup. */
 export interface PopupOptions {
     /** Global PICT id shown beside the text (the dësc Graphic). When set,
@@ -118,7 +126,7 @@ export interface PopupOptions {
  */
 export class OfferPopup {
     container = new PIXI.Container();
-    private choice = new Subject<'accept' | 'refuse'>();
+    private choice = new Subject<PopupChoice>();
     /** Scroll machinery for the current popup, when its text overflows. */
     private scroll?: {
         text: PIXI.Text,
@@ -266,10 +274,36 @@ export class OfferPopup {
         this.endHold();
     }
 
+    /**
+     * Answers the popup that is up with 'withdrawn' (see PopupChoice):
+     * the player docked with it over space (display/flight_overlays.ts).
+     * Unlike {@link dismiss}, the popup stays usable, and its caller
+     * unwinds — a pending show() left unsettled here would hold its
+     * opener (the hail key's) for the rest of the world's life. No-op
+     * when nothing is showing.
+     */
+    withdraw() {
+        if (this.container.visible) {
+            this.choice.next('withdrawn');
+        }
+    }
+
+    /**
+     * For an in-flight popup: whether a show() must come back 'withdrawn'
+     * at once instead of opening, because the player is no longer in
+     * flight. Its caller awaits data before it shows the popup, and a
+     * landing in that gap would otherwise put the popup over the
+     * spaceport after {@link withdraw} found nothing up.
+     */
+    withdrawnWhen?: () => boolean;
+
     async show(text: string, buttons: {
         accept: string,
         refuse?: string | null,
-    }, options: PopupOptions = {}): Promise<'accept' | 'refuse'> {
+    }, options: PopupOptions = {}): Promise<PopupChoice> {
+        if (this.withdrawnWhen?.()) {
+            return 'withdrawn';
+        }
         this.container.removeChildren();
         this.endHold();
         this.scroll = undefined;
@@ -715,6 +749,11 @@ export async function presentOffers(popup: OfferPopup,
         }
         const choice = await popup.show(text, offerButtons(offer),
             { pict: offer.data.offerPict, style: 'offer' });
+        if (choice === 'withdrawn') {
+            // Neither answer (only an in-flight popup is ever withdrawn,
+            // but a withdrawal must never read as a refusal).
+            return;
+        }
         if (choice === 'accept') {
             // The offer's acceptable flag was frozen when offers were
             // rolled; a prior accept this visit may have filled the hold

@@ -26,6 +26,7 @@ import { markShipDoneTextShown } from '../spaceport/ship_done_shown.js';
 import {
     keepCentred, ScreenSize, stopCentring,
 } from './screen_size_plugin.js';
+import { flightOverlays, landedIn } from './flight_overlays.js';
 import { Stage } from './stage_resource.js';
 import { PersHailQuoteSystem } from "./ship_mission_offer_plugin.js";
 import { showStatusMessage } from './status_message_plugin.js';
@@ -497,6 +498,11 @@ export const MissionShipDonePlugin: Plugin = {
         keepCentred(world, popup.container);
         stage.addChild(popup.container);
         world.resources.set(ShipDonePopupResource, popup);
+        // Docking withdraws it, unanswered (display/flight_overlays.ts),
+        // and so does an open that only gets there once the player has
+        // landed.
+        popup.withdrawnWhen = () => landedIn(world);
+        flightOverlays(world).register('ship-done text', () => popup.withdraw());
         world.resources.set(ShipDoneStateResource, {
             shown: new Set<string>(), missions: new Map(),
             loading: new Set<string>(),
@@ -505,6 +511,7 @@ export const MissionShipDonePlugin: Plugin = {
         world.addSystem(MissionShipDoneSystem);
     },
     remove(world) {
+        flightOverlays(world).unregister('ship-done text');
         world.removeSystem(MissionShipDoneSystem);
         // Destroyed, not just detached: the popup is per-world, and its
         // Text canvases leaked with every system transit (review #40).

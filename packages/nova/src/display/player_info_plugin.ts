@@ -14,6 +14,7 @@ import { getActivePilot } from '../title/pilot_registry.js';
 import {
     keepCentred, ScreenSize, stopCentring,
 } from './screen_size_plugin.js';
+import { flightOverlays } from './flight_overlays.js';
 import { Stage } from './stage_resource.js';
 
 export const PlayerInfoResource = new Resource<PlayerInfoDialog>('PlayerInfo');
@@ -127,8 +128,14 @@ export const PlayerInfoPlugin: Plugin = {
                 }
                 void openPlayerInfo();
             }));
+        // Docking closes it, its Jettison confirmation with it
+        // (display/flight_overlays.ts): opened in flight it shows the
+        // in-world ship and jettisons through the simulation.
+        flightOverlays(world).register('player info',
+            () => dialog.dismiss());
     },
     remove(world) {
+        flightOverlays(world).unregister('player info');
         world.resources.get(PlayerInfoControlsSubscription)?.unsubscribe();
         const stage = world.resources.get(Stage);
         const dialog = world.resources.get(PlayerInfoResource);

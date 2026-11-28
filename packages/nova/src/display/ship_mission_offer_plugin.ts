@@ -45,6 +45,7 @@ import {
 import {
     keepCentred, ScreenSize, stopCentring,
 } from './screen_size_plugin.js';
+import { flightOverlays, landedIn } from './flight_overlays.js';
 import { Stage } from './stage_resource.js';
 import { showStatusMessage } from './status_message_plugin.js';
 import { ProjectileSpinSystem } from "./projectile_spin_plugin.js";
@@ -328,6 +329,11 @@ export async function presentShipOffer(world: World, targetUuid: string,
     // on the spaceport boards: no Refuse button at all (offerButtons).
     const choice = await popup.show(text, offerButtons(offer),
         { pict: offer.data.offerPict, style: 'offer' });
+    if (choice === 'withdrawn') {
+        // The player landed with the offer up (display/flight_overlays.ts):
+        // neither accepted nor refused, so the offer is still the ship's.
+        return true;
+    }
     if (choice !== 'accept') {
         // See the module note: OnRefuse runs, the offer stays on the table.
         await refuseShipOffer(world, player, targetUuid, offer, gameData,
@@ -671,6 +677,11 @@ export const ShipMissionOfferPlugin: Plugin = {
         keepCentred(world, popup.container);
         stage.addChild(popup.container);
         world.resources.set(ShipOfferPopupResource, popup);
+        // Docking withdraws it, unanswered (display/flight_overlays.ts),
+        // and so does an open that only gets there once the player has
+        // landed.
+        popup.withdrawnWhen = () => landedIn(world);
+        flightOverlays(world).register('ship offer', () => popup.withdraw());
 
         world.resources.set(HailQuoteStateResource, {
             said: new Set(), resolving: new Set(),
@@ -679,6 +690,7 @@ export const ShipMissionOfferPlugin: Plugin = {
         world.addSystem(PersHailQuoteSystem);
     },
     remove(world) {
+        flightOverlays(world).unregister('ship offer');
         world.removeSystem(PersHailQuoteSystem);
         // Destroyed, not just detached: the popup is per-world, and its
         // Text canvases leaked with every system transit (review #40).
