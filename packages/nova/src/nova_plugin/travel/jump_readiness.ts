@@ -39,8 +39,9 @@ export type JumpBlocker =
     | 'jumping'
     /** No hyperspace route is selected, so there is nowhere to go. */
     | 'noRoute'
-    /** Inside the no-jump zone around the system center (and past a
-     * fresh arrival's grace: jump_plugin.ts ARRIVAL_JUMP_GRACE_MS). */
+    /** Inside the no-jump zone around the system center (unless it is a
+     * key held through the arrival: jump_plugin.ts
+     * HyperspaceArrivalComponent). */
     | 'tooClose'
     /** Under one jump's worth of fuel. */
     | 'noFuel';
@@ -61,10 +62,12 @@ export interface JumpReadinessInputs {
     disabled?: boolean;
     /** The ship already carries a JumpComponent. Optional, as above. */
     jumping?: boolean;
-    /** The ship came out of hyperspace moments ago and the no-jump zone
-     * does not refuse it yet (jump_plugin.ts ARRIVAL_JUMP_GRACE_MS,
-     * inArrivalJumpGrace). Optional: absent means no grace. */
-    arrivalGrace?: boolean;
+    /** This press is the arrival's held-key decision: a jump key held
+     * through the arrival, which the no-jump zone does not refuse
+     * (jump_plugin.ts HyperspaceArrivalComponent). Only the simulation's
+     * gate knows it; the display's readouts answer for a fresh press and
+     * leave it out. */
+    heldThroughArrival?: boolean;
 }
 
 /**
@@ -93,7 +96,7 @@ export function jumpBlocker(inputs: JumpReadinessInputs):
     if (!inputs.hasRoute) {
         return 'noRoute';
     }
-    if (inputs.distance < inputs.jumpRadius && !inputs.arrivalGrace) {
+    if (inputs.distance < inputs.jumpRadius && !inputs.heldThroughArrival) {
         return 'tooClose';
     }
     if (inputs.fuel < inputs.fuelPerJump) {

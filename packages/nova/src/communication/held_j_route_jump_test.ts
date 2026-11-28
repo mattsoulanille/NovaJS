@@ -20,7 +20,7 @@ import { ControlledByComponent, PEER_LOCAL_COMPONENTS } from '../nova_plugin/pla
 import { makeShip } from '../nova_plugin/ship/index.js';
 import { completeEntity } from '../nova_plugin/spawn/index.js';
 import {
-    ARRIVAL_JUMP_GRACE_MS, FinishJump, FinishJumpEvent, JUMP_DISTANCE,
+    FinishJump, FinishJumpEvent, HyperspaceArrivalComponent, JUMP_DISTANCE,
     JumpComponent, JumpRouteComponent,
 } from '../nova_plugin/travel/index.js';
 import { RollbackRelay } from './rollback_relay.js';
@@ -376,24 +376,48 @@ describe('the held-j route jump', () => {
         await expectSecondJump(destination);
     }, 120_000);
 
-    it('held through an arrival so slow to show that the ship has coasted into the no-jump zone: the arrival grace still chains', async () => {
+    it('held through an arrival so slow to show that the ship has coasted into the no-jump zone: the arrival\'s held-key decision still chains', async () => {
         const router = new ControlRouter();
         const { destination } = await departAndArrive(router);
         // 1.5 s behind the flash: one second of flight takes the ship
         // inside the zone.
         await hiddenArrival(router, destination, 90, true);
         expect(distanceOf(destination)).toBeLessThan(JUMP_DISTANCE);
+        expect(shipOf(destination.world)!.components
+            .has(HyperspaceArrivalComponent)).toBeTrue();
         await showArrival(router, destination);
         await expectSecondJump(destination);
     }, 120_000);
 
-    it('past the arrival grace, the no-jump zone refuses a held key again', async () => {
+    it('held through an arrival slower to show than the old 3 s grace: still chains (the decision has no clock)', async () => {
         const router = new ControlRouter();
         const { destination } = await departAndArrive(router);
-        await hiddenArrival(router, destination,
-            Math.ceil(ARRIVAL_JUMP_GRACE_MS / 1000 * 60) + 10, true);
+        // 3.5 s behind the flash, at 60 ticks a second.
+        await hiddenArrival(router, destination, 210, true);
         expect(distanceOf(destination)).toBeLessThan(JUMP_DISTANCE);
         await showArrival(router, destination);
+        await expectSecondJump(destination);
+    }, 120_000);
+
+    it('a FRESH press after the arrival, inside the no-jump zone, is refused (no arrival grace: reference wave 45, finding 2)', async () => {
+        const router = new ControlRouter();
+        const { destination } = await departAndArrive(router);
+        // Let go mid-transit: the arrival shows with the key up.
+        routeTo(router, press(false), undefined);
+        await hiddenArrival(router, destination, 10, false);
+        await showArrival(router, destination);
+        // Coast in until the ship is inside the zone (about 1.3 s after
+        // the arrival on the original's run), then tap `j`.
+        for (let i = 0; i < 600 && distanceOf(destination) > JUMP_DISTANCE - 100; i++) {
+            await destination.step();
+        }
+        expect(distanceOf(destination)).toBeLessThan(JUMP_DISTANCE);
+        routeTo(router, press('start'), destination);
+        await destination.step();
+        // The press used up the arrival's decision: it was a fresh one.
+        expect(shipOf(destination.world)!.components
+            .has(HyperspaceArrivalComponent)).toBeFalse();
+        routeTo(router, press(false), destination);
         await expectNoSecondJump(destination);
     }, 120_000);
 });

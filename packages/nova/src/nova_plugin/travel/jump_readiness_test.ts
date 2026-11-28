@@ -1,9 +1,7 @@
 import 'jasmine';
 import { canJump, jumpBlocker, jumpRadiusFor } from './jump_readiness.js';
 import { FUEL_PER_JUMP } from '../ship/index.js';
-import {
-    ARRIVAL_JUMP_GRACE_MS, inArrivalJumpGrace, JUMP_DISTANCE,
-} from './jump_plugin.js';
+import { JUMP_DISTANCE } from './jump_plugin.js';
 
 function inputs(overrides: Partial<Parameters<typeof canJump>[0]> = {}) {
     return {
@@ -61,18 +59,18 @@ describe('jumpBlocker', () => {
             .toBe('disabled');
     });
 
-    it('lets a fresh arrival\'s grace waive the no-jump zone, and nothing else', () => {
-        expect(jumpBlocker(inputs({ distance: 0, arrivalGrace: true })))
+    it('lets a key held through the arrival waive the no-jump zone, and nothing else', () => {
+        expect(jumpBlocker(inputs({ distance: 0, heldThroughArrival: true })))
             .toBeUndefined();
-        expect(jumpBlocker(inputs({ distance: 0, arrivalGrace: false })))
+        expect(jumpBlocker(inputs({ distance: 0, heldThroughArrival: false })))
             .toBe('tooClose');
-        expect(jumpBlocker(inputs({ arrivalGrace: true, fuel: 0 })))
+        expect(jumpBlocker(inputs({ heldThroughArrival: true, fuel: 0 })))
             .toBe('noFuel');
-        expect(jumpBlocker(inputs({ arrivalGrace: true, hasRoute: false })))
+        expect(jumpBlocker(inputs({ heldThroughArrival: true, hasRoute: false })))
             .toBe('noRoute');
-        expect(jumpBlocker(inputs({ arrivalGrace: true, disabled: true })))
+        expect(jumpBlocker(inputs({ heldThroughArrival: true, disabled: true })))
             .toBe('disabled');
-        expect(jumpBlocker(inputs({ arrivalGrace: true, jumping: true })))
+        expect(jumpBlocker(inputs({ heldThroughArrival: true, jumping: true })))
             .toBe('jumping');
     });
 
@@ -82,19 +80,5 @@ describe('jumpBlocker', () => {
             .toBe('tooClose');
         expect(jumpBlocker(inputs({ jumpRadius: radius, distance: 1600 })))
             .toBeUndefined();
-    });
-});
-
-describe('inArrivalJumpGrace', () => {
-    it('runs from the arrival for ARRIVAL_JUMP_GRACE_MS', () => {
-        const arrival = { at: 1000 };
-        expect(inArrivalJumpGrace(undefined, 1000)).toBeFalse();
-        expect(inArrivalJumpGrace(arrival, 1000)).toBeTrue();
-        expect(inArrivalJumpGrace(arrival, 1000 + ARRIVAL_JUMP_GRACE_MS))
-            .toBeTrue();
-        expect(inArrivalJumpGrace(arrival, 1001 + ARRIVAL_JUMP_GRACE_MS))
-            .toBeFalse();
-        // A clock behind the arrival (a different world's) is no grace.
-        expect(inArrivalJumpGrace(arrival, 999)).toBeFalse();
     });
 });

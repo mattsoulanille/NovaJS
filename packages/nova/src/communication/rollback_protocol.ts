@@ -1141,6 +1141,17 @@ export const STATE_HASH_INTERVAL = 60;
 //    derived wire schema fingerprint changes (9de999c5881f0046 ->
 //    e2aac6975801120c), and the join gate keeps older and newer builds
 //    apart.
+//    Also under 8, no further bump, and NO schema change: the arrival grace
+//    is gone (maintainer's ruling #385; reference "Jump chaining edge
+//    cases and an arrival inside the no-jump zone ...", wave 45, finding
+//    2). HyperspaceArrival keeps its `{at: number}` codec but now marks an
+//    arrival OUTSIDE the ship's no-jump zone whose held-key decision is
+//    pending: the first jump press after it (any state but 'start') is not
+//    refused by the zone, and any press takes it off; there is no 3 s
+//    clock, and an arrival inside an enlarged zone gets none. Sim-rule
+//    change only: the derived wire schema fingerprint is unchanged
+//    (e2aac6975801120c), so the join gate does not keep the builds on
+//    either side of it apart.
 
 export const PROTOCOL_VERSION = 8;
 

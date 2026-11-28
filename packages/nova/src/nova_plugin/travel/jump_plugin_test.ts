@@ -18,7 +18,7 @@ import { PlayerSoundEvent } from "../core/index.js";
 import { Entity } from "nova_ecs/entity";
 import { DisabledComponent } from "../ship/index.js";
 import { Angle } from "nova_ecs/datatypes/angle";
-import { ARRIVAL_JUMP_GRACE_MS, jumpStageDelays, JUMP_BRAKE_MS, JUMP_BURN_ANGLE, JUMP_CLOCK_MS, JUMP_MIN_BURN_MS, NPC_DEPARTURE_DEPART_DELAY_MS, NPC_DEPARTURE_SPINUP_DELAY_MS } from "./jump_plugin.js";
+import { HyperspaceArrivalComponent, jumpStageDelays, JUMP_BRAKE_MS, JUMP_BURN_ANGLE, JUMP_CLOCK_MS, JUMP_MIN_BURN_MS, NPC_DEPARTURE_DEPART_DELAY_MS, NPC_DEPARTURE_SPINUP_DELAY_MS } from "./jump_plugin.js";
 import { ShipPhysics } from "novadatainterface/ship_data";
 import { PlanetTargetComponent } from "./planet_plugin.js";
 import { ControlledByComponent } from "../player/index.js";
@@ -1077,8 +1077,9 @@ describe('jump phases (U8, waves 38-39)', () => {
         }, 30_000);
 
     it('a hyperspace dist mod does not move the arrival: a +1000 hull '
-        + 'arrives inside its 2,000 px zone, and a held key past the grace '
-        + 'waits until the ship has coasted out on the far side (reference '
+        + 'arrives inside its 2,000 px zone, and a key held through the '
+        + 'arrival waits until the ship has coasted out on the far side '
+        + '(reference '
         + '"Jump chaining edge cases and an arrival inside the no-jump '
         + 'zone ...", wave 45, finding 4)', async () => {
             const { gameData, world, ship, destinationId } =
@@ -1115,14 +1116,12 @@ describe('jump phases (U8, waves 38-39)', () => {
                 { route: [[...destination.links].sort()[0]!] });
             destWorld.step();
             expect(jumpedShip.components.has(JumpComponent)).toBeFalse();
-            // Past the arrival grace, still inside the zone (it coasts
-            // through the centre toward the far side).
-            for (let i = 0; i < ticksFor(ARRIVAL_JUMP_GRACE_MS) + 2; i++) {
-                destWorld.step();
-            }
-            expect(arrived.position.length).toBeLessThan(zone);
+            // Arrived inside its zone: no held-key decision to make.
+            expect(jumpedShip.components.has(HyperspaceArrivalComponent))
+                .toBeFalse();
+            // The client's re-assert of a key held through the arrival.
             applyControlEvents(destWorld, undefined,
-                [{ action: 'hyperjump', state: 'start' }]);
+                [{ action: 'hyperjump', state: 'repeat' }]);
             destWorld.step();
             expect(jumpedShip.components.has(JumpComponent)).toBeFalse();
             // The held key waits while the ship is inside the zone and
@@ -1134,6 +1133,69 @@ describe('jump phases (U8, waves 38-39)', () => {
                 .toBeGreaterThan(zone - 2 * tick);
             expect(arrived.position.length).toBeLessThan(zone + 2 * tick);
         }, 30_000);
+
+    it('no arrival grace: after the ship has coasted inside the zone, a '
+        + 'key held through the arrival chains and a fresh press is refused '
+        + '(reference "Jump chaining edge cases and an arrival inside the '
+        + 'no-jump zone ...", wave 45, findings 2-3; ruling #385)',
+        async () => {
+            for (const first of ['repeat', 'start'] as const) {
+                const { gameData, world, ship, destinationId } =
+                    await makeJumpHarness();
+                // Outside the zone, at rest.
+                const start = ship.components.get(MovementStateComponent)!;
+                start.position = new Position(0, -(JUMP_DISTANCE + 500));
+                start.velocity = new Vector(0, 0);
+                world.step();
+                let finishJump: FinishJump | undefined;
+                world.events.get(FinishJumpEvent).subscribe(({ data }) => {
+                    finishJump = data;
+                });
+                pressHyperjump(world);
+                applyControlEvents(world, undefined,
+                    [{ action: 'hyperjump', state: false }]);
+                stepUntil(world, () => finishJump !== undefined);
+                const jumpedShip = finishJump!.entity;
+                const destWorld = await makeSystem(destinationId, gameData,
+                    undefined, { npcs: false });
+                await completeEntity(destWorld, jumpedShip);
+                destWorld.entities.set(SHIP_UUID, jumpedShip);
+                const destination =
+                    await gameData.data.System.get(destinationId);
+                jumpedShip.components.set(JumpRouteComponent,
+                    { route: [[...destination.links].sort()[0]!] });
+                destWorld.step();
+                // Out of hyperspace outside the zone: the decision waits
+                // for the first press.
+                expect(jumpedShip.components.has(HyperspaceArrivalComponent))
+                    .withContext(first).toBeTrue();
+                const movement =
+                    jumpedShip.components.get(MovementStateComponent)!;
+                // The client's answer lands late: the ship is inside now.
+                stepUntil(destWorld,
+                    () => movement.position.length < JUMP_DISTANCE - 100);
+                applyControlEvents(destWorld, undefined,
+                    [{ action: 'hyperjump', state: first }]);
+                destWorld.step();
+                expect(jumpedShip.components.has(HyperspaceArrivalComponent))
+                    .withContext(first).toBeFalse();
+                expect(jumpedShip.components.has(JumpComponent))
+                    .withContext(first).toBe(first === 'repeat');
+                if (first === 'start') {
+                    // Used up: a later re-assert waits for the zone too.
+                    applyControlEvents(destWorld, undefined,
+                        [{ action: 'hyperjump', state: false }]);
+                    destWorld.step();
+                    applyControlEvents(destWorld, undefined,
+                        [{ action: 'hyperjump', state: 'repeat' }]);
+                    destWorld.step();
+                    expect(jumpedShip.components.has(JumpComponent))
+                        .toBeFalse();
+                    expect(movement.position.length)
+                        .toBeLessThan(JUMP_DISTANCE);
+                }
+            }
+        }, 60_000);
 
     it('an NPC departure keeps the 1 s + 2 s it had; a follower takes the '
         + 'player\'s timing', () => {

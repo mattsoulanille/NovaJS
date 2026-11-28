@@ -60,7 +60,10 @@ export const ARRIVAL_GATE_MAX_MS = 5000;
  * Why: no simulation system acts on 'repeat'. Edge-triggered actions
  * (land, cycle target, cloak...) fire on 'start' only, and held actions
  * (accelerate, turn, fire) read the state as truthy from 'start' until
- * the release (nova_plugin/player/ship_control.ts). Yet each repeat of a
+ * the release (nova_plugin/player/ship_control.ts); the one place a
+ * 'repeat' differs from a 'start' is the first jump press after an
+ * arrival (below), and only the re-assert this router sends itself is
+ * one there. Yet each repeat of a
  * held key is its own input record, and over a ~100 ms round trip every
  * record is retimed by the relay and rolled back locally — hundreds of
  * rollbacks while a turn key is held. Repeats still matter to the UI
@@ -99,11 +102,14 @@ export const ARRIVAL_GATE_MAX_MS = 5000;
  *    it found the arrival visible and re-asserted a key the player had
  *    already let go of (Matthew, 2026-11-26: "I'll immediately jump out
  *    to the next system in the path even when not pressing anything").
- *  - If the key is down then, the bridge is told once (a 'repeat', like
- *    any re-assert). By then the ship has coasted on for that first
- *    frame's length; the simulation's arrival grace
- *    (nova_plugin/travel/jump_plugin.ts, ARRIVAL_JUMP_GRACE_MS) still
- *    lets it start the next hop.
+ *  - If the key is down then, the bridge is told once, as a 'repeat' —
+ *    never a 'start': the simulation tells the two apart. By then the
+ *    ship has coasted on for that first frame's length, and maybe into
+ *    the no-jump zone; the arrival's held-key decision
+ *    (nova_plugin/travel/jump_plugin.ts HyperspaceArrivalComponent) lets
+ *    the first press after an arrival through if it is a key held through
+ *    it, and refuses a fresh one ('start') inside the zone, as the
+ *    original refuses any press there (wave 45: no arrival grace).
  */
 export class ControlRouter {
     private readonly held = new Set<ControlAction>();

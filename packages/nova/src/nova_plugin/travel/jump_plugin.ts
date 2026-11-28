@@ -160,65 +160,60 @@ export const JUMP_ARRIVAL_MARGIN_S = 3;
  * about 1,350 px out at Speed 800 (about 350 px/s), i.e. 1,000 + one
  * second (reference "Jump phases and fuel (U8), wave 38", finding 3;
  * GUESS that it scales with top speed rather than being a fixed 1,350:
- * one hull measured). A held jump key
- * that reaches the simulation only after the ship has coasted inside the
- * zone still chains: see ARRIVAL_JUMP_GRACE_MS. A multi-jump arrives the
- * same way, once, in its final system (resolveJumpHops). */
+ * one hull measured). A jump key held through the arrival chains from
+ * there even when the client's late first frame has let the ship coast
+ * inside the zone since: see HyperspaceArrivalComponent. A multi-jump
+ * arrives the same way, once, in its final system (resolveJumpHops). */
 export const PLAYER_JUMP_ARRIVAL_MARGIN_S = 1;
 
 /**
- * THE ARRIVAL GRACE: how long (logical ms) after a ship comes out of
- * hyperspace a jump press still starts the route's next hop although the
- * ship has coasted into the no-jump zone since.
+ * THE ARRIVAL'S HELD-KEY DECISION: set on a ship the tick it comes out of
+ * hyperspace OUTSIDE its no-jump zone, and taken off by the first jump
+ * press the ship gets after that (or by the next jump starting). If that
+ * first press carries a key held through the arrival — anything but a
+ * fresh keydown ('start'): the client's re-assert of a key still down
+ * ('repeat', client/control_routing.ts) or a key the simulation already
+ * had down — the no-jump zone does not refuse it, whether or not the ship
+ * has coasted inside since. Route, fuel, disabled and a jump under way
+ * still do. `at` is when the ship came out (logical ms; not read by the
+ * gate).
  *
- * Why it exists. On the original a held `j` chains a route hop after hop
- * "each jump starting as soon as the previous one arrived" (reference
- * "Multi-jump routes and the `j` key, wave 11"): the key is read on the
- * arrival frame, a whole second of flight outside the zone. Here the
- * arriving ship is live in the room's simulation (and coasting in on the
- * room's clock) before the player can see it: the client builds and
- * draws the new system first, behind the white flash, and only then
- * passes the held key on (client/control_routing.ts — a key let go while
- * the screen was white must not jump again). That first frame alone can
- * take most of the second (measured headless under load: 0.5-0.8 s; the
- * window is half as long in wall time at 2x), and once the ship was
- * inside the zone the held key did nothing at all — "even when holding
- * j, it does not jump right as I enter" (Matthew, 2026-11-26). So for
- * this long after the arrival the no-jump zone does not refuse a jump;
- * every other condition (route, fuel, disabled, a jump under way) still
- * does.
+ * What it reproduces. On the original a held `j` starts the route's next
+ * hop AT the arrival (reference "Jump chaining edge cases and an arrival
+ * inside the no-jump zone ...", wave 45, finding 3: within about 3
+ * frames), a whole second of flight outside the zone, and a tap in the
+ * arrival's white frame chains the same way (finding 1; here a key
+ * pressed on the white screen chains only if it is still down when the
+ * arrival shows, ControlRouter's rule, Matthew 2026-11-23). There is NO
+ * arrival grace (finding 2): a FRESH press 1.33 s or 2.46 s after the
+ * arrival, inside the zone, is refused with "not yet far enough away" —
+ * here too, since a fresh press is a 'start', and it also uses up the
+ * decision. (Matthew, ruling #385: "In practice, in nova, holding `j`
+ * pretty much always lets you jump immediately, but there's no grace time
+ * I think." The 3 s ARRIVAL_JUMP_GRACE_MS it replaces let any press in
+ * the first 3 s through.)
  *
- * GUESS: 3 s. The player sees the arrival a first frame late (S, in
- * room time; twice the wall time at 2x), so the original's one second
- * to press outside the zone becomes this grace minus S: a full second
- * whenever S is under 2 s. Measured headless under heavy load: S + the
- * key's way in = 0.9-1.0 s at 1x and 1.7-2.0 s at 2x, where 2 s of
- * grace still missed half the hops. A press this late after the arrival
- * can start from well inside the zone (a fast hull would be past the
- * centre), which the original never allows; nothing here is measured.
- */
-export const ARRIVAL_JUMP_GRACE_MS = 3000;
-
-/**
- * When (logical ms, the destination world's clock) this ship came out of
- * hyperspace: set by JumpSequenceSystem's 'arriving' stage and read for
- * the arrival grace (ARRIVAL_JUMP_GRACE_MS) by PlayerJumpControl and the
- * display's readiness readouts. Dropped when a jump starts and once the
- * grace is over. Synced (serializer-registered), so the display's
- * jump-ready cue and readout quote the same answer as the gate.
+ * Why the simulation needs it at all. The arriving ship is live in the
+ * room's simulation, coasting in on the room's clock, before the player
+ * can see it: the client builds and draws the new system behind the white
+ * flash, and only then passes the held key on (ControlRouter: a key let
+ * go while the screen was white must not jump again). That first frame
+ * alone can take most of a second under load (twice that in room time at
+ * 2x), and the record then crosses the relay. The client's answer to "was
+ * the key down at the arrival?" therefore lands late, and is judged here
+ * as of the arrival: by when it was decided, not by where the ship has
+ * got to since. It is bounded by the decision, not by a clock.
+ *
+ * An arrival INSIDE the zone (a hull whose hyperspace dist mod enlarges
+ * it: the arrival does not move, wave 45 finding 4) never gets one: on the
+ * original a held `j` there waits silently until the ship has coasted out
+ * on the far side, and here too.
+ *
+ * Synced (serializer-registered): it is simulation state every peer
+ * derives alike, and the snapshot of a ship that just arrived carries it.
  */
 export const HyperspaceArrivalComponent =
     new Component<{ at: number }>('HyperspaceArrival');
-
-/**
- * Whether a ship that came out of hyperspace at `arrival.at` is still in
- * its arrival grace at logical time `now` (see ARRIVAL_JUMP_GRACE_MS).
- */
-export function inArrivalJumpGrace(arrival: { at: number } | undefined,
-    now: number): boolean {
-    return arrival !== undefined && now - arrival.at >= 0
-        && now - arrival.at <= ARRIVAL_JUMP_GRACE_MS;
-}
 
 /** How closely (radians) an inertial ship must face retrograde before
  * it thrusts to kill its velocity. */
@@ -527,7 +522,7 @@ function beginJump(entity: Entity, systemId: string, hops: readonly string[],
         return false;
     }
     jumpRoute.route.splice(0, hops.length);
-    // A ship that jumps again leaves its arrival grace behind (a jump a
+    // A ship that jumps again has had its arrival's decision (a jump a
     // disable cancels does not get it back).
     entity.components.delete(HyperspaceArrivalComponent);
     entity.components.set(JumpComponent, {
@@ -647,31 +642,38 @@ export function beginFollowJump(entity: Entity, leader: string,
  * jump key departs at the first instant a jump becomes possible —
  * flying out of the no-jump zone with the key held, or chain-jumping:
  * ships arrive outside the standard no-jump radius, so a held key starts
- * the route's next jump immediately, and for ARRIVAL_JUMP_GRACE_MS after
- * the arrival the zone does not refuse it even once the ship has coasted
- * inside (the held key reaches a new system only after its first frame
- * has been seen: client/control_routing.ts). A hull whose hyperspace dist
- * mod enlarges its zone arrives INSIDE it (wave 45's JC); outside the
- * grace a held key then waits, silently, until the ship coasts out of the
- * zone on the far side, as the original does. Inside the grace it still
- * chains at once (the original does not: the grace is a maintainer call).
+ * the route's next jump immediately. The held key reaches a new system
+ * only once its first frame has been seen (client/control_routing.ts), by
+ * when the ship may have coasted inside the zone: the arrival's held-key
+ * decision (HyperspaceArrivalComponent) still lets that first press
+ * through, and no other. A fresh press inside the zone is refused, as on
+ * the original (no arrival grace, wave 45). A hull whose hyperspace dist
+ * mod enlarges its zone arrives INSIDE it (wave 45's JC), gets no
+ * decision, and a held key waits, silently, until the ship coasts out of
+ * the zone on the far side, as the original does.
  */
 const PlayerJumpControl = new System({
     name: 'PlayerJumpControl',
     args: [ShipControlStateComponent, GetEntity, SystemIdResource,
         JumpRouteComponent, MovementStateComponent, ShipPhysicsComponent,
-        FuelComponent, SimulationGameDataResource, TimeResource,
+        FuelComponent, SimulationGameDataResource,
         Optional(DisabledComponent),
         Optional(HyperspaceArrivalComponent)] as const,
     step(controlState, entity, systemId, jumpRoute, movement, shipPhysics,
-        fuel, gameData, time, disabled, arrival) {
-        const arrivalGrace = inArrivalJumpGrace(arrival, time.time);
-        if (arrival && !arrivalGrace) {
-            entity.components.delete(HyperspaceArrivalComponent);
-        }
+        fuel, gameData, disabled, arrival) {
         // Truthy while held ('start'/'repeat'/true); false on release.
-        if (!controlState.get('hyperjump')) {
+        const held = controlState.get('hyperjump');
+        if (!held) {
             return;
+        }
+        // The arrival's held-key decision, used up by the first press
+        // after the arrival: a key held through it ('repeat', the
+        // client's re-assert, or one the simulation already had down)
+        // chains from wherever the ship has coasted to since; a fresh
+        // press ('start') is judged like any other.
+        const heldThroughArrival = arrival !== undefined && held !== 'start';
+        if (arrival) {
+            entity.components.delete(HyperspaceArrivalComponent);
         }
         const destination = jumpRoute.route[0];
         // THE GATE. Every condition lives in the shared readiness predicate
@@ -690,7 +692,7 @@ const PlayerJumpControl = new System({
             fuelPerJump: FUEL_PER_JUMP,
             disabled: disabled !== undefined,
             jumping: entity.components.has(JumpComponent),
-            arrivalGrace,
+            heldThroughArrival,
         });
         // The destination re-check is redundant with the 'noRoute' blocker;
         // it is what narrows the type for beginJump.
@@ -709,8 +711,9 @@ const PlayerJumpControl = new System({
             jumpRoute, shipPhysics, gameData);
     },
     // #237 pin (shared: ControlledBy, JumpRouteComponent): JumpPlugin
-    // registers this before its route provider. After TimeSystem: it reads
-    // the clock for the arrival grace (determinism rule 4).
+    // registers this before its route provider. After TimeSystem: the
+    // order it has run in since it read the clock (the 3 s arrival grace
+    // it no longer has); kept so the schedule does not move.
     after: [TimeSystem],
     before: [JumpRouteProvider],
 });
@@ -1123,11 +1126,17 @@ export const JumpSequenceSystem = new System({
                     { id: warpUpSound(shipPhysics), stop: true }, [uuid]);
                 emit(PlayerSoundEvent, { id: WARP_OUT_SOUND }, [uuid]);
                 entity.components.delete(JumpComponent);
-                // The arrival grace starts now (ARRIVAL_JUMP_GRACE_MS): the
-                // route's next hop may start even after the ship has
-                // coasted into the no-jump zone.
-                entity.components.set(HyperspaceArrivalComponent,
-                    { at: time.time });
+                // Out of hyperspace outside the no-jump zone: the next
+                // press decides whether a key held through the arrival
+                // chains, wherever the ship has coasted to by the time
+                // the client's answer lands (HyperspaceArrivalComponent).
+                // Inside an enlarged zone there is nothing to decide: a
+                // held key waits for the ship to coast out.
+                if (movement.position.length >= jumpRadiusFor(
+                    JUMP_DISTANCE, shipPhysics.jumpDistanceMod)) {
+                    entity.components.set(HyperspaceArrivalComponent,
+                        { at: time.time });
+                }
                 break;
             }
         }
@@ -1164,7 +1173,7 @@ export const JumpPlugin: Plugin = {
             route: t.array(t.string),
         }));
         serializer?.addComponent(JumpComponent, JumpStateType);
-        // Synced so the display's readiness readouts see the arrival grace.
+        // Synced: simulation state (the arrival's held-key decision).
         serializer?.addComponent(HyperspaceArrivalComponent,
             t.type({ at: t.number }));
         if (serializer) {
