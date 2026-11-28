@@ -85,8 +85,10 @@ type Row =
  * list/detail dialog on the 510x201 PICT 8505 frame. The left pane
  * lists the day's offers (availability evaluated against the player's
  * REAL control bits) with active missions below them; the right pane
- * shows the expanded offer text. Accept uses the mïsn's custom button
- * label when present, and runs through the real NCB machinery. There
+ * shows the expanded offer text. Accept always reads "Accept": the
+ * original's BBS never takes the mïsn's AcceptButton (only the offer
+ * popup does; reference "Offer buttons fit their labels, 2026-11-28",
+ * B1), and runs through the real NCB machinery. There
  * is no Refuse here — a listing the player doesn't want is simply not
  * accepted, and no Abort — aborting lives in the Mission Info dialog.
  *
@@ -541,7 +543,6 @@ export class MissionBoard extends Menu<Entity> {
      */
     private refreshDescription() {
         const row = this.selectedRow();
-        this.buttons.accept.setLabel('Accept');
         if (!row || row.kind === 'header') {
             this.text.title.text = '';
             this.text.description.text = '';
@@ -556,10 +557,6 @@ export class MissionBoard extends Menu<Entity> {
                 this.descContext());
             const extra = offer.acceptable ? '' : `\n\n[${offer.reason}]`;
             this.text.description.text = text + extra;
-            // The mïsn's custom accept label, where present.
-            if (offer.data.acceptButton) {
-                this.buttons.accept.setLabel(offer.data.acceptButton);
-            }
             this.buttons.accept.state =
                 offer.acceptable ? 'normal' : 'grey';
         } else {

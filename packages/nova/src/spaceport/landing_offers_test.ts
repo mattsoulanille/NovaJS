@@ -166,6 +166,33 @@ describe('a landing\'s offers (#324)', () => {
 
     // ── The BBS ─────────────────────────────────────────────────────────
 
+    it('labels its Accept button "Accept" whatever the mïsn\'s '
+        + 'AcceptButton (reference "Offer buttons fit their labels", B1)',
+        async () => {
+            const env = await setup();
+            const transaction = await land(env);
+            const { board, closed } = await openBoard(env, transaction);
+            const internals = board as unknown as BoardInternals & {
+                buttons: { accept: { label: string } },
+                refreshDescription(): void,
+            };
+            const index = internals.rows.findIndex(
+                row => row.offer?.data.id === CHARTER);
+            const data = internals.rows[index].offer!.data as
+                { acceptButton: string };
+            const authored = data.acceptButton;
+            data.acceptButton = 'Go after them';
+            try {
+                internals.selectedIndex = index;
+                internals.refreshDescription();
+                expect(internals.buttons.accept.label).toBe('Accept');
+            } finally {
+                data.acceptButton = authored;
+            }
+            board.dismiss();
+            await closed;
+        });
+
     it('withdraws a disqualified listing at once and keeps the board open '
         + 'on the rest, but lists nothing the accept made available',
         async () => {
