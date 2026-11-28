@@ -19,7 +19,8 @@ import {
 } from '../nova_plugin/player/index.js';
 import { makeShip } from '../nova_plugin/ship/index.js';
 import { completeEntity } from '../nova_plugin/spawn/index.js';
-import { FleetLedger, refundLostFighters } from './fleet_ledger.js';
+import { FleetLedger, gateEmergenceFor, refundLostFighters } from './fleet_ledger.js';
+import { PlanetComponent } from '../nova_plugin/travel/index.js';
 import type { SimulationGameData } from './gamedata/simulation_game_data.js';
 
 /**
@@ -518,6 +519,55 @@ describe('the fleet ledger\'s lost fighters (issue #258)', () => {
         fleet.reset();
         expect(fleet.lostFighters).toEqual([]);
     });
+});
+
+/**
+ * Reference "Hypergate emergence, wave 59": a batch held for a gate arrival
+ * comes out at the arrival gate's centre, facing the way the player came out.
+ */
+describe('where a held gate batch comes out (wave 59)', () => {
+    function stellar(id: string, x: number, y: number) {
+        return new Entity(id)
+            .addComponent(PlanetComponent, { id })
+            .addComponent(MovementStateComponent, {
+                position: new Position(x, y), velocity: new Vector(0, 0),
+                rotation: new Angle(0), accelerating: 0, turnBack: false,
+                turning: 0,
+            });
+    }
+    function display() {
+        const world = new World('display');
+        world.entities.set('planet nova:137', stellar('nova:137', 0, 0));
+        world.entities.set('planet nova:1404', stellar('nova:1404', -70, 250));
+        return world;
+    }
+    const leader = new Entity('player').addComponent(MovementStateComponent, {
+        position: new Position(-60, 255), velocity: new Vector(19, 11),
+        rotation: new Angle(2.09), accelerating: 0, turnBack: false,
+        turning: 0,
+    });
+
+    it('is the named gate\'s centre and the player\'s heading', () => {
+        const emergence = gateEmergenceFor(display(), leader, [
+            { player: 'player', uuid: 'a', entity: new Entity(),
+                emergeAtGate: 'nova:1404' },
+        ])!;
+        expect(emergence.gate).toBe('nova:1404');
+        expect(emergence.position.x).toBe(-70);
+        expect(emergence.position.y).toBe(250);
+        expect(emergence.rotation.angle).toBeCloseTo(2.09, 9);
+    });
+
+    it('is undefined for a batch not held for a gate, or a gate not here',
+        () => {
+            expect(gateEmergenceFor(display(), leader, [
+                { player: 'player', uuid: 'a', entity: new Entity() },
+            ])).toBeUndefined();
+            expect(gateEmergenceFor(display(), leader, [
+                { player: 'player', uuid: 'a', entity: new Entity(),
+                    emergeAtGate: 'nova:1405' },
+            ])).toBeUndefined();
+        });
 });
 
 /** A stand-in for a display-only component the mirror carries. */

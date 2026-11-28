@@ -77,6 +77,30 @@ export interface CarriedEscort {
      * remap whenever they are finally put down.
      */
     priorPlayer?: string;
+    /**
+     * The spöb global id of the gate this escort comes out of: set when the
+     * batch is HELD for the player's gate arrival (system_entry), read when
+     * the flush puts it down (see {@link GateEmergence}).
+     */
+    emergeAtGate?: string;
+}
+
+/**
+ * Where escorts held for a gate arrival come out. On the original they
+ * emerge AT the arrival gate's centre, as the player does, a moment after
+ * the player (0.4-1.5 s, staggered), nearly at rest, and fly from there to
+ * their formation stations (reference "Hypergate emergence, wave 59"). The
+ * flush puts each direct escort of the player whose `emergeAtGate` is
+ * `gate` exactly at `position`, facing `rotation`, at rest; FormationSystem
+ * takes it from there. The stagger is not modelled: they come out together.
+ */
+export interface GateEmergence {
+    /** The gate's spöb global id (matched against CarriedEscort.emergeAtGate). */
+    gate: string;
+    /** The gate's centre. */
+    position: Position;
+    /** The emergence direction (the player's heading as it came out). */
+    rotation: Angle;
 }
 
 /**
@@ -121,9 +145,9 @@ export function playerJumpSettled(player: Entity): boolean {
  *
  * The fix is a hold: a batch arriving with a gate transit is held on the
  * jump roster, and released once the marker is gone — which is precisely the moment GateArrivalSystem has finished
- * positioning the player. The escorts then take formation stations on the
- * gate exit, coasting outward at the player's emergence velocity.
- * GateArrivalComponent is serializer-registered (gate_transit_plugin), so
+ * positioning the player. The escorts then come out AT the gate's centre,
+ * at rest, and fly to their formation stations (GateEmergence; the rows
+ * carry `emergeAtGate`). GateArrivalComponent is serializer-registered (gate_transit_plugin), so
  * the display world the client asks sees it appear and disappear.
  */
 export function gateArrivalPending(player: Entity): boolean {
@@ -399,10 +423,14 @@ const MAX_CARRY_DEPTH = 8;
  * Velocity is copied from the station so a batch arriving from hyperspace
  * coasts in with the player (who arrives at top speed) instead of hanging
  * motionless in front of them.
+ *
+ * `emerge` puts the escort ON `station.position` instead of a formation
+ * slot around it, at rest: an escort coming out of a gate (GateEmergence).
  */
 function placeCarriedEscort(escort: CarriedEscort, player: string,
     attachTo: string, station: Station, slot: number,
-    remap: ReadonlyMap<string, string>, ownerUuid?: string): Entity | undefined {
+    remap: ReadonlyMap<string, string>, ownerUuid?: string,
+    emerge = false): Entity | undefined {
     const movement = escort.entity.components.get(MovementStateComponent);
     if (!movement) {
         return undefined;
@@ -412,12 +440,15 @@ function placeCarriedEscort(escort: CarriedEscort, player: string,
         // At the spacing of the leader and this hull; FormationSystem
         // settles the formation on its group spacing (the largest frame
         // among the leader and all its escorts) from the first tick.
-        position: formationSlotPosition(station.position, station.rotation,
-            slot, formationSpacing(Math.max(station.frameWidth,
-                escort.entity.components.get(ShipDataComponent)
-                    ?.spriteFrameWidth ?? 0))),
+        position: emerge
+            ? new Position(station.position.x, station.position.y)
+            : formationSlotPosition(station.position, station.rotation,
+                slot, formationSpacing(Math.max(station.frameWidth,
+                    escort.entity.components.get(ShipDataComponent)
+                        ?.spriteFrameWidth ?? 0))),
         rotation: station.rotation,
-        velocity: station.velocity,
+        velocity: emerge ? new Vector(0, 0) : station.velocity,
+        ...(emerge ? { targetSpeed: 0 } : {}),
         accelerating: 0,
         turning: 0,
         turnBack: false,
@@ -515,10 +546,15 @@ export function prepareCarriedEscort(escort: CarriedEscort,
  *
  * Slots run from `firstSlot` for the player's own followers, and from 0
  * for any carrier in the batch (whose formation is new too).
+ *
+ * With `emergence`, a direct escort of the player held for that gate
+ * arrival (`emergeAtGate === emergence.gate`) comes out AT the gate's
+ * centre, at rest, facing the emergence direction (reference wave 59); a
+ * fighter it carries takes formation on it there as usual.
  */
 export function prepareCarriedEscorts(escorts: readonly CarriedEscort[],
     leaderUuid: string, leader: Entity, firstSlot: number,
-    mintUuid: () => string, ownerUuid?: string):
+    mintUuid: () => string, ownerUuid?: string, emergence?: GateEmergence):
     Array<{ uuid: string, entity: Entity }> {
     const leaderStation = stationOf(leader);
     if (!leaderStation) {
@@ -543,12 +579,17 @@ export function prepareCarriedEscorts(escorts: readonly CarriedEscort[],
     const prepared: Array<{ uuid: string, entity: Entity }> = [];
 
     const place = (escort: CarriedEscort, attachTo: string) => {
-        const station = stations.get(attachTo)!;
+        const emerge = emergence !== undefined && attachTo === leaderUuid
+            && escort.emergeAtGate === emergence.gate;
+        const station = emerge
+            ? { ...leaderStation, position: emergence.position,
+                rotation: emergence.rotation, velocity: new Vector(0, 0) }
+            : stations.get(attachTo)!;
         const slot = nextSlot.get(attachTo) ?? 0;
         nextSlot.set(attachTo, slot + 1);
         const uuid = remap.get(escort.uuid)!;
         const entity = placeCarriedEscort(escort, leaderUuid, attachTo,
-            station, slot, remap, ownerUuid);
+            station, slot, remap, ownerUuid, emerge);
         if (!entity) {
             console.warn(`Carried escort ${escort.uuid} has no movement `
                 + `state; skipped`);

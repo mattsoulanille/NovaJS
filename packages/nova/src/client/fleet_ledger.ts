@@ -24,7 +24,10 @@
  * the bridge's input-record path (client/fleet_insertion.ts).
  */
 import { isLeft } from 'fp-ts/lib/Either.js';
+import { Angle } from 'nova_ecs/datatypes/angle';
+import { Position } from 'nova_ecs/datatypes/position';
 import type { Entity } from 'nova_ecs/entity';
+import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import type { Serializer } from 'nova_ecs/plugins/serializer_plugin';
 import type { World } from 'nova_ecs/world';
 import { v4 } from 'uuid';
@@ -39,6 +42,7 @@ import {
     buildMissionShipSpawns, liveMissionShips,
 } from '../nova_plugin/missions/index.js';
 import { FormationComponent } from '../nova_plugin/npc/index.js';
+import { PlanetComponent } from '../nova_plugin/travel/index.js';
 import {
     ControlledByComponent, escortCopyKey, PlayerEscortComponent,
     PlayerShipSelector,
@@ -48,7 +52,7 @@ import {
 } from '../nova_plugin/pilot/index.js';
 import { restockCarriedEscorts } from '../spaceport/escort_restock.js';
 import {
-    carriedBatchSettled, CarriedEscort, escortsAccountedFor,
+    carriedBatchSettled, CarriedEscort, escortsAccountedFor, GateEmergence,
     takeCarriedEscorts,
 } from '../spaceport/landed_escorts.js';
 import { runLiftoffAutoAborts } from '../spaceport/mission_session.js';
@@ -677,12 +681,43 @@ export async function spawnHiredEscorts(ctx: FleetContext,
  */
 async function insertCarriedEscorts(ctx: FleetContext,
     bridge: AsyncSimulationBridgeClient, displayWorld: World,
-    leaderUuid: string, leader: Entity, escorts: CarriedEscort[]):
+    leaderUuid: string, leader: Entity, escorts: CarriedEscort[],
+    emergence?: GateEmergence):
     Promise<FleetInsertionResult> {
     const base = ctx.fleet.nextClientSlot(displayWorld, leaderUuid);
     ctx.fleet.noteSlotsUsed(leaderUuid, base + escorts.length);
     return insertEscortBatch(bridge, leaderUuid, leader, escorts, base, v4,
-        ctx.ownerUuid());
+        ctx.ownerUuid(), emergence);
+}
+
+/**
+ * Where a batch held for a gate arrival comes out: the centre of the gate
+ * its rows name (CarriedEscort.emergeAtGate), found among this world's
+ * stellars, facing the way the player came out of it (GateArrivalSystem
+ * turned the player to the emergence direction). Undefined when no row was
+ * held for a gate, or the gate is not in this world (a row retried after
+ * the player moved on): those rows take formation stations as usual.
+ */
+export function gateEmergenceFor(world: World, leader: Entity,
+    escorts: readonly CarriedEscort[]): GateEmergence | undefined {
+    const gate = escorts.find(escort => escort.emergeAtGate !== undefined)
+        ?.emergeAtGate;
+    const rotation = leader.components.get(MovementStateComponent)?.rotation;
+    if (gate === undefined || !rotation) {
+        return undefined;
+    }
+    for (const entity of world.entities.values()) {
+        if (entity.components.get(PlanetComponent)?.id !== gate) {
+            continue;
+        }
+        const position = entity.components.get(MovementStateComponent)
+            ?.position;
+        return position
+            ? { gate, position: Position.fromVectorLike(position),
+                rotation: Angle.fromAngleLike(rotation) }
+            : undefined;
+    }
+    return undefined;
 }
 
 /** The part of the simulation bridge the refund needs. */
@@ -805,8 +840,10 @@ export async function flushCarriedJumpEscorts(ctx: FleetContext,
         return;
     }
     // Whatever could not go in goes back on the roster for the next frame.
+    // A batch held for a gate arrival comes out of the gate (wave 59).
     const inserted = await insertCarriedEscorts(ctx, bridge, displayWorld,
-        playerUuid, leader, mine);
+        playerUuid, leader, mine,
+        gateEmergenceFor(displayWorld, leader, mine));
     ctx.fleet.jumping.push(...inserted.failed);
     // A lost fighter whose carrier rode this batch (held through a
     // gate arrival, or retried after a failed insertion) is owed its

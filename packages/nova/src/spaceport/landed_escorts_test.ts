@@ -346,6 +346,122 @@ describe('carried escort round trip', () => {
             { player: PLAYER, uuid: '1', entity: new Entity() },
             PLAYER, leader, 0)).toBeUndefined();
     });
+
+    /**
+     * Reference "Hypergate emergence, wave 59": escorts held for a gate
+     * arrival come out AT the gate's centre (where the player came out),
+     * nearly at rest, and fly from there to formation.
+     */
+    describe('a batch held for a gate arrival (wave 59)', () => {
+        const GATE = 'nova:1404';
+        const gateCentre = new Position(-70, 250);
+        const emergence = {
+            gate: GATE, position: gateCentre, rotation: new Angle(2.1),
+        };
+        let minted = 0;
+        const mint = () => `minted-${minted++}`;
+
+        async function heldBatch() {
+            const { makeEscort } = await makeFixture();
+            const direct = await makeEscort(ship => {
+                ship.components.set(PlayerEscortComponent,
+                    { player: PLAYER, parent: PLAYER, deal: NO_DEAL });
+            });
+            const wing = await makeEscort(ship => {
+                ship.components.set(OwnerComponent, { owner: 'old carrier' });
+                ship.components.set(SourceComponent, 'old carrier');
+                ship.components.set(PlayerEscortComponent,
+                    { player: PLAYER, parent: 'old carrier', deal: NO_DEAL });
+            });
+            // The player has already coasted out of the gate a little.
+            const leader = new Entity();
+            leader.components.set(MovementStateComponent, {
+                ...movement(-50, 260, 2.1),
+                velocity: new Vector(40, 20),
+            });
+            return { direct, wing, leader };
+        }
+
+        it('puts direct escorts AT the gate centre, at rest, facing out',
+            async () => {
+                const { direct, leader } = await heldBatch();
+                const second = (await heldBatch()).direct;
+                prepareCarriedEscorts([
+                    { player: PLAYER, uuid: 'a', entity: direct,
+                        emergeAtGate: GATE },
+                    { player: PLAYER, uuid: 'b', entity: second,
+                        emergeAtGate: GATE },
+                ], PLAYER, leader, 0, mint,
+                undefined, emergence);
+                for (const escort of [direct, second]) {
+                    const state = escort.components.get(MovementStateComponent)!;
+                    expect(state.position.x).toBe(gateCentre.x);
+                    expect(state.position.y).toBe(gateCentre.y);
+                    expect(state.velocity.length).toBe(0);
+                    expect(state.targetSpeed).toBe(0);
+                    expect(state.rotation.angle).toBeCloseTo(2.1, 9);
+                }
+                // They still fly to their own formation stations.
+                expect(direct.components.get(FormationComponent))
+                    .toEqual({ leader: PLAYER, slot: 0 });
+                expect(second.components.get(FormationComponent))
+                    .toEqual({ leader: PLAYER, slot: 1 });
+            });
+
+        it('puts a carried fighter in formation on its carrier at the gate',
+            async () => {
+                const { leader } = await heldBatch();
+                const { makeEscort } = await makeFixture();
+                const carrier = await makeEscort(ship => {
+                    ship.components.set(PlayerEscortComponent,
+                        { player: PLAYER, parent: PLAYER, deal: NO_DEAL });
+                });
+                const wing = await makeEscort(ship => {
+                    ship.components.set(PlayerEscortComponent,
+                        { player: PLAYER, parent: 'old carrier', deal: NO_DEAL });
+                });
+                const prepared = prepareCarriedEscorts([
+                    { player: PLAYER, uuid: 'old carrier', entity: carrier,
+                        emergeAtGate: GATE },
+                    { player: PLAYER, uuid: 'old wing', entity: wing,
+                        emergeAtGate: GATE },
+                ], PLAYER, leader, 0, mint, undefined,
+                emergence);
+                const carrierUuid = prepared.find(
+                    entry => entry.entity === carrier)!.uuid;
+                expect(wing.components.get(FormationComponent))
+                    .toEqual({ leader: carrierUuid, slot: 0 });
+                const at = carrier.components.get(MovementStateComponent)!
+                    .position;
+                expect(at.x).toBe(gateCentre.x);
+                expect(at.y).toBe(gateCentre.y);
+                // The fighter's station is a formation slot on the carrier
+                // (not the carrier's own point).
+                const wingAt = wing.components.get(MovementStateComponent)!
+                    .position;
+                expect(wingAt.subtract(at).length).toBeGreaterThan(1);
+            });
+
+        it('leaves rows not held for that gate in formation on the player',
+            async () => {
+                const { direct, leader } = await heldBatch();
+                const retried = (await heldBatch()).direct;
+                prepareCarriedEscorts([
+                    { player: PLAYER, uuid: 'a', entity: direct,
+                        emergeAtGate: 'nova:9999' },
+                    { player: PLAYER, uuid: 'b', entity: retried },
+                ], PLAYER, leader, 0, mint,
+                undefined, emergence);
+                for (const escort of [direct, retried]) {
+                    const state = escort.components.get(MovementStateComponent)!;
+                    expect(state.position.subtract(gateCentre).length)
+                        .toBeGreaterThan(1);
+                    // In formation, coasting with the player.
+                    expect(state.velocity.x).toBe(40);
+                    expect(state.velocity.y).toBe(20);
+                }
+            });
+    });
 });
 
 describe('carried batch roster policy', () => {

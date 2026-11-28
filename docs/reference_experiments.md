@@ -27163,7 +27163,11 @@ field lives on the client's roster), so no protocol note. Specs:
 `gate_transit_plugin_test.ts` (at the centre, half speed, facing out, the
 destination's 270), `landed_escorts_test.ts` "a batch held for a gate
 arrival (wave 59)", `fleet_ledger_test.ts` "where a held gate batch comes
-out (wave 59)", `gate_animation_test.ts` (sighting radius). Confidence:
+out (wave 59)", `gate_animation_test.ts` (sighting radius). A headless
+browser run of the same transit (a Starbridge with an Arachnid escort,
+stock HG-Tichel to HG-Kania, ränk 147) read the first display sample in
+Kania 7.5 px out at 120 degrees, 89.6 px/s, heading 120, and the escort at
+the gate's centre (0 px, 1.4 px/s) 0.1 s later. Confidence:
 high for the point, direction and speed (14 transits, two hulls, three art
 sizes); medium for the escorts' speed.
 

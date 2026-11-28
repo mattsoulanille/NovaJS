@@ -14,7 +14,7 @@ import {
 } from '../nova_plugin/npc/index.js';
 import { makeNpcShip } from '../nova_plugin/spawn/index.js';
 import {
-    CarriedEscort, prepareCarriedEscorts,
+    CarriedEscort, GateEmergence, prepareCarriedEscorts,
 } from '../spaceport/landed_escorts.js';
 
 /**
@@ -173,13 +173,17 @@ export function buildHiredEscort(shipData: ShipData, leaderUuid: string,
  * Intra-batch references are remapped to the new uuids by
  * prepareCarriedEscorts, and a fighter's own identity is component-borne
  * rather than uuid-borne, so re-minting is safe.
+ *
+ * `emergence` puts the rows held for that gate arrival at the gate's centre
+ * instead (prepareCarriedEscorts).
  */
 export async function insertEscortBatch(bridge: FleetBridge,
     leaderUuid: string, leader: Entity, escorts: readonly CarriedEscort[],
-    baseSlot: number, mintUuid: () => string, ownerUuid?: string):
+    baseSlot: number, mintUuid: () => string, ownerUuid?: string,
+    emergence?: GateEmergence):
     Promise<FleetInsertionResult> {
     const prepared = prepareCarriedEscorts(escorts, leaderUuid, leader,
-        baseSlot, mintUuid, ownerUuid);
+        baseSlot, mintUuid, ownerUuid, emergence);
     // prepareCarriedEscorts places each roster row's OWN entity object, so
     // a placed entity pairs back with its row; a failure hands the row
     // back under the uuid it was placed under.

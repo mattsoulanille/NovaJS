@@ -482,7 +482,10 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
     });
     window.myShip = entity;
     if (holdBatch) {
-        fleet.jumping.push(...jumpEscorts);
+        // Held for the gate arrival: they come out of the arrival gate
+        // when the flush puts them down (GateEmergence, wave 59).
+        fleet.jumping.push(...jumpEscorts.map(escort =>
+            ({ ...escort, emergeAtGate: plan.arrivalSpob })));
     }
     // An escort whose own insertion rejected is not dropped: the standing
     // flush puts it down on a later frame (issue #31).
