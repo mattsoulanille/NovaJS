@@ -37,5 +37,6 @@ export function getDefaultNovaIDs(): NovaIDs {
         StringTable: [],
         Description: [],
         InterfaceColors: [],
+        Nebula: [],
     }
 }

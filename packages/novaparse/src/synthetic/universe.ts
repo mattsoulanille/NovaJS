@@ -65,6 +65,7 @@ export const MISN = {
 export const RANK = { warrant: 128, confidant: 129, cover: 130 } as const;
 export const PERS = { lask: 128, pell: 129, vey: 130, stranded: 131, wreck: 132, muster: 133 } as const;
 export const JUNK = { resin: 128, alloy: 129 } as const;
+export const NEBU = { haze: 128, veil: 129 } as const;
 export const CHAR = { courier: 128 } as const;
 export const BOOM = { burst: 128 } as const;
 export const ROID = { shoal: 128 } as const;
@@ -114,6 +115,10 @@ export const BITS = {
     portDominated: 114, portReleased: 115,
     /** The Require bit the Warrant Seal outfit asks for (a Contribute bit index). */
     warrantHolder: 3,
+    /** Gates the Vael Veil nebula (never set by the scenario itself). */
+    veilCharted: 116,
+    /** The Kestrel Haze nebula's OnExplore sets it. */
+    hazeExplored: 117,
 } as const;
 
 /** The base-data id prefix the scenario loads under. */
@@ -195,6 +200,7 @@ export const SYNTHETIC = {
     ranks: globalIds(RANK),
     persons: globalIds(PERS),
     junk: globalIds(JUNK),
+    nebulae: globalIds(NEBU),
     playerStart: sid(CHAR.courier),
     explosion: sid(BOOM.burst),
     asteroid: sid(ROID.shoal),
@@ -1989,6 +1995,45 @@ export const JUNKS: JunkDef[] = [
         basePrice: 1200, flags: JUNK_FLAGS.decays, scanMask: 0x0001,
         lcName: "gate alloy", abbrev: "Alloy",
         buyOn: `b${BITS.surveyAccepted}`, sellOn: "",
+    },
+];
+
+// ---------------------------------------------------------------------
+// Nebulae
+// ---------------------------------------------------------------------
+
+export interface NebuDef {
+    id: number;
+    name: string;
+    /** XPos / YPos: the upper-left corner, in normal-zoom map units. */
+    position: [number, number];
+    /** XSize / YSize at the normal zoom. */
+    size: [number, number];
+    activeOn: string;
+    onExplore: string;
+    /** The pictures in slot order (PICT 9500 + 7 * (id - 128) + slot),
+     * as pixel sizes; the stock data fills slots 0-2 at 1/4, 1/2 and 1x. */
+    images: Array<[width: number, height: number]>;
+}
+
+/** The PICT id of a nëbu's `slot`th picture (EVN Bible: 9500-9724). */
+export const nebulaPict = (nebu: number, slot: number) =>
+    9500 + 7 * (nebu - 128) + slot;
+
+export const NEBULAE: NebuDef[] = [
+    {
+        // Around Kestrel Drift (200, 50) but not Thessaly Reach (0, 0),
+        // with the stock data's three picture sizes and an OnExplore.
+        id: NEBU.haze, name: "Kestrel Haze", position: [100, -40],
+        size: [160, 120], activeOn: "", onExplore: `b${BITS.hazeExplored}`,
+        images: [[40, 30], [80, 60], [160, 120]],
+    },
+    {
+        // Over Vael Hollow (350, -80), gated, with a single picture that
+        // every map scale has to stretch.
+        id: NEBU.veil, name: "Vael Veil", position: [300, -130],
+        size: [100, 100], activeOn: `b${BITS.veilCharted}`, onExplore: "",
+        images: [[50, 50]],
     },
 ];
 

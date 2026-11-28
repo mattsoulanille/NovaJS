@@ -10,6 +10,7 @@ import { JunkData } from "novadatainterface/junk_data";
 import { OopsData } from "novadatainterface/oops_data";
 import { GovtData } from "novadatainterface/govt_data";
 import { MissionData } from "novadatainterface/mission_data";
+import { NebulaData } from "novadatainterface/nebula_data";
 import { NovaDataInterface, NovaIDNotFoundError } from "novadatainterface/nova_data_interface";
 import { PlayerStartData } from "novadatainterface/player_start_data";
 import { NovaIDs } from "novadatainterface/nova_ids";
@@ -45,6 +46,7 @@ import { JunkParse } from "./parsers/junk_parse.js";
 import { OopsParse } from "./parsers/oops_parse.js";
 import { GovtParse } from "./parsers/govt_parse.js";
 import { MisnParse } from "./parsers/misn_parse.js";
+import { NebulaParse } from "./parsers/nebula_parse.js";
 import {
     builtInOutfitWeaponId, makeBuiltInAmmoOutfit, makeBuiltInWeaponOutfit,
     preferredAmmoOutfit,
@@ -77,6 +79,7 @@ import { CharResource } from "./resource_parsers/char_resource.js";
 import { CronResource } from "./resource_parsers/cron_resource.js";
 import { JunkResource } from "./resource_parsers/junk_resource.js";
 import { OopsResource } from "./resource_parsers/oops_resource.js";
+import { NebuResource } from "./resource_parsers/nebu_resource.js";
 import { GovtResource } from "./resource_parsers/govt_resource.js";
 import { IntfResource } from "./resource_parsers/intf_resource.js";
 import { ColrResource } from "./resource_parsers/colr_resource.js";
@@ -336,6 +339,7 @@ export class NovaParse implements GameDataInterface {
             StringTable: this.buildIDsForResource(idSpace["STR#"]),
             Description: this.buildIDsForResource(idSpace.dësc),
             InterfaceColors: this.buildIDsForResource(idSpace.cölr),
+            Nebula: this.buildIDsForResource(idSpace.nëbu),
         }
     }
 
@@ -380,6 +384,7 @@ export class NovaParse implements GameDataInterface {
             StringTable: this.makeGettable<StrNResource, StringTableData>(NovaResourceType.STRH, StringTableParse),
             Description: this.makeGettable<DescResource, DescriptionData>(NovaResourceType.dësc, DescriptionParse),
             InterfaceColors: this.makeGettable<ColrResource, InterfaceColorsData>(NovaResourceType.cölr, InterfaceColorsParse),
+            Nebula: this.makeGettable<NebuResource, NebulaData>(NovaResourceType.nëbu, NebulaParse),
         }
 
         return data;

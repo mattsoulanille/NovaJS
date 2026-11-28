@@ -11,6 +11,7 @@ import { GovtData } from "./govt_data.js";
 import { InterfaceColorsData } from "./interface_colors_data.js";
 import { JunkData } from "./junk_data.js";
 import { MissionData } from "./mission_data.js";
+import { NebulaData } from "./nebula_data.js";
 import { OopsData } from "./oops_data.js";
 import { OutfitData } from "./outfit_data.js";
 import { PictData } from "./pict_data.js";
@@ -62,6 +63,7 @@ enum NovaDataType {
     StringTable = "StringTable",
     Description = "Description",
     InterfaceColors = "InterfaceColors",
+    Nebula = "Nebula",
 };
 
 // index: NovaDataType
@@ -97,6 +99,7 @@ type NovaDataInterface = {
     StringTable: Gettable<StringTableData>,
     Description: Gettable<DescriptionData>,
     InterfaceColors: Gettable<InterfaceColorsData>,
+    Nebula: Gettable<NebulaData>,
 }
 
 // Re-exported from its own module so that gettable.ts (which this file

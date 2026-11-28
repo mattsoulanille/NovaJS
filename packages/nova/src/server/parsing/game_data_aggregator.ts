@@ -14,6 +14,7 @@ import { DudeData } from "novadatainterface/dude_data";
 import { FleetData } from "novadatainterface/fleet_data";
 import { JunkData } from "novadatainterface/junk_data";
 import { OopsData } from "novadatainterface/oops_data";
+import { NebulaData } from "novadatainterface/nebula_data";
 import { MissionData } from "novadatainterface/mission_data";
 import { PersData } from "novadatainterface/pers_data";
 import { CronData } from "novadatainterface/cron_data";
@@ -110,6 +111,7 @@ class GameDataAggregator implements GameDataInterface {
             StringTable: this.makeAggregator<StringTableData>(NovaDataType.StringTable),
             Description: this.makeAggregator<DescriptionData>(NovaDataType.Description),
             InterfaceColors: this.makeAggregator<InterfaceColorsData>(NovaDataType.InterfaceColors),
+            Nebula: this.makeAggregator<NebulaData>(NovaDataType.Nebula),
         };
 
         this.ids = this.getAllIDs();

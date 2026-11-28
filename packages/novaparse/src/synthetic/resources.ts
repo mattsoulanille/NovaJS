@@ -8,6 +8,7 @@ import {
     barDesc, BOOM, buttonPictSize, CharDef, CHARS, CICN, DIALOG_PICT_SIZES,
     DudeDef, DUDES, FletDef, FLETS, GovtDef, GOVTS, INTF, JunkDef, JUNKS,
     landscapePict, missionBriefDesc, missionOfferDesc, MisnDef, MISNS,
+    NebuDef, NEBULAE, nebulaPict,
     OutfDef, outfitDesc, outfitPict, OUTFS, PersDef, PERSONS, PICT,
     pilotDesc, RankDef, RANKS, RLED, ROID, ShanDef, ShipDef, shipDesc,
     shipPict, SHIPS, SPIN, SpobDef, SPOBS, STRING_TABLES, SystDef, SYSTS,
@@ -341,6 +342,15 @@ function junk(def: JunkDef): number[] {
         .expect(676).toArray();
 }
 
+/** A nëbu (534 bytes, EVN Bible p. 41). */
+function nebu(def: NebuDef): number[] {
+    return new ByteWriter()
+        .int16(def.position[0]).int16(def.position[1])
+        .int16(def.size[0]).int16(def.size[1])
+        .string(def.activeOn, 255).string(def.onExplore, 255)
+        .expect(518).padTo(534).toArray();
+}
+
 /** A dësc: the text, then its PICT, movie name and flags. */
 function desc(text: string, graphic = NONE): number[] {
     return new ByteWriter().cstring(text).int16(graphic).string("", 32)
@@ -486,6 +496,7 @@ export function buildSyntheticResources(): ResourceSpec[] {
     }
     for (const def of PERSONS) add("përs", def.id, def.name, pers(def));
     for (const def of JUNKS) add("jünk", def.id, def.name, junk(def));
+    for (const def of NEBULAE) add("nëbu", def.id, def.name, nebu(def));
     for (const table of STRING_TABLES) add("STR#", table.id, table.name, strn(table.strings));
 
     add("bööm", BOOM.burst, "Burst", boom());
@@ -539,6 +550,9 @@ export function buildSyntheticResources(): ResourceSpec[] {
             [id, `Button ${i}`, ...buttonPictSize(i)]),
         ...PICT.dialogs.map((id, i): [number, string, number, number] =>
             [id, `Dialog ${i}`, ...(DIALOG_PICT_SIZES[id] ?? [64, 48])]),
+        ...NEBULAE.flatMap(n => n.images.map(([width, height], slot)
+            : [number, string, number, number] =>
+            [nebulaPict(n.id, slot), `${n.name} ${slot}`, width, height])),
     ];
     for (const [id, name, width, height] of picts.sort((a, b) => a[0] - b[0])) {
         add("PICT", id, name, encodePict(pictImage(id, width, height)));

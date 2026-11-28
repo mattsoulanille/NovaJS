@@ -32,6 +32,7 @@ import { DudeData } from "novadatainterface/dude_data";
 import { FleetData } from "novadatainterface/fleet_data";
 import { JunkData } from "novadatainterface/junk_data";
 import { OopsData } from "novadatainterface/oops_data";
+import { NebulaData } from "novadatainterface/nebula_data";
 import { TargetCornersData } from "novadatainterface/target_corners_data";
 import { WeaponData } from "novadatainterface/weapon_data";
 import * as path from "path";
@@ -74,6 +75,7 @@ const Paths = {
     StringTable: { path: "StringTable", extension: "json" } as PathInfo,
     Description: { path: "Description", extension: "json" } as PathInfo,
     InterfaceColors: { path: "InterfaceColors", extension: "json" } as PathInfo,
+    Nebula: { path: "Nebula", extension: "json" } as PathInfo,
 };
 
 class FilesystemData implements GameDataInterface {
@@ -113,6 +115,7 @@ class FilesystemData implements GameDataInterface {
             StringTable: this.getFunction<StringTableData>(Paths.StringTable),
             Description: this.getFunction<DescriptionData>(Paths.Description),
             InterfaceColors: this.getFunction<InterfaceColorsData>(Paths.InterfaceColors),
+            Nebula: this.getFunction<NebulaData>(Paths.Nebula),
         }
         this.ids = this.buildIDs();
     }
@@ -193,6 +196,7 @@ class FilesystemData implements GameDataInterface {
             StringTable: await this.buildIDsForPath(Paths.StringTable),
             Description: await this.buildIDsForPath(Paths.Description),
             InterfaceColors: await this.buildIDsForPath(Paths.InterfaceColors),
+            Nebula: await this.buildIDsForPath(Paths.Nebula),
         }
     }
 

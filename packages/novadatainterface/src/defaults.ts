@@ -24,6 +24,7 @@ import { getDefaultSoundFile } from "./sound_file.js";
 import { getDefaultSpriteSheetData, getDefaultSpriteSheetFrames } from "./sprite_sheet_data.js";
 import { getDefaultStatusBarData } from "./status_bar_data.js";
 import { getDefaultInterfaceColorsData } from "./interface_colors_data.js";
+import { getDefaultNebulaData } from "./nebula_data.js";
 import { getDefaultStringTableData } from "./string_table_data.js";
 import { getDefaultSystemData } from "./system_data.js";
 import { getDefaultTargetCornersData } from "./target_corners_data.js";
@@ -62,4 +63,5 @@ export const Defaults = {
     get StringTable() { return getDefaultStringTableData() },
     get Description() { return getDefaultDescriptionData() },
     get InterfaceColors() { return getDefaultInterfaceColorsData() },
+    get Nebula() { return getDefaultNebulaData() },
 }

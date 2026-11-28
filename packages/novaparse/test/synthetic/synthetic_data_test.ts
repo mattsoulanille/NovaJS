@@ -11,7 +11,8 @@ import { buildSyntheticResources } from "../../src/synthetic/resources.js";
 import { SPRITE_GEOMETRY } from "../../src/synthetic/art.js";
 import {
     AVAIL_LOC, BITS, CHARS, CLOAK_MODVAL, DIALOG_PICT_SIZES, DUDES, FLETS, GOVTS,
-    JUNKS, MISNS, OUTFS, PERSONS, RANKS, RLED, SHIPS, sid, SPOBS, STRN, SYNTHETIC,
+    JUNKS, MISNS, NEBULAE, nebulaPict, OUTFS, PERSONS, RANKS, RLED, SHIPS, sid, SPOBS,
+    STRN, SYNTHETIC,
     SYST, SYSTS, VEIL_MODVAL, WEAPS,
 } from "../../src/synthetic/universe.js";
 
@@ -476,6 +477,36 @@ describe("the synthetic Nova data set", () => {
                 expect(alloy.decays).toBeTrue();
                 expect(alloy.buyOn).toEqual(`b${BITS.surveyAccepted}`);
                 expect(alloy.lcName).toEqual("gate alloy");
+            });
+
+        it("has a nebula with the stock three picture sizes and an OnExplore, "
+            + "and a gated one with a single picture", async () => {
+                expect([...ids.Nebula].sort())
+                    .toEqual(NEBULAE.map(n => sid(n.id)).sort());
+                for (const def of NEBULAE) {
+                    const nebula = await novaParse.data.Nebula.get(sid(def.id));
+                    expect(nebula.name).toEqual(def.name);
+                    expect(nebula.position).toEqual(def.position);
+                    expect(nebula.size).toEqual(def.size);
+                    expect(nebula.activeOn).toEqual(def.activeOn);
+                    expect(nebula.onExplore).toEqual(def.onExplore);
+                    expect(nebula.images).toEqual(def.images.map(
+                        ([width, height], slot) => ({
+                            id: sid(nebulaPict(def.id, slot)), width, height,
+                        })));
+                    // The frame size the parser reads is the decoded size.
+                    for (const image of nebula.images) {
+                        const png = PNG.sync.read(Buffer.from(
+                            await novaParse.data.PictImage.get(image.id)));
+                        expect([png.width, png.height])
+                            .toEqual([image.width, image.height]);
+                    }
+                }
+                const haze = await novaParse.data.Nebula.get(SYNTHETIC.nebulae.haze);
+                expect(haze.onExplore).toEqual(`b${BITS.hazeExplored}`);
+                const veil = await novaParse.data.Nebula.get(SYNTHETIC.nebulae.veil);
+                expect(veil.activeOn).toEqual(`b${BITS.veilCharted}`);
+                expect(veil.images.length).toEqual(1);
             });
 
         it("has a link-less wormhole pair, a MinStatus-0 world, an unlandable "
