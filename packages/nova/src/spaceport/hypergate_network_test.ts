@@ -49,7 +49,7 @@ const FAR_GATE = 'nova:1416';
 /**
  * The hypergate graph of the stock base data, built the way the gate map
  * builds it: every hypergate's HyperLinks, with the unlandable (destroyed)
- * gates marked unusable through the shared landable() predicate.
+ * gates marked destroyed through the shared landable() predicate.
  */
 async function stockNetwork(): Promise<HypergateNetwork> {
     const gameData = await getIntegrationGameData();
@@ -57,16 +57,16 @@ async function stockNetwork(): Promise<HypergateNetwork> {
     const planets = await Promise.all(
         ids.Planet.map(id => gameData.data.Planet.get(id)));
     const links = new Map<string, string[]>();
-    const unusable = new Set<string>();
+    const destroyed = new Set<string>();
     for (const planet of planets) {
         if (!landable(planet)) {
-            unusable.add(planet.id);
+            destroyed.add(planet.id);
         }
         if (planet.gate?.kind === 'hypergate') {
             links.set(planet.id, planet.gate.destinations);
         }
     }
-    return { links, unusable };
+    return { links, destroyed };
 }
 
 describe('the hypergateTransitivity setting', () => {
@@ -149,18 +149,31 @@ describe('hypergate network components', () => {
         expect([...reach.via]).toEqual([['c2', 'c1'], ['c3', 'c2']]);
     });
 
-    it('drops destroyed gates from the network entirely', () => {
+    it('keeps destroyed gates out of every network', () => {
         const network: HypergateNetwork = {
             links: new Map([
                 ['a', ['dead']],
                 ['dead', ['a', 'c']],
                 ['c', ['dead']],
             ]),
-            unusable: new Set(['dead']),
+            destroyed: new Set(['dead']),
         };
         // A destroyed gate is not a node, and it does not bridge a and c.
         expect(hypergateNetworkComponents(network)).toEqual([['a'], ['c']]);
-        expect(reachableGates(network, 'a')).toEqual([]);
+        // A lane still reaches it (wave 56), but nothing goes on from it.
+        expect(reachableGates(network, 'a')).toEqual(['dead']);
+        expect(reachableGates(network, 'dead')).toEqual([]);
+    });
+
+    it('leaves a gate that is not there at all unreached', () => {
+        const network: HypergateNetwork = {
+            links: new Map([['a', ['hidden', 'b']], ['hidden', ['c']],
+                ['b', []], ['c', []]]),
+            unusable: new Set(['hidden']),
+        };
+        expect(reachableGates(network, 'a')).toEqual(['b']);
+        expect(gateMapDestinations(network, 'a', false)).toEqual(['b']);
+        expect(gateCycleOrder(network, 'a', true)).toEqual(['b']);
     });
 
     it('finds exactly ONE live network in the stock data', async () => {
@@ -177,7 +190,7 @@ describe('hypergate network components', () => {
             for (const gate of DESTROYED_GATES) {
                 expect(network.links.has(gate)).toBeTrue();
                 expect(network.links.get(gate)).toEqual([]);
-                expect(network.unusable!.has(gate)).toBeTrue();
+                expect(network.destroyed!.has(gate)).toBeTrue();
             }
             // ...but none of them is offered anywhere.
             const reachable =
@@ -231,13 +244,20 @@ describe('what a gate offers', () => {
         }
     }, 60_000);
 
-    it('never offers a destroyed gate as a destination', () => {
+    // Reference "Tab on the hypergate map, wave 56", run b: HG-Tichel
+    // linked to the destroyed HG-Aldebaran offered it, and Done transited
+    // there.
+    it('offers a destroyed gate a link names, and goes no further', () => {
         const network: HypergateNetwork = {
-            links: new Map([['a', ['dead', 'b']], ['b', ['a']], ['dead', []]]),
-            unusable: new Set(['dead']),
+            links: new Map([['a', ['dead', 'b']], ['b', ['a']],
+                ['dead', ['c']], ['c', []]]),
+            destroyed: new Set(['dead']),
         };
-        expect(gateMapDestinations(network, 'a', false)).toEqual(['b']);
-        expect(gateMapDestinations(network, 'a', true)).toEqual(['b']);
+        expect(gateMapDestinations(network, 'a', false))
+            .toEqual(['b', 'dead']);
+        expect(gateMapDestinations(network, 'a', true))
+            .toEqual(['b', 'dead']);
+        expect(hypergateReach(network, 'a').via.get('dead')).toBe('a');
     });
 
     it('de-duplicates a gate that is linked twice', () => {
@@ -264,23 +284,27 @@ describe('gateCycleOrder (Tab on the gate map)', () => {
         const network: HypergateNetwork = {
             links: new Map([
                 ['a', ['c', 'dead', 'b', 'c', 'a']], ['b', ['d']],
-                ['c', ['a']], ['d', []], ['dead', []],
+                ['c', ['a']], ['d', []], ['dead', ['e']], ['e', []],
             ]),
-            unusable: new Set(['dead']),
+            destroyed: new Set(['dead']),
         };
         for (const transitive of [false, true]) {
             expect([...gateCycleOrder(network, 'a', transitive)].sort())
                 .toEqual(gateMapDestinations(network, 'a', transitive));
         }
-        expect(gateCycleOrder(network, 'a', false)).toEqual(['c', 'b']);
-        // Under transitivity, the gates further out follow, breadth first.
-        expect(gateCycleOrder(network, 'a', true)).toEqual(['c', 'b', 'd']);
+        // The destroyed gate keeps its slot (wave 56, run b).
+        expect(gateCycleOrder(network, 'a', false))
+            .toEqual(['c', 'dead', 'b']);
+        // Under transitivity, the gates further out follow, breadth first;
+        // nothing past the destroyed gate.
+        expect(gateCycleOrder(network, 'a', true))
+            .toEqual(['c', 'dead', 'b', 'd']);
     });
 
     it('is empty at a destroyed gate', () => {
         const network: HypergateNetwork = {
             links: new Map([['dead', ['a']], ['a', []]]),
-            unusable: new Set(['dead']),
+            destroyed: new Set(['dead']),
         };
         expect(gateCycleOrder(network, 'dead', true)).toEqual([]);
     });

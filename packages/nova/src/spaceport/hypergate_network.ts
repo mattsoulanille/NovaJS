@@ -73,17 +73,38 @@ export interface HypergateNetwork {
     /** Hypergate spöb global id -> its destination spöb global ids. */
     links: ReadonlyMap<string, readonly string[]>;
     /**
-     * Spöbs that must never be offered as a destination nor traversed as an
-     * intermediate hop: the DESTROYED gates, which fail the shared
-     * `landable()` predicate (nova_plugin/core/landable.ts). In stock data these
-     * are the 16 gates of the collapsed network, each with the spöb "can
-     * land" bit clear and zero HyperLinks. Anything not listed is usable.
+     * Spöbs that are not there at all for this player (a gate in no system
+     * the player's control bits show): never offered as a destination and
+     * never traversed. Anything not listed is present.
      */
     unusable?: ReadonlySet<string>;
+    /**
+     * The DESTROYED gates, which fail the shared `landable()` predicate
+     * (nova_plugin/core/landable.ts). In stock data these are the 16 gates
+     * of the collapsed network, each with the spöb "can land" bit clear and
+     * zero HyperLinks.
+     *
+     * A destroyed gate is still a place a working gate's lane can put the
+     * ship: the original draws one a working gate links to, Tabs to it in
+     * its slot and transits to it ("Exiting hypergate in the Aldebaran
+     * system...", reference "Tab on the hypergate map, wave 56", run b). It
+     * is never a gate to travel ON from (the ship cannot land on it), so it
+     * offers nothing, it is in no network, and a chain of transits stops
+     * there: under transitivity it is a leaf, whatever links a plug-in
+     * gives it.
+     */
+    destroyed?: ReadonlySet<string>;
 }
 
-function usable(network: HypergateNetwork, spob: string): boolean {
+/** Whether `spob` is there at all: a destination a link may name. */
+function present(network: HypergateNetwork, spob: string): boolean {
     return !network.unusable?.has(spob);
+}
+
+/** Whether a ship can depart from (or pass through) `spob`: present and
+ * not destroyed. */
+function usable(network: HypergateNetwork, spob: string): boolean {
+    return present(network, spob) && !network.destroyed?.has(spob);
 }
 
 /**
@@ -164,7 +185,8 @@ export function hypergateNetworkComponents(
 
 /**
  * How a chain of transits spreads out from one gate: a breadth-first walk
- * that follows each HyperLink in ITS OWN direction, over usable gates only.
+ * that follows each HyperLink in ITS OWN direction, over present gates
+ * only. A destroyed gate is reached but never walked on from.
  */
 export interface HypergateReach {
     /** Gate -> how many hops from the start (the start itself is 0). */
@@ -175,7 +197,8 @@ export interface HypergateReach {
     via: Map<string, string>;
 }
 
-/** The {@link HypergateReach} from `from` (empty when `from` is unusable). */
+/** The {@link HypergateReach} from `from` (empty when `from` is unusable:
+ * not present, or destroyed). */
 export function hypergateReach(network: HypergateNetwork,
     from: string): HypergateReach {
     const hops = new Map<string, number>();
@@ -189,14 +212,17 @@ export function hypergateReach(network: HypergateNetwork,
         const next: string[] = [];
         for (const current of frontier) {
             const onward = [...new Set(network.links.get(current) ?? [])]
-                .filter(to => usable(network, to)).sort();
+                .filter(to => present(network, to)).sort();
             for (const to of onward) {
                 if (hops.has(to)) {
                     continue;
                 }
                 hops.set(to, hops.get(current)! + 1);
                 via.set(to, current);
-                next.push(to);
+                // A destroyed gate ends the chain: nothing departs it.
+                if (usable(network, to)) {
+                    next.push(to);
+                }
             }
         }
         frontier = next.sort();
@@ -206,8 +232,8 @@ export function hypergateReach(network: HypergateNetwork,
 
 /**
  * Every gate reachable from `from` through a chain of links, each followed
- * in its own direction, excluding `from` itself and every unusable
- * (destroyed) gate.
+ * in its own direction, excluding `from` itself and every gate not present.
+ * A destroyed gate a link reaches is included; the chain stops there.
  */
 export function reachableGates(network: HypergateNetwork,
     from: string): string[] {
@@ -219,8 +245,9 @@ export function reachableGates(network: HypergateNetwork,
  * The order Tab cycles the gate map's destinations in: the gate's own
  * HyperLinks in SLOT order (HyperLink1 first), not by id, distance or
  * angle, as the star map's Tab follows the sÿst link slots (reference
- * "Tab on the hypergate map, wave 56"). Unusable (destroyed) gates and
- * repeats are left out.
+ * "Tab on the hypergate map, wave 56"). A destroyed gate keeps its slot
+ * (run b cycled Primus, Kania, the destroyed Aldebaran, Alphara); gates
+ * not present and repeats are left out.
  *
  * With `transitive` on (a NovaJS addition), the gates further out follow,
  * in a breadth-first walk that takes each gate's links in slot order too:
@@ -240,12 +267,14 @@ export function gateCycleOrder(network: HypergateNetwork, from: string,
         const next: string[] = [];
         for (const current of frontier) {
             for (const to of network.links.get(current) ?? []) {
-                if (seen.has(to) || !usable(network, to)) {
+                if (seen.has(to) || !present(network, to)) {
                     continue;
                 }
                 seen.add(to);
                 order.push(to);
-                next.push(to);
+                if (usable(network, to)) {
+                    next.push(to);
+                }
             }
         }
         frontier = transitive ? next : [];
@@ -261,9 +290,10 @@ export function gateCycleOrder(network: HypergateNetwork, from: string,
  * - `transitive` true: every gate a chain of links reaches from `from`
  *   ({@link reachableGates}).
  *
- * Destroyed gates are excluded either way — a gate you cannot land on is not
- * a place a transit can put you — and the result is sorted so the offering is
- * stable.
+ * A destroyed gate a link names is offered either way (the original transits
+ * to it, reference "Tab on the hypergate map, wave 56"), but a destroyed
+ * gate offers nothing and a chain never passes through one. The result is
+ * sorted so the offering is stable.
  */
 export function gateMapDestinations(network: HypergateNetwork, from: string,
     transitive: boolean): string[] {
@@ -274,6 +304,6 @@ export function gateMapDestinations(network: HypergateNetwork, from: string,
         return [];
     }
     return [...new Set(network.links.get(from) ?? [])]
-        .filter(to => usable(network, to) && to !== from)
+        .filter(to => present(network, to) && to !== from)
         .sort();
 }

@@ -100,16 +100,16 @@ describe('what the gate map offers per the transitivity setting', () => {
         const planets = await Promise.all(
             ids.Planet.map(id => gameData.data.Planet.get(id)));
         const links = new Map<string, string[]>();
-        const unusable = new Set<string>();
+        const destroyed = new Set<string>();
         for (const planet of planets) {
             if (!landable(planet)) {
-                unusable.add(planet.id);
+                destroyed.add(planet.id);
             }
             if (planet.gate?.kind === 'hypergate') {
                 links.set(planet.id, planet.gate.destinations);
             }
         }
-        const network: HypergateNetwork = { links, unusable };
+        const network: HypergateNetwork = { links, destroyed };
         return {
             systemById: new Map(systems.map(s => [s.id, s])),
             systemsOfSpob, network,
@@ -152,10 +152,12 @@ describe('what the gate map offers per the transitivity setting', () => {
         expect(selectable.has('nova:424')).toBeFalse();
     }, 60_000);
 
-    it('never offers a destroyed gate\'s system, either way', async () => {
+    it('offers no destroyed gate in stock data, either way', async () => {
+        // nova:130 (HG-Aldebaran) is one of the 16 collapsed gates, and no
+        // working stock gate links one (a plug-in link would offer it:
+        // "Tab on the gate map (wave 56)" below).
         for (const transitive of [false, true]) {
             const selectable = await offered(transitive);
-            // nova:130 (HG-Aldebaran) is one of the 16 collapsed gates.
             expect([...selectable.values()]).not.toContain('nova:130');
         }
     }, 60_000);
@@ -342,7 +344,7 @@ describe('computeGateMapView', () => {
 
     /** An index over `systems` and `links`. */
     function makeIndex(systems: SystemData[], links: Map<string, string[]>,
-        unusable: string[] = []): GateMapIndex {
+        destroyed: string[] = []): GateMapIndex {
         const systemsOfSpob = new Map<string, string[]>();
         for (const s of systems) {
             for (const spob of s.planets) {
@@ -353,7 +355,7 @@ describe('computeGateMapView', () => {
         return {
             systemById: new Map(systems.map(s => [s.id, s])),
             systemsOfSpob,
-            network: { links, unusable: new Set(unusable) },
+            network: { links, destroyed: new Set(destroyed) },
         };
     }
 
@@ -363,7 +365,7 @@ describe('computeGateMapView', () => {
      */
     function index(extraSystems: SystemData[] = [],
         extraLinks: [string, string[]][] = [],
-        unusable: string[] = []): GateMapIndex {
+        destroyed: string[] = []): GateMapIndex {
         const systems = [
             system('A1', ['a1', 'port']), system('A2', ['a2']),
             system('A3', ['a3']), system('B1', ['b1']), system('B2', ['b2']),
@@ -376,7 +378,7 @@ describe('computeGateMapView', () => {
         for (const [from, to] of extraLinks) {
             links.set(from, [...links.get(from) ?? [], ...to]);
         }
-        return makeIndex(systems, links, unusable);
+        return makeIndex(systems, links, destroyed);
     }
 
     /**
@@ -534,14 +536,36 @@ describe('computeGateMapView', () => {
         expect(arrows(v.gateLinks)).toEqual(['A1>X', 'A1>Y', 'X>Y', 'Y>X']);
     });
 
-    it('does not walk through a destroyed gate', () => {
-        const gateIndex = index([system('H', ['h'])],
-            [['a3', ['h']], ['h', ['a3', 'b1']], ['b1', ['h']]], ['h']);
-        const v = view(gateIndex, 'a1', 'A1', true);
-        expect(v.networkGates).toEqual(['a1', 'a2', 'a3']);
-        expect(arrows(v.gateLinks)).toEqual(['A1>A2', 'A2>A3']);
-        expect(v.selectable.has('B1')).toBeFalse();
-    });
+    it('offers a destroyed gate a lane reaches, and stops the chain there',
+        () => {
+            // Reference "Tab on the hypergate map, wave 56": the original
+            // drew, cycled and transited to a destroyed gate a working
+            // gate linked to. Nothing departs it, so the plug-in's onward
+            // h -> b1 link is never travelled.
+            const gateIndex = index([system('H', ['h'])],
+                [['a3', ['h']], ['h', ['a3', 'b1']], ['b1', ['h']]], ['h']);
+            const v = view(gateIndex, 'a1', 'A1', true);
+            expect(v.networkGates).toEqual(['a1', 'a2', 'a3', 'h']);
+            expect(arrows(v.gateLinks)).toEqual(['A1>A2', 'A2>A3', 'A3>H']);
+            expect(v.selectable.get('H')).toBe('h');
+            expect(v.selectable.has('B1')).toBeFalse();
+            expect(v.cycle).toEqual(['A2', 'A3', 'H']);
+        });
+
+    it('draws, offers and cycles a destroyed gate the gate links directly, '
+        + 'in its slot', () => {
+            const gateIndex = index([system('H', ['h'])],
+                [['a2', ['h']], ['h', ['b1']]], ['h']);
+            // a2's links are [a1, a3, h].
+            const v = view(gateIndex, 'a2', 'A2', false);
+            expect(arrows(v.gateLinks)).toEqual(['A2>A1', 'A2>A3', 'A2>H']);
+            expect(v.selectable.get('H')).toBe('h');
+            expect(v.cycle).toEqual(['A1', 'A3', 'H']);
+            // At the destroyed gate itself the map offers nothing.
+            const there = view(gateIndex, 'h', 'H', true);
+            expect(there.selectable.size).toBe(0);
+            expect(there.cycle).toEqual([]);
+        });
 
     it('draws a lane to, and offers, the visible copy of a stacked system',
         () => {
@@ -737,9 +761,9 @@ describe('the gate map at Kit Gate N1 (wave 27)', () => {
  * HG-Tichel with its links reordered to [Primus, Kania, (destroyed)
  * Aldebaran, Alphara] cycled Primus, Kania, Aldebaran, Alphara, Primus: the
  * gate's HyperLink SLOT order, wrapping with no empty step, the unexplored
- * Alphara included; Return (or Done) transited to the Tab's pick. NovaJS
- * leaves a destroyed gate off the map entirely (computeGateMapView), so its
- * cycle skips it; stock data links no working gate to a destroyed one.
+ * Alphara and the destroyed Aldebaran included; Return (or Done) transited
+ * to the Tab's pick, the destroyed gate too ("Exiting hypergate in the
+ * Aldebaran system"). Stock data links no working gate to a destroyed one.
  */
 describe('Tab on the gate map (wave 56)', () => {
     beforeAll(() => installHeadlessPixi());
@@ -807,15 +831,16 @@ describe('Tab on the gate map (wave 56)', () => {
         async () => {
             const { map, shown, press } = await open();
             const picks: (string | undefined)[] = [];
-            for (let i = 0; i < 5; i++) {
+            for (let i = 0; i < 7; i++) {
                 press('nextTarget');
                 picks.push(map.graph?.selectedSystem);
             }
-            expect(picks).toEqual(['s:primus', 's:kania', 's:alphara',
-                's:primus', 's:kania']);
+            // Run b's seven Tabs exactly.
+            expect(picks).toEqual(['s:primus', 's:kania', 's:aldebaran',
+                's:alphara', 's:primus', 's:kania', 's:aldebaran']);
             // The column follows the pick, as a click's does.
             expect(map.propertiesText.slice(0, 2))
-                .toEqual([HYPERGATE_DESTINATION_TITLE, 's:kania']);
+                .toEqual([HYPERGATE_DESTINATION_TITLE, 's:aldebaran']);
             map.dismiss();
             await shown;
         });
@@ -823,7 +848,7 @@ describe('Tab on the gate map (wave 56)', () => {
     it('includes an unexplored destination, read as "<Unknown>"',
         async () => {
             const { map, shown, press } = await open();
-            for (let i = 0; i < 3; i++) {
+            for (let i = 0; i < 4; i++) {
                 press('nextTarget');
             }
             expect(map.graph?.selectedSystem).toBe('s:alphara');
@@ -837,9 +862,20 @@ describe('Tab on the gate map (wave 56)', () => {
         const { map, shown, press } = await open();
         map.pickSystem('s:kania');
         press('nextTarget');
-        expect(map.graph?.selectedSystem).toBe('s:alphara');
+        expect(map.graph?.selectedSystem).toBe('s:aldebaran');
         map.dismiss();
         await shown;
+    });
+
+    it('transits to the destroyed gate on Done', async () => {
+        const { map, shown, press } = await open();
+        for (let i = 0; i < 3; i++) {
+            press('nextTarget');
+        }
+        // Its system's Ports line leaves the wreck out, as run b's did.
+        expect(map.propertiesText).toContain('Ports: None');
+        map.done();
+        expect((await shown).destinationSpob).toBe('t:dead');
     });
 
     it('transits to the Tab\'s pick on Return', async () => {

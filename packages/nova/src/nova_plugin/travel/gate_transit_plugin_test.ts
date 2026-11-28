@@ -233,16 +233,16 @@ describe('gate transit', () => {
         const planets = await Promise.all(
             (await gameData.ids).Planet.map(id => gameData.data.Planet.get(id)));
         const links = new Map<string, string[]>();
-        const unusable = new Set<string>();
+        const destroyed = new Set<string>();
         for (const planet of planets) {
             if (!landable(planet)) {
-                unusable.add(planet.id);
+                destroyed.add(planet.id);
             }
             if (planet.gate?.kind === 'hypergate') {
                 links.set(planet.id, planet.gate.destinations);
             }
         }
-        const network = { links, unusable };
+        const network = { links, destroyed };
         expect(gateMapDestinations(network, LEAF_GATE_SPOB, false))
             .not.toContain(FAR_GATE_SPOB);
         expect(gateMapDestinations(network, LEAF_GATE_SPOB, true))

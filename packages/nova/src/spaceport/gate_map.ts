@@ -129,7 +129,7 @@ export interface GateMapIndex {
     /** spöb global id -> containing system global ids, in data order
      * (stacked NCB copies of a system can share a gate). */
     systemsOfSpob: ReadonlyMap<string, readonly string[]>;
-    /** The hypergate graph, destroyed gates marked unusable. */
+    /** The hypergate graph, destroyed gates marked `destroyed`. */
     network: HypergateNetwork;
 }
 
@@ -213,8 +213,17 @@ export interface GateMapView {
  * offered destination onto the map, dim until entered). Wave 25's "no dot,
  * not selectable" was a misread (its click fell 54 px short of A2).
  *
- * Destroyed gates (unusable) stay out exactly as before. Pure, so it is
- * unit-testable: SystemGraph itself cannot be constructed headlessly.
+ * A DESTROYED gate (hypergate_network.ts `destroyed`: it fails landable())
+ * that the gate links to is drawn, offered and cycled like any other
+ * destination, in its HyperLink slot, and a transit to it puts the ship
+ * there (measured, reference "Tab on the hypergate map, wave 56", run b:
+ * HG-Tichel linked to the destroyed HG-Aldebaran got a fourth arrow, Tab
+ * picked it third, and Done exited "in the Aldebaran system"). It offers
+ * nothing onward, so under transitivity the chain stops at it. No stock
+ * gate links to a destroyed one; only plug-in data shows this.
+ *
+ * Pure, so it is unit-testable: SystemGraph itself cannot be constructed
+ * headlessly.
  */
 export function computeGateMapView(index: GateMapIndex,
     viewer: GateMapViewer): GateMapView {
@@ -252,7 +261,10 @@ export function computeGateMapView(index: GateMapIndex,
             unusable.add(gate);
         }
     }
-    const network: HypergateNetwork = { links: index.network.links, unusable };
+    const destroyed = index.network.destroyed ?? new Set<string>();
+    const network: HypergateNetwork = {
+        links: index.network.links, unusable, destroyed,
+    };
 
     const reach = hypergateReach(network, gateSpob);
     const destinations =
@@ -269,6 +281,10 @@ export function computeGateMapView(index: GateMapIndex,
     };
     if (viewer.transitive) {
         for (const [from, hopsFrom] of reach.hops) {
+            // A destroyed gate is the end of its lane: nothing departs it.
+            if (destroyed.has(from)) {
+                continue;
+            }
             for (const to of network.links.get(from) ?? []) {
                 const hopsTo = reach.hops.get(to);
                 if (hopsTo !== undefined && to !== gateSpob
@@ -439,8 +455,9 @@ export class GateMap extends Menu<GateMapResult> {
     private systemsOfSpob = new Map<string, string[]>();
     /** Hypergate spöb global id -> its destination spöb global ids. */
     private gateDestinations = new Map<string, string[]>();
-    /** Spöbs that cannot be landed on — the destroyed gates. Neither a
-     * destination nor a hop in the network walk. */
+    /** Spöbs that cannot be landed on — the destroyed gates. A destination
+     * a working gate's link may name, but never a gate to travel on from
+     * (hypergate_network.ts `destroyed`). */
     private unlandableSpobs = new Set<string>();
     /** Every stellar in a system, by global id, for the dot colours: the
      * star map's rule (starmap.ts mapDotRule), so a gate settles nothing —
@@ -646,7 +663,7 @@ export class GateMap extends Menu<GateMapResult> {
 
     /** The hypergate graph this map walks, as built in {@link build}. */
     private network(): HypergateNetwork {
-        return { links: this.gateDestinations, unusable: this.unlandableSpobs };
+        return { links: this.gateDestinations, destroyed: this.unlandableSpobs };
     }
 
     override async show(input: GateMapResult): Promise<GateMapResult> {

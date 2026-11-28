@@ -26481,6 +26481,21 @@ gate map entirely (no arrow, not offered, not in the cycle; `landable()`
 false, `computeGateMapView`), where the original draws, cycles and
 transits to one a working gate links to. No stock gate links to a
 destroyed one, so this only shows with a plug-in like run b's.
+**Applied 2026-11-27 (Matthew: "Sure, let's match"):** a destroyed gate
+a working gate links to is drawn (its arrow), offered, Tabbed in its
+slot and transited to. `N/spaceport/hypergate_network.ts` splits the
+network's `unusable` (a gate not there for this player) from
+`destroyed` (fails `landable()`): a destroyed gate is a destination a
+link may name but never a gate to depart from, so it offers nothing and
+a transitive chain stops at it (`hypergateReach`, `gateCycleOrder`,
+`gateMapDestinations`); `N/spaceport/gate_map.ts` hands the unlandable
+spöbs over as `destroyed`. The ship arrives as at a working gate: at the
+gate's position, flying out (`GateArrivalSystem`), as run b's
+`11-done1.png` shows the Leviathan emerging right beside the Aldebaran
+wreck. Specs: `hypergate_network_test.ts` ("offers a destroyed gate a
+link names", "keeps destroyed gates out of every network", the cycle
+slot), `gate_map_test.ts` (run b's seven Tabs exactly, "transits to the
+destroyed gate on Done", the transitive chain stopping at one).
 Confidence: high (both orders read off every shot; the transits read off
 the map afterwards).
 
