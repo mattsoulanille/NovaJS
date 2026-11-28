@@ -20,7 +20,7 @@ import { expandMissionText } from '../nova_plugin/missions/index.js';
 import { ShipComponent } from '../nova_plugin/ship/index.js';
 import { activeAsOffer, offerSubstitutions } from '../spaceport/mission_offers.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
-import { OfferPopup } from '../spaceport/offer_popup.js';
+import { OfferPopup, POPUP_OKAY } from '../spaceport/offer_popup.js';
 import { playerIdentitySubs } from '../spaceport/player_identity.js';
 import { markShipDoneTextShown } from '../spaceport/ship_done_shown.js';
 import {
@@ -389,7 +389,7 @@ export async function presentShipDoneText(world: World,
     // with it still up, and the date advance that follows must already
     // know not to queue the same text again.
     markShipDoneTextShown(missionId);
-    await popup.show(text, { accept: 'Okay' },
+    await popup.show(text, { accept: POPUP_OKAY },
         { pict: mission.shipDonePict, style: 'briefing' });
     return true;
 }

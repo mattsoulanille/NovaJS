@@ -18,7 +18,7 @@ import {
 import { LandedTransaction, Savepoint } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import { MenuControls } from './menu_controls.js';
-import { OfferPopup, presentOffers } from './offer_popup.js';
+import { OfferPopup, POPUP_OKAY, presentOffers } from './offer_popup.js';
 import { landingOffers } from './mission_offers.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
@@ -365,8 +365,8 @@ export class Bar extends Menu<Entity> {
             // than opening an empty shipyard grid (STR# 2002 index 223 —
             // see NO_SHIPS_FOR_HIRE).
             await this.offerPopup.show(
-                await noShipsForHire(this.displayAssets), { accept: 'OK' },
-                { style: 'briefing' });
+                await noShipsForHire(this.displayAssets),
+                { accept: POPUP_OKAY }, { style: 'briefing' });
         }
         this.rebindControls();
     }

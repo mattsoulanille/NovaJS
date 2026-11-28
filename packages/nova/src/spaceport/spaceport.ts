@@ -46,7 +46,7 @@ import { LandedTransaction } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import { MenuControls } from './menu_controls.js';
 import { MissionBoard } from './mission_board.js';
-import { OfferPopup, presentOffers } from './offer_popup.js';
+import { OfferPopup, POPUP_OKAY, presentOffers } from './offer_popup.js';
 import { landingOffers } from './mission_offers.js';
 import { MissionUniverse } from './mission_universe.js';
 import { presentVenueOffersIn } from './venue_offers.js';
@@ -346,7 +346,8 @@ export class Spaceport extends Menu<Entity> {
             if (briefing && this.stillDocked()) {
                 this.popupBlocker.bind();
                 try {
-                    await this.offerPopup.show(briefing.text, { accept: 'OK' },
+                    await this.offerPopup.show(briefing.text,
+                        { accept: POPUP_OKAY },
                         { pict: briefing.pict, style: 'briefing' });
                 } finally {
                     this.popupBlocker.unbind();
@@ -907,7 +908,7 @@ export class Spaceport extends Menu<Entity> {
                 // mission set one (completion/fail/shipDone/brief pict);
                 // OfferPopup falls back to the plain briefing frame when
                 // pict is absent.
-                await this.offerPopup.show(text, { accept: 'Okay' },
+                await this.offerPopup.show(text, { accept: POPUP_OKAY },
                     { pict: event.pict, style: 'briefing' });
             }
         }
@@ -1516,7 +1517,7 @@ export class Spaceport extends Menu<Entity> {
                 if (!this.stillDocked()) {
                     break;
                 }
-                await this.offerPopup.show(report!, { accept: 'Okay' },
+                await this.offerPopup.show(report!, { accept: POPUP_OKAY },
                     { style: 'briefing' });
             }
         } catch (e) {

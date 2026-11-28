@@ -645,26 +645,50 @@ function isPopupScrollKey(key: string): key is PopupScrollKey {
 }
 
 /**
+ * The label of the original's lone button on a game-drawn notice: the
+ * briefing after an accept (sigma_mission_1/2_sigma_1_accept.png; wave 13's
+ * Raczak briefing, `20261124-w13/raczak/.../04-after-okay.png`), a mission's
+ * completion text (5_sigma_1_mission_text_with_pict.png), "There are no
+ * ships available for hire." (reference "The UI screen x key matrix, wave
+ * 11" and "Hire pool, wave 25"), and a can't-refuse offer (offerButtons).
+ * "Okay", never "OK": the Aqua alerts (alert_confirm.ts,
+ * quantity_dialog.ts) are the only "OK" buttons. A refuse text and the
+ * "can't accept now" notice were not seen; they take Okay too (GUESS:
+ * every game-drawn lone button measured so far reads Okay).
+ */
+export const POPUP_OKAY = 'Okay';
+
+/**
  * The buttons a mission offer is asked with: the mïsn's own labels, or
- * Yes / No; no refuse button at all under mïsn Flags 0x0004 cantRefuse.
- * Shared by the spaceport offers (presentOffers) and the in-flight ship
- * offers (ship_mission_offer_plugin.ts).
+ * Yes / No; no refuse button at all under mïsn Flags 0x0004 cantRefuse,
+ * where the lone default button reads Okay. Shared by the spaceport
+ * offers (presentOffers) and the in-flight ship offers
+ * (ship_mission_offer_plugin.ts).
  *
  * The defaults are the original's: the wave-40 kit's text-less mïsn 1024,
  * with blank AcceptButton / RefuseButton, came up as an empty dialog with
  * "No / Yes" (reference "A mission with no offer text (R14), wave 40"),
  * as stock offers do (wave 5's Earth bar, sigma_mission_1/
- * 1_sigma_1_offer.png). NovaJS showed Accept / Refuse.
+ * 1_sigma_1_offer.png). NovaJS showed Accept / Refuse. A can't-refuse
+ * offer with a blank AcceptButton shows one "Okay" instead of "Yes": stock
+ * mïsn 394 "Rescue Raczak" (Flags 0x1214, blank buttons) at Heraan's bar,
+ * wave 13 (`20261124-w13/raczak/.../03-bar.png`), and wave 18's kit copy
+ * of it. A can't-refuse mïsn WITH its own AcceptButton (stock 878 "Put
+ * Down Uprising", "Go after them"; many ARPIA ones) has not been seen in
+ * the original; its own label is kept (GUESS).
  */
 export const OFFER_ACCEPT_DEFAULT = 'Yes';
 export const OFFER_REFUSE_DEFAULT = 'No';
 
 export function offerButtons(offer: MissionOffer):
     { accept: string, refuse: string | null } {
+    const { acceptButton, refuseButton, flags } = offer.data;
+    if (flags.cantRefuse) {
+        return { accept: acceptButton || POPUP_OKAY, refuse: null };
+    }
     return {
-        accept: offer.data.acceptButton || OFFER_ACCEPT_DEFAULT,
-        refuse: offer.data.flags.cantRefuse ? null
-            : (offer.data.refuseButton || OFFER_REFUSE_DEFAULT),
+        accept: acceptButton || OFFER_ACCEPT_DEFAULT,
+        refuse: refuseButton || OFFER_REFUSE_DEFAULT,
     };
 }
 
@@ -709,7 +733,7 @@ export async function presentOffers(popup: OfferPopup,
             ...identity,
         }, descContext());
         if (brief) {
-            await popup.show(brief, { accept: 'OK' },
+            await popup.show(brief, { accept: POPUP_OKAY },
                 { pict: offer.data.briefPict, style: 'briefing' });
         }
     };
@@ -761,7 +785,7 @@ export async function presentOffers(popup: OfferPopup,
             const result = acceptOffer(session.machinery, offer,
                 session.outfits);
             if (!result.accepted) {
-                await popup.show(result.reason, { accept: 'OK' });
+                await popup.show(result.reason, { accept: POPUP_OKAY });
                 continue;
             }
             await showBriefing(offer);
@@ -770,7 +794,7 @@ export async function presentOffers(popup: OfferPopup,
             const refuseText = expandMissionText(
                 offer.data.refuseText, substitutions, ctx);
             if (refuseText) {
-                await popup.show(refuseText, { accept: 'OK' },
+                await popup.show(refuseText, { accept: POPUP_OKAY },
                     { pict: offer.data.refusePict, style: 'briefing' });
             }
         }

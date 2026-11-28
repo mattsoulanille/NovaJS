@@ -33,7 +33,9 @@ import { SimulationTimeResource } from './simulation_time.js';
 import { PersComponent } from '../nova_plugin/spawn/index.js';
 import { offerSubstitutions } from '../spaceport/mission_offers.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
-import { OfferPopup, offerButtons } from '../spaceport/offer_popup.js';
+import {
+    OfferPopup, offerButtons, POPUP_OKAY,
+} from '../spaceport/offer_popup.js';
 import { playerIdentitySubs } from '../spaceport/player_identity.js';
 import {
     buildShipMissionAccept, buildShipMissionOffer, buildShipMissionRefusal,
@@ -376,7 +378,7 @@ async function refuseShipOffer(world: World,
             payment: event.payment,
             specialShipName: event.specialShipName,
         });
-        await popup.show(text, { accept: 'OK' },
+        await popup.show(text, { accept: POPUP_OKAY },
             { pict: offer.data.briefPict, style: 'briefing' });
     }
 }
@@ -400,7 +402,7 @@ async function acceptShipOffer(world: World,
         // so on the popup rather than swallowing the press, the same way
         // presentOffers does on the boards.
         await popup.show('You cannot take on this mission right now.',
-            { accept: 'OK' });
+            { accept: POPUP_OKAY });
         return;
     }
 
@@ -470,7 +472,7 @@ async function acceptShipOffer(world: World,
             payment: event.payment,
             specialShipName: event.specialShipName,
         });
-        await popup.show(brief, { accept: 'OK' },
+        await popup.show(brief, { accept: POPUP_OKAY },
             { pict: offer.data.briefPict, style: 'briefing' });
     }
 }
