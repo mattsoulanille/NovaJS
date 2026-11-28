@@ -590,7 +590,7 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
         }
         // Escape, on a surface that tells it apart from its other 'depart'
         // keys (MenuControls.cancelButton: the hail dialog, whose `d`
-        // demands tribute).
+        // demands tribute with enhHailDCloses off).
         if (event.type === 'keydown'
             && MenuControls.pressCancelButton(event)) {
             event.preventDefault();

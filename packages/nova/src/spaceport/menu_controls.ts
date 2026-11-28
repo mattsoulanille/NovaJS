@@ -57,8 +57,9 @@ export class MenuControls {
      * the other keys bound to 'depart'. A surface that sets it takes
      * Escape off the 'depart' action: the relay hands the raw key to
      * {@link pressCancelButton} first. The hail dialog needs it because
-     * its `d` presses Demand Tribute while Escape still backs out
-     * (reference "Hail dialog keys and Flags2 0x0001 (K5), wave 39"), and
+     * its `d` can press Demand Tribute (the original's key, reference
+     * "Hail dialog keys and Flags2 0x0001 (K5), wave 39", with the
+     * enhHailDCloses enhancement off) while Escape always backs out, and
      * both keys are 'depart' in settings/controls.json. A surface without
      * one keeps Escape as 'depart'.
      */
