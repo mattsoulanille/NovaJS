@@ -19,6 +19,7 @@ import { LandedTransaction, Savepoint } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import { FONT } from './outfitter.js';
 import { ScrollArrow } from './scroll_arrow.js';
+import { ScrollTextPane, shopDescriptionPane } from './scroll_text_pane.js';
 import { ShopSearchField } from './shop_search.js';
 import { enhancementEnabled } from '../enhancements.js';
 import { ShipInfoDialog } from './ship_info.js';
@@ -127,6 +128,8 @@ export class Shipyard extends Menu<Entity> {
      * which adopts them exactly as a purchase is adopted.
      */
     private hangar: HangarDialog;
+    /** The description, clipped to its pane (scroll_text_pane.ts). */
+    readonly descriptionPane: ScrollTextPane;
     private hangarButton: Button;
     private text = {
         description: new PIXI.Text("", FONT.normal),
@@ -260,6 +263,11 @@ export class Shipyard extends Menu<Entity> {
         for (const t of Object.values(this.text)) {
             this.container.addChild(t);
         }
+        // The description clips to its pane (and scrolls, with the "Scroll
+        // wheel in text" enhancement): scroll_text_pane.ts.
+        this.descriptionPane = shopDescriptionPane(this.text.description,
+            'ShipyardDescription');
+        this.container.addChild(this.descriptionPane.container);
         // x 175 (not 174): sweeping our capture of this very pane against
         // shipyard/earth_spaceport.png -- both showing the same Shuttle
         // PICT -- bottoms out at dx = -1 (5.9% differing pixels, against
@@ -526,7 +534,7 @@ export class Shipyard extends Menu<Entity> {
         if (!shipTile) {
             // Nothing selected: clear the description and blank the
             // price pane rather than leave the last ship's quote up.
-            this.text.description.text = "";
+            this.descriptionPane.setText("");
             this.refreshTradeState();
             return;
         }
@@ -536,11 +544,11 @@ export class Shipyard extends Menu<Entity> {
         }
 
         // Set Description
-        this.text.description.text = resolveConditionalBlocks(
+        this.descriptionPane.setText(resolveConditionalBlocks(
             shipTile.item.desc,
             makeDescTextContext(
                 this.input.components.get(ControlBitsComponent) ?? [],
-                playerGender()));
+                playerGender())));
         this.refreshTradeState();
     }
 

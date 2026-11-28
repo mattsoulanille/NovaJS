@@ -35,6 +35,7 @@ import { AMMO_SELL_INDICES, AMMO_SELL_STRINGS, AmmoSellStrings, BuyDenialReason,
 import { PlanetData } from "novadatainterface/planet_data";
 import { QuantityDialog } from "./quantity_dialog.js";
 import { ScrollArrow } from "./scroll_arrow.js";
+import { ScrollTextPane, shopDescriptionPane } from "./scroll_text_pane.js";
 import { ShopSearchField } from "./shop_search.js";
 import { enhancementEnabled } from "../enhancements.js";
 import { changeShipTargets } from "./shipyard_rules.js";
@@ -266,6 +267,8 @@ export class Outfitter extends Menu<Entity> {
     onShipChanged?: (ship: Entity) => void;
     /** Ends this visit's subscription to the transaction's ship changes. */
     private stopFollowingShipChanges?: () => void;
+    /** The description, clipped to its pane (scroll_text_pane.ts). */
+    readonly descriptionPane: ScrollTextPane;
 
     private text = {
         description: new PIXI.Text("", FONT.normal),
@@ -402,6 +405,11 @@ export class Outfitter extends Menu<Entity> {
         for (const t of Object.values(this.text)) {
             this.container.addChild(t);
         }
+        // The description clips to its pane (and scrolls, with the "Scroll
+        // wheel in text" enhancement): scroll_text_pane.ts.
+        this.descriptionPane = shopDescriptionPane(this.text.description,
+            'OutfitterDescription');
+        this.container.addChild(this.descriptionPane.container);
     }
 
     protected override async build() {
@@ -1227,7 +1235,7 @@ export class Outfitter extends Menu<Entity> {
     private setOutfitSelected(outfitTile: ItemTile<OutfitData> | undefined) {
         // Set Picture
         this.pictContainer.removeChildren();
-        this.text.description.text = "";
+        this.descriptionPane.setText("");
         this.text.price.text = "";
         this.text.status.text = "";
         this.text.mass.visible = false;
@@ -1253,9 +1261,9 @@ export class Outfitter extends Menu<Entity> {
         }
 
         // Set Description
-        this.text.description.text = resolveConditionalBlocks(
+        this.descriptionPane.setText(resolveConditionalBlocks(
             outfitTile.item.desc,
-            makeDescTextContext(this.controlBits, playerGender()));
+            makeDescTextContext(this.controlBits, playerGender())));
 
         // Set price text -- the same figure the Buy button charges
         // (outfitter_rules' outfitPrice; no ränk PriceMod, see price_mod.ts;

@@ -19,6 +19,7 @@ import { HIRE } from './dialog_layout.js';
 import { ItemGrid, ItemTile } from './item_grid.js';
 import { ScrollArrow } from './scroll_arrow.js';
 import { makeVenueShield } from './modal_shield.js';
+import { ScrollTextPane, shopDescriptionPane } from './scroll_text_pane.js';
 import { MenuControls } from './menu_controls.js';
 import { MissionUniverse } from './mission_universe.js';
 import { FONT } from './outfitter.js';
@@ -239,6 +240,8 @@ export class HireEscortDialog {
         status: new PIXI.Text('', FONT.normal),
     };
     private buttons: { hire: Button, done: Button };
+    /** The description, clipped to its pane (scroll_text_pane.ts). */
+    readonly descriptionPane: ScrollTextPane;
     /** The grid's scroll arrows, where the shipyard has its own: the
      * hire frame's sockets sit at exactly the shipyard's spheres'
      * centres on bar/hire_escort/select_escort.png. */
@@ -307,6 +310,11 @@ export class HireEscortDialog {
         for (const t of Object.values(this.text)) {
             this.container.addChild(t);
         }
+        // The pilot's (or ship's) description clips to its pane, and
+        // scrolls with the "Scroll wheel in text" enhancement.
+        this.descriptionPane = shopDescriptionPane(this.text.description,
+            'HireDescription');
+        this.container.addChild(this.descriptionPane.container);
 
         this.controls = new MenuControls(controlEvents, {
             left: () => { this.itemGrid?.left(); this.updateArrows(); },
@@ -400,7 +408,7 @@ export class HireEscortDialog {
 
     private setShipSelected(tile: ItemTile<ShipData> | undefined) {
         this.pictContainer.removeChildren();
-        this.text.description.text = '';
+        this.descriptionPane.setText('');
         this.text.price.text = '';
         this.text.status.text = '';
         if (!tile) {
@@ -410,9 +418,9 @@ export class HireEscortDialog {
         if (tile.largePict) {
             this.pictContainer.addChild(tile.largePict);
         }
-        this.text.description.text = resolveConditionalBlocks(
+        this.descriptionPane.setText(resolveConditionalBlocks(
             tile.item.pilotDesc || tile.item.desc,
-            makeDescTextContext(this.bits ?? [], playerGender()));
+            makeDescTextContext(this.bits ?? [], playerGender())));
         this.text.price.text =
             `${hirePrice(tile.item, this.priceMod).toLocaleString()} cr`;
         this.refreshButtons();

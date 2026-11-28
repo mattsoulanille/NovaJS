@@ -82,11 +82,15 @@ export const ENHANCEMENTS: readonly EnhancementSpec[] = [
         original: 'The wheel does nothing; use the arrows or the keys.',
     },
     {
+        // Also the shops' description panes (scroll_text_pane.ts
+        // shopDescriptionPane): clipped either way, scrolling only on.
         key: 'enhTextScrollWheel',
-        label: 'Scroll wheel in mission text',
+        label: 'Scroll wheel in text',
         novajs: 'The wheel or a two-finger scroll moves a long mission '
-            + 'offer or briefing text.',
-        original: 'The wheel does nothing; use the arrows or the keys.',
+            + 'offer or briefing text, or a shop description too long for '
+            + 'its pane (which gets a scroll bar).',
+        original: 'The wheel does nothing; use the arrows or the keys. A '
+            + 'shop description too long for its pane is cut off.',
     },
     {
         key: 'enhShopSearch',
