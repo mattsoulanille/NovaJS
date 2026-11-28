@@ -16,6 +16,11 @@
 //     applying the same input log, hashing every tick — pins the
 //     exact tick where the client's state stops tracking the log.
 //
+// Server-side passes run first, from the incident alone: the replay
+// verdict, a restore-asymmetry pass (a component a restore re-derives
+// that a never-restoring world holds stale: whoever rolls back forks),
+// and the live archive's state against a clean replay.
+//
 // Usage: node analyze_desync.mjs <incident-dir> [serverUrl]
 //   (run from packages/nova with the game server running, default
 //    http://localhost:8000; the dir needs desync.json, baselines.json,
@@ -37,10 +42,12 @@ const { makeSystem } = await import('./dist/src/nova_plugin/make_system.js');
 const { SimulationGameData } = await import('./dist/src/client/gamedata/simulation_game_data.js');
 const { fingerprintGameData } = await import('./dist/src/server/desync_recorder.js');
 const { loadWireSnapshotGameData } = await import('./dist/src/nova_plugin/spawn/entity_data_loader.js');
-const { deriveEntityComponents } = await import('./dist/src/nova_plugin/core/entity_factory.js');
+const { deriveEntityComponents, EntityDeriversResource } = await import('./dist/src/nova_plugin/core/entity_factory.js');
+const { SimulationGameDataResource } = await import('./dist/src/nova_plugin/core/game_data_resource.js');
 const { applyInputRecords, loadInputRecordsGameData } = await import('./dist/src/communication/simulation_input.js');
 const { PEER_LOCAL_COMPONENTS } = await import('./dist/src/nova_plugin/player/ship_control.js');
-const { restoreWireWorldSnapshot, wireSnapshotWorld } = await import('nova_ecs/plugins/snapshot_plugin');
+const { restoreWireWorldSnapshot, SnapshotPoliciesResource, wireSnapshotWorld } = await import('nova_ecs/plugins/snapshot_plugin');
+const { SerializerResource } = await import('nova_ecs/plugins/serializer_plugin');
 const { hashWorld } = await import('nova_ecs/plugins/world_hash');
 const { TimeResource } = await import('nova_ecs/plugins/time_plugin');
 
@@ -313,6 +320,64 @@ try {
     }
 } catch (error) {
     console.warn('Replay-verdict pass failed:', error);
+}
+
+// Restore-asymmetry pass. A component a restore RE-DERIVES (snapshot
+// policy 'skip', or wire-derived) instead of carrying must equal its
+// derivation at every tick boundary of a world that never restores, or
+// any peer that rolls back, joins or resyncs forks from one that does
+// not: the 2026-11-28 incidents (ShipPhysics left stale by in-place ammo
+// spends; the rolled-back peer was convicted, or outvoted the archive).
+// Replays from the verdict's baseline and names the first stale
+// (entity, component) pairs.
+try {
+    const world = await truthAt(baselines[0]?.tick ?? 0, 0, gameData);
+    const startTick = tick(world);
+    const policies = world.resources.get(SnapshotPoliciesResource);
+    const serializer = world.resources.get(SerializerResource);
+    const derivers = world.resources.get(EntityDeriversResource) ?? [];
+    const worldGameData = world.resources.get(SimulationGameDataResource);
+    const rederived = derivers.filter(deriver =>
+        policies.wireDerived.has(deriver.provided)
+        || policies.components.get(deriver.provided)?.policy === 'skip'
+        || !(policies.wireCodecs.has(deriver.provided)
+            || serializer?.hasComponent(deriver.provided)));
+    const asJson = value => JSON.stringify(value, (_key, inner) =>
+        inner instanceof Map || inner instanceof Set ? [...inner] : inner);
+    const stale = new Map();
+    while (tick(world) < desync.tick && stale.size < 10) {
+        stepTo(world, tick(world) + 1);
+        for (const [uuid, entity] of world.entities) {
+            for (const deriver of rederived) {
+                const key = `${uuid} ${deriver.provided.name}`;
+                if (stale.has(key) || !entity.components.has(deriver.provided)
+                    || !deriver.requires.every(c => entity.components.has(c))) {
+                    continue;
+                }
+                const derived = deriver.derive(entity, worldGameData);
+                const live = entity.components.get(deriver.provided);
+                if (derived !== undefined && asJson(derived) !== asJson(live)) {
+                    stale.set(key, `tick ${tick(world)}: `
+                        + `${entity.name ?? ''}(${uuid}).${deriver.provided.name}`
+                        + `\n      live:    ${clip(asJson(live))}`
+                        + `\n      restore: ${clip(asJson(derived))}`);
+                }
+            }
+        }
+    }
+    console.log(`\nRestore-asymmetry pass (ticks ${startTick}..${tick(world)}: `
+        + `restore-derived components vs their derivation):`);
+    if (stale.size === 0) {
+        console.log('  none — every restore-derived component matched.');
+    } else {
+        console.log(`  ${stale.size} stale (a peer that restores after these `
+            + `ticks diverges from one that does not):`);
+        for (const line of stale.values()) {
+            console.log(`  - ${line}`);
+        }
+    }
+} catch (error) {
+    console.warn('Restore-asymmetry pass failed:', error);
 }
 
 // When the incident captured the archive's full live state, diff it
