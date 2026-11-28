@@ -34,6 +34,7 @@ import {
 } from '../display/hail_dialog_plugin.js';
 import { jumpFadeCovering, resetJumpFade } from '../display/jump_fade_plugin.js';
 import { AbortMissionEvent } from '../display/mission_info_plugin.js';
+import { JettisonCargoRequestEvent } from '../display/player_info_plugin.js';
 import {
     AcceptShipMissionEvent, RefuseShipMissionEvent,
 } from '../display/ship_mission_offer_plugin.js';
@@ -221,6 +222,12 @@ function wireWorld(runtime: ClientRuntime, pump: FramePump): WorldWiring {
             void bridge.abortMission(data.record).catch(e => {
                 console.warn('Failed to abort a mission:', e);
             });
+        });
+        // The player-info dialog's Jettison Cargo, confirmed in flight:
+        // the `jettisonCargo` input kind, applied to this pilot's own ship
+        // (nova_plugin/ship/jettison_cargo.ts).
+        world.events.get(JettisonCargoRequestEvent).subscribe(() => {
+            sendToBridge(bridge.jettisonCargo(), 'Jettison cargo');
         });
         // The capture prompt's "Use As My Ship", renamed and its set strings
         // resolved (display/boarding_plugin.ts useCapturedShip), on its own

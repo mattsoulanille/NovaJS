@@ -67,6 +67,10 @@ export class SimulationBridgeClient {
         this.host.setTurretAim(accurate);
     }
 
+    jettisonCargo() {
+        this.host.jettisonCargo();
+    }
+
     hail(action: HailAction) {
         this.host.hail(structuredClone(action));
     }

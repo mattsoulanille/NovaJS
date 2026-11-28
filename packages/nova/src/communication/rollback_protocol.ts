@@ -1178,6 +1178,19 @@ export const STATE_HASH_INTERVAL = 60;
 //    no plunder session (it writes the boarded record directly). The
 //    derived wire schema fingerprint is unchanged (012d2e220f2f71b8), so
 //    only the build stamp keeps the builds on either side of it apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): Jettison Cargo (reference "Jettison cargo, wave
+//    55"). The new `jettisonCargo` input kind (no payload), applied to the
+//    SENDER's own ship only (nova_plugin/ship/jettison_cargo.ts
+//    applyJettisonCargo): the hold empties, and each mission whose cargo
+//    was aboard is marked failed with the new SimFailCause literal
+//    'jettison' (player/player_state_plugin.ts), whose failure changes no
+//    record and shows no FailText. One new bridge event,
+//    CargoJettisonedEvent (`{missionFailed}`), for the display's status
+//    line and cargo box. No message kind changes. New union members, so
+//    the derived wire schema fingerprint changes (012d2e220f2f71b8 ->
+//    67ff6c826e092635), and the join gate keeps older and newer builds
+//    apart.
 
 export const PROTOCOL_VERSION = 8;
 

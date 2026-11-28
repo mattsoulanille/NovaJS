@@ -1984,6 +1984,10 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         this.schedule({ kind: 'setTurretAim', accurate });
     }
 
+    jettisonCargo() {
+        this.schedule({ kind: 'jettisonCargo' });
+    }
+
     hail(action: HailAction) {
         this.schedule({ kind: 'hail', action });
     }

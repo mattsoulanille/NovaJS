@@ -390,13 +390,15 @@ export function decodePayVal(payVal: number): PayValEffect {
  *  - 'timeout': its TimeLimit ran out (the deadline passed);
  *  - 'scanned': a Flags 0x0020 mission's cargo was found by a contraband
  *    scan (ActiveMission.failCause 'scan');
+ *  - 'jettisoned': the pilot jettisoned its cargo (failCause 'jettison',
+ *    ship/jettison_cargo.ts);
  *  - 'fail': any other failure (an Fxxx set string, the owner disabled or
  *    destroyed under Flags2 0x0004, boarded by pirates under Flags
  *    0x8000, a ship goal made unachievable);
  *  - 'abort': the player aborted it.
  */
 export type MissionOutcome =
-    'complete' | 'timeout' | 'scanned' | 'fail' | 'abort';
+    'complete' | 'timeout' | 'scanned' | 'jettisoned' | 'fail' | 'abort';
 
 /**
  * The record change for a mission outcome with a CompGovt (Bible):
@@ -410,8 +412,11 @@ export type MissionOutcome =
  * enemies or the xenophobes (reference "A14 / contraband wave 15",
  * finding 2). Neither does a SCAN failure: a Flags 0x0020 mission failed
  * by a contraband scan (CompReward 10) changed no record either
- * (reference "S1 and S2 wave 12", S2). The other failure kinds keep the
- * Bible's -R/2 for now: they were not measured.
+ * (reference "S1 and S2 wave 12", S2). Nor does a JETTISON failure: two
+ * missions failed by jettisoning their cargo (CompReward 20 with gövt
+ * 128, 40 with gövt 129) changed no record anywhere (reference
+ * "Jettison cargo, wave 55"). The other failure kinds keep the Bible's
+ * -R/2 for now: they were not measured.
  */
 export function compRewardDelta(compReward: number,
     outcome: MissionOutcome, lose5xOnAbort = false): number {
@@ -419,6 +424,7 @@ export function compRewardDelta(compReward: number,
         case 'complete': return compReward;
         case 'timeout': return 0;
         case 'scanned': return 0;
+        case 'jettisoned': return 0;
         case 'fail': return -Math.trunc(compReward / 2);
         case 'abort': return lose5xOnAbort ? -5 * compReward : 0;
     }

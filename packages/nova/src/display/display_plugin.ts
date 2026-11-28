@@ -9,6 +9,7 @@ import {
 } from '../nova_plugin/player/index.js';
 import { AnimationGraphicPlugin, ObjectDrawSystem } from "./animation_graphic_plugin.js";
 import { AsteroidDisplayPlugin } from "./asteroid_display_plugin.js";
+import { CargoBoxPlugin } from "./cargo_box_plugin.js";
 import { BeamDisplayPlugin } from "./beam_display_plugin.js";
 import { CloakSoundPlugin } from "./cloak_sound_plugin.js";
 import { CursorPlugin } from "./cursor_plugin.js";
@@ -166,6 +167,7 @@ export const Display: Plugin = {
         await world.addPlugin(ParticlesPlugin);
         await world.addPlugin(ExplosionPlugin);
         await world.addPlugin(AsteroidDisplayPlugin);
+        await world.addPlugin(CargoBoxPlugin);
         await world.addPlugin(BeamDisplayPlugin);
         await world.addPlugin(PlanetCornersPlugin);
         // Fades projectile sprites over the final 32/falloff frames of
@@ -241,6 +243,7 @@ export const Display: Plugin = {
         await world.removePlugin(BeamDisplayPlugin);
         await world.removePlugin(ProjectileFadePlugin);
         await world.removePlugin(ProjectileSpinPlugin);
+        await world.removePlugin(CargoBoxPlugin);
         await world.removePlugin(AsteroidDisplayPlugin);
         await world.removePlugin(ExplosionPlugin);
         await world.removePlugin(ParticlesPlugin);

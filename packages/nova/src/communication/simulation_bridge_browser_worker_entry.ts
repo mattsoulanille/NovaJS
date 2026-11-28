@@ -122,6 +122,10 @@ class BrowserSimulationBridgeHost implements BrowserSimulationBridgeWorkerApi {
         this.requireBridge().setTurretAim(accurate);
     }
 
+    async jettisonCargo() {
+        this.requireBridge().jettisonCargo();
+    }
+
     async hail(action: HailAction) {
         this.requireBridge().hail(action);
     }

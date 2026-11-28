@@ -50,6 +50,7 @@ export const CreditsComponent = new Component<Credits>('Credits');
 /** The fail conditions the shared sim observes (ActiveMission.failCause). */
 export const SimFailCauseType = t.union([
     t.literal('lost'), t.literal('plundered'), t.literal('scan'),
+    t.literal('jettison'),
 ]);
 export type SimFailCause = t.TypeOf<typeof SimFailCauseType>;
 
@@ -167,10 +168,12 @@ export const ActiveMissionType = t.intersection([t.type({
     /**
      * WHY the shared sim set `failed`, written beside it by the same
      * system: 'lost' (the owner disabled or destroyed, mïsn Flags2
-     * 0x0004), 'plundered' (boarded by pirates, Flags 0x8000) or 'scan'
-     * (contraband scan, Flags 0x0020). The first cause wins: a mission
-     * already failed keeps its cause. Only 'scan' changes the outcome so
-     * far (it changes no record: simFailOutcome, compRewardDelta). ADDITIVE: absent in
+     * 0x0004), 'plundered' (boarded by pirates, Flags 0x8000), 'scan'
+     * (contraband scan, Flags 0x0020) or 'jettison' (the owner jettisoned
+     * the mission's cargo, ship/jettison_cargo.ts). The first cause wins:
+     * a mission already failed keeps its cause. 'scan' and 'jettison'
+     * change no record (simFailOutcome, compRewardDelta), and a
+     * 'jettison' failure shows no FailText (failMission). ADDITIVE: absent in
      * saves written before it existed and on imported original pilots,
      * which keep the old -R/2 failure.
      */

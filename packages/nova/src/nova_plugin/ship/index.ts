@@ -20,6 +20,7 @@ export * from './health_plugin.js';
 export * from './target_component.js';
 export * from './ship_plugin.js';
 export * from './cargo_plugin.js';
+export * from './jettison_cargo.js';
 export * from './ship_explosion.js';
 export * from './death_plugin.js';
 export * from './cloak_plugin.js';

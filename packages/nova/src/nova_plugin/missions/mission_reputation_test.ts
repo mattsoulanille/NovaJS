@@ -6,6 +6,8 @@ import {
     acceptOffer,
     failExpiredMissions,
     failMission,
+    failMissionInFlight,
+    jettisonDockedCargo,
     makeMissionOffer,
     MissionContext,
     MissionOffer,
@@ -23,6 +25,7 @@ import {
 import { isRight } from 'fp-ts/lib/Either.js';
 import { applyContrabandScan } from '../npc/index.js';
 import { ActiveMissionType, Missions } from '../player/index.js';
+import { jettisonedMissionIds } from '../ship/index.js';
 import {
     LegalGeography, LegalRecords, localLaw,
 } from '../reputation/index.js';
@@ -367,6 +370,64 @@ describe('CompGovt/CompReward', () => {
             expect(state.records!.size).toBe(0);
             expect(state.missions.size).toBe(0);
         });
+    });
+
+    // Overturns the Bible's -R/2 again: reference "Jettison cargo, wave
+    // 55" (two missions with CompReward 20 / 40 failed by jettisoning
+    // their cargo: no record changed anywhere, no FailText shown).
+    describe('missions failed by jettisoning their cargo', () => {
+        /** Accepts two missions, one with 3 t of cargo and one without;
+         * the hold also holds 2 t of food. */
+        function loaded() {
+            const state = makeState({ cargo: new Map([['cargo:0', 2]]) });
+            const freight = makeMission({
+                id: 'nova:201', compGovt: 128, compReward: 20,
+                cargoType: 2, cargoQty: 3, pickupMode: 0, dropOffMode: 1,
+                onFailure: 'b9360', failText: 'FAILTEXT A',
+            });
+            const empty = makeMission({ id: 'nova:203', onFailure: 'b9362' });
+            const missions = [freight, empty];
+            const machinery = makeMachinery(state, missions);
+            for (const mission of missions) {
+                acceptOffer(machinery,
+                    makeMissionOffer(mission, machinery.offerContext())!);
+            }
+            expect(state.cargo.get('mission:nova:201')).toBe(3);
+            return { state, machinery };
+        }
+
+        it('fail exactly the missions whose cargo is aboard', () => {
+            const { state } = loaded();
+            expect(jettisonedMissionIds(state.missions)).toEqual(['nova:201']);
+        });
+
+        it('docked: the hold empties, OnFailure runs, no record changes '
+            + 'and no FailText is shown', () => {
+                const { state, machinery } = loaded();
+                jettisonDockedCargo(machinery);
+                expect(state.cargo.size).toBe(0);
+                expect([...state.missions.keys()]).toEqual(['nova:203']);
+                expect([...state.bits]).toEqual([9360]);
+                expect(state.records!.size).toBe(0);
+                const failed = state.events.filter(e => e.type === 'failed');
+                expect(failed.map(e => e.missionId)).toEqual(['nova:201']);
+                expect(failed[0].text).toBe('');
+            });
+
+        it('in flight: the sim\'s jettison mark fails them the same way',
+            () => {
+                const { state, machinery } = loaded();
+                for (const id of jettisonedMissionIds(state.missions)) {
+                    Object.assign(state.missions.get(id)!,
+                        { failed: true, failCause: 'jettison' });
+                }
+                expect(failMissionInFlight(machinery, 'nova:201')).toBeTrue();
+                expect(failMissionInFlight(machinery, 'nova:203')).toBeFalse();
+                expect(state.records!.size).toBe(0);
+                expect([...state.bits]).toEqual([9360]);
+                expect(state.events.filter(e => e.type === 'failed')
+                    .map(e => e.text)).toEqual(['']);
+            });
     });
 
     it('reads a sim-failed mission saved WITHOUT a failCause (an older '

@@ -1,4 +1,5 @@
 import { Entity } from 'nova_ecs/entity';
+import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
 import { Resource } from 'nova_ecs/resource';
 import { World } from 'nova_ecs/world';
@@ -8,7 +9,7 @@ import {
 } from '../nova_plugin/core/index.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
-import { PlayerInfoDialog } from '../spaceport/player_info.js';
+import { PlayerInfoDialog, PlayerInfoJettison } from '../spaceport/player_info.js';
 import { getActivePilot } from '../title/pilot_registry.js';
 import {
     keepCentred, ScreenSize, stopCentring,
@@ -16,6 +17,13 @@ import {
 import { Stage } from './stage_resource.js';
 
 export const PlayerInfoResource = new Resource<PlayerInfoDialog>('PlayerInfo');
+/**
+ * An in-flight Jettison Cargo the player confirmed, on its way to the
+ * simulation bridge (game_session.ts -> bridge.jettisonCargo): the
+ * `jettisonCargo` input record (nova_plugin/ship/jettison_cargo.ts).
+ */
+export const JettisonCargoRequestEvent =
+    new EcsEvent<true>('JettisonCargoRequestEvent');
 const PlayerInfoControlsSubscription =
     new Resource<Subscription>('PlayerInfoControlsSubscription');
 /**
@@ -23,12 +31,15 @@ const PlayerInfoControlsSubscription =
  * resolves when it closes. Landed menus (the spaceport) call this for
  * their 'properties' key, passing the docked ship entity — while
  * docked the player's entity is out of the world (the spaceport holds
- * it), so it can't be looked up. In flight the plugin's own
- * subscription below opens it for the world's player ship. No-ops
- * while the dialog is already open.
+ * it), so it can't be looked up — and the Jettison Cargo action that
+ * edits the landing's working copy. In flight the plugin's own
+ * subscription below opens it for the world's player ship, whose
+ * jettison is the `jettisonCargo` input record. No-ops while the dialog
+ * is already open.
  */
 export const OpenPlayerInfoResource =
-    new Resource<(entity?: Entity) => Promise<void>>('OpenPlayerInfo');
+    new Resource<(entity?: Entity, jettison?: PlayerInfoJettison) => Promise<void>>(
+        'OpenPlayerInfo');
 
 function getPlayerShip(world: World) {
     for (const entity of world.entities.values()) {
@@ -76,7 +87,13 @@ export const PlayerInfoPlugin: Plugin = {
         // while open (CentredUiResource).
         keepCentred(world, dialog.container);
         world.resources.set(PlayerInfoResource, dialog);
-        const openPlayerInfo = async (entity?: Entity): Promise<void> => {
+        // In flight, Jettison Cargo goes through the simulation.
+        const jettisonInFlight: PlayerInfoJettison = () => {
+            world.emit(JettisonCargoRequestEvent, true);
+            return true;
+        };
+        const openPlayerInfo = async (entity?: Entity,
+            jettison?: PlayerInfoJettison): Promise<void> => {
             if (dialog.container.visible || opening) {
                 return;
             }
@@ -90,7 +107,8 @@ export const PlayerInfoPlugin: Plugin = {
                 // so it opens over the spaceport (whose container is
                 // added after this plugin's).
                 stage.addChild(dialog.container);
-                await dialog.show(ship);
+                await dialog.show(ship,
+                    entity ? jettison : jettisonInFlight);
             } finally {
                 opening = false;
             }

@@ -133,6 +133,7 @@ describe('the local input gate', () => {
         { name: 'setPlanetTarget, object target', valid: false, input: { kind: 'setPlanetTarget', target: {} } },
         { name: 'setTurretAim', valid: true, input: { kind: 'setTurretAim', accurate: false } },
         { name: 'setTurretAim, string', valid: false, input: { kind: 'setTurretAim', accurate: 'yes' } },
+        { name: 'jettisonCargo', valid: true, input: { kind: 'jettisonCargo' } },
         { name: 'hail', valid: true, input: { kind: 'hail', action: { kind: 'bribe', target: 'ship' } } },
         { name: 'hail, no target', valid: false, input: { kind: 'hail', action: { kind: 'bribe' } } },
         { name: 'acceptMission', valid: true, input: { kind: 'acceptMission', accepted: { missionId: 'nova:1', mission: null, creditsDelta: -0 } } },
@@ -177,13 +178,17 @@ describe('the local input gate', () => {
         const members = (SimulationInputType as unknown as {
             types: { type: { props: { kind: { value: string } } } }[],
         }).types.map(member => member.type.props.kind.value).sort();
-        expect(members.length).toBe(20);
+        expect(members.length).toBe(21);
         const kindsOf = (valid: boolean) => [...new Set(cases
             .filter(c => c.valid === valid)
             .map(c => (c.input as { kind: string }).kind))]
             .filter(kind => members.includes(kind)).sort();
         expect(kindsOf(true)).toEqual(members);
-        expect(kindsOf(false)).toEqual(members);
+        // A kind with no payload ('jettisonCargo') has no malformed form:
+        // t.strict strips any extra field.
+        const PAYLOADLESS = ['jettisonCargo'];
+        expect(kindsOf(false)).toEqual(
+            members.filter(kind => !PAYLOADLESS.includes(kind)));
     });
 
     it('the host and the wire agree on every input, and the host applies what the room receives', async () => {

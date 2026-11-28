@@ -105,6 +105,10 @@ export class AsyncSimulationBridgeClient {
         await this.guard(() => this.host.setTurretAim(accurate));
     }
 
+    async jettisonCargo() {
+        await this.guard(() => this.host.jettisonCargo());
+    }
+
     async hail(action: HailAction) {
         await this.guard(() => this.host.hail(action));
     }

@@ -3,7 +3,9 @@ import { Component } from 'nova_ecs/component';
 import { map } from 'nova_ecs/datatypes/map';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
+import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { Provide } from 'nova_ecs/provide';
+import { CargoJettisonedEvent, CargoJettisonedEventType } from './jettison_cargo.js';
 import { ShipComponent } from './ship_plugin.js';
 
 /**
@@ -123,6 +125,8 @@ export const CargoPlugin: Plugin = {
         deltaMaker.addComponent(CargoComponent, {
             componentType: CargoType,
         });
+        world.resources.get(SerializerResource)?.addEvent(
+            CargoJettisonedEvent, CargoJettisonedEventType);
         world.addSystem(ShipCargoProvider);
     }
 };

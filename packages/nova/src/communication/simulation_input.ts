@@ -33,6 +33,7 @@ import {
     applyNebulaExplored, NebulaExplored, NebulaExploredType,
     applyRefuseMission, RefusedMission, RefusedMissionType, SetStringEffects,
 } from "../nova_plugin/missions/index.js";
+import { applyJettisonCargo } from "../nova_plugin/ship/index.js";
 import {
     applyEscortAction, applyRefundFighter, EscortAction, EscortActionType,
     FighterRefund, FighterRefundType,
@@ -64,6 +65,10 @@ export type SimulationInput =
      * intercept (`accurate`) or the original's first-order lead, from the
      * Enhancements toggle "Accurate turret aim" as it changes in flight. */
     | { kind: 'setTurretAim', accurate: boolean }
+    /** The player-info dialog's Jettison Cargo (or the dump-cargo key),
+     * confirmed: the sender's own ship empties its hold in flight
+     * (ship/jettison_cargo.ts applyJettisonCargo). */
+    | { kind: 'jettisonCargo' }
     /** A hail dialog action (request assistance / bribe) against a ship. The
      * effect (repair, credit change, pacify) is recomputed sim-side. */
     | { kind: 'hail', action: HailAction }
@@ -218,6 +223,7 @@ export const SimulationInputType: t.Type<SimulationInput, unknown> = t.union([
     t.strict({ kind: t.literal('setTarget'), target: t.union([t.string, t.null]) }),
     t.strict({ kind: t.literal('setPlanetTarget'), target: t.union([t.string, t.null]) }),
     t.strict({ kind: t.literal('setTurretAim'), accurate: t.boolean }),
+    t.strict({ kind: t.literal('jettisonCargo') }),
     t.strict({ kind: t.literal('hail'), action: HailActionType }),
     t.strict({ kind: t.literal('acceptMission'), accepted: AcceptedMissionType }),
     t.strict({ kind: t.literal('refuseMission'), refused: RefusedMissionType }),
@@ -702,6 +708,10 @@ function applySimulationInput(world: World, input: SimulationInput,
         }
         case 'setTurretAim': {
             applySetTurretAim(world, peerId, input.accurate);
+            break;
+        }
+        case 'jettisonCargo': {
+            applyJettisonCargo(world, peerId);
             break;
         }
         case 'hail': {

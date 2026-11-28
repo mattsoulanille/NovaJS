@@ -34,8 +34,8 @@ export interface AlertPromptLayout {
     buttonHeight: number;
 }
 
-const ICON_X = 7;
-const ICON_Y = 5;
+export const ALERT_ICON_X = 7;
+export const ALERT_ICON_Y = 5;
 const ICON_SIZE = 32;
 /** The field's text starts this far inside its edge. */
 const FIELD_TEXT_INSET_X = 4;
@@ -66,7 +66,7 @@ export const ALERT_LABEL_FONT: Partial<PIXI.ITextStyle> = {
  * neutral placeholder tile of the same size; swap in a real texture here if
  * an icon resource ever becomes available.
  */
-function drawIconPlaceholder(g: PIXI.Graphics, x: number, y: number) {
+export function drawIconPlaceholder(g: PIXI.Graphics, x: number, y: number) {
     g.lineStyle(1, 0x5a5a5a)
         .beginFill(0x1c1c1c)
         .drawRoundedRect(x + 0.5, y + 0.5, ICON_SIZE - 1, ICON_SIZE - 1, 5)
@@ -315,7 +315,7 @@ export class AlertPromptDialog {
             .drawRect(left + layout.fieldX + 0.5, top + layout.fieldY + 0.5,
                 layout.fieldWidth - 1, layout.fieldHeight - 1)
             .endFill();
-        drawIconPlaceholder(panel, left + ICON_X, top + ICON_Y);
+        drawIconPlaceholder(panel, left + ALERT_ICON_X, top + ALERT_ICON_Y);
         panel.interactive = true;
         this.container.addChild(panel);
 

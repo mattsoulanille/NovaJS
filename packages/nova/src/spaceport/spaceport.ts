@@ -23,9 +23,10 @@ import {
 import {
     LOCATION_MAIN_SPACEPORT, LOCATION_MISSION_COMPUTER, LOCATION_OUTFIT, LOCATION_SHIPYARD,
     LOCATION_TRADING, MissionEvent, MissionMapMark, missionMapMarks, expandMissionText,
-    abortMission,
+    abortMission, jettisonDockedCargo,
 } from '../nova_plugin/missions/index.js';
 import type { MissionInfoAbort } from './mission_info.js';
+import type { PlayerInfoJettison } from './player_info.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent, PlayerNamesComponent,
 } from '../nova_plugin/player/index.js';
@@ -227,8 +228,10 @@ export class Spaceport extends Menu<Entity> {
         /** Opens the player-info dialog over the spaceport (the 'p'
          * key) — it works both in flight and docked. The docked ship
          * entity is passed explicitly: while docked it is out of the
-         * world, held by this menu. */
-        private openPlayerInfo?: (entity: Entity) => Promise<unknown>,
+         * world, held by this menu; so is the Jettison Cargo that edits
+         * the landing's working copy. */
+        private openPlayerInfo?: (entity: Entity,
+            jettison?: PlayerInfoJettison) => Promise<unknown>,
         /** Opens the mission-info dialog over the spaceport (the 'i'
          * key; display/mission_info_plugin.ts OpenMissionInfoResource),
          * for the hull docked here and with the Abort that edits the
@@ -432,7 +435,7 @@ export class Spaceport extends Menu<Entity> {
             // stay quiet under them and 'd' backs out of just the
             // overlay.
             map: () => this.openDockedMap(),
-            properties: () => void this.openPlayerInfo?.(this.input),
+            properties: () => void this.openDockedPlayerInfo(),
             // 'i': the mission dialog, with a working Abort, as on the
             // original's spaceport (reference "#324 mission BBS after an
             // accept, wave 21", finding 6); nothing with no missions
@@ -697,6 +700,38 @@ export class Spaceport extends Menu<Entity> {
         if (this.container.visible) {
             this.controls.bind();
         }
+    }
+
+    /**
+     * The 'p' key on the main screen. Like 'i', the landing's working copy
+     * is flushed onto the docked hull first, and Jettison Cargo empties
+     * that working copy under a savepoint released at once (the hold, and
+     * the missions whose cargo was aboard fail: missions/
+     * mission_transitions.ts jettisonDockedCargo). MEASURED: docked, the
+     * original dumps the hold as in flight, with no message (reference
+     * "Jettison cargo, wave 55" runs 2 and 5). Without a transaction the
+     * button stays greyed.
+     */
+    private async openDockedPlayerInfo() {
+        const transaction = this.transaction && !this.transaction.isClosed
+            ? this.transaction : undefined;
+        transaction?.flush();
+        const jettison: PlayerInfoJettison | undefined = transaction
+            ? () => {
+                if (transaction.isClosed) {
+                    return false;
+                }
+                const visit = transaction.savepoint('jettison');
+                try {
+                    jettisonDockedCargo(transaction.session.machinery,
+                        transaction.outfits);
+                } finally {
+                    transaction.release(visit);
+                }
+                return true;
+            }
+            : undefined;
+        await this.openPlayerInfo?.(transaction?.ship ?? this.input, jettison);
     }
 
     /**

@@ -24,6 +24,8 @@ export interface SimulationBridgeHostApi {
     setPlanetTarget(target: string | null): void;
     /** The sender's own turret aim (player/turret_aim.ts). */
     setTurretAim(accurate: boolean): void;
+    /** The sender's own ship jettisons its cargo (ship/jettison_cargo.ts). */
+    jettisonCargo(): void;
     hail(action: HailAction): void;
     escortAction(action: EscortAction): void | Promise<void>;
     /** A lost bay fighter's round back to its carrier (issue #258). */
@@ -126,6 +128,7 @@ export interface AsyncSimulationBridgeHostApi {
     setTarget(target: string | null): Promise<void>;
     setPlanetTarget(target: string | null): Promise<void>;
     setTurretAim(accurate: boolean): Promise<void>;
+    jettisonCargo(): Promise<void>;
     hail(action: HailAction): Promise<void>;
     escortAction(action: EscortAction): Promise<void>;
     refundFighter(refund: FighterRefund): Promise<void>;

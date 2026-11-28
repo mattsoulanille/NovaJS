@@ -12,7 +12,8 @@ import {
 } from '../nova_plugin/player/index.js';
 import {
     CargoComponent, ArmorComponent, FuelComponent, ShieldComponent, OutfitsState,
-    OutfitsStateComponent, deriveShipPhysics, ShipComponent, ShipPhysicsComponent,
+    OutfitsStateComponent, deriveShipPhysics, hasJettisonableCargo, ShipComponent,
+    ShipPhysicsComponent,
 } from '../nova_plugin/ship/index.js';
 import { ControlEvent, displayName } from '../nova_plugin/core/index.js';
 import {
@@ -22,6 +23,7 @@ import {
     combatRatingName, legalStatusInSystem, statusGovtOf, CombatRatingComponent,
     LegalRecordsComponent,
 } from '../nova_plugin/reputation/index.js';
+import { AlertConfirmDialog } from './alert_confirm.js';
 import { Button } from './button.js';
 import { MenuControls } from './menu_controls.js';
 import {
@@ -114,6 +116,27 @@ const PROSE_FONT: Partial<PIXI.ITextStyle> = {
 };
 
 type Page = 'general' | 'cargo' | 'extras' | 'honors';
+
+/**
+ * The Jettison Cargo confirmation, verbatim from stock STR# 2002 ("misc
+ * strings", 0-based index 290), measured on the original as a native
+ * Cancel / OK alert (reference "Jettison cargo, wave 55").
+ */
+export const JETTISON_CONFIRM = 'Are you sure you want to jettison your cargo?';
+export const JETTISON_STRING_TABLE = 'nova:2002';
+export const JETTISON_CONFIRM_INDEX = 290;
+/** The status line after an in-flight jettison that failed no mission
+ * (STR# 2002, index 288); one that did says "Mission failed.". */
+export const CARGO_JETTISONED = 'Cargo jettisoned.';
+export const CARGO_JETTISONED_INDEX = 288;
+
+/**
+ * Empties the shown ship's hold, once the player has confirmed (see
+ * nova_plugin/ship/jettison_cargo.ts): in flight it sends the
+ * `jettisonCargo` input record, docked it edits the landing's working
+ * copy. Resolves false when nothing was done.
+ */
+export type PlayerInfoJettison = () => boolean | Promise<boolean>;
 
 /**
  * Warms the caches the General page's synchronous render reads for its
@@ -321,9 +344,10 @@ export function budgetRows(budget: DailyBudget): InfoRow[] {
  * The player-info dialog ('p'): four pages — General, Cargo, Extras,
  * Honors — on the 8518/8519/8520 three-part frame, per the
  * p_properties reference screenshots. Toggles from flight and from the
- * spaceport; read-only (the reference's Jettison Cargo button is shown
- * greyed — jettison isn't modeled, and in flight the cargo hold
- * belongs to the simulation).
+ * spaceport. Its one action is the Cargo page's Jettison Cargo, shown
+ * with something aboard and live in flight and docked alike (reference
+ * "Jettison cargo, wave 55"): a Cancel / OK confirmation, then the
+ * {@link PlayerInfoJettison} it was shown with, and the dialog closes.
  */
 export class PlayerInfoDialog {
     container = new PIXI.Container();
@@ -331,6 +355,9 @@ export class PlayerInfoDialog {
     private closed = new Subject<void>();
     private tabs: { [page in Page]: Button };
     private jettison: Button;
+    private jettisonAction?: PlayerInfoJettison;
+    private jettisonConfirm: AlertConfirmDialog;
+    private jettisonPrompt = JETTISON_CONFIRM;
     private done: Button;
     /** Every piece of the dialog except the modal shield, frame-local:
      * positioned at the current layout's origin. */
@@ -429,14 +456,14 @@ export class PlayerInfoDialog {
             this.frame.addChild(tab.container);
         }
 
-        // The reference's Jettison Cargo button (cargo page only).
-        // Greyed: jettison isn't modeled yet, and the dialog is
-        // read-only in flight. Its y, like Done's, follows the bottom
-        // strip (applyLayout).
+        // The reference's Jettison Cargo button (cargo page, with cargo
+        // aboard). Live whenever the dialog was shown with an action;
+        // its y, like Done's, follows the bottom strip (applyLayout).
         this.jettison = new Button(displayAssets, 'Jettison Cargo',
             JETTISON_WIDTH, { x: JETTISON_X - BUTTON_CAP_INSET, y: 0 });
         this.jettison.state = 'grey';
         this.jettison.container.visible = false;
+        this.jettison.click.subscribe(() => void this.jettisonCargo());
         this.frame.addChild(this.jettison.container);
 
         this.done = new Button(displayAssets, 'Done', DONE_WIDTH,
@@ -447,6 +474,18 @@ export class PlayerInfoDialog {
         this.content.mask = this.contentMask;
         this.frame.addChild(this.contentMask, this.content);
         this.applyLayout(this.layout);
+
+        // The confirmation is centred on the screen, which is the
+        // container's origin (the frame sits at the layout's offset).
+        this.jettisonConfirm = new AlertConfirmDialog(controlEvents,
+            'JettisonConfirm');
+        this.container.addChild(this.jettisonConfirm.container);
+        void displayAssets.data.StringTable.get(JETTISON_STRING_TABLE)
+            .then(table => {
+                this.jettisonPrompt =
+                    table.strings[JETTISON_CONFIRM_INDEX]?.trim()
+                    || JETTISON_CONFIRM;
+            }).catch(() => { /* Keep the stock wording. */ });
 
         // The wheel scrolls a page too tall for the screen. Bound on the
         // whole dialog — the modal shield included, which the events
@@ -509,13 +548,17 @@ export class PlayerInfoDialog {
      * not shown.
      */
     dismiss() {
+        if (this.jettisonConfirm.shown) {
+            this.jettisonConfirm.cancel();
+        }
         if (this.container.visible) {
             this.closed.next();
         }
     }
 
-    async show(entity: Entity): Promise<void> {
+    async show(entity: Entity, jettison?: PlayerInfoJettison): Promise<void> {
         this.entity = entity;
+        this.jettisonAction = jettison;
         try {
             await this.load(entity);
         } catch (e) {
@@ -527,6 +570,37 @@ export class PlayerInfoDialog {
         await firstValueFrom(this.closed);
         this.controls.unbind();
         this.container.visible = false;
+    }
+
+    /**
+     * Jettison Cargo: the native confirmation, then (on OK) the action,
+     * and the dialog closes (both measured: Cancel leaves the dialog as it
+     * was). No-op without an action or while the alert is already up.
+     */
+    private async jettisonCargo() {
+        const action = this.jettisonAction;
+        if (!action || this.jettisonConfirm.shown
+            || !this.container.visible) {
+            return;
+        }
+        // The original greys the button behind its alert.
+        this.jettison.state = 'grey';
+        const confirmed = await this.jettisonConfirm.show(this.jettisonPrompt);
+        this.jettison.state = 'normal';
+        if (!confirmed || !this.container.visible) {
+            return;
+        }
+        try {
+            await action();
+        } catch (e) {
+            console.warn('Jettison failed:', e);
+        }
+        this.closed.next();
+    }
+
+    /** The open Jettison Cargo confirmation, for headless driving. */
+    get jettisonAlert(): AlertConfirmDialog {
+        return this.jettisonConfirm;
     }
 
     private async load(entity: Entity) {
@@ -614,12 +688,13 @@ export class PlayerInfoDialog {
         }
         // Jettison Cargo only appears on the cargo page and only when
         // there is cargo aboard (compare p_properties/cargo.png — no
-        // button — with cargo_with_stuff.png). Greyed: jettison isn't
-        // modeled yet.
-        const cargo = this.entity?.components.get(CargoComponent);
-        const hasCargo = !![...(cargo ?? new Map())]
-            .find(([, count]) => count > 0);
+        // button — with cargo_with_stuff.png; wave 55 measured the empty
+        // hold's page the same way).
+        const hasCargo = hasJettisonableCargo(
+            this.entity?.components.get(CargoComponent),
+            this.entity?.components.get(MissionsComponent));
         this.jettison.container.visible = page === 'cargo' && hasCargo;
+        this.jettison.state = this.jettisonAction ? 'normal' : 'grey';
         this.content.removeChildren();
         // A page opens at its top. The prose renderers set the wrapped
         // line count that sizes the pane; the General table leaves it
