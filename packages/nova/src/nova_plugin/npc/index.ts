@@ -20,6 +20,7 @@ export * from './system_hold.js';
 export * from './npc_decision.js';
 export * from './npc_mining.js';
 export * from './npc_shuttle.js';
+export * from './npc_hypergate.js';
 export * from './npc_fire_control.js';
 export * from './npc_formation_system.js';
 export * from './npc_departure.js';

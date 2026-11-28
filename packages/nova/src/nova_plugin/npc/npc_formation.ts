@@ -150,7 +150,7 @@ export const FormationComponent = new Component<Formation>('FormationComponent')
  */
 export function offFormationBusiness(mode: string | undefined): boolean {
     return mode === 'attack' || mode === 'flee' || mode === 'depart'
-        || mode === 'board' || mode === 'scan';
+        || mode === 'board' || mode === 'scan' || mode === 'gate';
 }
 
 /**

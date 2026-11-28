@@ -27467,6 +27467,10 @@ reading, the stops, the emergence state, a 0x0040 trader flying in and
 gone, an arrival flying out along 120 degrees and jumping past the no-jump
 zone, a 0x0040 warship and its escort going in, and a traffic census:
 every respawn of a 0x0040 govt at the gate, of a 0x0020 govt by jump).
+Browser check: `N/scripts/npc_gate_browser.mjs` (a fresh Koria room,
+150 s: 2 Rebellion ships out of HG-Koria, 4 ships in, the Rebel Destroyer
+of the launch census and an independent Purveyor fleet; the gate open on
+screen for each; no page errors).
 **Not modelled:** the ~1.9 s the gate stands open before a ship comes out,
 and the grey silhouette fading in / out (the NPC simply appears at / leaves
 from the centre); the gate govt's enemies (no stock gate has any); 0x0080

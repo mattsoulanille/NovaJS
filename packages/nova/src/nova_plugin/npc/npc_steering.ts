@@ -1,4 +1,4 @@
-import { Entities, GetEntity } from 'nova_ecs/arg_types';
+import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
@@ -42,6 +42,7 @@ import {
 } from './npc_retreat.js';
 import { TargetComponent, WeaponsStateComponent } from '../ship/index.js';
 import { updateNpcCloak } from './npc_cloak.js';
+import { GATE_ENTER_RADIUS, GATE_ENTER_SPEED } from './npc_hypergate.js';
 
 /**
  * Executes the mode NpcDecisionSystem chose (see the AI overview in
@@ -434,9 +435,10 @@ export const NpcSteeringSystem = new System({
         Optional(EscortCommandComponent), Optional(EscortLandingComponent),
         Optional(DisabledComponent), Optional(JumpComponent),
         Optional(WeaponsStateComponent), Optional(MovementPhysicsComponent),
-        TimeResource, Entities, GetEntity] as const,
+        TimeResource, Entities, GetEntity, UUID] as const,
     step(npc, movement, physics, target, formation, escortCommand, landing,
-        disabled, jump, weapons, movementPhysics, time, entities, entity) {
+        disabled, jump, weapons, movementPhysics, time, entities, entity,
+        uuid) {
         // A 0x0800 trader's cloak (npc_cloak.ts), every tick, whatever
         // the arm below does or skips.
         updateNpcCloak(entity, npc, time.time);
@@ -767,6 +769,25 @@ export const NpcSteeringSystem = new System({
                 }
                 break;
             }
+            case 'gate': {
+                // INTO A HYPERGATE (npc_hypergate.ts): fly to its centre
+                // like a landing and, there, leave the system. A disabled
+                // ship goes nowhere; a held one never decided this (the
+                // decision keeps gates out of a held ship's stops).
+                const gate = npc.destination
+                    ? entities.get(npc.destination)?.components
+                        .get(MovementStateComponent)?.position
+                    : undefined;
+                if (!gate || disabled) {
+                    return; // Decision system will re-plan.
+                }
+                if (steerArrive(movement, steering,
+                    Position.fromVectorLike(gate), GATE_ENTER_RADIUS,
+                    GATE_ENTER_SPEED, time.delta_s)) {
+                    entities.delete(uuid);
+                }
+                break;
+            }
             case 'depart': {
                 // Fly outward until clear of the no-jump zone (the same
                 // threshold the flee exit uses), then jump out.
@@ -787,8 +808,12 @@ export const NpcSteeringSystem = new System({
                 // it is destroyed, repaired, or the player leaves (EVN
                 // Bible: a disabled ship is dead in space; mïsn ShipGoal 5
                 // ships "stay that way until you board them").
-                steerOutward(movement, new Vector(
-                    movement.position.x, movement.position.y));
+                // A ship that came out of a hypergate flies on along the
+                // gate's emergence angle (wave 60), the rest straight away
+                // from the system centre.
+                steerOutward(movement, npc.departHeading !== undefined
+                    ? new Angle(npc.departHeading).getUnitVector()
+                    : new Vector(movement.position.x, movement.position.y));
                 break;
             }
         }

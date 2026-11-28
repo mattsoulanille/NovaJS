@@ -1215,6 +1215,18 @@ export const STATE_HASH_INTERVAL = 60;
 //    wire schema fingerprint changes (3a6d49a035638325 ->
 //    5e883b17be46131c), and the join gate keeps older and newer builds
 //    apart.
+//    schema-only changes): NPC hypergate traffic (reference "NPC hypergate
+//    traffic, wave 60"). NpcState gains the mode literal 'gate' (flying
+//    into a hypergate to leave by it) and the optional field
+//    `departHeading` (the emergence angle a ship that came out of a gate
+//    flies away along). Sim-rule changes alongside (npc/npc_hypergate.ts):
+//    a respawn of a gövt Flags2 0x0040 govt comes out of the system's
+//    working hypergate (a govt with neither flag on a roll) and leaves at
+//    once; traders of a 0x0020 govt no longer stop at gates, a 0x0040
+//    govt's go into them, and a 0x0040 warship leaves by one. No input or
+//    message kind changes. The derived wire schema fingerprint changes
+//    (5e883b17be46131c -> NEWFP), and the join gate keeps
+//    older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

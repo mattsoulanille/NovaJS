@@ -33,6 +33,7 @@ import {
 import { ShieldComponent } from '../ship/index.js';
 import { JumpComponent } from '../travel/index.js';
 import { landable } from '../core/index.js';
+import { gateUse, isWorkingHypergate } from './npc_hypergate.js';
 import { MissionShipComponent } from '../player/index.js';
 import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
 import { NpcComponent, NpcState } from './npc_component.js';
@@ -211,9 +212,33 @@ export function landingDestinations(planets: PlanetEntry[]): PlanetEntry[] {
  */
 export function traderDestinations(planets: PlanetEntry[],
     shipGovt: GovtData | undefined,
-    govtOf: (id: string) => GovtData | undefined): PlanetEntry[] {
-    return landingDestinations(planets).filter(([, , , data]) =>
+    govtOf: (id: string) => GovtData | undefined,
+    held = false): PlanetEntry[] {
+    const stops = landingDestinations(planets).filter(([, , , data]) =>
         friendlyStellar(shipGovt, data.govt, govtOf));
+    // HYPERGATES (npc_hypergate.ts, reference "NPC hypergate traffic, wave
+    // 60"): a stop at a working gate is a way OUT (mode 'gate'), so a
+    // govt with gövt Flags2 0x0020 never picks one, nor does a ship held
+    // in the system; a 0x0040 govt picks nothing else while there is one;
+    // a govt with neither flag picks it like any other stop. A gate that
+    // is landable but linked nowhere stays an ordinary (parking) stop.
+    const use = held ? 'never' : gateUse(shipGovt);
+    const gates = stops.filter(([, , , data]) => isWorkingHypergate(data));
+    if (use === 'prefer' && gates.length > 0) {
+        return gates;
+    }
+    if (use === 'never') {
+        return stops.filter(([, , , data]) => !isWorkingHypergate(data));
+    }
+    return stops;
+}
+
+/** Whether the stop `uuid` among `planets` is a working hypergate, so
+ * flying to it is leaving by it (mode 'gate', npc_hypergate.ts). */
+function isGateStop(planets: readonly PlanetEntry[],
+    uuid: string | undefined): boolean {
+    return uuid !== undefined && planets.some(([other, , , data]) =>
+        other === uuid && isWorkingHypergate(data));
 }
 
 /** Picks the next planet a trader heads for (uuid order for
@@ -249,9 +274,11 @@ function nearestPlanet(planets: PlanetEntry[],
  * be travelling.
  */
 function travelOrDepart(destination: string | undefined,
-    held: boolean): 'travel' | 'depart' | undefined {
+    held: boolean, planets: readonly PlanetEntry[] = []):
+    'travel' | 'gate' | 'depart' | undefined {
     if (destination) {
-        return 'travel';
+        // A stop at a working hypergate is the way out by it.
+        return isGateStop(planets, destination) ? 'gate' : 'travel';
     }
     return held ? undefined : 'depart';
 }
@@ -287,6 +314,7 @@ export function fleetLeaderLeaving(leader: Entity | undefined): boolean {
     }
     const leaderNpc = leader.components.get(NpcComponent);
     return leaderNpc !== undefined && (leaderNpc.mode === 'depart'
+        || leaderNpc.mode === 'gate'
         || leader.components.has(JumpComponent));
 }
 
@@ -497,7 +525,16 @@ export const NpcDecisionSystem = new System({
         // the roll above, so every NPC's draws stay where they were.
         if (formation && !held
             && fleetLeaderLeaving(entities.get(formation.leader))) {
-            npc.mode = 'depart';
+            // Out the way the leader goes: by its hypergate when it flies
+            // into one (npc_hypergate.ts), else by jump.
+            const leaderNpc = entities.get(formation.leader)
+                ?.components.get(NpcComponent);
+            if (leaderNpc?.mode === 'gate' && leaderNpc.destination) {
+                npc.mode = 'gate';
+                npc.destination = leaderNpc.destination;
+            } else {
+                npc.mode = 'depart';
+            }
             target.target = undefined;
             return;
         }
@@ -856,12 +893,15 @@ export const NpcDecisionSystem = new System({
                 const govtOf = (id: string) => gameData.data.Govt.getCached(id);
                 const destinations = shuttle
                     ? shuttleStops(planets, govtData, govtOf)
-                    : traderDestinations(planets, govtData, govtOf);
+                    : traderDestinations(planets, govtData, govtOf, held);
                 const isStop = (stop: string | undefined) => stop !== undefined
                     && destinations.some(([other]) => other === stop);
                 // Planet-to-planet loop.
-                if (npc.mode === 'travel') {
-                    if (!npc.destination || !entities.has(npc.destination)) {
+                if (npc.mode === 'travel' || npc.mode === 'gate') {
+                    if (!npc.destination || !entities.has(npc.destination)
+                        || (npc.mode === 'gate' && !isStop(npc.destination))) {
+                        // Its stop is gone, or a gate it may no longer
+                        // take (held here since it set off): re-plan.
                         npc.mode = undefined;
                     }
                 } else if (npc.mode === 'dwell') {
@@ -914,7 +954,8 @@ export const NpcDecisionSystem = new System({
                             // another port meanwhile.
                             npc.destination = pickPlanet(destinations, random,
                                 npc.destination);
-                            npc.mode = travelOrDepart(npc.destination, held);
+                            npc.mode = travelOrDepart(npc.destination, held,
+                                planets);
                         }
                     }
                 }
@@ -931,7 +972,8 @@ export const NpcDecisionSystem = new System({
                         } else if (npc.laneEnd !== undefined) {
                             delete npc.laneEnd;
                         }
-                        npc.mode = travelOrDepart(npc.destination, held);
+                        npc.mode = travelOrDepart(npc.destination, held,
+                            planets);
                     }
                 }
                 break;
@@ -1024,9 +1066,28 @@ export const NpcDecisionSystem = new System({
                 const inLiveFleet = formation !== undefined
                     && entities.get(formation.leader)?.components
                         .has(NpcComponent) === true;
-                if (!held && !inLiveFleet && time.time >= npc.departAt) {
-                    npc.mode = 'depart';
-                    return;
+                // A warship of a govt that PREFERS hypergates (gövt
+                // Flags2 0x0040) leaves by one as soon as it has nothing
+                // to fight (reference "NPC hypergate traffic, wave 60":
+                // the AI 3 Sigma ships in the system at launch all flew
+                // into the gate within 8 s); the rest jump out on their
+                // roll.
+                if (!held && !inLiveFleet) {
+                    const gate = gateUse(govtData) === 'prefer'
+                        ? nearestPlanet(traderDestinations(planets, govtData,
+                            id => gameData.data.Govt.getCached(id))
+                            .filter(([, , , data]) => isWorkingHypergate(data)),
+                        position)
+                        : undefined;
+                    if (gate !== undefined) {
+                        npc.mode = 'gate';
+                        npc.destination = gate;
+                        return;
+                    }
+                    if (time.time >= npc.departAt) {
+                        npc.mode = 'depart';
+                        return;
+                    }
                 }
                 if (npc.mode === undefined || npc.mode === 'patrol') {
                     // In formation with a live leader: hold instead of

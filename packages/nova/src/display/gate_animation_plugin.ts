@@ -20,6 +20,7 @@ import {
 } from '../nova_plugin/ship/index.js';
 import { DominatedComponent, MissionsComponent } from '../nova_plugin/player/index.js';
 import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
+import { GATE_NPC_OPEN_RANGE, NpcComponent } from '../nova_plugin/npc/index.js';
 import { defaultSimulationTime, SimulationTimeResource } from './simulation_time.js';
 import { AnimationGraphicComponent, AnimationGraphicInsert, ObjectDrawSystem } from './animation_graphic_plugin.js';
 import { BoardingUiSystem } from "./boarding_plugin.js";
@@ -249,6 +250,8 @@ const ShipArrivedAtGateSystem = new System({
  * quote (ränk 147 unlocks the stock network) — so a pilot without access
  * sees a gate that ignores them. NPC selections open it as before.
  */
+const NpcGateQuery = new Query([NpcComponent, MovementStateComponent] as const);
+
 const ShipTargetQuery = new Query([PlanetTargetComponent,
     Optional(LegalRecordsComponent), Optional(ShipDataComponent),
     Optional(OutfitsStateComponent), Optional(StellarBribesComponent),
@@ -306,6 +309,26 @@ export const GateAnimationSystem = new System({
             if (cleared) {
                 wantOpen = true;
                 break;
+            }
+        }
+        // An NPC flying INTO this gate to leave by it (mode 'gate',
+        // npc_hypergate.ts) opens it once it is close: reference "NPC
+        // hypergate traffic, wave 60", the gate stood open while the ship
+        // was still about 250 px out. NpcComponent and the positions are
+        // delta-synced, so every peer opens it alike.
+        if (!wantOpen) {
+            const gatePosition = world.entities.get(uuid)?.components
+                .get(MovementStateComponent)?.position;
+            if (gatePosition) {
+                for (const [npc, movement] of runQuery(NpcGateQuery)) {
+                    if (npc.mode === 'gate' && npc.destination === uuid
+                        && movement.position.subtract(gatePosition)
+                            .lengthSquared
+                            < GATE_NPC_OPEN_RANGE * GATE_NPC_OPEN_RANGE) {
+                        wantOpen = true;
+                        break;
+                    }
+                }
             }
         }
         if (!wantOpen) {

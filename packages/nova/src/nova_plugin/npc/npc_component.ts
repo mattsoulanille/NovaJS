@@ -21,7 +21,11 @@ export const NpcMode = t.union([
     t.literal('mine'),
     /** A miner with a mining scoop (Flags3 0x0002 plus an oütf ModType
      * 31) flying over asteroid debris to scoop it (npc/npc_mining.ts). */
-    t.literal('scoop')]);
+    t.literal('scoop'),
+    /** Flying INTO a hypergate (`destination`) to leave the system by it
+     * (npc/npc_hypergate.ts; gövt Flags2 0x0040, or a gate picked as a
+     * stop by a govt without 0x0020). Gone once it reaches the centre. */
+    t.literal('gate')]);
 export type NpcMode = t.TypeOf<typeof NpcMode>;
 
 export const NpcState = t.intersection([t.type({
@@ -39,6 +43,11 @@ export const NpcState = t.intersection([t.type({
     laneEnd: t.string,
     /** Current waypoint (patrol legs, orbit points, flee headings). */
     waypoint: t.tuple([t.number, t.number]),
+    /** Compass heading (radians) a ship that came OUT of a hypergate
+     * flies away along in mode 'depart' (npc/npc_hypergate.ts: the gate's
+     * emergence angle), instead of straight away from the system centre.
+     * Set only at such an arrival. */
+    departHeading: t.number,
     /** Sim time (ms) when the current dwell ends. */
     until: t.number,
     /** Sim time (ms) of the next decision re-evaluation. */

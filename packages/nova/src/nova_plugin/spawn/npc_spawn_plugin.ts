@@ -35,6 +35,10 @@ import { ControlledByComponent, GOAL_RESCUE } from '../player/index.js';
 import { DeathAIComponent } from '../npc/index.js';
 import { FiringGroupComponent } from '../ship/index.js';
 import { FormationComponent, NpcComponent, formationSlotPosition, formationSpacing } from '../npc/index.js';
+import {
+    gateEmergenceState, gateUse, isWorkingHypergate, MAY_GATE_ARRIVAL_CHANCE,
+} from '../npc/index.js';
+import { PlanetDataComponent } from '../travel/index.js';
 import { PersComponent } from './pers_plugin.js';
 import {
     classifySpawnTest, effectiveNpcSpawnEntries, effectivePersEntries,
@@ -1143,6 +1147,65 @@ export function jumpInState(shipData: ShipData,
 }
 
 /**
+ * A traffic arrival THROUGH A HYPERGATE (npc/npc_hypergate.ts, reference
+ * "NPC hypergate traffic, wave 60"): for a respawn of `govtId` in this
+ * world, the gate emergence it makes instead of a jump-in, or undefined
+ * for a jump-in. A govt with gövt Flags2 0x0020 never comes through a
+ * gate, one with 0x0040 always does when the system has a working one, one
+ * with neither flag does with MAY_GATE_ARRIVAL_CHANCE. The gate's govt and
+ * MinStatus do not matter (the stock gates lock the player out and let
+ * every NPC through).
+ *
+ * Deterministic: genesis planet state and the staged govt cache, and the
+ * draws are structural: none without a working gate or for a 0x0020 /
+ * 0x0040 govt with one gate; one for the neither-flag roll, one to pick
+ * among several gates (no stock system has two), one for a random
+ * emergence angle (gateEmergenceState).
+ */
+export function gateArrivalState(world: World,
+    gameData: SimulationGameDataInterface, govtId: string | null,
+    shipData: ShipData, random: Random) {
+    const govt = govtId ? gameData.data.Govt.getCached(govtId) : undefined;
+    const use = gateUse(govt);
+    if (use === 'never') {
+        return undefined;
+    }
+    const gates: [string, Entity][] = [];
+    for (const [uuid, entity] of world.entities) {
+        const data = entity.components.get(PlanetDataComponent);
+        if (data && isWorkingHypergate(data)
+            && entity.components.has(MovementStateComponent)) {
+            gates.push([uuid, entity]);
+        }
+    }
+    if (gates.length === 0) {
+        return undefined;
+    }
+    if (use === 'may' && random.next() >= MAY_GATE_ARRIVAL_CHANCE) {
+        return undefined;
+    }
+    gates.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+    const [, gate] = gates.length === 1 ? gates[0]
+        : gates[random.below(gates.length)];
+    const position = gate.components.get(MovementStateComponent)!.position;
+    const data = gate.components.get(PlanetDataComponent)!;
+    return gateEmergenceState(Position.fromVectorLike(position),
+        data.gate?.emergenceAngle ?? null, shipData.physics.speed, random);
+}
+
+/** Marks a ship that has just come out of a hypergate: it leaves at once,
+ * flying on along the gate's emergence angle and jumping out past the
+ * no-jump zone (wave 60: straight out, no stop at a port, AI 1 and AI 3
+ * alike). */
+function leaveFromGate(ship: Entity, heading: Angle) {
+    const npc = ship.components.get(NpcComponent);
+    if (npc) {
+        npc.mode = 'depart';
+        npc.departHeading = heading.angle;
+    }
+}
+
+/**
  * Spawns one draw from the spawn table — the candidate tables as `bits`
  * see them (spawn_bits.ts; the empty set by default): a single dude
  * ship, or a whole fleet (lead + escorts in formation slots). `atEdge` selects jump-in
@@ -1197,11 +1260,16 @@ export function spawnNpc(world: World,
             return spawnedPers;
         }
         let state;
+        let throughGate = false;
         if (atEdge) {
             // Every respawn jumps in, a SHUTTLE too (reference "Shuttles
             // and T1 traders, wave 15": all five came in from the edge;
-            // none took off from a stellar).
-            state = jumpInState(shipData, random);
+            // none took off from a stellar) — unless its govt comes
+            // through the system's hypergate (gateArrivalState).
+            const gate = gateArrivalState(world, gameData, entry.dude.govt,
+                shipData, random);
+            throughGate = gate !== undefined;
+            state = gate ?? jumpInState(shipData, random);
         } else {
             state = {
                 position: scatter(),
@@ -1209,9 +1277,13 @@ export function spawnNpc(world: World,
                 velocity: new Vector(0, 0),
             };
         }
-        insert(ids.next('npc'), makeNpcShip(shipData,
+        const ship = makeNpcShip(shipData,
             entry.dude.aiType, entry.dude.govt,
-            state.position, state.rotation, state.velocity));
+            state.position, state.rotation, state.velocity);
+        if (throughGate) {
+            leaveFromGate(ship, state.rotation);
+        }
+        insert(ids.next('npc'), ship);
         return spawnedPers + 1;
     }
 
@@ -1224,8 +1296,12 @@ export function spawnNpc(world: World,
         return spawnedPers;
     }
     let leadState;
+    let throughGate = false;
     if (atEdge) {
-        leadState = jumpInState(leadData, random);
+        const gate = gateArrivalState(world, gameData, fleet.govt, leadData,
+            random);
+        throughGate = gate !== undefined;
+        leadState = gate ?? jumpInState(leadData, random);
     } else {
         leadState = {
             position: scatter(),
@@ -1233,8 +1309,17 @@ export function spawnNpc(world: World,
             velocity: new Vector(0, 0),
         };
     }
-    return spawnedPers + spawnFleet(world, gameData, ids, random, fleet,
-        leadData, leadState).length;
+    const inserted = spawnFleet(world, gameData, ids, random, fleet,
+        leadData, leadState);
+    if (throughGate && inserted.length > 0) {
+        // The lead leaves at once; its escorts go with it
+        // (fleetLeaderLeaving).
+        const lead = world.entities.get(inserted[0]);
+        if (lead) {
+            leaveFromGate(lead, leadState.rotation);
+        }
+    }
+    return spawnedPers + inserted.length;
 }
 
 /**
