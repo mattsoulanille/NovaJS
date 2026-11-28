@@ -1,6 +1,6 @@
 import 'jasmine';
 import { v4 } from 'uuid';
-import { Emit, EmitNow, Entities, GetEntity, GetWorld, QueryResults, RunQuery, SetComponent, UUID } from './arg_types.js';
+import { Emit, EmitNow, Entities, GetArg, GetEntity, GetWorld, QueryResults, RunQuery, SetComponent, UUID } from './arg_types.js';
 import { Component } from './component.js';
 import { Entity } from './entity.js';
 import { AddEvent, DeleteEvent, EcsEvent } from './events.js';
@@ -90,6 +90,42 @@ describe('world', () => {
         world.resources.set(OptionalResource, { v: 7 });
         world.step();
         expect(seen).toEqual([undefined, 7]);
+    });
+
+    it('resolves Optional without a query cache entry of its own', () => {
+        // Optional's modifier query is [GetArg]: it requires no
+        // component, so a cache entry for it would hold every entity
+        // and be swept on every entity set and delete (the 2026-11-27
+        // lag trace: ~40% of the simulation worker). It must resolve
+        // directly, and still track the wrapped component.
+        const seen: (number | undefined)[] = [];
+        world.addSystem(new System({
+            name: 'ReadsOptionalFoo',
+            args: [Optional(FOO_COMPONENT), BAR_COMPONENT] as const,
+            step: (foo) => {
+                seen.push(foo?.x);
+            },
+        }));
+        const queries = (world as unknown as { queries: Map<Query, unknown> }).queries;
+        const entity = new Entity().addComponent(BAR_COMPONENT, { y: 'a' });
+        world.entities.set('e1', entity);
+        world.step();
+        entity.components.set(FOO_COMPONENT, { x: 3 });
+        world.step();
+        world.entities.set('e2', new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'b' })
+            .addComponent(FOO_COMPONENT, { x: 5 }));
+        world.step();
+        entity.components.delete(FOO_COMPONENT);
+        world.entities.delete('e2');
+        world.step();
+
+        expect(seen).toEqual([undefined, 3, 3, 5, undefined]);
+        // Resolving Optional (for old and new entities) cached no entry
+        // for its [GetArg] modifier query.
+        const getArgOnly = [...queries.keys()].filter(query =>
+            query.args.length === 1 && query.args[0] === GetArg);
+        expect(getArgOnly).toEqual([]);
     });
 
     it('addSystem rejects a system whose nested query needs a missing resource', () => {

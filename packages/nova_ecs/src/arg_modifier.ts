@@ -1,5 +1,5 @@
 import { Either } from "fp-ts/lib/Either.js";
-import { ArgData, ArgsToData, ArgTypes, GetArg } from "./arg_types.js";
+import { ArgData, ArgsToData, ArgTypes, GetArg, GetEntity, UUID } from "./arg_types.js";
 import { UnknownComponent } from "./component.js";
 import { Query } from "./query.js";
 
@@ -36,6 +36,19 @@ export class ArgModifier<Args extends readonly ArgTypes[], Result> {
      * to mean). `Optional(x)` declares `[x]`.
      */
     readonly reaches: readonly ArgTypes[] | undefined;
+    /**
+     * True when the modifier's query is nothing but per-entity handles
+     * (GetArg, GetEntity, UUID) and requires no component: resolving it
+     * is a closure or a reference, so `World.getArg` resolves it
+     * directly instead of through the query cache. A cache entry for
+     * such a query would require nothing, so it would hold EVERY entity
+     * as a member and be swept on every entity set and delete — and
+     * `Optional` makes one per use (~200 in the stock plugin set),
+     * which made spawning a projectile cost hundreds of entry updates.
+     * Cached or not, the transform sees equivalent args (the GetArg
+     * closure fetches fresh on every call).
+     */
+    readonly resolvesDirectly: boolean;
     constructor({ query, transform, extraComponents, reaches }: {
         query: Query<Args>, transform: Transform<Args, Result>,
         extraComponents?: ReadonlySet<UnknownComponent> | null,
@@ -44,6 +57,9 @@ export class ArgModifier<Args extends readonly ArgTypes[], Result> {
         this.query = query;
         this.transform = transform;
         this.reaches = reaches;
+        this.resolvesDirectly = query.components.size === 0
+            && query.args.every(arg =>
+                arg === GetArg || arg === GetEntity || arg === UUID);
         if (extraComponents === null) {
             this.referencedComponents = null;
         } else if (extraComponents === undefined

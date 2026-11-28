@@ -703,6 +703,21 @@ export class World {
             return left(undefined);
         } else if (arg instanceof ArgModifier) {
             const modifier = arg as UnknownArgModifier;
+            if (modifier.resolvesDirectly) {
+                // See ArgModifier.resolvesDirectly: no query cache entry.
+                const args = modifier.query.args;
+                const resolved = new Array<unknown>(args.length);
+                for (let i = 0; i < args.length; i++) {
+                    const result = this.getArg(args[i], entity, event);
+                    if (isLeft(result)) {
+                        return left(undefined);
+                    }
+                    resolved[i] = result.right;
+                }
+                return (modifier.transform as (...args: unknown[]) =>
+                    Either<undefined, unknown>)(...resolved) as
+                    Either<undefined, ArgData<T>>;
+            }
             const query = this.queries.get(modifier.query);
             const modifierQueryResults =
                 query.getResultForEntity(entity, event);
