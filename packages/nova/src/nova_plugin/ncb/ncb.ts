@@ -122,8 +122,9 @@ export interface NCBTestContext {
      * plug-ins (9,979 non-empty expressions; the operator census by letter
      * is b 4152, p 320, o 286, bare-number 4) finds ZERO `Exxx` terms —
      * not in AvailBits, not in Availability, not in any Visibility, not in
-     * a dësc conditional (which cannot even spell one: desc_text's
-     * tryParseConditional accepts only b/p/g). So the wired sites above
+     * a dësc conditional (which has no such term at all: the original
+     * tests one b / g / p letter there, reference wave 54, desc_text.ts).
+     * So the wired sites above
      * are wired on the Bible's word, and the unwired ones cost nothing.
      *
      * BEWARE `E` IN A SET STRING, which is a DIFFERENT operator: the

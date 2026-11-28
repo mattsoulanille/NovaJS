@@ -162,6 +162,8 @@ export class Spaceport extends Menu<Entity> {
         leave: Button,
     };
     private data?: PlanetData;
+    /** The landing description (spöb dësc), re-expanded every landing. */
+    private landingDesc?: PIXI.Text;
     /**
      * The docked-ship handle the status bar reads while docked. The spaceport
      * points its `liveStatus` at whichever venue is open so the bar tracks a
@@ -631,6 +633,8 @@ export class Spaceport extends Menu<Entity> {
         // The hull the landing pass left the player in (a completion's
         // set string can have changed it).
         input = this.transaction?.ship ?? input;
+        // The landing text against the bits the landing pass left.
+        this.refreshLandingDesc();
         // An auto-refueller (oütf ModType 19) fills the tank at touch-down,
         // at the port's price, so the Refuel button is gone (reference
         // "The Auto-recharger (E7), wave 39"; spaceport/auto_refuel.ts);
@@ -1252,6 +1256,21 @@ export class Spaceport extends Menu<Entity> {
             ? fuel.max : fuel.current + purchase.units;
     }
 
+    /**
+     * Expands the stellar's landing description against the docked
+     * player's control bits (the landing's working copy once it is open)
+     * and the pilot's gender. Before the first landing there are no bits:
+     * every bit test reads clear.
+     */
+    private refreshLandingDesc() {
+        if (!this.landingDesc || !this.data) {
+            return;
+        }
+        const bits = this.playerComponent(ControlBitsComponent) ?? new Set<number>();
+        this.landingDesc.text = resolveConditionalBlocks(this.data.landingDesc,
+            makeDescTextContext(bits, playerGender()));
+    }
+
     override async build() {
         await super.build();
         const data = await this.simulationData.data.Planet.get(this.id);
@@ -1274,16 +1293,17 @@ export class Spaceport extends Menu<Entity> {
         this.container.addChild(title);
 
         // Landing descriptions may carry dësc conditionals (e.g. the {G}
-        // gender text in stellar 472). They are rendered once at build time,
-        // before the docked entity is known, so only the pilot profile's gender
-        // drives them (no control bits are read here).
-        const desc = new PIXI.Text(
-            resolveConditionalBlocks(data.landingDesc,
-                makeDescTextContext(new Set(), playerGender())),
-            this.font.desc);
+        // gender text in stellar 472). The spaceport is built once per
+        // stellar and reused, so the text is expanded again on every
+        // landing (refreshLandingDesc) against that landing's control bits:
+        // the original's landing text reads the player's real bits
+        // (reference "dësc test operators, wave 54").
+        const desc = new PIXI.Text('', this.font.desc);
         desc.position.x = -149;
         desc.position.y = 70;
         this.container.addChild(desc);
+        this.landingDesc = desc;
+        this.refreshLandingDesc();
 
 
         // Venue buttons only appear where the stellar offers the

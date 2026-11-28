@@ -17,9 +17,10 @@ import {
  *   {P "paid" "unpaid"}              — registration selects between strings
  *   {!bXXX "if clear" "if set"}     — "!" negates any test
  *
- * A missing second string substitutes nothing when the test is false. The Bible
- * documents no nesting or compound tests; malformed input must degrade (leave the
- * block literal) rather than throw.
+ * A missing second string substitutes nothing when the test is false. What
+ * the original does beyond that (other letters, compound tests, malformed
+ * blocks) was measured in reference wave 54 and is pinned below; none of it
+ * throws.
  */
 describe('resolveConditionalBlocks (dësc conditional grammar)', () => {
     it('selects the first string when the bit is set', () => {
@@ -115,37 +116,96 @@ describe('resolveConditionalBlocks (dësc conditional grammar)', () => {
             makeDescTextContext(new Set()))).toBe('xy');
     });
 
-    it('does not support compound tests; those degrade to literal text', () => {
-        const ctx = makeDescTextContext(new Set([1, 2]));
-        // b1 & b2 is not a legal single-term dësc test; leave literal.
-        expect(resolveConditionalBlocks('{b1 & b2 "both" "other"}', ctx))
-            .toBe('{b1 & b2 "both" "other"}');
+    // The rest of the grammar is the ORIGINAL's, measured in reference
+    // wave 54 (desc_text_reference_test.ts replays those runs whole).
+
+    it('tests only the first term: the rest of a compound test is ignored',
+        () => {
+            const ctx = makeDescTextContext(new Set([1]));
+            expect(resolveConditionalBlocks('{b1 & b2 "both" "other"}', ctx))
+                .toBe('both');
+            expect(resolveConditionalBlocks('{b2 | b1 "either" "neither"}',
+                ctx)).toBe('neither');
+        });
+
+    it('takes a block\'s test from the next b / g / p, however far on', () => {
+        const male = makeDescTextContext(new Set([7]), 'male');
+        // o / e / x are not dësc terms: the scan runs on to the b7.
+        expect(resolveConditionalBlocks(
+            '1[{o188 "Y" "N"}] 2[{e136 "Y" "N"}] 3[{b7 "Y" "N"}] 4[ok]',
+            male)).toBe('1[Y] 4[ok]');
+        // ...or to a g / p inside a word of prose, whose strings then
+        // start at the next quote (here the one closing "x get").
+        expect(resolveConditionalBlocks('A{o609 "x get" "y"}B', male))
+            .toBe('A B');
     });
 
-    it('degrades gracefully on malformed input (no throw)', () => {
-        const ctx = emptyDescTextContext();
-        // Unterminated closing brace / string stays literal.
-        expect(resolveConditionalBlocks('{b1 "unterminated', ctx))
-            .toBe('{b1 "unterminated');
-        expect(resolveConditionalBlocks('{b1 "a" "b"', ctx))
-            .toBe('{b1 "a" "b"');
-        // Missing quoted string after the test.
-        expect(resolveConditionalBlocks('{b1 noquote}', ctx))
-            .toBe('{b1 noquote}');
-        // An empty/blank body.
-        expect(resolveConditionalBlocks('{}', ctx)).toBe('{}');
-        expect(resolveConditionalBlocks('{   }', ctx)).toBe('{   }');
-        // Out-of-range bit (b10000) is not a valid term.
-        expect(resolveConditionalBlocks('{b10000 "a" "b"}', ctx))
-            .toBe('{b10000 "a" "b"}');
-        // No literal text and a bare "{" with trailing garbage.
-        expect(resolveConditionalBlocks('{', ctx)).toBe('{');
-    });
-
-    it('passes through ordinary braces that are not conditionals', () => {
+    it('ends the text at a block that has no b / g / p after it', () => {
         const ctx = emptyDescTextContext();
         expect(resolveConditionalBlocks('set {1,2,3} of firmware', ctx))
-            .toBe('set {1,2,3} of firmware');
+            .toBe('set ');
+        expect(resolveConditionalBlocks('a {o188 "Y" "N"} rest', ctx))
+            .toBe('a ');
+        expect(resolveConditionalBlocks('{', ctx)).toBe('');
+        expect(resolveConditionalBlocks('{}', ctx)).toBe('');
+    });
+
+    it('makes "!" sticky for the rest of the text', () => {
+        const male = makeDescTextContext(new Set(), 'male');
+        expect(resolveConditionalBlocks(
+            '{G "Y" "N"} {!b0 "Y" "N"} {b0 "Y" "N"} {!G "Y" "N"}', male))
+            .toBe('Y Y Y N');
+        // A "!" in prose between blocks is not read...
+        expect(resolveConditionalBlocks('{b0 "Y" "N"} wow! {b0 "Y" "N"}',
+            male)).toBe('N wow! N');
+        // ...but one met while a block scans for its letter is.
+        expect(resolveConditionalBlocks('{x "Y" "N"} ! {b0 "Y" "N"}', male))
+            .toBe('Y');
+        // Each text starts un-negated.
+        expect(resolveConditionalBlocks('{b0 "Y" "N"}', male)).toBe('N');
+    });
+
+    it('reads the bit number from the digits right after the b', () => {
+        const ctx = makeDescTextContext(new Set([9351]));
+        expect(resolveConditionalBlocks('{b9351x "Y" "N"}', ctx)).toBe('Y');
+        expect(resolveConditionalBlocks('{b 9351 "Y" "N"}', ctx)).toBe('N');
+        expect(resolveConditionalBlocks('{B9351 "Y" "N"}', ctx)).toBe('Y');
+        // Past the 10,000 bits: a clear bit.
+        expect(resolveConditionalBlocks('{b10000 "a" "b"}', ctx)).toBe('b');
+    });
+
+    it('drops whatever follows the chosen string up to the "}"', () => {
+        const male = makeDescTextContext(new Set(), 'male');
+        expect(resolveConditionalBlocks('[{G "Y" "N" tail}]', male))
+            .toBe('[Y]');
+        expect(resolveConditionalBlocks('[{G "Y" "N" "Z"}]', male))
+            .toBe('[Y]');
+        // False: junk before the second string is skipped...
+        expect(resolveConditionalBlocks('[{!G "Y" x "N"}]', male))
+            .toBe('[N]');
+        // ...but the search for it stops at the block's "}".
+        expect(resolveConditionalBlocks('[{b0 "Y"}] [{G "Z" "W"}]', male))
+            .toBe('[] [Z]');
+    });
+
+    it('runs an unterminated string, or a missing "}", to the end', () => {
+        const male = makeDescTextContext(new Set(), 'male');
+        expect(resolveConditionalBlocks('E1[{b0 "Y" "N" tail]', male))
+            .toBe('E1[N');
+        expect(resolveConditionalBlocks('E2[{b0 "Y" "N tail]', male))
+            .toBe('E2[N tail]');
+        expect(resolveConditionalBlocks('E3[{G "Y tail]', male))
+            .toBe('E3[Y tail]');
+        // No quote at all after the term: the text ends at the "{".
+        expect(resolveConditionalBlocks('E4[{b0 noquote} tail]', male))
+            .toBe('E4[');
+    });
+
+    it('does not rescan a chosen string, and keeps a stray "}"', () => {
+        const male = makeDescTextContext(new Set(), 'male');
+        expect(resolveConditionalBlocks('[{G "{b0 \\"Y\\" \\"N\\"}" "x"}]',
+            male)).toBe('[{b0 "Y" "N"}]');
+        expect(resolveConditionalBlocks('[a } b]', male)).toBe('[a } b]');
     });
 
     it('playerGender honours the override and defaults to male', () => {
