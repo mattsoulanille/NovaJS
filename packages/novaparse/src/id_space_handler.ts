@@ -208,11 +208,14 @@ export async function resolvePluginEntries(pluginsPath: string):
     // case-INsensitive name order ("k low" < "M top" < "t low"), last
     // wins, regardless of the order the files were created in.
     //
-    // A FOLDER in Plug-ins is a NovaJS extension: the original (Mac
-    // 1.1.1) ignores every sub-folder of Plug-ins and the files in it
-    // (wave 58). Here a folder loads as ONE plug-in, at its own sorted
-    // position, its files in sorted order inside it (addDirectory, one
-    // level deep), under the folder's namespace.
+    // A FOLDER in Plug-ins is one plug-in, by design (Matthew's id
+    // namespacing): its files share the folder's namespace, so their new
+    // ids never overwrite another plug-in's; plug-ins overwrite each other
+    // only where they both edit an id the stock Nova Files define. The
+    // folder loads at its own sorted position, its files in sorted order
+    // inside it (addDirectory, one level deep). The original (Mac 1.1.1)
+    // differs on purpose: it ignores every sub-folder of Plug-ins and the
+    // files in it (wave 58; ruling 2026-11-27: keep NovaJS's folders).
     //
     // The sort is explicit rather than trusting readdir: on macOS
     // readdir happens to come back sorted, but that is not guaranteed

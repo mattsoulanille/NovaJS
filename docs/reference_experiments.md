@@ -26927,17 +26927,20 @@ Journaled HFS+ (case-insensitive); its Plug-ins folder is spelled
 
 **NovaJS (main 7b2c4337):** top-level order **matches** (case-insensitive
 `comparePluginNames`, `P/id_space_handler.ts:60`, last wins). Folders
-**differ**: NovaJS loads a folder as ONE plug-in (its own namespace) at
-its sorted position, its files sorted inside it, one level deep; a folder
-inside a folder was read as a FILE and logged the resource-fork "FAILED
-to load plug-in" banner. **Not changed to match** (a maintainer ruling:
-matching means dropping every folder plug-in, which today loads Matthew's
-`arpia`, `extra-outfits` and `singularity`); this branch documents the
-folder load as a NovaJS extension in the `resolvePluginEntries` comment,
-skips a nested folder with a plain warning (`:751`), and logs the clash
+**differ by design**: NovaJS loads a folder as ONE plug-in at its sorted
+position, its files sorted inside it, one level deep. That is Matthew's
+id namespacing: the files of one folder share its namespace, so their new
+ids never overwrite another plug-in's; plug-ins overwrite each other only
+where they both edit an id the stock Nova Files define. **Ruling
+2026-11-27: keep it** ("That's a change I made to namespace IDs"), so
+`arpia`, `extra-outfits` and `singularity` keep loading. A folder inside a
+folder was read as a FILE and logged the resource-fork "FAILED to load
+plug-in" banner. This branch describes the folder design in the
+`resolvePluginEntries` comment, skips a nested folder with a plain
+warning (`:754`), and logs the clash
 Matthew hit at load, one line per plug-in pair and type: `spöb: Planet
 Rico -> singularity/Singularity1.plug: 1 (516 "Gravit Station" ->
-"Wormhole")` (`getOverrideReport`, `:514`; NovaParse `pluginOverrideLog`;
+"Wormhole")` (`getOverrideReport`, `:517`; NovaParse `pluginOverrideLog`;
 54 lines for his Plug-ins set, `NOVA_PLUGIN_OVERRIDE_LOG=full` lists
 every resource). On the
 original's rules Planet Rico would win only because Singularity is never
