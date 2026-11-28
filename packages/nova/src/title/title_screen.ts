@@ -4,6 +4,10 @@ import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { texturesFromFrames } from '../display/textures_from_frames.js';
 import { isReturnPress, isTextEntryActive } from '../input_focus.js';
+import {
+    LOGO_TICKS, nextLogoFrame, ROLL_IN_END_SOUND, ROLL_IN_START_SOUND,
+    RollInCue, SLIDE_ROWS, TickClock, TitleRollIn,
+} from './title_rollin.js';
 
 /** The six title-screen commands, one per corner button. */
 export type TitleAction =
@@ -66,6 +70,8 @@ export function shipClassLines(name: string, subtitle = ''):
 interface ButtonSpec {
     /** SpriteSheet id (rlëD) holding the button's normal/pressed frames. */
     sheet: string;
+    /** The roll-in row (SLIDE_ROWS index) whose landing draws it. */
+    row: number;
     /** Human label, used only for the scene-graph container name. */
     label: string;
     action: TitleAction;
@@ -106,12 +112,12 @@ export function statusLayers(lines: StatusLine[]): [string, string] {
 // The corner buttons: sheet id -> label/action/rollover-frame, with the
 // art's top-left in background-local coords.
 const BUTTONS: ButtonSpec[] = [
-    { sheet: 'nova:8050', label: 'New Pilot', action: 'newPilot', rollover: 0, x: 349, y: 400 },
-    { sheet: 'nova:8053', label: 'Enter Ship', action: 'enterShip', rollover: 3, x: 555, y: 401 },
-    { sheet: 'nova:8051', label: 'Open Pilot', action: 'openPilot', rollover: 1, x: 344, y: 464 },
-    { sheet: 'nova:8054', label: 'Set Prefs', action: 'setPrefs', rollover: 4, x: 581, y: 464 },
-    { sheet: 'nova:8052', label: 'Quit Nova', action: 'quit', rollover: 2, x: 345, y: 528 },
-    { sheet: 'nova:8055', label: 'About Nova', action: 'about', rollover: 5, x: 580, y: 528 },
+    { sheet: 'nova:8050', label: 'New Pilot', action: 'newPilot', rollover: 0, row: 0, x: 349, y: 400 },
+    { sheet: 'nova:8053', label: 'Enter Ship', action: 'enterShip', rollover: 3, row: 0, x: 555, y: 401 },
+    { sheet: 'nova:8051', label: 'Open Pilot', action: 'openPilot', rollover: 1, row: 1, x: 344, y: 464 },
+    { sheet: 'nova:8054', label: 'Set Prefs', action: 'setPrefs', rollover: 4, row: 1, x: 581, y: 464 },
+    { sheet: 'nova:8052', label: 'Quit Nova', action: 'quit', rollover: 2, row: 2, x: 345, y: 528 },
+    { sheet: 'nova:8055', label: 'About Nova', action: 'about', rollover: 5, row: 2, x: 580, y: 528 },
 ];
 
 /** Rollover frame shown in the center emblem when nothing is hovered. */
@@ -128,8 +134,7 @@ const TITLE_FRAME_H = 209;
 const TITLE_FRAMES = 7;
 
 /** Button-feedback snds (the original's title UI): 600 on press, 601 on
- * release. (602/603 drive the button ANIMATIONS, which aren't built yet —
- * deferred.) */
+ * release. (602/603 belong to the roll-in: title_rollin.ts.) */
 const SOUND_DOWN = 'nova:600';
 const SOUND_UP = 'nova:601';
 /** UI click volume. The in-game SFX bus runs hot (~0.045); a click needs
@@ -176,13 +181,27 @@ export class TitleScreen {
     private rightValues = new PIXI.Text('');
     private downSound?: Sound;
     private upSound?: Sound;
+    private rollInStartSound?: Sound;
+    private rollInEndSound?: Sound;
+    /** One sprite per roll-in row, showing its slide strip's frames. */
+    private slideSprites: PIXI.Sprite[] = [];
+    private slideTextures: PIXI.Texture[][] = [];
+    /** The current roll-in (a finished one between appearances). */
+    private rollIn = new TitleRollIn(SLIDE_ROWS, true);
+    private readonly rollInClock = new TickClock();
+    private logoTicks = 0;
+    /**
+     * Every roll-in sound cue as it happens, and whether it was played
+     * (false while the page's audio is still locked by the autoplay rule,
+     * or the snd failed to load). For headless checks.
+     */
+    readonly rollInCues = new Subject<RollInCue & { played: boolean }>();
 
     private hovered?: TitleButton;
     /** Keyboard selection index into `buttons` (column-major order). */
     private selected = -1;
     private enabled = false;
     private titleFrameIndex = 0;
-    private titleFrameTimer = 0;
     private screenW = 1920;
     private screenH = 1080;
 
@@ -225,6 +244,14 @@ export class TitleScreen {
         void assets.data.Sound.get(SOUND_UP)
             .then(sound => { this.upSound = sound; })
             .catch(e => console.warn(`Title up sound ${SOUND_UP}:`, e));
+        void assets.data.Sound.get(ROLL_IN_START_SOUND)
+            .then(sound => { this.rollInStartSound = sound; })
+            .catch(e => console.warn(
+                `Title roll-in sound ${ROLL_IN_START_SOUND}:`, e));
+        void assets.data.Sound.get(ROLL_IN_END_SOUND)
+            .then(sound => { this.rollInEndSound = sound; })
+            .catch(e => console.warn(
+                `Title roll-in sound ${ROLL_IN_END_SOUND}:`, e));
 
         // Background frame (PICT 8000), drawn at native size, centered.
         const bgTexture = await assets.textureFromPictAsync('nova:8000');
@@ -233,7 +260,36 @@ export class TitleScreen {
         bg.name = 'TitleBackground';
         // So clicks on the background don't fall through to the game.
         bg.interactive = true;
+        // A mouse-down anywhere on the title skips the roll-in, as in the
+        // original (buttons skip it from their own handler).
+        bg.on('pointerdown', () => this.skipRollIn());
         this.frame.addChildAt(bg, 0);
+
+        // The roll-in's slide strips (PICTs 8030-8032), one sprite per
+        // row over the centre panel, under the buttons and the emblem.
+        // A missing strip only loses that row's slide: its buttons still
+        // appear when the row lands.
+        for (const [i, row] of SLIDE_ROWS.entries()) {
+            const sprite = new PIXI.Sprite();
+            sprite.name = `TitleSlide${i}`;
+            sprite.position.set(row.x - BG_CX, row.y - BG_CY);
+            sprite.visible = false;
+            this.frame.addChild(sprite);
+            this.slideSprites.push(sprite);
+            this.slideTextures.push([]);
+            try {
+                const strip = await assets.textureFromPictAsync(row.pict);
+                // Nearest, like the logo: no bleed between strip frames.
+                strip.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+                for (let f = 0; f < row.frames; f++) {
+                    this.slideTextures[i].push(new PIXI.Texture(
+                        strip.baseTexture, new PIXI.Rectangle(
+                            0, f * row.height, row.width, row.height)));
+                }
+            } catch (e) {
+                console.warn(`Title slide strip ${row.pict}:`, e);
+            }
+        }
 
         // Animated title (PICT 8010): a vertical 7-frame filmstrip. Slice
         // it into per-frame sub-textures sharing the one base texture.
@@ -273,6 +329,13 @@ export class TitleScreen {
             container.position.set(spec.x - BG_CX, spec.y - BG_CY);
             const sprite = new PIXI.Sprite(textures[0]);
             container.addChild(sprite);
+            // An explicit hit area (the art's rectangle, which is what the
+            // sprite's bounds gave before), so a button whose row is still
+            // sliding in (sprite hidden) can still be pressed: in the
+            // original a click there skips the roll-in and is tracked as
+            // that button's press.
+            container.hitArea = new PIXI.Rectangle(0, 0,
+                textures[0]?.width ?? 0, textures[0]?.height ?? 0);
             container.interactive = true;
             container.cursor = 'pointer';
             const button: TitleButton = {
@@ -288,6 +351,7 @@ export class TitleScreen {
                 this.clearHover(button);
             });
             container.on('pointerdown', () => {
+                this.skipRollIn();
                 this.setPressed(button, true);
                 this.playSound(this.downSound);
             });
@@ -322,6 +386,7 @@ export class TitleScreen {
             }
         }
 
+        this.applyRollIn();
         this.layout();
     }
 
@@ -352,6 +417,50 @@ export class TitleScreen {
         } catch (e) {
             console.warn('Title sound play failed:', e);
         }
+    }
+
+    /**
+     * Plays a roll-in cue's snd, but only into an audio context that is
+     * already running: the title first appears before any user gesture,
+     * and a sound started into a context the autoplay rule still holds
+     * suspended would come out late, all at once, on the first click.
+     * The original's sounds belong to the moment, so a locked context
+     * drops them instead. `?mute` is honoured by the global volume.
+     */
+    private playRollInCue(cue: RollInCue) {
+        const sound = cue.kind === 'start'
+            ? this.rollInStartSound : this.rollInEndSound;
+        const played = sound !== undefined && audioRunning(sound);
+        if (played) {
+            this.playSound(sound);
+        }
+        this.rollInCues.next({ ...cue, played });
+    }
+
+    /** A click during the roll-in lands every row at once (no end snd). */
+    private skipRollIn() {
+        if (this.rollIn.skip()) {
+            this.applyRollIn();
+        }
+    }
+
+    /** Draws the roll-in's current state: each row's strip frame or its
+     * buttons, and the emblem's fade. */
+    private applyRollIn() {
+        for (const [i, sprite] of this.slideSprites.entries()) {
+            const view = this.rollIn.row(i);
+            const texture = view.kind === 'slide'
+                ? this.slideTextures[i][view.frame] : undefined;
+            sprite.visible = texture !== undefined;
+            if (texture) {
+                sprite.texture = texture;
+            }
+        }
+        for (const button of this.buttons) {
+            button.sprite.visible =
+                this.rollIn.row(button.spec.row).kind === 'buttons';
+        }
+        this.emblem.alpha = this.rollIn.emblemOpacity;
     }
 
     private setHover(button: TitleButton) {
@@ -504,10 +613,19 @@ export class TitleScreen {
         this.rightValues.text = rightValues;
     }
 
-    /** Shows the title and accepts input. */
+    /**
+     * Shows the title and accepts input, starting the button roll-in (the
+     * original plays it on every appearance: first open and every return
+     * from the game). Input is live throughout, as in the original. A
+     * page already in the background gets no roll-in (the original's
+     * `inBackground` path).
+     */
     show() {
         this.container.visible = true;
         this.enabled = true;
+        this.rollIn = new TitleRollIn(SLIDE_ROWS, document.hidden);
+        this.rollInClock.reset();
+        this.applyRollIn();
         this.updateEmblem();
     }
 
@@ -535,19 +653,42 @@ export class TitleScreen {
         }
     }
 
-    /** Advances the flame animation on the title logo. Call each frame. */
+    /**
+     * Advances the title's animations on the original's 60 Hz tick: the
+     * logo's flames (a random other frame every 5 ticks) and the button
+     * roll-in. Call each frame. Both stand still while a title dialog is
+     * up (the original's modal dialogs run their own loop: About opened
+     * mid roll-in froze the rows and the logo, and closing it resumed
+     * them where they stood).
+     */
     tick(deltaMs: number) {
-        if (!this.container.visible || this.titleTextures.length === 0) {
+        if (!this.container.visible) {
             return;
         }
-        this.titleFrameTimer += deltaMs;
-        if (this.titleFrameTimer >= 120) {
-            this.titleFrameTimer = 0;
-            this.titleFrameIndex =
-                (this.titleFrameIndex + 1) % this.titleTextures.length;
-            this.titleSprite.texture =
-                this.titleTextures[this.titleFrameIndex];
+        const ticks = this.rollInClock.advance(deltaMs);
+        if (!this.enabled) {
+            return;
         }
+        for (let t = 0; t < ticks; t++) {
+            this.logoTick();
+            if (!this.rollIn.finished) {
+                for (const cue of this.rollIn.tick()) {
+                    this.playRollInCue(cue);
+                }
+                this.applyRollIn();
+            }
+        }
+    }
+
+    private logoTick() {
+        if (this.titleTextures.length === 0
+            || ++this.logoTicks < LOGO_TICKS) {
+            return;
+        }
+        this.logoTicks = 0;
+        this.titleFrameIndex = nextLogoFrame(this.titleFrameIndex,
+            this.titleTextures.length);
+        this.titleSprite.texture = this.titleTextures[this.titleFrameIndex];
     }
 
     /** Re-centers and scales the title to the current screen size. */
@@ -568,8 +709,25 @@ export class TitleScreen {
     }
 
     destroy() {
+        this.rollInCues.complete();
         document.removeEventListener('keydown', this.onKeyDown);
         document.removeEventListener('keyup', this.onKeyUp);
         this.container.destroy({ children: true });
     }
+}
+
+/**
+ * Whether a snd can be heard right now: its context is not auto-paused
+ * (window blurred) and, for Web Audio, already running (the autoplay rule
+ * keeps it suspended until the first user gesture).
+ */
+function audioRunning(sound: Sound): boolean {
+    const context = sound.context as {
+        paused?: boolean, audioContext?: { state?: string },
+    } | undefined;
+    if (!context || context.paused) {
+        return false;
+    }
+    const state = context.audioContext?.state;
+    return state === undefined || state === 'running';
 }
