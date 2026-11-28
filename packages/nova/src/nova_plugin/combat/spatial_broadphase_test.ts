@@ -269,7 +269,8 @@ describe('spatial broadphase in a missile fight', () => {
                             const shot = weaponEntries.getCached('nova:129')!
                                 .fireFromEntity(shooter, true, target);
                             // Spawned, not just asked for: a full shot
-                            // table (shot_cap.ts) refuses the missile.
+                            // table (core/engine_limits.ts) refuses the
+                            // missile.
                             if (f === 0 && shot) {
                                 fired++;
                             }
@@ -296,9 +297,10 @@ describe('spatial broadphase in a missile fight', () => {
             }
             // The scans had work to do: missiles flew and most ended
             // early (a 240-tick missile ends inside 200 ticks only by
-            // striking something). Counted as SPAWNED: the 128-shot table
-            // (shot_cap.ts), shared with the point-defense bolts, refuses
-            // some missiles (seeds 3 / 11: 95 / 97 spawned, 35 / 37 ended).
+            // striking something). Counted as SPAWNED: the shot table
+            // (core/engine_limits.ts), shared with the point-defense bolts,
+            // can refuse some missiles (under the original's 128, seeds
+            // 3 / 11 spawned 95 / 97, and 35 / 37 ended).
             expect(fired).toBeGreaterThan(80);
             expect(fired - liveMissiles(fights[0].world)).toBeGreaterThan(30);
         }, 120000);

@@ -93,7 +93,7 @@ export const ENGINE_LIMITS: Readonly<Record<LimitsRule, EngineLimits>> = {
         ships: 64,
     },
     novajs: {
-        shots: { soft: 512, hard: 1024 },
+        shots: { soft: 256, hard: 512 },
         beams: { soft: 128, hard: 256 },
         familyBudget: 256,
         ships: 128,
