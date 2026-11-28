@@ -3,6 +3,7 @@ import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SpriteSheetSprite } from '../display/sprite_sheet_sprite.js';
+import { enhancementEnabled } from '../enhancements.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import { EscortDeal } from '../nova_plugin/player/index.js';
 import {
@@ -1067,10 +1068,15 @@ export class HailDialog {
         // "Hail dialog keys and Flags2 0x0001 (K5), wave 39"): g, r, o, t
         // and d below, Return (defaultPress) closes the channel or accepts
         // a price; `y`, `a`, `b`, `c` and Space do nothing, so 'hail' (y)
-        // and 'depart' (d, and Escape) have no handler here. Escape still
-        // backs out, a NovaJS convenience (untested on the original), as
-        // the cancel button (MenuControls.cancelButton) so that `d` can
-        // demand tribute instead.
+        // has no handler here. Escape still backs out, a NovaJS
+        // convenience (untested on the original), as the cancel button
+        // (MenuControls.cancelButton), so it stays apart from `d`.
+        //
+        // `d` CLOSES the channel, as Escape does, on every page (the
+        // haggle popup too) — Matthew 2026-11-27: "make `d` close the open
+        // hail window since `esc` always exits fullscreen". A NovaJS
+        // enhancement (enhHailDCloses, default on); with it off `d` is the
+        // original's second Demand Tribute key again.
         this.controls = new MenuControls(controlEvents, {
             // The comm column's letter keys (Matthew's ruling): 'g' (the
             // 'gamble' action, KeyG) presses Greetings and 'r' ('recharge',
@@ -1087,13 +1093,25 @@ export class HailDialog {
             // nothing. 'outfitter' has no in-flight handler, and the
             // focused dialog keeps the press out of the simulation anyway.
             outfitter: () => this.keyedButtons.bribe?.activate(),
-            // `t` and `d` both press Demand Tribute (K5 wave 39): the
-            // 'tradeCenter' action (KeyT) and 'defend' (KeyD; its other
-            // binding, 'depart', has no handler here). The button's action
-            // is pressTribute (#353), so a key does exactly what a click
-            // does, and nothing while the row is greyed.
+            // `t` and (with enhHailDCloses off) `d` press Demand Tribute
+            // (K5 wave 39): the 'tradeCenter' action (KeyT) and 'defend'
+            // (KeyD). The button's action is pressTribute (#353), so a key
+            // does exactly what a click does, and nothing while the row
+            // is greyed.
             tradeCenter: () => this.keyedButtons.tribute?.activate(),
-            defend: () => this.keyedButtons.tribute?.activate(),
+            defend: () => {
+                if (!enhancementEnabled('enhHailDCloses')) {
+                    this.keyedButtons.tribute?.activate();
+                }
+            },
+            // KeyD's other binding: closes the channel (enhHailDCloses).
+            // Escape never arrives here (the relay presses cancelButton
+            // first), so this is `d` alone.
+            depart: () => {
+                if (enhancementEnabled('enhHailDCloses')) {
+                    this.close();
+                }
+            },
         });
         this.controls.defaultButton = () => this.defaultPress?.();
         this.controls.cancelButton = () => this.close();

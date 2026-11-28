@@ -9,6 +9,7 @@ import {
 } from './hail_dialog.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { MenuControls } from './menu_controls.js';
+import { overrideEnhancements } from '../enhancements.js';
 
 /**
  * ============================================================================
@@ -301,7 +302,10 @@ describe('the hail dialog\'s other keys (K5, wave 39)', () => {
         dialog = new HailDialog(DISPLAY_ASSETS, controls, callbacks);
     });
 
-    afterEach(() => dialog.dismiss());
+    afterEach(() => {
+        dialog.dismiss();
+        overrideEnhancements({});
+    });
 
     async function open(context: HailContext) {
         void dialog.show(context);
@@ -327,8 +331,10 @@ describe('the hail dialog\'s other keys (K5, wave 39)', () => {
         return pressed;
     }
 
-    it('t (KeyT) and d (KeyD: \'defend\' and \'depart\') press Demand '
-        + 'Tribute, and d does not close the channel', async () => {
+    it('with enhHailDCloses OFF (the original), t (KeyT) and d (KeyD: '
+        + '\'defend\' and \'depart\') press Demand Tribute, and d does not '
+        + 'close the channel', async () => {
+            overrideEnhancements({ enhHailDCloses: false });
             await open(PORT_TRIBUTE);
             const pressed = liveTribute();
             await key('tradeCenter');
@@ -340,8 +346,9 @@ describe('the hail dialog\'s other keys (K5, wave 39)', () => {
             expect(dialog.container.visible).toBeTrue();
         });
 
-    it('t and d do nothing while Demand Tribute is greyed (tribute is a '
-        + 'seam), and r never presses it', async () => {
+    it('t and d (enhHailDCloses OFF) do nothing while Demand Tribute is '
+        + 'greyed (tribute is a seam), and r never presses it', async () => {
+            overrideEnhancements({ enhHailDCloses: false });
             await open(PORT_TRIBUTE);
             const before = drawnText(dialog);
             await key('tradeCenter');
@@ -397,6 +404,66 @@ describe('the hail dialog\'s other keys (K5, wave 39)', () => {
         await settle();
         expect(callbacks.bribe).toHaveBeenCalledTimes(1);
     });
+
+    describe('d closes the channel (enhHailDCloses, Matthew 2026-11-27)',
+        () => {
+            const ESCORT: HailContext = {
+                variant: 'escort', heading: 'Hired Escort:\n Terrapin',
+                image: null, body: 'Escort here.',
+                escort: { provenance: 'hired', dailyFee: 1_500 },
+            };
+
+            it('on a ship, a port, a live Demand Tribute and an escort, '
+                + 'in either action order', async () => {
+                    for (const context of [SHIP, HOSTILE, PORT_BRIBE,
+                        PORT_TRIBUTE, ESCORT]) {
+                        for (const order of [['defend', 'depart'],
+                            ['depart', 'defend']] as ControlAction[][]) {
+                            const shown = dialog.show(context);
+                            await settle();
+                            expect(dialog.container.visible).toBeTrue();
+                            const pressed = context === PORT_TRIBUTE
+                                ? liveTribute() : undefined;
+                            await key(...order);
+                            await shown;
+                            expect(dialog.container.visible).toBeFalse();
+                            // It closes; it never demands tribute.
+                            if (pressed) {
+                                expect(pressed).not.toHaveBeenCalled();
+                            }
+                            expect(MenuControls.focused).toBeUndefined();
+                        }
+                    }
+                    expect(callbacks.bribe).not.toHaveBeenCalled();
+                    expect(callbacks.requestAssistance).not.toHaveBeenCalled();
+                });
+
+            it('from the haggle page too, as Escape does', async () => {
+                await open(HOSTILE);
+                await key('recharge');
+                expect(drawnText(dialog)).toContain('Accept Price');
+                await key('defend', 'depart');
+                expect(dialog.container.visible).toBeFalse();
+                expect(callbacks.bribe).not.toHaveBeenCalled();
+                expect(MenuControls.focused).toBeUndefined();
+            });
+
+            it('t still demands tribute', async () => {
+                await open(PORT_TRIBUTE);
+                const pressed = liveTribute();
+                await key('tradeCenter');
+                expect(pressed).toHaveBeenCalledTimes(1);
+                expect(dialog.container.visible).toBeTrue();
+            });
+
+            it('a held d\'s repeats do nothing more', async () => {
+                await open(SHIP);
+                controls.next({ action: 'depart', state: 'repeat' });
+                controls.next({ action: 'defend', state: 'repeat' });
+                await settle();
+                expect(dialog.container.visible).toBeTrue();
+            });
+        });
 
     it('Escape still backs out (a NovaJS convenience)', async () => {
         await open(SHIP);

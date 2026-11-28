@@ -37,7 +37,8 @@ export type EnhancementKey =
     | 'enhGateMapLanes'
     | 'enhSmoothMapZoom'
     | 'enhShipStorage'
-    | 'enhAccurateTurretAim';
+    | 'enhAccurateTurretAim'
+    | 'enhHailDCloses';
 
 /** One row of the NovaJS Enhancements dialog. */
 export interface EnhancementSpec {
@@ -144,6 +145,17 @@ export const ENHANCEMENTS: readonly EnhancementSpec[] = [
             + 'when the shot reaches it.',
         original: 'Your turrets lead to first order, as the original\'s '
             + 'do, and miss fast crossing targets.',
+    },
+    {
+        // spaceport/hail_dialog.ts: 'depart' (KeyD) closes the channel.
+        // Matthew 2026-11-27: Escape leaves browser fullscreen, so the
+        // hail window needs a close key that stays in the game.
+        key: 'enhHailDCloses',
+        label: 'd closes the hail window',
+        novajs: 'd closes the hail window, as Esc does; t still demands '
+            + 'tribute.',
+        original: 'd demands tribute at a planet and does nothing on a '
+            + 'ship.',
     },
 ];
 
