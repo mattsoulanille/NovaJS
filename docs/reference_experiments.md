@@ -27923,6 +27923,14 @@ measured). Keep `BEAM_COUNT_RATE` (a deterministic sim cannot follow a
 frame rate). Confidence: high for 1-3 and 5 (the 4-of-60 count is
 exact), high for 4 (two runs' timing agree to a tap).
 
+**Applied (the engine-limits room rule, 2026-11-28):** as proposed, under
+the room rule `limits` = `original` (`N/nova_plugin/core/engine_limits.ts`
+`beams: { soft: 64, hard: 64, refusalReloads: true }`, checked in
+`BeamWeaponEntry.fire`, the reload in `WeaponsSystem`); under `novajs`
+beam submunitions stop at 128, a ship's beams at 256, and a refused beam
+keeps its weapon ready. Not applied: the per-frame Inaccuracy and the
+frame-rate Count (side findings 6a-b).
+
 **Evidence:** `~/.local/share/novaref/evidence/20261127-beamcap/`:
 `20261127-230642-w60_bc_a/` (`recording.mp4`, `px.tsv`, `frames/t20.png`
 the full fan, `t98.png` the late probe), `20261127-232104-w60_bc_c/`
@@ -28016,6 +28024,14 @@ traffic spawn; defence fleets exempt up to 64 in all (GUESS). In
 multiplayer each player's ship presumably takes one of the 64 (GUESS: the
 original has one player). Confidence: high for 1-2 (exact panel counts,
 four runs), medium for 3 (one run, but six defenders on every shot).
+
+**Applied (the engine-limits room rule, 2026-11-28):**
+`N/nova_plugin/ship/ship_cap.ts` with `core/engine_limits.ts` ShipCaps:
+under `original`, 55 ships that are not a pilot's own refuse NPC arrivals
+(traffic, fleets, reinforcements, persons) and bay launches (no fighter
+taken), and 64 ships in all refuse a planet's defender (GUESS, the 64);
+under `novajs`, 110 and 128. Mission ships are not refused (they arrive
+through the owner's addEntity record); escorts are never refused.
 
 **Evidence:** `~/.local/share/novaref/evidence/20261127-beamcap/`:
 `20261128-010231-w60_sc_b/` (`03-bay90.png`, `panel.txt`; the first

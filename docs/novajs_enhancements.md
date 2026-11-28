@@ -43,7 +43,7 @@ a player can turn it off.
 | Bay fighters still in flight count against the bay's capacity when buying, and block selling the bay ("You can't sell this while its fighters are deployed."). | Matthew 2026-08-09 (`spaceport/deployed_outfits.ts`), 2026-08-17 launcher sell rule (`spaceport/outfitter_rules.ts`); listed as "the deployed-fighters trade block" in the reference | sim (it decides what the ship carries at lift-off) | room rule |
 | An OWNED escort (provenance "captured": a prize kept with "Use As Escort", the hull the pilot left for a prize with "Use As My Ship", a stored ship sent along from the hangar, or the pilot's old hull left behind in a hangar swap) that lands with the player is rearmed back up to the ammo it had aboard when it became an escort, never past it (and, like every restock, only as far as the hull's free mass allows), at the same lift-offs where a hired escort is rearmed to its ship class's stock loadout (Matthew 2026-11-27). Fuel and hull repair are the same for both. Ammo outfits the snapshot does not name are left alone, and an upgrade swaps in the new class's stock loadout as the new target. Escorts made from the player's own ships, and ship storage itself, are NovaJS additions, so this is a rule for a NovaJS feature. Escorts saved before the rule take their counts at load as the target. | Matthew 2026-11-24: "refill their ammo stores to whatever the player left the ship with when they swapped it to an escort", "at the same events as we refill normal hired escorts" (`spaceport/escort_restock.ts`, `player/player_escort.ts` OWNED ESCORT AMMO) | sim (it decides what the escort carries at lift-off) | room rule |
 | The per-day BuyRandom / HireRandom roll is off: anything with a nonzero chance is offered every day. | Matthew 2026-08-14: "disabled for now" (`spaceport/day_roll.ts` BUY_RANDOM_DAY_ROLL_ENABLED) | sim (a shop's stock is shared by everyone docked there) | room rule |
-| Higher engine limits: a system holds up to 256 submunitions and 512 projectiles in all (a ship's own shots get the top 256), 128 beam submunitions and 256 beams, and 128 ships; every descendant of one directly fired shot shares a budget of 256 spawns. The original holds 128 projectiles and 64 beams, whatever fired them, and 64 ships (Max Shots / Beams On Screen, Max Ships In System). | Matthew 2026-11-27: "I'd like to raise this limit if possible ... (firing a weapon and having the projectiles never appear...)", with a guard against cheat weapons that "sub into 5 copies of self" (`core/engine_limits.ts`, `ship/ship_cap.ts`); reference "The shot cap, wave 58" and the beam and ship cap sections after it | sim | room rule `limits`: `novajs` (default) or `original` (see "Room rules") |
+| Higher engine limits: a system holds up to 256 submunitions and 512 projectiles in all (a ship's own shots get the top 256), 128 beam submunitions and 256 beams, and 110 ships besides the pilots' (128 in all for a planet's defenders); every descendant of one directly fired shot shares a budget of 256 spawns, and a refused beam keeps its weapon ready. The original holds 128 projectiles and 64 beams, whatever fired them, a refused beam costing its weapon's reload, and 55 ships besides the player (64 in all for defenders) (Max Shots / Beams On Screen, Max Ships In System; measured, waves 58 and 60). | Matthew 2026-11-27: "I'd like to raise this limit if possible ... (firing a weapon and having the projectiles never appear...)", with a guard against cheat weapons that "sub into 5 copies of self" (`core/engine_limits.ts`, `ship/ship_cap.ts`); reference "The shot cap, wave 58" and the beam and ship cap sections after it | sim | room rule `limits`: `novajs` (default) or `original` (see "Room rules") |
 
 No longer departures (they were listed as deliberate non-fidelity, but now
 match the original): **one plunder per hulk** (the original does the same,
@@ -78,7 +78,9 @@ per server today: every room of a server runs the same ones.
 | projectiles alive: a directly fired shot (a ship's gun, turret, point defense, launched missile) is refused at | 128 | 512 (hard) |
 | beams alive: a beam submunition / a ship's beam is refused at | 64 / 64 | 128 / 256 |
 | spawns shared by every descendant of one directly fired shot | no limit | 256 |
-| ships in the system: an NPC, a fleet, a person, a planet's defender, a bay launch is refused at | 64 | 128 |
+| a beam refused by a full table costs its weapon's reload | yes (measured) | no |
+| ships besides the pilots' own: an NPC arrival (traffic, a fleet, reinforcements, a person) or a bay launch is refused at | 55 | 110 |
+| ships in all: a planet's defender (and anything else the sim adds) is refused at | 64 (GUESS: the Bible's number; defenders got past 55) | 128 |
 
 Under both, a full table refuses the NEW shot and never removes one that
 is alive, and a refused shot takes no ammo (a refused bay launch keeps its
@@ -108,6 +110,16 @@ must also fit into. Submunitions are capped at 2x the original's table, so
 the worst flood a plug-in weapon makes stays near 3 ms a step; directly
 fired shots get 4x, so a ship's shot appears unless the system holds 512
 projectiles, which only an extreme brawl reaches (the big fight above, at
-2.5x the original's cost). The ship cap of 128 keeps the original's
-planet-domination tactic (fill the system with escorts and fighters so the
-defense fleet cannot launch) possible with twice the ships.
+2.5x the original's cost). Ships get 2x the original's counts.
+
+The planet-domination tactic Matthew remembered (fill the system with
+escorts and launched fighters so the defence fleet cannot launch) does not
+work on the original as measured: with 55 fighters out, all six defenders
+of a demand still launched (reference "The ship cap, beamcap (wave 60)").
+Both rules keep that: defenders are held only by the whole system's count,
+and a fleet must still be beaten to dominate. Not measured, and not
+implemented: whether a fleet that cannot launch at all (a system of 64)
+counts as beaten; the original's 55-ship refusal of MISSION ships (NovaJS
+places every mission ship: they arrive through their owner's addEntity
+record); whether hired / captured escorts and traffic arrivals are held at
+55 (NovaJS: escorts are never refused, traffic is).
