@@ -25984,7 +25984,296 @@ each, the hull's grid place unchanged), the edge's exact place unread.
   inertialess hull (Accel 100-300), **T**'s front / side sectors: as wave
   51.
 
+### Star-map nebulae (nëbu), wave 53: each is one PICT stretched (nearest neighbour) to exactly XSize x YSize times the map scale at (XPos, YPos) in system coordinates, the largest of its PICTs that fits INSIDE that size in both dimensions (else the first); drawn under the links, dots and names, combined with the borders by a per-channel MAX, black transparent; the WHOLE image appears once any system inside its rect is explored (none of it otherwise), ActiveOn hides it, and OnExplore runs for every visible nebula without the map being opened; the map's 7 zoom levels are discrete and its pan is unbounded (2026-11-27)
+
+**Questions** (the hub's wave-53 brief; a fix agent is implementing
+nebulae in parallel): how does the original draw the nëbu (Bible :1716,
+PICTs 9500 + 7 x (id - 128) + 0..6)? Which PICT at which zoom, where and
+how big, under or over what and with what blending; when is a nebula
+visible (explored systems inside its rect, all at once or in pieces);
+does ActiveOn hide one; does the in-flight minimap show them; anything
+else (pan limits, background, unexplored systems inside one).
+
+**Stock data first** (`tools/nebu.mjs`, `tools/pictpng.mjs`). The stock
+game has FOUR nëbu, each with only THREE PICTs (indices 0-2; none has 3-6),
+and none sets ActiveOn or OnExplore:
+
+| nëbu | XPos, YPos, XSize x YSize | PICTs (size) | the art's own label | systems inside the rect |
+|---|---|---|---|---|
+| 128 Holpa Nebula | 430, 45, 251 x 298 | 9500 63x75, 9501 126x149, 9502 251x298 | "Holpa Nebula" in 9501 / 9502 | 5, all in its top-left corner (Tiria 433,50 .. Tocc 461,152; Holpa 486,120) |
+| 129 Obatta Nebula | 60, 40, 65 x 90 | 9507 17x25, 9508 33x49, 9509 **65x98** (taller than YSize) | "Obatta Nebula" in 9509 only | Tichel 110,40 (on the top edge), Obatta 80,80, Wittor, SPC-050 (x2) |
+| 130 Rochak Dust Field | 263, 145, 109 x 95 | 9514 28x24, 9515 55x48, 9516 109x95 | "Rochak Dust Field" in 9516 only | 6 (Tekel Kymon, Neilha, Kipa, Cipa, Zipa, Boro) |
+| 131 L-1551 | -138, -226, 146 x 71 | 9521 73x36, 9522 146x71, **9523 292x141** (200 %) | "L1551" in 9522 / 9523 | 12 K-xxx systems (each twice: !b330 / b330 copies) |
+
+So the stock PICT sets are 25 / 50 / 100 % of XSize (Holpa, Obatta,
+Rochak) or 50 / 100 / 200 % (L-1551); the labels baked into the larger
+PICTs tell the PICT on screen apart even by eye.
+
+**Rig.** Stock data, no kit. Pilots from the game-made base (Shuttle at
+Snowmelt, Fomalhaut; it holds Fomalhaut 136 and its neighbours 129 / 152
+/ 153 / 154 at exploration 1), written by `tools/mkpilots.mjs`:
+`w53_all` (exploreAll, every sÿst at 2), `w53_allholpa` (the same at
+Holpa Station), `w53_fresh` (the base as the game made it), `w53_holpa`
+/ `w53_nibos` / `w53_k003` / `w53_foma` (ONLY that system at 2, the base's
+five zeroed, the ship at a stellar there), `w53_nibtocc` (Nibos 2 + Tocc
+1). Three run-only plug-ins override stock nëbu (never the shared kit;
+`tools/w53_nebu_ncb.mjs`, `w53_nebu_ncb2.mjs`, `w53_nebu_size.mjs`). The
+map: `m` in flight; `f`, a name, Return centres the system (window
+(354, 264), the green bracket); `=` / `-` step the zoom; arrows pan. Each
+shot was fitted by `tools/fit.mjs`: every PICT of the nebula, stretched
+nearest-neighbour over a rect searched +-6-8 px around the prediction
+`left = cx + (XPos - Sx) x s`, `top = cy + (YPos - Sy) x s`, `w = XSize x
+s`, `h = YSize x s` (anchor system S at the bracket centre (cx, cy), s
+the scale), scored by mean |RGB| difference over the source's lit
+pixels; `tools/scan.mjs` scans one dimension; `tools/overlay.mjs` lists
+what differs from the stretched source (the overlays).
+
+**1. The zoom levels and the full-map captures.** The map has exactly
+SEVEN zoom levels (from the opening one, five `-` reach the last, where
+the - button greys out and a sixth changes nothing; one `=` reaches 237 %,
+where + greys out): 42.1, 56.2, 75, 100, 133.3, 177.7 and 237 % (the
+Bible's list; the fits' measured scales are within 0.5 % of these), and it
+OPENS at 177.7 % (wave 2's 1.77 px a unit). A zoom keeps the view's centre.
+Each arrow press pans 10 map units at every zoom (24 px at 237 %, 17.8 at
+177.7 %, 4.2 at 42.1 %). Captures with every system explored (`all_b`):
+
+| shot(s) (`all_b/20261127-165719-w53_all_b/`) | zoom | what is seen |
+|---|---|---|
+| `01-ov_sol`, `02-ov_r2` | 42.1 % | the whole galaxy: Obatta (centre), Rochak, L-1551 (top left), Holpa clipped at the pane's right edge |
+| `04-h237_c`, `05`-`08` (ul / ur / dr / dl), `09` | 237 % | nëbu 128 Holpa, a 2 x 2 grid (stitched: `holpa237_mosaic.png`) |
+| `10-h178_c`, `11-h178_u`, `12-h178_d` | 177.7 % | 128 (top / bottom halves) |
+| `13-h133` .. `17-h042` | 133.3 .. 42.1 % | 128 whole |
+| `18-o237` .. `24-o042` | all 7 | 129 Obatta |
+| `25-r237` .. `31-r042` | all 7 | 130 Rochak |
+| `32-l237` .. `38-l042` | all 7 | 131 L-1551 |
+| `39-lim237_r` .. `43-lim042_lu` | 237 / 42.1 % | pan limits (item 4) |
+
+(`explore_a/` holds the first look: Holpa at every level, the zoom-step
+count and the arrow / drag tests.)
+
+**2. Placement, size and the PICT used.** Every fit put the image's rect
+at the prediction within 2 px (Holpa at 100 %: exactly, dLeft 0, dTop 0)
+and its size at XSize x s by YSize x s within 1 % on all 28
+nebula-zoom pairs. XPos / YPos are in the SAME coordinates as the sÿst
+positions (the image's top-left corner), and XSize / YSize at 100 % are
+the on-screen size: the PICT is STRETCHED to them whatever its own size
+(Obatta's 65x98 PICT drew 65 wide by 212 tall at 237 %, i.e. YSize 90 x
+2.37 = 213, not 98 x 2.37 = 232: `scan.mjs` minimum at 212, 8.85 against
+19.1 at 210 and worse beyond; at 133 % 121 = 90 x 1.333, not 131). The
+scaling is nearest-neighbour (whole source pixels as blocks, no
+smoothing), and the colours are the 16-bit screen's (5 bits a channel:
+source 120 shows 123).
+
+The PICT on screen (best fit; the label in the art confirms by eye):
+
+| zoom | Holpa 128 | Obatta 129 | Rochak 130 | L-1551 131 |
+|---|---|---|---|---|
+| 237 % | 9502 | 9509 | 9516 | **9523** (292x141) |
+| 177.7 % | 9502 | 9509 | 9516 (label) | **9522** (146x71, not 9523) |
+| 133.3 % | 9502 | 9509 | 9516 (label) | 9522 |
+| 100 % | 9502 | **9508** (33x49: 9509's 98 > 90) | 9516 | 9522 |
+| 75 % | 9501 | 9508 | 9515 | 9521 |
+| 56.25 % | 9501 | 9508 | 9515 | 9521 |
+| 42.1 % | **9500** (63 wide, not the nearer 126) | 9507 | 9514 | 9521 (nothing fits; the first) |
+
+**The rule** (all 28 cells, `tools/rule.py`): the LARGEST PICT whose
+width <= XSize x s AND height <= YSize x s; if none fits, the first
+(smallest) PICT; then stretched to XSize x s by YSize x s. "The nearest
+in width" fails Holpa / Obatta / Rochak at 42 % and L-1551 at 177.7 %;
+"width only" fails Obatta at 100 %. The size plug-in (`size_a`, Obatta
+set to 60 x 200, Rochak to 200 x 90) separates "both" from "height only"
+and "width only": at 100 % Obatta's 65x98 (too wide, short enough) was
+NOT used (no label; 9507 / 9508 scores 29.4 / 30.4 against 56.2) and
+Rochak's 109x95 (narrow enough, too tall) was NOT used (no label; 9515);
+both labelled PICTs came back at 177.7 % where they fit. The Bible's
+"pick the best image for the scale, else the closest and stretch" reads,
+in the engine, as "the biggest that is not bigger than the target".
+With fewer than seven PICTs only the ones that exist are candidates
+(stock: indices 0-2); an unsorted set was not tried.
+
+**What's over what, and blending** (`tools/overlay.mjs`, `bdiff.mjs`):
+- The map's background is black (0, 0, 0); there are no grid lines.
+- The nebula is drawn UNDER everything else on the map: links (74, 74,
+  74, the lane grey) cross it as opaque lines (shot (74, 74, 74) where the
+  source is (123, 115, 8): no add, no blend), the system rings (opaque,
+  with their BLACK interiors: a ring blacks out the nebula inside it), the
+  white names (opaque), the route and the green bracket. Under 3 % of a
+  nebula's rect differs from the stretched source, all of it these
+  overlays (97 % within 60 of the source over 113,505 px at Holpa 177.7 %).
+- With **Show Borders** the territory and the nebula combine by a
+  PER-CHANNEL MAX (QuickDraw addMax): source-black nebula pixels show
+  the border colour (21,523 changed), lit pixels keep their own colour
+  where they are brighter (45,352 unchanged), and where both are lit each
+  channel is the larger one ((8, 0, 8) under a (49, 0, 0) border shows
+  (49, 0, 8); (16, 41, 57) under (33, 0, 0) shows (33, 41, 57); (24, 132,
+  156) under (24, 0, 0) unchanged). Neither covers the other.
+- Black in a nebula PICT is therefore transparent (it shows the border);
+  over the black background this cannot be told from opaque.
+
+**3. Visibility.** The vis runs (`vis_<pilot>/`; `m`, shots at 177.7 /
+42.1 / 100 / 237 %):
+
+| pilot (explored) | the nebula concerned | drawn? |
+|---|---|---|
+| `w53_fresh` (Fomalhaut 136 + 4 neighbours at 1; Tichel 110,40 sits ON Obatta's top edge, YPos 40) | Obatta 129 | **no** (Tichel drawn labelled, no nebula: `vis_fresh/.../01-z178.png`) |
+| `w53_nibos` (only Nibos 422,170 at 2: 8 units LEFT of Holpa's rect; its neighbour Tocc, inside, drawn as a dim ring) | Holpa 128 | **no** |
+| `w53_k003` (only K-003 -56,-218 at 2, inside L-1551) | L-1551 131 | **yes, the WHOLE image** (97 % of the rect's pixels within 60 of 9522 at 177.7 %; all 146 x 71 units, far beyond K-003's links), its unexplored neighbours' dim rings drawn over it like anywhere else |
+| `w53_foma` (only Fomalhaut 105,10 at 2; Tichel then an unexplored dim ring on the edge) | Obatta 129 | **no** |
+| `w53_holpa` (only Holpa 486,120 at 2; the first try hit the open_pilot flake, `vis_holpa2/` is the run) | Holpa 128 | **yes, the WHOLE image**, all 251 x 298 units, though Holpa sits in its top-left corner |
+| `w53_nibtocc` (Nibos 2 and Tocc 461,152 at **1**, inside Holpa's rect) | Holpa 128 | **yes, whole** (fit 9502 at 177.7 %, score 5.98, the all-explored map's 5.68) |
+| `w53_tichel` (only Tichel at **2**, ON Obatta's top edge, the ship at Viking) | Obatta 129 | **no** |
+| `w53_k018` (only K-018 -15,-226 at 2, ON L-1551's top edge, YPos -226; the ship at Snowmelt, Find K-018) | L-1551 131 | **no** |
+| `w53_all` | all four | yes |
+
+So a nebula appears all at once, never in pieces, when a system inside
+its rect is explored at level 1 (visited) or 2 (landed): Tocc at 1
+revealed Holpa as Holpa at 2 did. An explored system just outside (Nibos)
+or an unexplored, dim-ring neighbour inside (Tocc in `w53_nibos`) does
+not reveal it, and a system ON the top edge does not count either, at
+level 1 (`w53_fresh`) or 2, for two nebulae (Tichel at y = 40 = Obatta's
+YPos, K-018 at y = -226 = L-1551's): the inside test is strict at the
+top, y > YPos. The other three edges were not tried (no stock system
+sits on one; Eguit is 1 unit below Rochak's bottom); GUESS: strict on
+every side, x > XPos, x < XPos + XSize, y < YPos + YSize.
+
+**ActiveOn** (`ncb_a`, `ncb_map2_a`; plug-in `w53_nebu_ncb(2).mjs` with
+every system explored): Obatta with ActiveOn `b9351` (a bit no pilot
+holds) was NOT drawn (`ncb_a/.../01-map_foma.png`: the Obatta system dot
+on bare black, where `explore_a`'s map shows the nebula), Rochak with
+ActiveOn `!b9351` was. **OnExplore** (`ncb_nomap2_a`, `ncb_map2_a`: land,
+decline the stock intro job, Leave, pull): with the map NEVER opened the
+pilot held b9353 (Rochak's OnExplore) and b9354 (Holpa's, no ActiveOn)
+and NOT b9352 (the hidden Obatta's), and the same with the map opened on
+Rochak only (Holpa, never on screen, still set its bit). So OnExplore
+runs for every nebula that passes ActiveOn and its explored test,
+whether or not the map is open or the nebula on screen, by the Leave
+(the test itself runs at least at a landing / launch; when exactly was
+not read). 6033 / 6034 / 9215 in those pilots are the declined stock
+intro job's.
+
+**4. Other things seen.**
+- **Pan limits: none.** 40 presses right and 40 down at 237 % (400 units
+  each way past Holpa's centre, beyond every system and nebula), then 40
+  + 40 more at 42.1 %, then 80 left and 80 up landed EXACTLY back on
+  Holpa (bracket (354, 264)): the view was never clamped in about 800
+  units each way. A nebula past the systems' extent (Holpa's right edge
+  681 and bottom 343 beyond the eastmost / southmost systems 587 / 300)
+  can therefore always be panned to.
+- A plain left-drag does not pan; it selects the system under the press.
+- **The `h` minimap draws NO nebula** (`minimap_a`: every system
+  explored, the ship at Holpa Station, inside Holpa's rect; frames 0.3-1.5
+  s after each of four `h` presses, `minimap_a/.../hf/`): Caryo, Cworn,
+  Holpa, Tocc, Nibos and their links over the in-flight space, and none
+  of the nebula (its "Holpa Nebula" label would sit just up-left of
+  Holpa, its bright core about 180 px down-right); the status bar's radar
+  showed only its in-system blips. (The in-flight space there is (23, 6, 7),
+  not black: Holpa's sÿst BackgroundColor 0x19090F, a separate field.)
+- Unexplored systems inside a nebula draw as everywhere else (the dim
+  ring, opaque black inside, over the nebula); explored ones too.
+
+**NovaJS (main 11a2b42f).** Nebulae are not drawn at all:
+`NebuResource` parses the fields (`P/resource_parsers/nebu_resource.ts:30-37`,
+registered at `P/read_nova_file.ts:123`), but `novadatainterface` has no
+nebula type (`NovaDataInterface`, `packages/novadatainterface/src/nova_data_interface.ts:67-79`
+lists Asteroid .. Weapon, no Nebula), and the map draws borders, links
+and routes only (`N/spaceport/system_graph.ts:303-308`): **mismatch**
+(the whole feature). Around it: the zoom is continuous, x 1.3225 a
+button step between 0.6 and 8 px a unit (`N/spaceport/starmap_viewport.ts:14-16`,
+`N/spaceport/starmap.ts:355,360`; the original: seven fixed levels 0.42
+.. 2.37 px a unit), an arrow pans 40 screen px (`starmap_viewport.ts:32`;
+the original: 10 map units), and the pan is clamped to the systems'
+bounding box (`clampPosition`, `starmap_viewport.ts:146-167`, built from
+`worldBoundsOf(visibleSystems)` at `system_graph.ts:302-303`; the
+original: unbounded): **mismatches** around it, but only the clamp
+touches nebulae (Holpa's lower right lies beyond every system: at a high
+zoom the clamp keeps it out of view). The borders are opaque discs
+(`N/spaceport/starmap_borders.ts:62-70`), so a border drawn over a
+nebula would hide it. `N/nova_plugin/player/discovery.ts:14,96` already cites the OnExplore
+note. Link colour 0x4a4a4a (`N/spaceport/starmap_draw.ts:22`) **matches**
+the 74 grey.
+
+**Proposed implementation spec** (for the fix agent):
+1. Data: a `NebulaData` {id, name, xPos, yPos, xSize, ySize, activeOn,
+   onExplore, picts: the PICT ids 9500 + 7 x (index) + 0..6 that exist,
+   in order} (index = the nëbu's position in the id space, `id - 128`
+   for stock; for a plug-in nëbu use ITS id the same way, as the Bible's
+   numbering does), served through `NovaDataInterface`.
+2. Visible = ActiveOn passes (empty = true) AND at least one system
+   whose map position lies inside [xPos, xPos + xSize] x [yPos, yPos +
+   ySize] is explored at level >= 1, strictly inside at the top (y >
+   yPos; strict on every side as the GUESS); sÿst positions, not the
+   drawn-or-not state, decide. Whole image or nothing.
+3. Picture: s = the map's screen px per map unit (1 at 100 %); target =
+   (xSize x s, ySize x s); choose the LAST PICT with width <= target.w
+   AND height <= target.h, else the FIRST; draw it stretched to exactly
+   the target at (xPos, yPos) in system coordinates, nearest-neighbour
+   (PIXI `SCALE_MODES.NEAREST`). With continuous zoom, re-pick when the
+   scale crosses a PICT's size (or pick at the seven original scales).
+4. Layer: under the links, dots, names, routes and gate overlays; with
+   borders on, combine border and nebula by per-channel max (a MAX blend
+   equation, e.g. WebGL2 `gl.MAX`; ADD or SCREEN over-brighten), black =
+   transparent.
+5. OnExplore: run its set expression for every visible nebula whenever
+   visibility is recomputed (the original did at least by a landing,
+   without the map), idempotently (the Bible: no random operators).
+6. Let the pan reach every visible nebula (widen the clamp's bounds by
+   the visible nebulae's rects, or drop the clamp as the original does).
+7. The `h` minimap (`N/spaceport/mini_map.ts`, built from the same
+   graph at `starmap.ts:460-474`) must NOT draw them.
+
+Confidence: high for the PICT rule, placement, size and stretch (28
+fits plus the two size-plug-in contradictions), the layering and the max
+blend (pixel values), ActiveOn and OnExplore (pilot bits), whole-image
+reveal at level 1 or 2 (four pilots); medium for the strict edges beyond
+the top one (unread), and for when exactly OnExplore runs.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w53/`: `all_b/`
+(the capture table above), `explore_a/`, `vis_fresh/`, `vis_nibos/`,
+`vis_k003/`, `vis_foma/`, `vis_holpa2/`, `vis_nibtocc/`, `vis_tichel/`,
+`vis_k018/` (the `sheet_vis_*.png` crops), `ncb_a/`, `ncb_map2_a/`, `ncb_nomap2_a/`
+(`pilot-left/`), `size_a/`, `borders_a/`, `minimap_a/`, `picts/` (the 12
+stock PICTs as PNG), `holpa237_mosaic.png`, `fit_o.txt`, `fit_r.txt`,
+`fit_l.txt`, `tools/` (`fit.mjs`, `scan.mjs`, `overlay.mjs`, `bdiff.mjs`,
+`bracket.mjs`, `rule.py`, `mkpilots.mjs`, the plug-in specs, `q*.sh`).
+
+### Not reached in wave 53: the nebula rect's left / right / bottom edges, when OnExplore runs, a plug-in nëbu with 4-7 PICTs or unsorted ones (2026-11-27)
+
+- **NB** (nebulae): whether the left, right and bottom edges are strict
+  like the top (needs a kit system exactly on one: the kit's name list is
+  full, so retire one or override a stock sÿst position in a run-only
+  plug-in); exactly when OnExplore runs (map open, landing, take-off, day
+  change: read bits from a pilot pulled without a landing, e.g. through a
+  mission's AvailBits on the BBS); a nëbu with more than three PICTs or
+  PICTs out of size order (the rule "the last that fits" vs "the largest
+  that fits"); a plug-in nëbu id above 159 (the Bible's 32-nebula cap).
+
 ### Reliability notes (for anyone running the reference)
+
+- **A stock-data map rig needs no kit (wave 53):** pilots made with
+  `explored` / `exploreAll` and run-only nëbu overrides (`"@8:str255"`
+  raw fields) answered everything; the full kit's name list stayed
+  untouched. The base pilot holds its start system's neighbours at
+  exploration 1: zero them (`explored: {"129": 0, ...}`) for a pilot that
+  should know one system only.
+- **Landing at Snowmelt with a bare pilot offers the stock intro job
+  (wave 53 `ncb_a`, `ncb_nomap_a`):** the scripted Return accepts it, and
+  after a No click (window 357, 413) an Okay dialog takes the next
+  Return; the Leave never came and the pilot was never written. Click No,
+  press Return for the Okay, then click Leave (650, 511).
+- **Concurrent `--lock-wait` queues starve the oldest waiter (wave 53):**
+  a run waiting since 16:59 got the lock only at 17:10, after four later
+  waiters; give each queued run a lock-wait longer than everything queued
+  ahead of it (or chain queues on each other's "done" lines, q5 / q6).
+- **`{"pull": "after"}` writes `pilot-after/`, the same folder as the
+  run's final pull (wave 53 `ncb_a`):** the final pull overwrites it; name
+  mid-run pulls anything else (`"left"`).
+- **The open_pilot flake again (wave 53 `vis_holpa`):** "could not open
+  pilot ... (panel still open; cancelled)", not retried; rerun it.
+- **Map shots: the bracket is the anchor (wave 53):** after Find the
+  selected system's green bracket centres at window (354, 264) (bbox of
+  pure-green pixels, `tools/bracket.mjs`); a nebula's own green pixels
+  can pull that bbox off (L-1551 at 237 %: read (339.5, 259)), so check it
+  against (354, 264).
 
 - **The kit's resource NAME list is full (wave 52):** a resource fork's
   name offsets are 16-bit, and the kit's names add up to 65,518 bytes;
@@ -27357,6 +27646,7 @@ each, the hull's grid place unchanged), the edge's exact place unread.
 | Wave 50 leftovers | KB: the tractor's rate with Impact (a second beamer needs a shïp id), its range edge (425-500 px, diagonal vs axis), a moving inertialess hull under it; the thrusting excess on a second hull. T: leads in the front / side blind sectors. E6: the no-turn line to better than 64-67 of 100. CD: wave 46's parked craft. A13: the spells' cause. R18: surviving guards. Kit: next free sÿst 1493, spöb 1215-1399 (and 518-999), shïp NONE (retire an old kit hull), düde 328 / 552, wëap 330, oütf 514, gövt 283 and below, bits 9334, rlëD 1113; mïsn NONE (retire another old kit mission: wave 14's 1082-1084); përs: override a stock one (kits/w48_pers225.mjs). | **Wave 51** (the "... wave 51" sections above): KB's tractor (the pull builds steadily over the NPC beam's ~1 s at about the push law's 30 x \|Impact\| / Mass a 1/30 s unit, in proportion to Impact; the near brake takes a lighter moving hull, not a heavier one: NovaJS matches the shape, mismatch in the clock and 0.86), E6 (Matthew's question: an ionized hull turns floor(Turn / 10 x (1 - q)) whole degrees a frame, q held at about 2/3-0.7, so fast hulls keep turning when saturated and Turn 10 never turns once hit; the uncharged turn is whole degrees too (Turn 25 = Turn 20); the saturated thrust is about 0.3 of any Accel: NovaJS mismatch), SG (self-granting outfits: NovaJS matches), E10 (the NPC tractor's Count-30 beam lasts ~1 s, the player's fixed beam in the same system Count / 56). Not reached: CD, A13, R18, the thrusting excess, the tractor's range edge, T's front / side sectors. Left: see "Wave 51 leftovers". |
 | Wave 51 leftovers | E6: the saturation hold (floor at q 0.7 or strictly below at 2/3: a saturated Turn-95 hull tells them apart), the saturated thrust's 0.30 vs 1/3, a Turn-35 / 55 hull uncharged. E10: whether the ~1 s beam is the NPC's or the turret's (a player Count-30 turret beam, an NPC fixed beam). KB: the thrusting excess on a second inertialess hull (Accel 100-300), the tractor's range edge (425-500 px), a moving inertialess hull under it, the brake between the beamer's Mass and 300 t. T: leads in the front / side blind sectors. CD: wave 46's parked craft. A13: the spells' cause. R18: surviving guards. Kit: next free sÿst 1494, spöb 1216-1399 (and 518-999), shïp NONE (retire an old kit hull), düde 607 / 328 / 552, wëap 331, oütf 519 (and 630 / 631), gövt 283 and below, bits 9336 (avoid the stock bits 9011-9015, 9111, 9200-9208, 9215-9216, 9333-9334, 9500-9501, 9666, 9812, 9995, 9998-9999), rlëD 1113; mïsn 967 (then retire another old kit mission: wave 14's 1082-1084); përs: override a stock one (kits/w48_pers225.mjs). | **Wave 52** (the "... wave 52" sections above): E6B (the uncharged turn is max(1, floor(Turn / 10)) whole degrees a frame on every hull: Turn 7 / 9 / 15 turn 1, 35 three, 55 five, 95 nine; a saturated Turn 95 turns 2, so the hold is q 0.7 with floor: NovaJS's base turn is continuous, mismatch), NK (the hub's added item: an NPC's kill satisfies a destroy goal and the ReturnStel landing completes it; an NPC's disable earns a disable goal's ShipDone and its kill fails it: NovaJS matches, the ARPIA report is not a bug), E10 (only an NPC's TURRETED beam lives Count / 30 s; the NPC fixed and the player turret beams Count / 56: NovaJS mismatch for NPC turret beams), MJ (ModVal counts hops; the arrival is opposite the departure heading; a held j chains whole multi-jumps a day each; an unexplored drawn system is passed and stays unexplored; passed systems' mission ships are not observed: NovaJS mismatch on the hop count, the arrival side and the explored mark), TR (a still hull is held at 450 / 475 / 490 px, so the pull edge is beyond 490: NovaJS 450; a shot that starts pulling pulls to its end: NovaJS decides per unit). Not reached: CD, A13, R18, the thrusting excess, T's front / side sectors, the E6 thrust's 0.30 vs 1/3. Left: see "Wave 52 leftovers". |
 | Wave 52 leftovers | MJ: a "blocked" system on the route, the arrival law for a departure that is not eastward, a passed level-1 (visited, not landed) system. TR: the pull edge in (490, 500] on the axis and the diagonal vs the axis, a moving inertialess hull under a tractor, the brake between the beamer's Mass and 300 t, a player turret tractor (0.54 s by E10). E6: an ionized Turn-7 / 9 hull, Turn 1-6 uncharged, the saturated thrust's 0.30 vs 1/3. E10: a point-defence beam's clock, damage per unit on each clock. NK: an NPC that stops at the disable. KB: the thrusting excess on a second inertialess hull (Accel 100-300). T: leads in the front / side blind sectors. CD: wave 46's parked craft. A13: the spells' cause. R18: surviving guards. Kit: THE RESOURCE NAME LIST IS FULL (64 KB: short names, or retire old resources to free names); next free sÿst 1513 (check 1514+), spöb 1292-1399 (and 518-999), shïp NONE (retire the rest of wave 40's E11 yard, 615-625), düde 555+, wëap 334, oütf 522 (and 630 / 631), gövt 283 and below, bits 9351 (not a stock bit), rlëD 1113; mïsn 997 (retired, unused), then retire another old kit mission; përs: override a stock one (kits/w48_pers225.mjs). | open |
+| Wave 53 leftovers | NB: whether the nebula rect's left / right / bottom edges are strict like the top (y > YPos measured twice); when exactly OnExplore runs (it ran by a landing with the map never opened); a nëbu with 4-7 or unsorted PICTs | open |
 
 ## Catalogue
 
@@ -27445,6 +27735,7 @@ cosmetic or rare.
 | M5 | Faction borders: minor govts, two majors meeting, uninhabited and unlandable systems | NovaJS border drawing | **answered (wave 3)**: explored + inhabited stellar radiates even if unlandable; no stellar or unexplored: nothing. Applied in 6d202ebc | M |
 | M6 | Big-map default zoom (px per map unit) | NovaJS map (2.0 vs about 1.778) | **answered (wave 2)**: 1.77. **Mismatch** | L |
 | M7 | Tab cycling order on the big map | `N/spaceport/route.ts:233-252` | **answered (wave 2)**: link-slot order, no "off" step. **Mismatch** (the extra off slot) | M |
+| NB | Star-map nebulae (nëbu): which PICT, where, what over what, when visible, ActiveOn / OnExplore, minimap | NovaJS map (`N/spaceport/system_graph.ts`; nebulae not drawn) | **answered (wave 53, "Star-map nebulae (nëbu), wave 53")**: the largest PICT within XSize x s by YSize x s, stretched nearest-neighbour at (XPos, YPos); under links / dots / names, max-blended with borders; whole image once a system strictly inside (y > YPos) is explored at level >= 1; ActiveOn hides, OnExplore runs without the map; no minimap; pan unbounded. **Mismatch** (not drawn) | M |
 | K9 | Bracket colour of non-attacking ships of a hostile govt | `N/nova_plugin/combat/hostility.ts` (onSightDisposition) | **answered (waves 2 and 4)**: red exactly when the ship attacks or will at once: AI 3/4 of a hostile govt from the start, AI 1/2 only once provoked. Applied in 29237401 | M |
 
 ### UI navigation and hotkeys (Matthew's category)
