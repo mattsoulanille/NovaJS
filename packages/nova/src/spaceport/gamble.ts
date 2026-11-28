@@ -5,6 +5,7 @@ import { ControlEvent } from '../nova_plugin/core/index.js';
 import { Button, ButtonClick } from './button.js';
 import { GAMBLE } from './dialog_layout.js';
 import { MenuControls } from './menu_controls.js';
+import { makeVenueShield } from './modal_shield.js';
 import { QuantityDialog } from './quantity_dialog.js';
 
 // The 470x230 racing dialog (PICT 8529): the header LED strip on top,
@@ -71,6 +72,9 @@ export class GambleDialog {
         this.container.name = 'GambleDialog';
         this.container.visible = false;
 
+        // Modal over the bar: its buttons outside this frame stay dead
+        // until the race is closed (modal_shield.ts).
+        this.container.addChild(makeVenueShield('GambleShield'));
         const background = displayAssets.spriteFromPict(GAMBLE_BACKGROUND_PICT);
         background.anchor.set(0.5);
         background.interactive = true;

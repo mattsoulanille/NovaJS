@@ -8,6 +8,7 @@ import { ControlEvent } from '../nova_plugin/core/index.js';
 import { CronStatesComponent } from '../nova_plugin/player/index.js';
 import { LINE_HEIGHT, NEWS } from './dialog_layout.js';
 import { MenuControls } from './menu_controls.js';
+import { makeVenueShield } from './modal_shield.js';
 import { MissionUniverse } from './mission_universe.js';
 
 // The 300x230 news dialog PICTs (9000 generic, 9001+ per-govt
@@ -124,6 +125,10 @@ export class NewsDialog {
         this.container.name = 'NewsDialog';
         this.container.visible = false;
         this.text.name = 'NewsText';
+        // Modal over the bar: a click outside the news window reaches
+        // nothing behind it (modal_shield.ts). The background goes just
+        // above it at each show.
+        this.container.addChild(makeVenueShield('NewsShield'));
         const pane = NEWS.pane;
         this.paneMask.beginFill(0xffffff);
         this.paneMask.drawRect(pane.left, pane.top,
@@ -222,7 +227,7 @@ export class NewsDialog {
         this.background.cursor = 'pointer';
         // Any click on the news window dismisses it.
         this.background.on('pointerdown', () => this.closed.next());
-        this.container.addChildAt(this.background, 0);
+        this.container.addChildAt(this.background, 1);
 
         const [commercials, generic] = await Promise.all([
             this.strings(COMMERCIALS_STRING_TABLE, FALLBACK_COMMERCIALS),

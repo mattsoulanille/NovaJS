@@ -21,6 +21,7 @@ import {
 import { v4 } from 'uuid';
 import { Button } from './button.js';
 import { requestCheckpoint } from './checkpoint_requests.js';
+import { makeVenueShield } from './modal_shield.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import { HIRE } from './dialog_layout.js';
 import { HIRE_DIALOG_PICT } from './hire_escort.js';
@@ -264,6 +265,9 @@ export class HangarDialog {
         controlEvents: Observable<ControlEvent>) {
         this.container.name = 'HangarDialog';
         this.container.visible = false;
+        // Modal over the shipyard: its buttons and grid outside this frame
+        // stay dead until it closes (modal_shield.ts).
+        this.container.addChild(makeVenueShield('HangarShield'));
         const background = displayAssets.spriteFromPict(HIRE_DIALOG_PICT);
         background.anchor.set(0.5);
         background.interactive = true;

@@ -160,7 +160,8 @@ export class MissionBoard extends Menu<Entity> {
          */
         private openStarmap?: (options?: OpenStarmapOptions)
             => Promise<unknown>) {
-        super(displayAssets, simulationData, background, controlEvents);
+        super(displayAssets, simulationData, background, controlEvents,
+            /* modal */ true);
         this.container.name = `MissionBoard-${title}`;
 
         // No Refuse on the BBS: an uninteresting listing is simply not

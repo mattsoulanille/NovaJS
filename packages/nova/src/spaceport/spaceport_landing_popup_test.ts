@@ -179,10 +179,17 @@ describe('a landing popup over the spaceport', () => {
         + 'while a popup is still up', async () => {
             const { spaceport, offerPopup, buttons, departed } =
                 await landUnderPopup();
-            // The pre-shield hazard, driven directly: Leave under the
+            // A click on Leave that got past the shield does nothing: the
+            // spaceport's buttons act only on its bare main screen
+            // (Spaceport.onMainScreenClick).
+            buttons.leave.click.next({ shift: false, option: false });
+            await new Promise(resolve => setTimeout(resolve, 10));
+            expect(spaceport.container.visible).toBeTrue();
+            // The pre-shield hazard, driven past both: Leave under the
             // popup. Menu.show() resolves at once; the popup sequence is
             // still running.
-            buttons.leave.click.next({ shift: false, option: false });
+            void (spaceport as unknown as { leave: () => Promise<void> })
+                .leave();
             await waitFor(() => !spaceport.container.visible);
             // The popup is still up, hidden with its parent; the sequence
             // is running blind (show() resolves only once it ends).

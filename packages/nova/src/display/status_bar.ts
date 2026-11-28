@@ -10,6 +10,8 @@ import {
 import { DEBUG_CREDITS_GRANT } from "../nova_plugin/pilot/index.js";
 import { DiscoveryStoreResource } from "../nova_plugin/player/index.js";
 import { Button, ButtonClick } from "../spaceport/button.js";
+import { addShieldPassThrough, removeShieldPassThrough }
+    from "../spaceport/modal_shield.js";
 import { DockedPlayerEditedEvent, DockedShipResource } from "./docked_ship.js";
 import { PixiAppResource } from "./pixi_app_resource.js";
 import { ScreenSize } from "./screen_size_plugin.js";
@@ -85,6 +87,18 @@ export class StatusBar {
         this.clearRecordButton.container.position.x = DEBUG_BUTTON_X;
         this.clearRecordButton.container.position.y = 605;
         this.clearRecord = this.clearRecordButton.click;
+
+        // NovaJS debug cheats, not part of the original's spaceport: they
+        // stay pressable while a landed venue is open (its modal shield
+        // lets the pointer through to them; spaceport/modal_shield.ts).
+        for (const button of this.debugButtons) {
+            addShieldPassThrough(button.container);
+        }
+    }
+
+    private get debugButtons(): Button[] {
+        return [this.addEnemyButton, this.giveCreditsButton,
+            this.clearRecordButton];
     }
 
     /**
@@ -172,6 +186,9 @@ export class StatusBar {
      * Text destroys its own canvas texture regardless (review #40).
      */
     destroy() {
+        for (const button of this.debugButtons) {
+            removeShieldPassThrough(button.container);
+        }
         this.container.destroy({ children: true });
         // A Text a pane owns but never parented (the target pane's image
         // placeholder) is out of the container's reach; each pane

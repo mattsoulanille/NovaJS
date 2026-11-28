@@ -193,7 +193,8 @@ export class TradeCenter extends Menu<Entity> {
         simulationData: SimulationGameDataInterface,
         controlEvents: Observable<ControlEvent>,
         private planetId: string) {
-        super(displayAssets, simulationData, TRADE_CENTER_PICT, controlEvents);
+        super(displayAssets, simulationData, TRADE_CENTER_PICT, controlEvents,
+            /* modal */ true);
         this.container.name = 'TradeCenter';
 
         this.buttons = {

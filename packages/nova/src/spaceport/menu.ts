@@ -5,6 +5,7 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import { Button } from './button.js';
 import { MenuControls } from './menu_controls.js';
+import { makeVenueShield } from './modal_shield.js';
 
 type Buttons = {
     [index: string]: Button,
@@ -46,9 +47,22 @@ export abstract class Menu<T> {
     constructor(protected displayAssets: DisplayAssetDataInterface,
         protected simulationData: SimulationGameDataInterface,
         private background: string,
-        controlEvents: Observable<ControlEvent>) {
+        controlEvents: Observable<ControlEvent>,
+        /**
+         * A spaceport venue (outfitter, shipyard, trade center, bar,
+         * Mission BBS): modal, as in the original, so a full-screen shield
+         * under its frame keeps the pointer off everything behind it — the
+         * spaceport's own buttons included (modal_shield.ts). Without it
+         * only the frame below caught clicks. The spaceport itself and the
+         * maps leave it off.
+         */
+        modal = false) {
         this.controls = new MenuControls(controlEvents);
 
+        if (modal) {
+            this.container.addChild(
+                makeVenueShield(`${this.constructor.name}Shield`));
+        }
         const backgroundSprite = this.displayAssets.spriteFromPict(this.background);
         // So you can't press things behind this menu:
         backgroundSprite.interactive = true;

@@ -194,7 +194,10 @@ export class Spaceport extends Menu<Entity> {
      * The venues, as the set the transaction is attached to per landing
      * and the set a teardown dismisses.
      */
-    private get venues(): { transaction?: LandedTransaction, dismiss(): void }[] {
+    private get venues(): {
+        transaction?: LandedTransaction, dismiss(): void,
+        container: PIXI.Container,
+    }[] {
         return [this.outfitter, this.shipyard, this.bar, this.tradeCenter,
             this.missionComputer].filter(<T>(venue: T | undefined):
                 venue is T => venue !== undefined);
@@ -270,8 +273,8 @@ export class Spaceport extends Menu<Entity> {
         };
         const buttons = this.buttons;
 
-        buttons.leave.click.subscribe(() => void this.leave());
-        buttons.refuel.click.subscribe(this.refuel.bind(this));
+        this.onMainScreenClick(buttons.leave, () => void this.leave());
+        this.onMainScreenClick(buttons.refuel, () => this.refuel());
 
         this.venueControlEvents = controlEvents;
         // (A ship change from an OnPurchase set string is published off
@@ -321,7 +324,7 @@ export class Spaceport extends Menu<Entity> {
             this.refreshRefuelButton();
             this.rebindControls();
         };
-        buttons.outfitter.click.subscribe(showOutfitter);
+        this.onMainScreenClick(buttons.outfitter, showOutfitter);
 
         this.universe = MissionUniverse.shared(simulationData);
         this.offerPopup = new OfferPopup(displayAssets, controlEvents);
@@ -355,7 +358,7 @@ export class Spaceport extends Menu<Entity> {
             this.refreshRefuelButton();
             this.rebindControls();
         };
-        buttons.missions.click.subscribe(showMissionComputer);
+        this.onMainScreenClick(buttons.missions, showMissionComputer);
 
         const showBar = async () => {
             const bar = this.bar;
@@ -375,7 +378,7 @@ export class Spaceport extends Menu<Entity> {
             this.refreshRefuelButton();
             this.rebindControls();
         };
-        buttons.bar.click.subscribe(showBar);
+        this.onMainScreenClick(buttons.bar, showBar);
 
         const showTradeCenter = async () => {
             const tradeCenter = this.tradeCenter;
@@ -394,7 +397,7 @@ export class Spaceport extends Menu<Entity> {
             this.refreshRefuelButton();
             this.rebindControls();
         };
-        buttons.tradeCenter.click.subscribe(showTradeCenter);
+        this.onMainScreenClick(buttons.tradeCenter, showTradeCenter);
 
         const showShipyard = async () => {
             const shipyard = this.shipyard;
@@ -420,7 +423,7 @@ export class Spaceport extends Menu<Entity> {
             this.refreshRefuelButton();
             this.rebindControls();
         };
-        buttons.shipyard.click.subscribe(showShipyard);
+        this.onMainScreenClick(buttons.shipyard, showShipyard);
         this.addButtons(buttons);
 
         this.controls = new MenuControls(controlEvents, {
@@ -462,6 +465,28 @@ export class Spaceport extends Menu<Entity> {
      */
     get onMainScreen(): boolean {
         return this.container.visible && MenuControls.focused === this.controls;
+    }
+
+    /**
+     * Wires one of the spaceport's own buttons so it acts only on the bare
+     * main screen ({@link onMainScreen}) and never during a Leave. The
+     * original's venues and dialogs are modal: nothing behind one reacts
+     * until it closes. The venue's shield (modal_shield.ts) already keeps
+     * the pointer off these buttons; this is the rule itself, so a button
+     * can never open a second venue over the first — with the Outfitter
+     * open, the Trade Center button below its frame used to, and the trade
+     * center's Done then handed the keyboard back to the spaceport UNDER
+     * the outfitter: its 'd' left the planet with the outfitter still
+     * bound, and the ship would not fly until a third 'd' closed it
+     * (Matthew's 2026-11-27 playtest). The keys need no such gate: the
+     * focus stack only ever hands them to the surface on top.
+     */
+    private onMainScreenClick(button: Button, act: () => unknown) {
+        button.click.subscribe(() => {
+            if (this.onMainScreen && !this.leaving) {
+                act();
+            }
+        });
     }
 
     /**
@@ -775,7 +800,9 @@ export class Spaceport extends Menu<Entity> {
      * rebound the spaceport's controls whether or not it was still docked.
      */
     private enterVenue(): boolean {
-        if (!this.container.visible) {
+        // Nor while a Leave is settling (see leave): the departure would
+        // go through with the venue still up.
+        if (!this.container.visible || this.leaving) {
             return false;
         }
         this.controls.unbind();
@@ -1455,8 +1482,9 @@ export class Spaceport extends Menu<Entity> {
      *
      * Re-entrant presses are dropped while a Leave is in flight (the
      * settlement awaits the upgrade targets' data, and the dialog awaits
-     * the player), the spaceport's own keys are given up for the dialog
-     * so a second 'depart' closes IT rather than leaving again, and a
+     * the player), the spaceport's own keys are given up for the whole
+     * Leave so a second 'depart' closes the dialog rather than leaving
+     * again and no venue opens under the departure, and a
      * spaceport torn down under the dialog (exit to title) leaves nothing
      * to depart: done() is not called, exactly as dismiss() does not.
      */
@@ -1465,6 +1493,12 @@ export class Spaceport extends Menu<Entity> {
             return;
         }
         this.leaving = true;
+        // The keyboard is the Leave's from here on: the settlement awaits
+        // the upgrade targets' data, and a venue or overlay key pressed
+        // meanwhile would open over a spaceport that is about to depart,
+        // still bound when the ship flew off.
+        this.controls.unbind();
+        this.popupBlocker.bind();
         try {
             let reports: (string | undefined)[] = [];
             try {
@@ -1482,22 +1516,31 @@ export class Spaceport extends Menu<Entity> {
                 if (!this.stillDocked()) {
                     break;
                 }
-                this.controls.unbind();
-                this.popupBlocker.bind();
-                try {
-                    await this.offerPopup.show(report!, { accept: 'Okay' },
-                        { style: 'briefing' });
-                } finally {
-                    this.popupBlocker.unbind();
-                }
+                await this.offerPopup.show(report!, { accept: 'Okay' },
+                    { style: 'briefing' });
             }
         } catch (e) {
             console.warn('Escort settlement failed at lift-off:', e);
         } finally {
+            this.popupBlocker.unbind();
             this.leaving = false;
         }
         if (!this.alive) {
             return;
+        }
+        // Nothing of the visit may outlive the departure on the focus
+        // stack, or the ship cannot be flown. The main-screen gate keeps a
+        // venue from being open here at all (onMainScreenClick, and the
+        // focus stack for the keys); should one be, it is closed first —
+        // its done() releases its visit onto the transaction synchronously,
+        // before the commit below — rather than left holding the keyboard.
+        // Only one that is up: a shipyard's dismiss releases its hangar's
+        // keys for good (a teardown's), and the spaceport is reused at the
+        // next landing here.
+        for (const venue of this.venues) {
+            if (venue.container.visible) {
+                venue.dismiss();
+            }
         }
         this.done();
     }

@@ -102,7 +102,8 @@ export class Bar extends Menu<Entity> {
         controlEvents: Observable<ControlEvent>,
         private universe: MissionUniverse,
         private planetId: string) {
-        super(displayAssets, simulationData, BAR_PICT, controlEvents);
+        super(displayAssets, simulationData, BAR_PICT, controlEvents,
+            /* modal */ true);
         this.container.name = 'Bar';
 
         // Behind the buttons/description (added below), above the 8503

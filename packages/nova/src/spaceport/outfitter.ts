@@ -295,7 +295,8 @@ export class Outfitter extends Menu<Entity> {
     constructor(displayAssets: DisplayAssetDataInterface,
         simulationData: SimulationGameDataInterface,
         controlEvents: Observable<ControlEvent>) {
-        super(displayAssets, simulationData, OUTFITTER_PICT, controlEvents);
+        super(displayAssets, simulationData, OUTFITTER_PICT, controlEvents,
+            /* modal */ true);
         this.container.name = 'Outfitter';
 
         // Sphere centres (738, 679.5) and (768, 679.5): the 15px spheres

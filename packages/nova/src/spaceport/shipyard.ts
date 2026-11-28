@@ -177,7 +177,8 @@ export class Shipyard extends Menu<Entity> {
     constructor(displayAssets: DisplayAssetDataInterface,
         simulationData: SimulationGameDataInterface,
         controlEvents: Observable<ControlEvent>) {
-        super(displayAssets, simulationData, SHIPYARD_PICT, controlEvents);
+        super(displayAssets, simulationData, SHIPYARD_PICT, controlEvents,
+            /* modal */ true);
         this.container.name = 'Shipyard';
         // Captions, widths and positions measured against the original
         // (shipyard_content.ts). The middle pill says "Buy Ship" and is

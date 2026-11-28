@@ -18,6 +18,7 @@ import { Button } from './button.js';
 import { HIRE } from './dialog_layout.js';
 import { ItemGrid, ItemTile } from './item_grid.js';
 import { ScrollArrow } from './scroll_arrow.js';
+import { makeVenueShield } from './modal_shield.js';
 import { MenuControls } from './menu_controls.js';
 import { MissionUniverse } from './mission_universe.js';
 import { FONT } from './outfitter.js';
@@ -251,6 +252,9 @@ export class HireEscortDialog {
         this.container.name = 'HireEscortDialog';
         this.container.visible = false;
 
+        // Modal over the bar: the bar's buttons outside this frame stay
+        // dead until it closes (modal_shield.ts).
+        this.container.addChild(makeVenueShield('HireEscortShield'));
         const background = displayAssets.spriteFromPict(HIRE_DIALOG_PICT);
         background.anchor.set(0.5);
         background.interactive = true;
