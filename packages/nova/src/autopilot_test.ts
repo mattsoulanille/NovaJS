@@ -1,5 +1,5 @@
 import 'jasmine';
-import { Position } from 'nova_ecs/datatypes/position';
+import { BOUNDARY, Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import {
     MovementPhysicsComponent, MovementStateComponent, MovementType,
@@ -181,6 +181,87 @@ describe('Autopilot landing on the square zone', () => {
                 planet.components.get(PlanetDataComponent));
             expect(landingDistance(at.position.x - centre.x,
                 at.position.y - centre.y)).toBeLessThanOrEqual(range);
+        }, 60_000);
+    }
+
+    /**
+     * The system is a torus (positions wrap over ±BOUNDARY). Matthew's
+     * playtest: the landing autopilot "doesn't quite account for screen
+     * wrapping, unlike holding `a`". It measured the planet by the plain
+     * coordinate difference, so with the ship just past one edge and the
+     * stellar just inside the other it set off the long way round,
+     * across the whole system. It now flies the short hop over the seam,
+     * as 'pointTo' (Position.subtract) does, and the sim's landing check
+     * (also Position.subtract) lands it there.
+     */
+    const seamCases: Array<{
+        name: string, planetAt: [number, number], shipAt: [number, number],
+        inertialess?: boolean,
+    }> = [
+        { name: 'across the x seam (ship past +x, planet inside -x)',
+            planetAt: [-BOUNDARY + 150, 300],
+            shipAt: [BOUNDARY - 350, 300] },
+        { name: 'across the x seam the other way, inertialess',
+            planetAt: [BOUNDARY - 120, -200],
+            shipAt: [-BOUNDARY + 380, -200], inertialess: true },
+        { name: 'across the y seam on the diagonal',
+            planetAt: [400, BOUNDARY - 100],
+            shipAt: [100, -BOUNDARY + 250] },
+        { name: 'across both seams at the corner, inertialess',
+            planetAt: [-BOUNDARY + 80, -BOUNDARY + 60],
+            shipAt: [BOUNDARY - 300, BOUNDARY - 240], inertialess: true },
+    ];
+    for (const { name, planetAt, shipAt, inertialess } of seamCases) {
+        it(`lands the short way ${name}`, async () => {
+            const { world, ship, planet } = await harness([72, 72],
+                SYNTHETIC.ships.skiff);
+            if (inertialess) {
+                ship.components.set(ShipPhysicsComponent, {
+                    ...ship.components.get(ShipPhysicsComponent)!,
+                    inertialess: true,
+                });
+                world.step();
+            }
+            const planetMovement =
+                planet.components.get(MovementStateComponent)!;
+            planetMovement.position = new Position(...planetAt);
+            const movement = ship.components.get(MovementStateComponent)!;
+            movement.position = new Position(...shipAt);
+            movement.velocity = new Vector(0, 0);
+            const start = planetMovement.position
+                .subtract(movement.position).length;
+            // Across the seam: the plain coordinate difference is most of
+            // the world, the wrapped one a few hundred px.
+            expect(Math.hypot(planetAt[0] - shipAt[0],
+                planetAt[1] - shipAt[1])).toBeGreaterThan(BOUNDARY);
+            expect(start).toBeLessThan(600);
+
+            const autopilot = new Autopilot({
+                controlEvents: events =>
+                    applyControlEvents(world, PEER, events),
+                analogControl: control =>
+                    applyAnalogControl(world, PEER, control),
+            });
+            autopilot.navigateTo(PORT);
+            const lands: string[] = [];
+            world.events.get(LandEvent).subscribe(({ data }) =>
+                lands.push(data.uuid));
+            let farthest = start;
+            let ticks = 0;
+            for (; ticks < 30 * 60 && lands.length === 0; ticks++) {
+                autopilot.step(world, PEER);
+                world.step();
+                farthest = Math.max(farthest, planet.components
+                    .get(MovementStateComponent)!.position.subtract(
+                        ship.components.get(MovementStateComponent)!
+                            .position).length);
+            }
+            expect(lands).withContext(`after ${ticks} ticks`)
+                .toEqual([PORT]);
+            // It never turned away to go round: never farther than where
+            // it started (plus a little overshoot while braking).
+            expect(farthest).toBeLessThan(start + 100);
+            expect(ticks).toBeLessThan(30 * 30);
         }, 60_000);
     }
 

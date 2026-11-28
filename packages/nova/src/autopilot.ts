@@ -1,3 +1,4 @@
+import { wrapNearestDelta } from 'nova_ecs/datatypes/position';
 import { MovementPhysicsComponent, MovementStateComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import { ControlEvent } from './nova_plugin/core/index.js';
@@ -154,8 +155,16 @@ export class Autopilot {
             return;
         }
 
-        const toX = planetMovement.position.x - movement.position.x;
-        const toY = planetMovement.position.y - movement.position.y;
+        // The system is a torus: fly the SHORTEST way round, as the sim's
+        // own steering does (Position.subtract wraps; 'pointTo' turns by
+        // it). A ship past the +x edge with the planet just over the -x
+        // one used to set off across the whole system (or, nearer, to
+        // misjudge the distance it had to brake in) instead of hopping
+        // the seam.
+        const toX = wrapNearestDelta(
+            planetMovement.position.x - movement.position.x);
+        const toY = wrapNearestDelta(
+            planetMovement.position.y - movement.position.y);
         const distanceSquared = toX * toX + toY * toY;
         const speedSquared = movement.velocity.x * movement.velocity.x
             + movement.velocity.y * movement.velocity.y;
