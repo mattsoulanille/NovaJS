@@ -32,6 +32,7 @@ import { ExitPointData } from './exit_point.js';
 import { spatialBroadphase, ToroidalGrid } from '../core/index.js';
 import { FireSubs, FireSubsFunction, ShipPointDefenseVulnerabilitySystem, SubCounts, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin.js';
 import { ShotEnd } from './submunition_rule.js';
+import { shotSlotFree } from './shot_cap.js';
 import { ActiveSecondaryProvider } from './weapon_plugin.js';
 import { BeamCollisionSystem, BeamDamageSystem } from './beam_plugin.js';
 import { KillCreditSystem } from '../reputation/index.js';
@@ -194,6 +195,11 @@ class ProjectileWeaponEntry extends WeaponEntry {
     fire(position: Position, angle: Angle, owner?: string, target?: string,
         source?: string, sourceVelocity?: Vector,
         _exitPointData?: ExitPointData, silent = false): Entity | undefined {
+        // The original's 128-projectile table is full: the new shot is
+        // refused (shot_cap.ts).
+        if (!shotSlotFree(this.runQuery)) {
+            return undefined;
+        }
 
         let velocity = new Vector(0, 0);
         if (this.data.guidance !== 'guided' && sourceVelocity) {
