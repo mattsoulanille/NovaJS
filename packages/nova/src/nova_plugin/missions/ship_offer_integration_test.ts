@@ -189,7 +189,7 @@ describe('the Refuel Trader, hail to undock (mïsn 141)', () => {
         }, 30_000);
 
     it('says "Ready for docking" on the status line at the accept '
-        + '(OnAccept Q25057; reference "Refuel rescue", 2026-11-27)',
+        + '(OnAccept Q25057; reference "The Refuel Trader rescue", 2026-11-27)',
         async () => {
             const { accept, gameData } = await hailTheTrader();
             // In flight Qxxx has no stellar to leave: only its message.
@@ -210,7 +210,8 @@ describe('the Refuel Trader, hail to undock (mïsn 141)', () => {
         }, 30_000);
 
     it('replaces the trader with a WAITING rescue ship in its own berth, '
-        + 'and keeps it targeted (reference "Refuel rescue", 2026-11-27)',
+        + 'and keeps it targeted (reference "The Refuel Trader rescue", '
+        + '2026-11-27)',
         async () => {
             const { world, player, trader, traderUuid, berth, record,
                 shipUuids } = await hailTheTrader('nova:225',

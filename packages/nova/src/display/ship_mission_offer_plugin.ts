@@ -440,7 +440,7 @@ async function acceptShipOffer(world: World,
 
     // The OnAccept's Qxxx messages on the status line (no stellar to
     // leave in flight): the stock Refuel Trader's "<OSN>: Ready for
-    // docking, <PSN>." (reference "Refuel rescue", 2026-11-27).
+    // docking, <PSN>." (reference "The Refuel Trader rescue", 2026-11-27).
     const displayAssets = world.resources.get(DisplayAssetDataResource);
     for (const { stringId, prefix } of displayAssets
         ? accept.statusQuotes : []) {

@@ -182,7 +182,7 @@ export interface MissionMachineryContext {
      * in-flight accept (spaceport/ship_mission_accept.ts), where there is
      * no stellar to leave and only the message is shown: the stock Refuel
      * Trader's OnAccept "Q25057", "<OSN>: Ready for docking, <PSN>."
-     * (reference "Refuel rescue", 2026-11-27). Everywhere else it is
+     * (reference "The Refuel Trader rescue", 2026-11-27). Everywhere else it is
      * reported as an unimplemented hook. `prefix` is the running
      * expression's plug-in, for resolving the bare STR# number.
      */

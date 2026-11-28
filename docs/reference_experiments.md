@@ -26660,8 +26660,8 @@ boarding the Valkyrie):
   waiting rescue ship with the grey corners (wave 19's ShipStart-2 ship
   had them too);
 - the owner's board of a deferred auto-abort rescue ship is `rescueBoard`
-  kind 'deferred' (`N/nova_plugin/encounters/rescue_board.ts:127`,
-  `boardDeferredRescue` `:203`, the gate `N/nova_plugin/encounters/boarding_plugin.ts:633`):
+  kind 'deferred' (`N/nova_plugin/encounters/rescue_board.ts:121`,
+  `boardDeferredRescue` `:206`, the gate `N/nova_plugin/encounters/boarding_plugin.ts:633`):
   no plunder session, the boarded record written directly (so
   `rescueBoarded` pays, takes the fuel and marks the abort as before),
   and `RescueBoardedEvent` puts "<ship>:  Energy transfer complete,

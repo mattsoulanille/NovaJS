@@ -294,8 +294,8 @@ export interface ShipMissionAccept {
      * plug-in prefix it resolves against. In flight there is no stellar to
      * leave, so the message on the status line is all of it (the stock
      * Refuel Trader's "Q25057", "<OSN>: Ready for docking, <PSN>.",
-     * reference "Refuel rescue", 2026-11-27). Display-only: nothing in the
-     * simulation reads them.
+     * reference "The Refuel Trader rescue", 2026-11-27). Display-only:
+     * nothing in the simulation reads them.
      */
     statusQuotes: { stringId: number, prefix: string }[];
 }

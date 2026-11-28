@@ -409,7 +409,7 @@ async function buildShip(ctx: SpawnContext, missionId: string,
     // stock Refuel Traders), which WAITS too: reference "The deferred
     // (përs) auto-abort (R16), wave 43" — the replacement read "Waiting"
     // the moment the offer was accepted (ShipStart 0, the stock Refuel
-    // Traders' value), and "Refuel rescue" (2026-11-27) on the stock
+    // Traders' value), and "The Refuel Trader rescue" (2026-11-27) on the stock
     // Refuel Trader itself. Keyed on the mission kind as well as on the
     // replacement, so a respawn on re-entering the system waits as well.
     if (options.goal === GOAL_RESCUE) {

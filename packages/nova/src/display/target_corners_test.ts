@@ -229,7 +229,7 @@ describe('styleForTarget (target corner selection)', () => {
     });
 
     it('shows the gray corners for a rescue ship WAITING for its pilot '
-        + '(reference "Refuel rescue", 2026-11-27; wave 19)', () => {
+        + '(reference "The Refuel Trader rescue", 2026-11-27; wave 19)', () => {
             const waiting = new Entity('waiting')
                 .addComponent(GovtComponent, { id: 'nova:157' })
                 .addComponent(NpcComponent, { aiType: 1 })

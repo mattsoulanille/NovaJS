@@ -384,7 +384,7 @@ describe('boarding a rescue ship', () => {
 
     describe('the deferred auto-abort rescue (the Refuel Traders)', () => {
         // Përs replacements, mïsn Flags 0x0001: reference "The deferred
-        // (përs) auto-abort (R16), wave 43" and "Refuel rescue"
+        // (përs) auto-abort (R16), wave 43" and "The Refuel Trader rescue"
         // (2026-11-27): one press boards it with "Target ship has been
         // boarded." and NO dialog; the mission ends at the board.
         const deferred = () => rescueMission({

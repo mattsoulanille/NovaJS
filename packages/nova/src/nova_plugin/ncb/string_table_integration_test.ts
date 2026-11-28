@@ -142,7 +142,7 @@ describe('StringTable against real Nova data', () => {
             const table = await gameData.data.StringTable.get('nova:2002');
             expect(table.strings[129]).toBe(ALREADY_BOARDED_MESSAGE);
             expect(table.strings[125]).toBe(TARGET_BOARDED_MESSAGE);
-            // The Refuel Trader's board line (reference "Refuel rescue").
+            // The Refuel Trader's board line (reference "The Refuel Trader rescue").
             expect(table.strings[2]).toBe(ENERGY_TRANSFER_COMPLETE);
             expect(table.strings[124]).toBe(CAPTURE_REPELLED_MESSAGE);
             // The two proximity refusals, quoted verbatim from the same

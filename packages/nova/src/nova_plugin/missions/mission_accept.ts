@@ -817,11 +817,11 @@ function applyOfferingShipFate(world: World,
         }
         // Whoever had the person targeted now has the special ship in its
         // place: the original never drops the player's target at the swap
-        // (reference "Refuel rescue", 2026-11-27, and wave 43's r16 runs:
-        // the brackets stayed on the hull and the pane went straight from
-        // the person's name to the special ship's, "Waiting", with no key
-        // pressed). Moved BEFORE the delete, so TargetRemovedSystem finds
-        // nobody pointing at the departed hull.
+        // (reference "The Refuel Trader rescue", 2026-11-27, and wave 43's
+        // r16 runs: the brackets stayed on the hull and the pane went
+        // straight from the person's name to the special ship's,
+        // "Waiting", with no key pressed). Moved BEFORE the delete, so
+        // TargetRemovedSystem finds nobody pointing at the departed hull.
         for (const entity of world.entities.values()) {
             const target = entity.components.get(TargetComponent);
             if (target?.target === uuid) {

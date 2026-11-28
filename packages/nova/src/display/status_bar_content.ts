@@ -347,7 +347,7 @@ export const ALREADY_BOARDED_MESSAGE = "You can't board this ship.";
  * STR# 2002 index 125, verbatim: the original's confirmation of a board
  * that opens no dialog. The one place it is shown is the board of a
  * deferred auto-abort rescue ship, the Refuel Trader's (reference "The
- * deferred (përs) auto-abort (R16), wave 43", and "Refuel rescue",
+ * deferred (përs) auto-abort (R16), wave 43", and "The Refuel Trader rescue",
  * 2026-11-27; encounters/rescue_board.ts).
  */
 export const TARGET_BOARDED_MESSAGE = 'Target ship has been boarded.';
@@ -359,9 +359,9 @@ export const ENERGY_TRANSFER_COMPLETE = 'Energy transfer complete';
  * The board of a Refuel Trader (a deferred auto-abort rescue whose mission
  * takes the player's fuel, mïsn Flags 0x0008): the rescued ship thanks
  * the player by name, "Valkyrie:  Energy transfer complete, rescue-a."
- * (reference "Refuel rescue", 2026-11-27: two spaces after the colon, the
- * player's ship name, a full stop). `ship` is the name the target pane
- * gives the rescued ship; `playerShip` the player's ship name.
+ * (reference "The Refuel Trader rescue", 2026-11-27: two spaces after
+ * the colon, the player's ship name, a full stop). `ship` is the name the
+ * target pane gives the rescued ship; `playerShip` the player's ship name.
  */
 export function energyTransferMessage(ship: string,
     playerShip: string | undefined): string {

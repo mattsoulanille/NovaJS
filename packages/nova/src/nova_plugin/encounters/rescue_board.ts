@@ -52,10 +52,11 @@ import {
  * THE DEFERRED AUTO-ABORT RESCUE (mïsn Flags 0x0001 with a përs
  * replacement: the four stock Refuel Traders, `autoAbortOnBoard`) is the
  * third kind of board, 'deferred': the owner's first board is the rescue
- * itself, with NO dialog — the status line "Target ship has been
- * boarded." (STR# 2002 index 125) and nothing else (reference "The
- * deferred (përs) auto-abort (R16), wave 43", and "Refuel rescue",
- * 2026-11-27, on the stock Refuel Trader). It spends the hull's one
+ * itself, with NO dialog, only a status line (RescueBoardedEvent: the
+ * stock Refuel Trader's "Valkyrie:  Energy transfer complete, rescue-a.",
+ * a mission that takes no fuel's "Target ship has been boarded."; reference
+ * "The Refuel Trader rescue", 2026-11-27, and "The deferred (përs)
+ * auto-abort (R16), wave 43"). It spends the hull's one
  * board through the durable BoardedComponent record, which is what
  * MissionShipTrackSystem's rescueBoarded reads to pay, take the fuel,
  * release the ship and mark the mission's abort pending. No plunder
@@ -215,8 +216,9 @@ export function boardDeferredRescue(target: Entity,
  * the only thing the original shows. With `energyTransfer` (the mission
  * takes the player's fuel: the stock Refuel Traders) it is the rescued
  * ship's "Valkyrie:  Energy transfer complete, rescue-a." (STR# 2002
- * index 2; reference "Refuel rescue", 2026-11-27); without (wave 43's kit
- * mission, no Flags 0x0008) "Target ship has been boarded." (index 125).
+ * index 2; reference "The Refuel Trader rescue", 2026-11-27); without
+ * (wave 43's kit mission, no Flags 0x0008) "Target ship has been
+ * boarded." (index 125).
  * GUESS: that the fuel flag is what picks the line (two missions, one
  * each). Never mutates the simulation.
  */

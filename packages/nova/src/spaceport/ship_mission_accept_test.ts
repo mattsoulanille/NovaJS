@@ -526,7 +526,7 @@ describe('the Refuel Trader replacement ship (përs Flags 0x0040)', () => {
             expect(movement.position.y).toEqual(-567);
             // Not the Bible's ShipGoal-5 hulk: the original's replacement
             // reads "Waiting" from the accept on (reference "The deferred
-            // (përs) auto-abort (R16), wave 43"; "Refuel rescue",
+            // (përs) auto-abort (R16), wave 43"; "The Refuel Trader rescue",
             // 2026-11-27), held in the system until it is boarded.
             expect(ships[0].components.has(DisabledComponent)).toBeFalse();
             const { waitingForRescue } =
