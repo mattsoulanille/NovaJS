@@ -1251,6 +1251,16 @@ export const STATE_HASH_INTERVAL = 60;
 //    changes. The derived wire schema fingerprint changes
 //    (5228b7f1a5a94f40 -> fcce7ad2bfc8f5bf), and the join gate keeps older and
 //    newer builds apart.
+//    schema-only changes): the set operator `Txxx` (rename the player's
+//    ship) in flight. The in-flight set-string effects
+//    (missions/mission_accept.ts SET_STRING_EFFECT_PROPS — carried by the
+//    accept, refusal, abort, missionSetString, captureShip and
+//    stellarSetString records) gain the optional field `shipName`: the
+//    name the owning client picked from the T's STR#, applied (cleaned)
+//    to the hull the player ends up in. No input or message kind
+//    changes. The derived wire schema fingerprint changes
+//    (fcce7ad2bfc8f5bf -> NEWFP), and the join gate keeps
+//    older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

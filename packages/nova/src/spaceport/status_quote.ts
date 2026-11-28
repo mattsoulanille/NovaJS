@@ -19,9 +19,16 @@ export async function statusQuoteLine(
         } catch {
             continue;
         }
-        if (strings && strings.length > 0) {
-            return strings[Math.min(strings.length - 1,
-                Math.floor(random() * strings.length))];
+        // The pick is among the NON-EMPTY lines: an empty one shows
+        // nothing (and renames nothing). The HypergatePass plug-in's STR#
+        // 25077-25079 hold one message and a run of empty strings, so a
+        // pick over all of them would almost never show its "Your Four Day
+        // HyperGate Pass has Expired." (GUESS: unmeasured; the original
+        // shows what the plug-in's author evidently meant either way).
+        const lines = strings?.filter(line => line.trim() !== '') ?? [];
+        if (lines.length > 0) {
+            return lines[Math.min(lines.length - 1,
+                Math.floor(random() * lines.length))];
         }
     }
     return undefined;

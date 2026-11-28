@@ -72,6 +72,15 @@ export function makeMissionSetHooks(machinery: MissionMachineryContext,
     if (leaveStellar) {
         hooks.leaveStellar = id => leaveStellar(id, runningMissionPrefix);
     }
+    // Txxx / Pxxx, recorded for the caller to resolve against display data
+    // (spaceport/set_string_requests.ts).
+    const { renameShip, playSound } = machinery;
+    if (renameShip) {
+        hooks.renameShip = id => renameShip(id, runningMissionPrefix);
+    }
+    if (playSound) {
+        hooks.playSound = id => playSound(id, runningMissionPrefix);
+    }
 
     if (depth > 4) {
         // Guard against Sxxx/Axxx/Fxxx cycles in scripting.

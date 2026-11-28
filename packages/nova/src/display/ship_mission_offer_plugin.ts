@@ -50,6 +50,7 @@ import {
 import { flightOverlays, landedIn } from './flight_overlays.js';
 import { Stage } from './stage_resource.js';
 import { showStatusMessage } from './status_message_plugin.js';
+import { presentSetStringRequests } from './set_string_display.js';
 import { ProjectileSpinSystem } from "./projectile_spin_plugin.js";
 import { SweepPlanetCornersSystem } from "./planet_corners_plugin.js";
 
@@ -337,7 +338,10 @@ async function refuseShipOffer(world: World,
     let refusal;
     try {
         refusal = await buildShipMissionRefusal(player.entity, offer,
-            gameData, universe, { offeredBy: targetUuid, systemId });
+            gameData, universe, {
+                offeredBy: targetUuid, systemId,
+                displayAssets: world.resources.get(DisplayAssetDataResource),
+            });
     } catch (e) {
         console.warn('Failed to refuse a ship-offered mission:', e);
         return;
@@ -345,7 +349,16 @@ async function refuseShipOffer(world: World,
     if (!refusal) {
         return;
     }
-    world.emit(RefuseShipMissionEvent, { record: refusal.record });
+    // Sent only when the OnRefuse changed something: a lone `Qxxx`
+    // (arpia's mïsn 1102-1104) is the owner's status line and nothing more.
+    const { missionId: _id, offeredBy: _by, ...effects } = refusal.record;
+    if (Object.keys(effects).length > 0) {
+        world.emit(RefuseShipMissionEvent, { record: refusal.record });
+    }
+    // Its `Qxxx` lines and `Pxxx` sounds, expanded as the accept's are.
+    await presentSetStringRequests(world, refusal.requests, player.entity,
+        line => expandOfferText(world, universe, offer,
+            displayName(pers.name), line, {}));
     for (const event of refusal.events) {
         if (!event.text?.trim()) {
             continue;
@@ -370,6 +383,7 @@ async function acceptShipOffer(world: World,
     const accept = await buildShipMissionAccept(player.entity, offer,
         gameData, universe, {
         offeredBy: targetUuid, systemId,
+        displayAssets: world.resources.get(DisplayAssetDataResource),
         // 'stay' is the absence of the field, so only the two verbs the
         // sim knows how to carry out are sent.
         ...(consequence === 'stay' ? {} : { offeredByFate: consequence }),
@@ -426,15 +440,10 @@ async function acceptShipOffer(world: World,
     // The OnAccept's Qxxx messages on the status line (no stellar to
     // leave in flight): the stock Refuel Trader's "<OSN>: Ready for
     // docking, <PSN>." (reference "The Refuel Trader rescue", 2026-11-27).
-    const displayAssets = world.resources.get(DisplayAssetDataResource);
-    for (const { stringId, prefix } of displayAssets
-        ? accept.statusQuotes : []) {
-        const line = await statusQuoteLine(displayAssets!, stringId, prefix);
-        if (line) {
-            showStatusMessage(world, await expandOfferText(world, universe,
-                offer, pers.name, line, { active: accept.active }));
-        }
-    }
+    // Its Pxxx sounds with them (arpia's mïsn 1082 OnAccept `P5002`).
+    await presentSetStringRequests(world, accept.requests, player.entity,
+        line => expandOfferText(world, universe, offer, pers.name, line,
+            { active: accept.active }));
 
     // The briefing (or, for an immediate auto-abort, its notice). Every
     // stock AvailLoc 2 mission has an EMPTY BriefText, so in stock

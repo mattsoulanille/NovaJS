@@ -34,6 +34,11 @@ import { MissionUniverse } from './mission_universe.js';
 import {
     shipOffers, ShipOfferTrigger, shipOfferTrigger,
 } from './ship_mission_offer.js';
+import type { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
+import {
+    anySetStringRequests, emptySetStringRequests, pickShipName,
+    recordSetStringRequests, SetStringRequests,
+} from './set_string_requests.js';
 
 /**
  * ============================================================================
@@ -298,6 +303,45 @@ export interface ShipMissionAccept {
      * nothing in the simulation reads them.
      */
     statusQuotes: { stringId: number, prefix: string }[];
+    /** The OnAccept's display requests (its `Qxxx` — the statusQuotes
+     * above — `Pxxx` and `Txxx`; set_string_requests.ts). */
+    requests: SetStringRequests;
+}
+
+/**
+ * What every in-flight builder below takes besides the system: the display
+ * assets a `Txxx` picks the ship's new name from (its STR#), when the
+ * caller has them — without them a `Txxx` is recorded in `requests` but
+ * names nothing on the record.
+ */
+export interface DetachedSetStringOptions {
+    systemId?: string;
+    displayAssets?: DisplayAssetDataInterface;
+}
+
+/**
+ * A `Txxx`'s name onto the record's effects (`shipName`), picked from its
+ * STR# now that the synchronous string is done (set_string_requests.ts).
+ */
+async function nameShip(effects: SetStringEffects,
+    requests: SetStringRequests,
+    displayAssets: DisplayAssetDataInterface | undefined):
+    Promise<SetStringEffects> {
+    if (!displayAssets || requests.shipNames.length === 0) {
+        return effects;
+    }
+    const name = await pickShipName(displayAssets, requests.shipNames);
+    return name === undefined ? effects : { ...effects, shipName: name };
+}
+
+/** `from`'s requests appended to a caller's sink, when it gave one. */
+function copyRequests(from: SetStringRequests,
+    into: SetStringRequests | undefined): void {
+    if (into) {
+        into.statusQuotes.push(...from.statusQuotes);
+        into.sounds.push(...from.sounds);
+        into.shipNames.push(...from.shipNames);
+    }
 }
 
 function missionsAfter(copy: Entity, missionId: string) {
@@ -358,7 +402,12 @@ async function detachedSession(player: Entity,
     session.machinery.moveToSystem = (systemId, keepCoordinates) => {
         outcome.moveToSystem = { systemId, keepCoordinates };
     };
-    return { session, before, outcome };
+    // `Qxxx` / `Pxxx` / `Txxx`: recorded for the caller to resolve
+    // against display data (set_string_requests.ts). In flight a Q has no
+    // stellar to leave, so its message on the status line is all of it.
+    const requests = emptySetStringRequests();
+    recordSetStringRequests(session.machinery, requests);
+    return { session, before, outcome, requests };
 }
 
 /**
@@ -474,15 +523,12 @@ export async function buildShipMissionAccept(player: Entity,
          * was resolved against, or the accept re-rolls a different
          * destination and ship system than the player was shown. */
         systemId?: string,
+        displayAssets?: DisplayAssetDataInterface,
     } = {}): Promise<ShipMissionAccept | null> {
     const { offeredBy, offeredByFate } = options;
     const ships = options.ships ?? [];
-    const { session, before, outcome } = await detachedSession(player,
-        gameData, universe, options.systemId);
-    const statusQuotes: ShipMissionAccept['statusQuotes'] = [];
-    session.machinery.leaveStellar = (stringId, prefix) => {
-        statusQuotes.push({ stringId, prefix });
-    };
+    const { session, before, outcome, requests } = await detachedSession(
+        player, gameData, universe, options.systemId);
     // A përs that is REPLACED by the special ship is the Bible's condition
     // for deferring a board/rescue auto-abort (deferredAutoAbort).
     const accepted = offeredByFate === 'replace'
@@ -495,8 +541,9 @@ export async function buildShipMissionAccept(player: Entity,
     // The hull the session committed onto: the copy, or the one an
     // OnAccept `Cxxx` / `Exxx` / `Hxxx` swapped in.
     const after = session.target;
-    const effects = diffSetStringEffects(before, after, offer.data.id,
-        outcome, universe.legalGeography());
+    const effects = await nameShip(diffSetStringEffects(before, after,
+        offer.data.id, outcome, universe.legalGeography()), requests,
+    options.displayAssets);
 
     const active = missionsAfter(after, offer.data.id);
     // An IMMEDIATE auto-abort mission never becomes active
@@ -519,7 +566,8 @@ export async function buildShipMissionAccept(player: Entity,
     return {
         active,
         events,
-        statusQuotes,
+        statusQuotes: requests.statusQuotes,
+        requests,
         bits: new Set(after.components.get(ControlBitsComponent) ?? []),
         shipSource: active ?? {
             shipObjective: offer.shipObjective,
@@ -549,6 +597,8 @@ export interface ShipMissionRefusal {
     record: RefusedMission;
     /** E.g. the briefing of a mission the OnRefuse started (Sxxx). */
     events: MissionEvent[];
+    /** Its `Qxxx` / `Pxxx` / `Txxx` (set_string_requests.ts). */
+    requests: SetStringRequests;
 }
 
 /**
@@ -569,21 +619,28 @@ export async function buildShipMissionRefusal(player: Entity,
         offeredBy?: string,
         /** The system the offer was made in (see buildShipMissionAccept). */
         systemId?: string,
+        displayAssets?: DisplayAssetDataInterface,
     } = {}): Promise<ShipMissionRefusal | null> {
     if (!offer.data.onRefuse?.trim()) {
         return null;
     }
-    const { session, before, outcome } = await detachedSession(player,
-        gameData, universe, options.systemId);
+    const { session, before, outcome, requests } = await detachedSession(
+        player, gameData, universe, options.systemId);
     refuseOffer(session.machinery, offer, session.outfits);
     const events = session.commit();
-    const effects = diffSetStringEffects(before, session.target,
-        offer.data.id, outcome, universe.legalGeography());
-    if (Object.keys(effects).length === 0) {
+    const effects = await nameShip(diffSetStringEffects(before,
+        session.target, offer.data.id, outcome, universe.legalGeography()),
+    requests, options.displayAssets);
+    // A string whose only effect is display (a lone `Qxxx`: arpia's mïsn
+    // 1102-1104 OnRefuse `Q25089`) still answers, for its line; the record
+    // it carries then changes nothing.
+    if (Object.keys(effects).length === 0
+        && !anySetStringRequests(requests)) {
         return null;
     }
     return {
         events,
+        requests,
         record: {
             missionId: offer.data.id,
             ...(options.offeredBy ? { offeredBy: options.offeredBy } : {}),
@@ -596,6 +653,8 @@ export async function buildShipMissionRefusal(player: Entity,
 export interface MissionAbort {
     record: AbortedMission;
     events: MissionEvent[];
+    /** Its OnAbort's `Qxxx` / `Pxxx` / `Txxx` (set_string_requests.ts). */
+    requests: SetStringRequests;
 }
 
 /**
@@ -612,11 +671,9 @@ export interface MissionAbort {
  */
 export async function buildMissionAbort(player: Entity, missionId: string,
     gameData: SimulationGameDataInterface, universe: MissionUniverse,
-    options: {
-        /** The system the player is flying in (an OnAbort `Sxxx` is
-         * offered from there, as an in-flight accept's is). */
-        systemId?: string,
-    } = {}): Promise<MissionAbort | null> {
+    /** `systemId`: the system the player is flying in (an OnAbort `Sxxx`
+     * is offered from there, as an in-flight accept's is). */
+    options: DetachedSetStringOptions = {}): Promise<MissionAbort | null> {
     await universe.load();
     if (!player.components.get(MissionsComponent)?.has(missionId)) {
         return null;
@@ -624,13 +681,14 @@ export async function buildMissionAbort(player: Entity, missionId: string,
     if (!(universe.getMission(missionId)?.canAbort ?? true)) {
         return null;
     }
-    const { session, before, outcome } = await detachedSession(player,
-        gameData, universe, options.systemId);
+    const { session, before, outcome, requests } = await detachedSession(
+        player, gameData, universe, options.systemId);
     abortMission(session.machinery, missionId, session.outfits);
     const events = session.commit();
-    const effects = diffSetStringEffects(before, session.target, missionId,
-        outcome, universe.legalGeography());
-    return { events, record: { missionId, ...effects } };
+    const effects = await nameShip(diffSetStringEffects(before,
+        session.target, missionId, outcome, universe.legalGeography()),
+    requests, options.displayAssets);
+    return { events, requests, record: { missionId, ...effects } };
 }
 
 /**
@@ -654,14 +712,14 @@ export async function buildMissionAbort(player: Entity, missionId: string,
 export async function buildDeferredAutoAbort(player: Entity,
     missionId: string, gameData: SimulationGameDataInterface,
     universe: MissionUniverse,
-    options: { systemId?: string } = {}): Promise<MissionAbort | null> {
+    options: DetachedSetStringOptions = {}): Promise<MissionAbort | null> {
     await universe.load();
     if (!player.components.get(MissionsComponent)?.get(missionId)
         ?.autoAbortPending) {
         return null;
     }
-    const { session, before, outcome } = await detachedSession(player,
-        gameData, universe, options.systemId);
+    const { session, before, outcome, requests } = await detachedSession(
+        player, gameData, universe, options.systemId);
     // A goal the board itself completed (a rescue) owes its OnShipDone
     // first, as the date advance runs it before the auto-abort; the
     // `missionSetString` record leaves an auto-aborting mission to this
@@ -672,9 +730,10 @@ export async function buildDeferredAutoAbort(player: Entity,
         return null;
     }
     const events = session.commit();
-    const effects = diffSetStringEffects(before, session.target, missionId,
-        outcome, universe.legalGeography());
-    return { events, record: { missionId, ...effects } };
+    const effects = await nameShip(diffSetStringEffects(before,
+        session.target, missionId, outcome, universe.legalGeography()),
+    requests, options.displayAssets);
+    return { events, requests, record: { missionId, ...effects } };
 }
 
 /**
@@ -696,7 +755,10 @@ export async function buildDeferredAutoAbort(player: Entity,
 export async function buildMissionSetString(player: Entity,
     owed: { kind: MissionSetStringKind, missionId: string },
     gameData: SimulationGameDataInterface, universe: MissionUniverse,
-    options: { systemId?: string } = {}): Promise<MissionSetString | null> {
+    options: DetachedSetStringOptions & {
+        /** Filled with the string's `Qxxx` / `Pxxx` / `Txxx`. */
+        requests?: SetStringRequests,
+    } = {}): Promise<MissionSetString | null> {
     await universe.load();
     const { kind, missionId } = owed;
     const active = player.components.get(MissionsComponent)?.get(missionId);
@@ -705,8 +767,8 @@ export async function buildMissionSetString(player: Entity,
             : failureOwed(active))) {
         return null;
     }
-    const { session, before, outcome } = await detachedSession(player,
-        gameData, universe, options.systemId);
+    const { session, before, outcome, requests } = await detachedSession(
+        player, gameData, universe, options.systemId);
     if (kind === 'shipDone') {
         runShipDoneSetString(session.machinery, missionId, session.outfits);
     } else {
@@ -717,9 +779,10 @@ export async function buildMissionSetString(player: Entity,
     // An OnShipDone's own mission is not the record's to remove: diffed
     // as a bystander, so a string that ends it (an `Axxx` naming itself)
     // ends it through missionsEnded. A failure's apply removes it.
-    const effects = diffSetStringEffects(before, session.target,
-        kind === 'shipDone' ? '' : missionId, outcome,
-        universe.legalGeography());
+    const effects = await nameShip(diffSetStringEffects(before,
+        session.target, kind === 'shipDone' ? '' : missionId, outcome,
+        universe.legalGeography()), requests, options.displayAssets);
+    copyRequests(requests, options.requests);
     return {
         missionId, kind,
         ...(notices.length ? { notices } : {}),
@@ -758,13 +821,16 @@ export async function buildMissionSetString(player: Entity,
 export async function buildCaptureSetStrings(player: Entity,
     retired: ShipData | undefined, captured: ShipData,
     gameData: SimulationGameDataInterface, universe: MissionUniverse,
-    options: { systemId?: string } = {}): Promise<SetStringEffects> {
+    options: DetachedSetStringOptions & {
+        /** Filled with the strings' `Qxxx` / `Pxxx` / `Txxx`. */
+        requests?: SetStringRequests,
+    } = {}): Promise<SetStringEffects> {
     if (!retired?.onRetire && !captured.onCapture) {
         return {};
     }
     await universe.load();
-    const { session, before, outcome } = await detachedSession(player,
-        gameData, universe, options.systemId);
+    const { session, before, outcome, requests } = await detachedSession(
+        player, gameData, universe, options.systemId);
     if (retired) {
         runMissionSetString(session.machinery, retired.onRetire,
             setStringPrefix(retired), session.outfits);
@@ -774,8 +840,9 @@ export async function buildCaptureSetStrings(player: Entity,
     // The notices a string's mission starts or ends would give are dropped:
     // the original shows the status line and nothing else here.
     session.commit();
-    return diffSetStringEffects(before, session.target, '', outcome,
-        universe.legalGeography());
+    copyRequests(requests, options.requests);
+    return nameShip(diffSetStringEffects(before, session.target, '',
+        outcome, universe.legalGeography()), requests, options.displayAssets);
 }
 
 /**
@@ -799,18 +866,22 @@ export async function buildStellarSetString(player: Entity,
     planet: Pick<PlanetData, 'id' | 'writerPrefix' | 'domination'>,
     kind: StellarSetStringKind, gameData: SimulationGameDataInterface,
     universe: MissionUniverse,
-    options: { systemId?: string } = {}): Promise<SetStringEffects> {
+    options: DetachedSetStringOptions & {
+        /** Filled with the string's `Qxxx` / `Pxxx` / `Txxx`. */
+        requests?: SetStringRequests,
+    } = {}): Promise<SetStringEffects> {
     const expression = kind === 'dominate'
         ? planet.domination.onDominate : planet.domination.onRelease;
     if (!expression.trim()) {
         return {};
     }
     await universe.load();
-    const { session, before, outcome } = await detachedSession(player,
-        gameData, universe, options.systemId);
+    const { session, before, outcome, requests } = await detachedSession(
+        player, gameData, universe, options.systemId);
     runMissionSetString(session.machinery, expression,
         setStringPrefix(planet), session.outfits);
     session.commit();
-    return diffSetStringEffects(before, session.target, '', outcome,
-        universe.legalGeography());
+    copyRequests(requests, options.requests);
+    return nameShip(diffSetStringEffects(before, session.target, '',
+        outcome, universe.legalGeography()), requests, options.displayAssets);
 }

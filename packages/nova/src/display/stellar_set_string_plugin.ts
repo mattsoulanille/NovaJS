@@ -4,8 +4,10 @@ import { Plugin } from 'nova_ecs/plugin';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import {
-    SimulationGameDataResource, SystemIdResource,
+    DisplayAssetDataResource, SimulationGameDataResource, SystemIdResource,
 } from '../nova_plugin/core/index.js';
+import { emptySetStringRequests } from '../spaceport/set_string_requests.js';
+import { presentSetStringRequests } from './set_string_display.js';
 import type { StellarSetString } from '../nova_plugin/encounters/index.js';
 import {
     PendingStellarSetString, PendingStellarSetStringsComponent,
@@ -37,6 +39,8 @@ export const STELLAR_SET_STRING_RESEND_MS = 3000;
 export interface StellarSetStringSent {
     seq?: number;
     at: number;
+    /** The last entry whose Qxxx / Pxxx were shown / played. */
+    presentedSeq?: number;
 }
 export const StellarSetStringSentResource =
     new Resource<StellarSetStringSent>('StellarSetStringSent');
@@ -75,11 +79,15 @@ export const StellarSetStringSystem = new System({
         const systemId = world.resources.get(SystemIdResource);
         void (async () => {
             let effects = {};
+            const requests = emptySetStringRequests();
             try {
                 const planet = await gameData.data.Planet.get(entry.planetId);
                 effects = await buildStellarSetString(entity, planet,
-                    entry.kind, gameData, MissionUniverse.shared(gameData),
-                    { systemId });
+                    entry.kind, gameData, MissionUniverse.shared(gameData), {
+                        systemId, requests,
+                        displayAssets:
+                            world.resources.get(DisplayAssetDataResource),
+                    });
             } catch (e) {
                 console.warn(`The ${entry.kind === 'dominate'
                     ? 'OnDominate' : 'OnRelease'} of ${entry.planetId} `
@@ -89,6 +97,12 @@ export const StellarSetStringSystem = new System({
                 record: { seq: entry.seq, planetId: entry.planetId,
                     ...effects },
             });
+            // Its `Qxxx` / `Pxxx` (no stock OnDominate has one), once per
+            // entry however often it is resent.
+            if (sent.presentedSeq !== entry.seq) {
+                sent.presentedSeq = entry.seq;
+                await presentSetStringRequests(world, requests, entity);
+            }
         })();
     },
 });

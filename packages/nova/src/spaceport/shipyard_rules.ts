@@ -41,6 +41,7 @@ import { ensurePlayerStateComponents } from './mission_session.js';
 import { OUTFIT_RESALE_FRACTION, outfitPrice } from './outfitter_rules.js';
 import { modifiedPrice } from './price_mod.js';
 import {
+    CronDisplayOperators,
     outfitsAfterShipChange, PLAYER_STATE_COMPONENTS, resolveNumberedResource,
     setStringPrefix, systemDiscoveryOperators,
 } from '../nova_plugin/missions/index.js';
@@ -493,6 +494,10 @@ export interface TradeSetStringLookups {
     getRank?(globalId: string): RankData | undefined;
     systemExists?(globalId: string): boolean;
     discovery?: DiscoveryAccess;
+    /** `Qxxx` / `Mxxx` / `Nxxx` / `Txxx` / `Pxxx` (the landing's
+     * transaction's, LandedTransaction.setStringOperators); absent, each
+     * is reported unimplemented. None in stock or the bundled plug-ins. */
+    operators?: CronDisplayOperators;
 }
 
 /**
@@ -542,7 +547,7 @@ export function runShipTradeSetStrings(entity: Entity,
             // Player-local, like the outfitter's: only the resulting
             // state reaches the simulation, so plain randomness is fine
             // for R(a b).
-            runNCBSet(expression, makeControlBitHooks(bits, {
+            const hooks = makeControlBitHooks(bits, {
                 outfits,
                 resolveId: id => resolveNumberedResource(
                     id, prefix, lookups.outfitExists),
@@ -551,7 +556,23 @@ export function runShipTradeSetStrings(entity: Entity,
                 resolveId: id => resolveNumberedResource(id, prefix, rankExists),
                 getRank: id => lookups.getRank?.(id),
             }, systemDiscoveryOperators(lookups.discovery, prefix,
-                lookups.systemExists)), Math.random);
+                lookups.systemExists));
+            const ops = lookups.operators;
+            if (ops?.leaveStellar) {
+                hooks.leaveStellar = id => ops.leaveStellar!(id, prefix);
+            }
+            if (ops?.moveToSystem) {
+                hooks.moveToSystem = (id, keep) => ops.moveToSystem!(
+                    resolveNumberedResource(id, prefix, lookups.systemExists),
+                    keep);
+            }
+            if (ops?.renameShip) {
+                hooks.renameShip = id => ops.renameShip!(id, prefix);
+            }
+            if (ops?.playSound) {
+                hooks.playSound = id => ops.playSound!(id, prefix);
+            }
+            runNCBSet(expression, hooks, Math.random);
         } catch (error) {
             if (error instanceof NCBParseError) {
                 console.warn(`Bad shïp set string on ${ship.id}:`, error);

@@ -40,6 +40,10 @@ import { warmChangeShipTargets } from './change_ship_targets.js';
 import {
     cloneDeparture, LandedDeparture,
 } from './landed_departure.js';
+import {
+    cloneSetStringRequests, SetStringRequests, StringPick,
+} from './set_string_requests.js';
+import type { CronDisplayOperators } from '../nova_plugin/missions/index.js';
 
 /**
  * ============================================================================
@@ -220,6 +224,8 @@ interface Snapshot {
     hired: string[];
     /** The Qxxx / Mxxx / Nxxx requests at the time. */
     departure: LandedDeparture;
+    /** The Txxx requests at the time. */
+    requests: SetStringRequests;
     /** The leased holds' working cargo at the time, by hold. */
     holds: { hold: FleetHold, cargo: Map<string, number> }[];
 }
@@ -339,14 +345,51 @@ export class LandedTransaction {
      * (mission_set_strings.ts).
      */
     private wireDeparture(): void {
+        Object.assign(this.session.machinery, this.setStringOperators());
+    }
+
+    /**
+     * The landing's own Q / M / N / T / P hooks, shared by every set string
+     * its session runs and by the crons and in-flight upkeep of its date
+     * advance ({@link processLanding}): a Q and an M / N go to the
+     * departure (landed_departure.ts); a `Txxx` waits on the session for
+     * the spaceport to pick the name ({@link takeShipNames}); a `Pxxx`
+     * plays at once through {@link onSound} (arpia's mïsn 983 OnSuccess
+     * `P5000`, at the completion), or is dropped with no spaceport to play
+     * it (a sound has nothing to roll back).
+     */
+    setStringOperators(): CronDisplayOperators {
         const session = this.session;
-        session.machinery.leaveStellar = (stringId, prefix) => {
-            session.departure.leave = true;
-            session.departure.quotes.push({ stringId, prefix });
+        return {
+            leaveStellar: (stringId, prefix) => {
+                session.departure.leave = true;
+                session.departure.quotes.push({ stringId, prefix });
+            },
+            moveToSystem: (systemId, keepCoordinates) => {
+                session.departure.move = { systemId, keepCoordinates };
+            },
+            renameShip: (stringId, prefix) => {
+                session.requests.shipNames.push({ stringId, prefix });
+            },
+            playSound: (soundId, prefix) => {
+                this.onSound?.({ soundId, prefix });
+            },
         };
-        session.machinery.moveToSystem = (systemId, keepCoordinates) => {
-            session.departure.move = { systemId, keepCoordinates };
-        };
+    }
+
+    /**
+     * Plays a landed `Pxxx` (the spaceport sets it to its own UI channel).
+     */
+    onSound?: (sound: { soundId: number, prefix: string }) => void;
+
+    /**
+     * The `Txxx`s run since the last call, oldest first, taken off the
+     * session (the spaceport names the ship from the last one's STR#).
+     */
+    takeShipNames(): StringPick[] {
+        const names = this.session.requests.shipNames;
+        this.session.requests.shipNames = [];
+        return names;
     }
 
     /**
@@ -356,6 +399,17 @@ export class LandedTransaction {
      */
     get departure(): Readonly<LandedDeparture> {
         return this.session.departure;
+    }
+
+    /**
+     * An `Mxxx` / `Nxxx` has run this visit: the system the player is now
+     * IN, though still docked here — the map opened from the spaceport
+     * shows it as the "Current System", and the Leave launches into it
+     * (MEASURED, reference "M / N without Q while landed (ncbops)").
+     * Undefined otherwise.
+     */
+    get movedToSystem(): string | undefined {
+        return this.session.departure.move?.systemId;
     }
 
     /** Whether a `Qxxx` has asked the spaceport to leave. */
@@ -504,8 +558,14 @@ export class LandedTransaction {
      */
     async processLanding(): Promise<MissionEvent[]> {
         const classBefore = this.hull.components.get(ShipComponent)?.id;
+        // The day's set strings (a crön's OnEnd, a deadline OnFailure) may
+        // Q / M / N / T / P: recorded as any landed string's are, so a Q
+        // there leaves after the landing's popups (spaceport.ts).
         await advanceEntityDate(this.hull, 1, this.universe, this.gameData,
-            { escortWages: false, tribute: false });
+            {
+                escortWages: false, tribute: false,
+                operators: this.setStringOperators(),
+            });
         // The crons just ran on the entity (bits, ranks, outfits, the
         // books): the working copy and the per-hull facts follow.
         this.session.reseed(this.hull);
@@ -636,6 +696,7 @@ export class LandedTransaction {
             outfits: new Map(this.session.outfits),
             hired: [...this.hired],
             departure: cloneDeparture(this.session.departure),
+            requests: cloneSetStringRequests(this.session.requests),
             holds: this.leasedHolds.map(hold =>
                 ({ hold, cargo: new Map(hold.cargo) })),
         };
@@ -669,6 +730,7 @@ export class LandedTransaction {
         this.hired.length = 0;
         this.hired.push(...snapshot.hired);
         this.session.departure = cloneDeparture(snapshot.departure);
+        this.session.requests = cloneSetStringRequests(snapshot.requests);
         for (const { hold, cargo } of snapshot.holds) {
             replaceMap(hold.cargo, cargo);
         }

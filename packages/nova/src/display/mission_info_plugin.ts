@@ -29,6 +29,7 @@ import {
 import { flightOverlays } from './flight_overlays.js';
 import { Stage } from './stage_resource.js';
 import { showStatusMessage } from './status_message_plugin.js';
+import { presentSetStringRequests } from './set_string_display.js';
 import { BEEP_MISSION_CLOSE, BEEP_MISSION_OPEN, playUiSound } from './ui_sound.js';
 
 export const MissionInfoResource = new Resource<MissionInfoDialog>('MissionInfo');
@@ -106,11 +107,17 @@ export const DeferredAutoAbortSystem = new System({
             sent.add(missionId);
             void buildDeferredAutoAbort(entity, missionId, gameData,
                 MissionUniverse.shared(gameData),
-                { systemId: world.resources.get(SystemIdResource) })
-                .then(abort => {
+                {
+                    systemId: world.resources.get(SystemIdResource),
+                    displayAssets:
+                        world.resources.get(DisplayAssetDataResource),
+                })
+                .then(async abort => {
                     if (abort) {
                         world.emit(AbortMissionEvent,
                             { record: abort.record });
+                        await presentSetStringRequests(world,
+                            abort.requests, entity);
                     }
                 }).catch(e => {
                     console.warn('Deferred auto-abort failed:', e);
@@ -162,12 +169,17 @@ export const MissionInfoPlugin: Plugin = {
                 return false;
             }
             const abort = await buildMissionAbort(player, missionId,
-                simulationData, universe,
-                { systemId: world.resources.get(SystemIdResource) });
+                simulationData, universe, {
+                    systemId: world.resources.get(SystemIdResource),
+                    displayAssets,
+                });
             if (!abort) {
                 return false;
             }
             world.emit(AbortMissionEvent, { record: abort.record });
+            // Its OnAbort's `Qxxx` line and `Pxxx` sound (an `Mxxx` rides
+            // the record: arpia's mïsn 1038 OnAbort `... M500 ...`).
+            void presentSetStringRequests(world, abort.requests, player);
             return true;
         };
         // Opens the dialog for a ship (in flight the world's player ship;

@@ -4,8 +4,10 @@ import { Plugin } from 'nova_ecs/plugin';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import {
-    SimulationGameDataResource, SystemIdResource,
+    DisplayAssetDataResource, SimulationGameDataResource, SystemIdResource,
 } from '../nova_plugin/core/index.js';
+import { presentSetStringRequests } from './set_string_display.js';
+import { emptySetStringRequests } from '../spaceport/set_string_requests.js';
 import {
     MissionSetString, owedMissionSetString,
 } from '../nova_plugin/missions/index.js';
@@ -37,6 +39,8 @@ export const MISSION_SET_STRING_RESEND_MS = 3000;
  * and when. */
 export interface MissionSetStringSent {
     key?: string;
+    /** The last owed string whose Qxxx / Pxxx were shown / played. */
+    presented?: string;
     at: number;
 }
 export const MissionSetStringSentResource =
@@ -76,11 +80,24 @@ export const MissionSetStringSystem = new System({
         sent.key = key;
         sent.at = now;
         const systemId = world.resources.get(SystemIdResource);
+        const displayAssets = world.resources.get(DisplayAssetDataResource);
+        const requests = emptySetStringRequests();
         void buildMissionSetString(entity, owed, gameData,
-            MissionUniverse.shared(gameData), { systemId })
-            .then(record => {
+            MissionUniverse.shared(gameData),
+            { systemId, displayAssets, requests })
+            .then(async record => {
                 if (record) {
                     world.emit(MissionSetStringEvent, { record });
+                    // Its `Qxxx` line (stock: 30-odd OnShipDones and
+                    // in-flight OnFailures, e.g. mïsn nova:156's Q25059
+                    // "Holographic recording complete.  Return to P'ar
+                    // Aed."), its `Pxxx` sound. Once per debt: a resend
+                    // (the record was lost) does not say it twice.
+                    if (sent.presented !== key) {
+                        sent.presented = key;
+                        await presentSetStringRequests(world, requests,
+                            entity);
+                    }
                 }
             }).catch(e => {
                 console.warn(`The ${owed.kind === 'shipDone'

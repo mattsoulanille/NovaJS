@@ -47,6 +47,9 @@ import {
     departureRequested, PendingDeparture, PendingDepartureComponent,
 } from './landed_departure.js';
 import { statusQuoteLine } from './status_quote.js';
+import {
+    pickShipName, resolveSetStringSound,
+} from './set_string_requests.js';
 import { Menu } from './menu.js';
 import { MenuControls } from './menu_controls.js';
 import { MissionBoard } from './mission_board.js';
@@ -660,6 +663,9 @@ export class Spaceport extends Menu<Entity> {
             // the Recharge button here, and whichever venue is open.
             this.transaction.onCreditsChanged(
                 () => this.creditsChangedOutside());
+            // A landed `Pxxx` plays as its string runs (arpia's mïsn 983
+            // OnSuccess `P5000`, under its completion text).
+            this.transaction.onSound = sound => void this.playSetStringSound(sound);
             try {
                 events = await this.transaction.processLanding();
             } catch (e) {
@@ -740,12 +746,70 @@ export class Spaceport extends Menu<Entity> {
      * Leave is already under way.
      */
     private departIfAsked(): void {
+        void this.settleSetStrings();
+    }
+
+    /**
+     * Once the dialog a set string ran under is closed: its `Txxx` names
+     * the ship (set_string_requests.ts; the stock OnAccepts of mïsn
+     * nova:197, 320, 361, 709 and 748 — "Dart", "Arrow", ... with their
+     * change of ship), and then a `Qxxx` departs.
+     */
+    private async settleSetStrings(): Promise<void> {
+        try {
+            await this.applyShipNames();
+        } catch (e) {
+            console.warn('A set string\'s ship name could not be applied:', e);
+        }
         const transaction = this.transaction;
         if (!transaction?.mustLeave || transaction.isClosed || this.leaving
             || !this.stillDocked()) {
             return;
         }
         void this.leave();
+    }
+
+    /**
+     * The visit's `Txxx`s so far: the last one's STR# names the hull the
+     * player is in now ("change the name (title) of the player's ship to a
+     * string randomly selected from STR# resource ID xxx"). The hull is
+     * held out of every world while docked, so the name is written on it
+     * directly, as the shipyard's naming prompt writes one, and rides the
+     * lift-off's insertion.
+     */
+    private async applyShipNames(): Promise<void> {
+        const transaction = this.transaction;
+        if (!transaction || transaction.isClosed) {
+            return;
+        }
+        const picks = transaction.takeShipNames();
+        const name = await pickShipName(this.displayAssets, picks);
+        if (name === undefined || transaction.isClosed) {
+            return;
+        }
+        const ship = transaction.ship;
+        ship.components.set(PlayerNamesComponent, {
+            ...ship.components.get(PlayerNamesComponent), ship: name,
+        });
+    }
+
+    /** Plays a landed `Pxxx` on the UI channel (setUiSoundPlayer). */
+    private async playSetStringSound(
+        sound: { soundId: number, prefix: string }): Promise<void> {
+        const id = await resolveSetStringSound(this.displayAssets, sound);
+        if (id) {
+            this.uiSoundPlayer?.(id);
+        } else {
+            console.warn(`Set string P${sound.soundId}: no such sound.`);
+        }
+    }
+
+    private uiSoundPlayer?: (id: string) => void;
+
+    /** How the spaceport plays a one-shot UI sound (a set string's Pxxx):
+     * the display plugin hands it the display world's UI channel. */
+    setUiSoundPlayer(play: (id: string) => void): void {
+        this.uiSoundPlayer = play;
     }
 
     /**
@@ -1610,6 +1674,8 @@ export class Spaceport extends Menu<Entity> {
      * conditional is resolved. Undefined when nothing was asked.
      */
     private async buildLiftOffDeparture(): Promise<PendingDeparture | undefined> {
+        // A `Txxx` the Leave caught before its dialog's settle did.
+        await this.applyShipNames();
         const transaction = this.transaction;
         if (!transaction || transaction.isClosed
             || !departureRequested(transaction.departure)) {

@@ -194,6 +194,17 @@ export interface MissionMachineryContext {
      */
     leaveStellar?(stringId: number, prefix: string): void;
     /**
+     * `Txxx` (rename the player's ship to a line of STR# xxx) and `Pxxx`
+     * (play snd xxx). Both name display data the simulation never loads,
+     * so the caller only records them (spaceport/set_string_requests.ts):
+     * the in-flight records, the date advance and the landing's
+     * transaction each wire them. Absent, each is reported as an
+     * unimplemented hook. `prefix` is the running expression's plug-in,
+     * for resolving the bare number stock-first.
+     */
+    renameShip?(stringId: number, prefix: string): void;
+    playSound?(soundId: number, prefix: string): void;
+    /**
      * Whether a shïp with this global id exists, so the change-ship
      * operators resolve their bare number stock-first like every other
      * numeric reference.

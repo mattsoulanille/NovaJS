@@ -776,6 +776,7 @@ export class Shipyard extends Menu<Entity> {
             systemExists: universe.systemsLoaded
                 ? (id: string) => universe.hasSystem(id) : undefined,
             discovery: playerDiscovery,
+            operators: this.transaction?.setStringOperators(),
         });
         // The hull just bought is what a SECOND purchase in this same
         // visit trades in, so the valuation must follow it immediately

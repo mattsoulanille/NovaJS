@@ -11,7 +11,7 @@ import {
     WeaponsStateComponent,
 } from '../nova_plugin/ship/index.js';
 import {
-    abortMission, failExpiredMissions, failMission, MissionContext, MissionEvent,
+    abortMission, CronDisplayOperators, failExpiredMissions, failMission, MissionContext, MissionEvent,
     MissionMachineryContext, MissionWorkingState, outfitsAfterShipChange,
     playerContribute, processLanding, rehullShip, runCronsForDays,
     runMissionSetString,
@@ -33,6 +33,9 @@ import { missionEventLabel, requestCheckpoint } from './checkpoint_requests.js';
 import { takeShipDoneTextShown } from './ship_done_shown.js';
 import { loadOrSkip } from './skip_failed_loads.js';
 import { emptyDeparture, LandedDeparture } from './landed_departure.js';
+import {
+    emptySetStringRequests, SetStringRequests,
+} from './set_string_requests.js';
 
 /**
  * The per-hull facts a session derives from the entity and the game data
@@ -81,6 +84,14 @@ export class MissionSession {
      * with its savepoints; every other session leaves it empty.
      */
     departure: LandedDeparture = emptyDeparture();
+    /**
+     * The `Txxx` a landed set string asked for (set_string_requests.ts),
+     * waiting for the spaceport to pick the name from its STR# once the
+     * dialog is done. Written and snapshot like `departure`. (A landed
+     * `Pxxx` plays at once through the transaction's sound hook; a `Qxxx`
+     * is the departure's.)
+     */
+    requests: SetStringRequests = emptySetStringRequests();
     private shipGovt: string | null;
     private shipInherentAI: number | undefined;
     private playerContribute: bigint;
@@ -783,6 +794,16 @@ export async function advanceEntityDate(entity: Entity, days: number,
          * day's tribute as the player leaves (spaceport.ts's
          * settleTributeAtLiftOff). */
         tribute?: boolean,
+        /**
+         * `Qxxx` / `Mxxx` / `Nxxx` / `Txxx` / `Pxxx` in the set strings
+         * this date advance runs — a crön's OnStart / OnEnd, and the
+         * in-flight upkeep's OnShipDone / OnFailure / OnAbort — for a
+         * caller that can act on them: a jump (client/transit.ts) shows
+         * the lines and plays the sounds on arrival, names the ship, and
+         * goes where a move says; a landing (landed_transaction.ts) records
+         * them on its departure. Absent: each is reported unimplemented.
+         */
+        operators?: CronDisplayOperators,
     } = {}): Promise<void> {
     ensurePlayerStateComponents(entity);
     if (days <= 0) {
@@ -820,6 +841,7 @@ export async function advanceEntityDate(entity: Entity, days: number,
             contribute, getShip: id => payrollShips.get(id),
             escortWages: options.escortWages,
             tribute: options.tribute,
+            operators: options.operators,
             ...(hull ? {
                 changeShip: (id: string, mode: ShipChangeMode,
                     outfits: Map<string, number>) =>
@@ -837,7 +859,8 @@ export async function advanceEntityDate(entity: Entity, days: number,
     // (gameData-less) callers.
     if (gameData) {
         try {
-            await processInFlightMissions(entity, gameData, universe);
+            await processInFlightMissions(entity, gameData, universe,
+                options.operators);
         } catch (e) {
             console.warn('In-flight mission evaluation failed:', e);
         }
@@ -882,6 +905,8 @@ export function settleDateAdvance(entity: Entity, days: number,
         changeShip?: (globalShipId: string, mode: ShipChangeMode,
             outfits: Map<string, number>) => void,
         shipExists?: (globalId: string) => boolean,
+        /** A crön's Q / M / N / T / P (see advanceEntityDate). */
+        operators?: CronDisplayOperators,
     }): void {
     ensurePlayerStateComponents(entity);
     if (days <= 0) {
@@ -926,6 +951,7 @@ export function settleDateAdvance(entity: Entity, days: number,
                     options.changeShip!(id, mode, ownedOutfits),
                 shipExists: options.shipExists,
             } : {}),
+            operators: options.operators,
         });
         entity.components.set(ControlBitsComponent, bits);
         // A crön set string may have granted or dropped a rank (Kxxx /
@@ -986,7 +1012,8 @@ function commitCronOutfits(entity: Entity,
  */
 async function processInFlightMissions(entity: Entity,
     gameData: SimulationGameDataInterface,
-    universe: MissionUniverse): Promise<void> {
+    universe: MissionUniverse,
+    operators?: CronDisplayOperators): Promise<void> {
     const missions = entity.components.get(MissionsComponent);
     if (!missions || missions.size === 0) {
         return;
@@ -1005,6 +1032,11 @@ async function processInFlightMissions(entity: Entity,
     }
     const session = await MissionSession.create(
         entity, gameData, universe, '<in-flight>');
+    // A Qxxx / Mxxx / Nxxx / Txxx / Pxxx in them goes to the caller (see
+    // advanceEntityDate): stock's deadline OnFailures with a Q (the
+    // duellists, mïsn nova:759-764 `Q7999`), arpia's mïsn 1038 OnFailure
+    // `b20129 M500 s962`.
+    Object.assign(session.machinery, operators ?? {});
     // A Cxxx / Exxx / Hxxx in an OnShipDone, OnFailure or OnAbort run here
     // swaps the hull of the entity this date advance holds, in place —
     // the session already points at it, so only its outfits move.

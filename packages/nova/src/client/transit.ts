@@ -34,6 +34,16 @@ import {
 } from '../nova_plugin/travel/index.js';
 import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship/index.js';
 import { advanceEntityDate } from '../spaceport/mission_session.js';
+import {
+    emptySetStringRequests, pickShipName, SetStringRequests,
+} from '../spaceport/set_string_requests.js';
+import {
+    expandQuoteLine, playSetStringSounds, quoteLines,
+} from '../display/set_string_display.js';
+import type {
+    CronDisplayOperators, SystemMove,
+} from '../nova_plugin/missions/index.js';
+import { PlayerNamesComponent } from '../nova_plugin/player/index.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import {
     activeSystemId, requestGateLaunch, returnToGate, strand, TransitPlan,
@@ -73,15 +83,37 @@ export function followHyperspaceJump(runtime: ClientRuntime,
     // date advances ONCE, one jump's days, for the whole multi-jump
     // (Matthew, 2026-11-27).
     void runtime.transitions.run(async () => {
-        await advanceDateForJump(runtime, data.entity);
+        const asked = await advanceDateForJump(runtime, data.entity);
+        // A `Mxxx` / `Nxxx` the days' set strings ran (a crön's OnEnd, a
+        // deadline OnFailure — arpia's mïsn 1038 `M500`) sends the arrival
+        // elsewhere: M on top of the named system's first stellar, as the
+        // in-flight move places it; N where the jump would have put the
+        // ship (its arrival point, the "same x/y" the ship has on arrival).
+        // GUESS: unmeasured; the original advances the date as the jump
+        // ends, so the move is read as happening then.
+        const move = asked.move;
+        const to = move?.systemId ?? data.to;
+        if (move && !move.keepCoordinates) {
+            await placeOnFirstStellar(data.entity, to, runtime.gameData);
+        }
         // A rejection here used to be unobserved: the ship (already
         // deleted sim-side) was simply gone. Recover it into the system it
         // left, the way a failed gate transit recovers to its gate.
         try {
             await jumpTo(runtime, {
-                kind: 'hyper', from: origin, to: data.to, uuid: data.uuid,
-                entity: data.entity,
+                kind: move && !move.keepCoordinates ? 'move' : 'hyper',
+                from: origin, to, uuid: data.uuid, entity: data.entity,
             }, wire);
+            // The days' `Qxxx` lines on the arrival's status line (in
+            // place of the arrival line, as a landed move's are) and their
+            // `Pxxx` sounds.
+            const arrived = runtime.state.state;
+            if (arrived.kind === 'inSpace') {
+                const world = arrived.system.world;
+                showDepartureMessages(world, asked.lines, true);
+                await playSetStringSounds(world, runtime.displayAssetData,
+                    asked.requests);
+            }
         } catch (e) {
             if (isSessionEnded(e)) {
                 // Exit-to-title took the session: there is no world to
@@ -109,8 +141,25 @@ export function followHyperspaceJump(runtime: ClientRuntime,
  * costs one jump's days, however many hops it takes (Matthew, 2026-11-27).
  */
 async function advanceDateForJump(runtime: ClientRuntime, entity: Entity):
-    Promise<void> {
+    Promise<JumpDaysRequests> {
     const { gameData } = runtime;
+    // The days' `Qxxx` / `Mxxx` / `Nxxx` / `Txxx` / `Pxxx`
+    // (set_string_requests.ts): recorded while the strings run, acted on
+    // once they are done.
+    const asked: JumpDaysRequests = {
+        requests: emptySetStringRequests(), lines: [],
+    };
+    const operators: CronDisplayOperators = {
+        leaveStellar: (stringId, prefix) =>
+            asked.requests.statusQuotes.push({ stringId, prefix }),
+        renameShip: (stringId, prefix) =>
+            asked.requests.shipNames.push({ stringId, prefix }),
+        playSound: (soundId, prefix) =>
+            asked.requests.sounds.push({ soundId, prefix }),
+        moveToSystem: (systemId, keepCoordinates) => {
+            asked.move = { systemId, keepCoordinates };
+        },
+    };
     try {
         const derived = entity.components.get(ShipPhysicsComponent);
         let mass = derived?.mass;
@@ -124,7 +173,7 @@ async function advanceDateForJump(runtime: ClientRuntime, entity: Entity):
             speedMod = physics?.hyperspaceSpeedMod ?? 0;
         }
         await advanceEntityDate(entity, daysPerJump(mass, speedMod),
-            MissionUniverse.shared(gameData), gameData);
+            MissionUniverse.shared(gameData), gameData, { operators });
     } catch (e) {
         // THE DATE COST IS FORFEIT, DELIBERATELY, and the jump still
         // happens. advanceEntityDate is a player-local bookkeeping pass
@@ -137,6 +186,43 @@ async function advanceDateForJump(runtime: ClientRuntime, entity: Entity):
         console.warn('Failed to advance the date on jump; jumping anyway '
             + 'without the date cost:', e);
     }
+    try {
+        await resolveJumpDaysRequests(runtime, entity, asked);
+    } catch (e) {
+        console.warn('The jump\'s set-string messages could not be '
+            + 'resolved:', e);
+    }
+    return asked;
+}
+
+/** What a jump's days asked for (advanceDateForJump). */
+interface JumpDaysRequests {
+    requests: SetStringRequests;
+    /** The `Qxxx` lines, picked and expanded. */
+    lines: string[];
+    /** The last `Mxxx` / `Nxxx`, the sÿst resolved stock-first. */
+    move?: SystemMove;
+}
+
+/**
+ * The display-data half of a jump's requests, on the entity the jump
+ * holds (out of every world, so it is written directly and rides the
+ * arrival's insertion): a `Txxx` names the ship, and each `Qxxx` line is
+ * picked and expanded against the pilot as the name leaves it.
+ */
+async function resolveJumpDaysRequests(runtime: ClientRuntime,
+    entity: Entity, asked: JumpDaysRequests): Promise<void> {
+    const displayAssets = runtime.displayAssetData;
+    const name = await pickShipName(displayAssets,
+        asked.requests.shipNames);
+    if (name !== undefined) {
+        entity.components.set(PlayerNamesComponent, {
+            ...entity.components.get(PlayerNamesComponent), ship: name,
+        });
+    }
+    const universe = MissionUniverse.shared(runtime.gameData);
+    asked.lines = await quoteLines(displayAssets, asked.requests,
+        line => expandQuoteLine(line, entity, universe));
 }
 
 /**

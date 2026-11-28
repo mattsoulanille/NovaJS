@@ -28,7 +28,7 @@ import {
 } from './screen_size_plugin.js';
 import { Stage, WorldLayer } from './stage_resource.js';
 import { OpenStarmapResource } from './starmap_plugin.js';
-import { UiSoundEvent } from './ui_sound.js';
+import { playUiSound, UiSoundEvent } from './ui_sound.js';
 import { MissionShipDoneSystem } from "./mission_ship_done_plugin.js";
 
 
@@ -131,6 +131,8 @@ const OpenSpaceportSystem = new System({
             stage.addChild(spaceport.container);
             planet.components.set(SpaceportComponent, spaceport);
         }
+        // A landed set string's `Pxxx` plays on this world's UI channel.
+        spaceport.setUiSoundPlayer(id => playUiSound(world, { id }));
 
         // Owned-but-not-aboard outfits for this landing: fighters still
         // in FLIGHT (a closure over the live EntityMap — one shot down

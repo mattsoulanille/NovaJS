@@ -6,7 +6,7 @@ import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
 import { CargoComponent } from '../ship/index.js';
 import { deriveEntityComponents } from '../core/index.js';
-import { addDays } from '../player/index.js';
+import { addDays, PlayerNamesComponent, sanitizeShipName } from '../player/index.js';
 import { ActiveMission, ActiveMissionType, CreditsComponent, GameDateComponent, MissionsComponent, MAX_ACTIVE_MISSIONS } from '../player/index.js';
 import {
     ActiveRanksComponent, AggressionSuppressGovtsComponent,
@@ -248,6 +248,17 @@ const SET_STRING_EFFECT_PROPS = {
      * pilot's own state, so their order there does not change the result.
      */
     moveToSystem: SystemMoveType,
+    /**
+     * `Txxx`: the name the player's ship now has ("change the name (title)
+     * of the player's ship to a string randomly selected from STR#
+     * resource ID xxx") — plug-in arpia's mïsn 1112 OnRefuse `... H445
+     * T25091 ...`, "Dark Raider". The STR# is display data, so the owning
+     * client picked the line (spaceport/set_string_requests.ts) and only
+     * the result crosses the wire. Applied after the change of ship, onto
+     * the hull the player ends up in; cleaned as every stored name is
+     * (sanitizeShipName), since a record is untrusted input.
+     */
+    shipName: t.string,
 };
 
 /** The effect fields on their own (both records carry them). */
@@ -765,6 +776,15 @@ export function applySetStringEffects(world: World, uuid: string,
     let ship = player;
     if (effects.shipChange) {
         ship = applyShipChange(world, uuid, player, effects.shipChange);
+    }
+    // Txxx: the name, on the hull the player is now in.
+    if (effects.shipName !== undefined) {
+        const name = sanitizeShipName(effects.shipName);
+        if (name !== undefined) {
+            ship.components.set(PlayerNamesComponent, {
+                ...ship.components.get(PlayerNamesComponent), ship: name,
+            });
+        }
     }
     // Mxxx / Nxxx: the ship leaves this system at the head of this tick's
     // step, in the hull it now has (MissionSystemMoveSystem).

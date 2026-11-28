@@ -22,6 +22,42 @@ function makeCron(partial: Partial<CronData> = {}): CronData {
 const DAY = dayNumber({ day: 23, month: 6, year: 1177 });
 
 describe('runCronsForDays', () => {
+    it('hands a cron\'s Q / M / N / T / P to the caller\'s operators, in '
+        + 'the cron\'s own plug-in namespace (HypergatePass crön 386\'s '
+        + 'OnEnd `D444 L159 !b20282 & Q25077`)', () => {
+            const cron = makeCron({
+                id: 'HypergatePassv1.0:386', onStart: 'Q25077 T25040 P5000',
+                onEnd: '', duration: 0,
+            });
+            const calls: unknown[] = [];
+            const moved = makeCron({
+                id: 'arpia:400', onStart: 'M128 N500',
+            });
+            runCronsForDays([cron, moved], new Map(), new Set(), DAY,
+                DAY + 1, () => 0, 0n, {
+                    systemExists: id => id === 'nova:128'
+                        || id === 'arpia:500',
+                    operators: {
+                        leaveStellar: (id, prefix) =>
+                            calls.push(['Q', id, prefix]),
+                        renameShip: (id, prefix) =>
+                            calls.push(['T', id, prefix]),
+                        playSound: (id, prefix) =>
+                            calls.push(['P', id, prefix]),
+                        moveToSystem: (id, keep) =>
+                            calls.push(['M', id, keep]),
+                    },
+                });
+            expect(calls).toEqual([
+                ['Q', 25077, 'HypergatePassv1.0'],
+                ['T', 25040, 'HypergatePassv1.0'],
+                ['P', 5000, 'HypergatePassv1.0'],
+                // Stock-first, then the cron's own plug-in.
+                ['M', 'nova:128', false],
+                ['M', 'arpia:500', true],
+            ]);
+        });
+
     it('scopes a cron\'s Kxxx rank grant to the cron\'s OWN plug-in, not '
         + 'the stock namespace', () => {
             // A plug-in cron granting "its" rank 147 must activate

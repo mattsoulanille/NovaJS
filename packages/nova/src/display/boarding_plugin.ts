@@ -28,6 +28,8 @@ import { ShipComponent } from '../nova_plugin/ship/index.js';
 import { displayName, SystemIdResource } from '../nova_plugin/core/index.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { buildCaptureSetStrings } from '../spaceport/ship_mission_accept.js';
+import { emptySetStringRequests } from '../spaceport/set_string_requests.js';
+import { presentSetStringRequests } from './set_string_display.js';
 import {
     CAPTURED_SHIP_NAME_PROMPT_INDEX, CAPTURED_SHIP_NAME_PROMPT_TEXT,
     CapturedShipNamePrompt,
@@ -1139,10 +1141,14 @@ export async function useCapturedShip(world: World,
         return true;
     }
     const retired = await gameData.data.Ship.get(oldId);
+    const requests = emptySetStringRequests();
     const effects = await buildCaptureSetStrings(player, retired, prize,
-        gameData, MissionUniverse.shared(gameData),
-        { systemId: world.resources.get(SystemIdResource) });
+        gameData, MissionUniverse.shared(gameData), {
+            systemId: world.resources.get(SystemIdResource), requests,
+            displayAssets: world.resources.get(DisplayAssetDataResource),
+        });
     world.emit(CaptureShipEvent, { capture: { name, ...effects } });
+    void presentSetStringRequests(world, requests, player);
     return true;
 }
 
@@ -1167,11 +1173,15 @@ async function useCapturedShipAsEscort(world: World,
         return false;
     }
     const prize = await gameData.data.Ship.get(prizeId);
+    const requests = emptySetStringRequests();
     const effects = await buildCaptureSetStrings(player, undefined, prize,
-        gameData, MissionUniverse.shared(gameData),
-        { systemId: world.resources.get(SystemIdResource) });
+        gameData, MissionUniverse.shared(gameData), {
+            systemId: world.resources.get(SystemIdResource), requests,
+            displayAssets: world.resources.get(DisplayAssetDataResource),
+        });
     world.emit(CaptureShipEvent,
         { capture: { name: '', escort: true, ...effects } });
+    void presentSetStringRequests(world, requests, player);
     return true;
 }
 

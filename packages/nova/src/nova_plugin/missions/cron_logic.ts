@@ -1,7 +1,8 @@
 import { CronData } from 'novadatainterface/cron_data';
 import { dateFromDayNumber } from '../player/index.js';
 import {
-    makeControlBitHooks, NCBParseError, RankHookOptions, runNCBSet, ShipChangeMode,
+    makeControlBitHooks, NCBParseError, NCBSetHooks, RankHookOptions, runNCBSet,
+    ShipChangeMode,
     evaluateNCBTest,
 } from '../ncb/index.js';
 import { CronState, CronStates } from '../player/index.js';
@@ -104,6 +105,24 @@ export interface CronEvaluationOptions {
     changeShip?(globalShipId: string, mode: ShipChangeMode): void;
     /** Whether a shïp id exists, for resolving the change's bare number. */
     shipExists?(globalId: string): boolean;
+    /**
+     * `Qxxx` / `Mxxx` / `Nxxx` / `Txxx` / `Pxxx`, for a caller that can act
+     * on them (the date advance: client/transit.ts for a jump's days, the
+     * landing's transaction for its day). The HypergatePass plug-in's crön
+     * 386-388 OnEnd `D444 L159 !b20282 & Q25077` is the case in the data.
+     * Each STR# / snd number arrives with the cron's own plug-in prefix,
+     * and the sÿst number already resolved stock-first. Absent: each is
+     * reported unimplemented, as before.
+     */
+    operators?: CronDisplayOperators;
+}
+
+/** See CronEvaluationOptions.operators. */
+export interface CronDisplayOperators {
+    leaveStellar?(stringId: number, prefix: string): void;
+    moveToSystem?(globalSystemId: string, keepCoordinates: boolean): void;
+    renameShip?(stringId: number, prefix: string): void;
+    playSound?(soundId: number, prefix: string): void;
 }
 
 /** An ordinal for a (month, day) pair, months normalised to 31 days. */
@@ -189,6 +208,9 @@ interface CronSetContext {
     discovery?: DiscoveryNCBOperators;
     /** Cxxx / Exxx / Hxxx, the number resolved for THIS cron's plug-in. */
     changeShip?(id: number, mode: ShipChangeMode): void;
+    /** Qxxx / Mxxx / Nxxx / Txxx / Pxxx, scoped to THIS cron's plug-in. */
+    operators?: Pick<NCBSetHooks, 'leaveStellar' | 'moveToSystem'
+        | 'renameShip' | 'playSound'>;
 }
 
 function runCronSetString(expression: string, bits: Set<number>,
@@ -202,6 +224,7 @@ function runCronSetString(expression: string, bits: Set<number>,
         if (context.changeShip) {
             hooks.changeShip = context.changeShip;
         }
+        Object.assign(hooks, context.operators);
         runNCBSet(expression, hooks, random);
     } catch (e) {
         if (e instanceof NCBParseError) {
@@ -334,6 +357,31 @@ function cronPrefix(cron: CronData): string {
  * active crons' own Contribute is folded in per day. Default 0n means no
  * contributions.
  */
+/** One cron's Q / M / N / T / P hooks, scoped to its plug-in `prefix`. */
+function cronOperators(operators: CronDisplayOperators | undefined,
+    prefix: string, systemExists?: (globalId: string) => boolean):
+    CronSetContext['operators'] {
+    if (!operators) {
+        return undefined;
+    }
+    const { leaveStellar, moveToSystem, renameShip, playSound } = operators;
+    return {
+        ...(leaveStellar ? {
+            leaveStellar: (id: number) => leaveStellar(id, prefix),
+        } : {}),
+        ...(moveToSystem ? {
+            moveToSystem: (id: number, keep: boolean) => moveToSystem(
+                resolveNumberedResource(id, prefix, systemExists), keep),
+        } : {}),
+        ...(renameShip ? {
+            renameShip: (id: number) => renameShip(id, prefix),
+        } : {}),
+        ...(playSound ? {
+            playSound: (id: number) => playSound(id, prefix),
+        } : {}),
+    };
+}
+
 export function runCronsForDays(crons: CronData[], states: CronStates,
     bits: Set<number>, fromDay: number, toDay: number,
     random: () => number = Math.random, baseContribute: bigint = 0n,
@@ -342,7 +390,7 @@ export function runCronsForDays(crons: CronData[], states: CronStates,
     // rank options' required `active` set.
     const {
         ranks, ownedOutfits, outfitExists, discovery, systemExists,
-        changeShip, shipExists,
+        changeShip, shipExists, operators,
     }: CronEvaluationOptions =
         'active' in options ? { ranks: options } : options;
     // Every numeric id in a cron's set string is scoped to the plug-in that
@@ -378,6 +426,7 @@ export function runCronsForDays(crons: CronData[], states: CronStates,
                 changeShip: changeShip && ((id: number, mode: ShipChangeMode) =>
                     changeShip(resolveNumberedResource(id, prefix, shipExists),
                         mode)),
+                operators: cronOperators(operators, prefix, systemExists),
             }];
         }));
     const cronsById = new Map(crons.map(cron => [cron.id, cron]));

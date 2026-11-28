@@ -21,7 +21,8 @@ import { ActiveRanksComponent, ControlBitsComponent } from '../nova_plugin/ncb/i
 import {
     ActiveMission, ControlledByComponent, CreditsComponent, GameDateComponent,
     GOAL_DESTROY, GOAL_DISABLE, GOAL_ESCORT, MissionShipComponent,
-    MissionsComponent, PendingMissionNoticesComponent, ShipObjective,
+    MissionsComponent, PendingMissionNoticesComponent, PlayerNamesComponent,
+    ShipObjective,
 } from '../nova_plugin/player/index.js';
 import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import {
@@ -32,6 +33,8 @@ import {
     decodeSave, encodeSave, extractSaveData, restorePlayerState,
 } from '../nova_plugin/pilot/index.js';
 import { advanceEntityDate, processEntityLanding } from './mission_session.js';
+import { emptySetStringRequests } from './set_string_requests.js';
+import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { MissionUniverse } from './mission_universe.js';
 import {
     buildDeferredAutoAbort, buildMissionSetString,
@@ -64,7 +67,14 @@ describe('a mission\'s OnShipDone and in-flight OnFailure', () => {
         knockback: 0, passThroughShield: true, recoil: 0,
     } as never;
 
+    /** The courier's OnShipDone (a spec may add operators to it). */
+    let onShipDone = `^b${SHIP_DONE_BIT}`;
+    /** Replaces the courier's OnFailure when set. */
+    let onFailure: string | undefined;
+
     beforeEach(() => {
+        onShipDone = `^b${SHIP_DONE_BIT}`;
+        onFailure = undefined;
         // The courier run with an OnShipDone, a countable OnFailure and a
         // FailText.
         const original = MissionUniverse.prototype.getMission;
@@ -73,8 +83,9 @@ describe('a mission\'s OnShipDone and in-flight OnFailure', () => {
                 const mission = original.call(this, id);
                 return mission && id === COURIER ? {
                     ...mission,
-                    onShipDone: `^b${SHIP_DONE_BIT}`,
-                    onFailure: `${mission.onFailure} ^b${FAILURE_BIT}`,
+                    onShipDone,
+                    onFailure: onFailure
+                        ?? `${mission.onFailure} ^b${FAILURE_BIT}`,
                     failText: 'The convoy is lost.',
                 } as MissionData : mission;
             });
@@ -392,4 +403,87 @@ describe('a mission\'s OnShipDone and in-flight OnFailure', () => {
             universe, { systemId: THESSALY });
         expect(abort!.record.bitsSet).toEqual([SHIP_DONE_BIT]);
     }, 60_000);
+
+    /**
+     * `Qxxx` / `Txxx` / `Pxxx` in an OnShipDone (stock: 30-odd OnShipDones
+     * and in-flight OnFailures carry a Q — mïsn nova:156 `Q25059`
+     * "Holographic recording complete.  Return to P'ar Aed."; arpia:1028's
+     * OnShipDone is `P5001`). The STR# / snd numbers come back as requests
+     * for the owner's display; a T's line is picked from its STR# and rides
+     * the record as `shipName`, which every peer applies.
+     */
+    it('hands an OnShipDone\'s Q and P to the owner\'s display and its T to '
+        + 'the record', async () => {
+        onShipDone = `^b${SHIP_DONE_BIT} Q25059 T25040 P5001`;
+        const { gameData, universe, world, a } = await flying(GOAL_DESTROY);
+        expect(await kill(world, 'special')).toBeTrue();
+        const owed = owedMissionSetString(a.components.get(MissionsComponent)!);
+        const tables: { [id: string]: string[] } = {
+            'nova:25040': ['Dart', 'Dart'],
+        };
+        const displayAssets = {
+            data: {
+                StringTable: {
+                    get: async (id: string) => {
+                        if (!tables[id]) {
+                            throw new Error(`no STR# ${id}`);
+                        }
+                        return { id, strings: tables[id] };
+                    },
+                },
+            },
+        } as unknown as DisplayAssetDataInterface;
+        const requests = emptySetStringRequests();
+        const record = await buildMissionSetString(a, owed!, gameData,
+            universe, { systemId: THESSALY, displayAssets, requests });
+        expect(record).toEqual({
+            missionId: COURIER, kind: 'shipDone', bitsSet: [SHIP_DONE_BIT],
+            shipName: 'Dart',
+        });
+        expect(requests.statusQuotes).toEqual(
+            [{ stringId: 25059, prefix: 'nova' }]);
+        expect(requests.sounds).toEqual([{ soundId: 5001, prefix: 'nova' }]);
+        expect(requests.shipNames).toEqual(
+            [{ stringId: 25040, prefix: 'nova' }]);
+
+        await apply(world, 'a', record!);
+        expect(world.entities.get('ship a')!.components
+            .get(PlayerNamesComponent)?.ship).toBe('Dart');
+        // The other pilot's name is not touched.
+        expect(world.entities.get('ship b')!.components
+            .get(PlayerNamesComponent)?.ship).toBeUndefined();
+    }, 60_000);
+
+    it('a jump\'s date advance hands a deadline OnFailure\'s Q and M to the '
+        + 'caller (the duellists\' `Q7999`, arpia:1038\'s `M500`)',
+        async () => {
+            onFailure = `Q7999 M${SYNTHETIC.systems.ossory.split(':')[1]}`;
+            const gameData = await getSyntheticGameData();
+            const universe = MissionUniverse.shared(gameData);
+            await universe.load();
+            const ship = makeShip(
+                await gameData.data.Ship.get(SYNTHETIC.ships.skiff));
+            ship.components.set(GameDateComponent,
+                { day: 3, month: 4, year: 1177 });
+            ship.components.set(MissionsComponent, new Map([[COURIER, {
+                ...courier(GOAL_DESTROY), shipObjective: undefined,
+                deadlineDay: 0,
+            }]]));
+            const quotes: unknown[] = [];
+            const moves: unknown[] = [];
+            await advanceEntityDate(ship, 2, universe, gameData, {
+                operators: {
+                    leaveStellar: (stringId, prefix) =>
+                        quotes.push({ stringId, prefix }),
+                    moveToSystem: (systemId, keepCoordinates) =>
+                        moves.push({ systemId, keepCoordinates }),
+                },
+            });
+            expect(ship.components.get(MissionsComponent)!.has(COURIER))
+                .withContext('the deadline failed it').toBeFalse();
+            expect(quotes).toEqual([{ stringId: 7999, prefix: 'nova' }]);
+            expect(moves).toEqual([{
+                systemId: SYNTHETIC.systems.ossory, keepCoordinates: false,
+            }]);
+        }, 60_000);
 });
