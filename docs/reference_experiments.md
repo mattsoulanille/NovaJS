@@ -26867,7 +26867,97 @@ the pilot; plug-in `plugins/novaref-w55-jet`, tools in `tools/`,
   a 0-ton passenger aboard; a FailText at the ReturnStel later (the
   missions left the list at once, so presumably none).
 
+### Plug-in load order and folders, wave 58: the original loads NO plug-in inside a sub-folder of Plug-ins (any depth); top-level plug-ins load in case-insensitive name order, last wins, whatever order the files were created in (2026-11-27)
+
+**Question** (the hub's brief): Matthew's "Planet Rico" plug-in reuses
+stock spöb 516 for Gravit Station; `singularity/Singularity1.plug`
+overrides spöb 516 too and wins in NovaJS, which loads a folder as one
+plug-in at its sorted position (`P/id_space_handler.ts:227`, `:669`).
+Does the original load plug-ins inside sub-folders of Plug-ins, and in
+what order relative to top-level files (folders first or last, sorted
+in place, case-sensitive)?
+
+**Rig.** No kit, no kit ids: seven run-only plug-ins (`tools/gen.mjs`),
+each a letter, each renaming stock sÿst "probes" near Fomalhaut (stock
+bytes, only the resource name changed) to `<probe>:<letter>`, so the star
+map shows each probe's LAST-loaded participant. Probes: every pair of the
+seven files (21), two singles (A, X) and ALL. Installed (novaref's new
+`"as": "Folder/Name"`, README) in REVERSE name order, so creation order
+is the opposite of name order:
+
+| letter | Plug-ins path |
+|---|---|
+| A / Z | `G dir/a in G`, `G dir/z in G` (a folder) |
+| C | `S dir/c in S` (a second folder) |
+| X | `S dir/deep/x deep` (a folder in a folder) |
+| K / M / T | `k low`, `M top`, `t low` (top level; lower-case k and t) |
+
+Pilot: the base Shuttle at Snowmelt (Fomalhaut) with every system
+explored; Enter Ship, `m`, shots at 100 % and 133 %. Run b, the Planet
+Rico layout: top-level `Planet Rico` and `singularity/Singularity1.plug`
+both rename Kon (`PR:P` / `PR:S`) and one sÿst each of their own (SPC-1927
+`R1:P`, Galvan `S1:S`); top-level `Zed.plug` renames Tidbinbilla (`Z1:Z`),
+the control that a `.plug`-named file loads. The old Mac's volume is
+Journaled HFS+ (case-insensitive); its Plug-ins folder is spelled
+`Plug-Ins`.
+
+| probe (sÿst) | original | NovaJS (this branch, same tree) |
+|---|---|---|
+| AZ, AC, AX, ZC, ZX, CX (folder files only) | **stock names** (Kon, SPC-1927, Galvan, Kania, Tichel, Gefjon) | AZ:Z, AC:C, AX:A, ZC:C, ZX:Z, CX:C |
+| A, X singles (Tenetria, NGC-1894) | **stock** | A:A; X stock (nested folder skipped) |
+| folder file vs top-level file (AK, AM, AT, ZK, ZM, ZT, CK, CM, CT, XK, XM, XT) | **the top-level letter every time** (AK:K ... XT:T) | top-level wins against G dir; **C wins CK, CM** (S dir sorts after k and M); X never loads |
+| KM, KT, MT (Aral, Rautherion, Barnard's Star) | **KM:M, KT:T, MT:T** | KM:M, KT:T, MT:T |
+| ALL (Tau Ceti) | **ALL:T** | ALL:T |
+| run b: Kon / SPC-1927 / Galvan / Tidbinbilla | **PR:P**, **R1:P**, **Galvan** (stock), **Z1:Z** | PR:S, R1:P, S1:S, Z1:Z |
+
+**Findings.**
+1. **The original ignores sub-folders of Plug-ins entirely**: no file in
+   `G dir`, `S dir`, `S dir/deep` or `singularity` changed anything, while
+   the same plug-in files at top level did. So on the original, Planet
+   Rico's Gravit Station survives; Singularity (and Matthew's `arpia` and
+   `extra-outfits` folders) would not load at all.
+2. **Top-level plug-ins load in case-INsensitive name order, the last
+   wins**: `k low` < `M top` < `t low` (ASCII order would put `M` before
+   `k`, giving KM:K). Creation order plays no part (installed t, M, k: a
+   creation order would have made k the winner).
+3. A `.plug`-suffixed top-level file loads like a bare-named one.
+4. Not separable here: whether the game sorts the names or takes the
+   volume's (HFS+ catalog) order, which is the same case-insensitive
+   order.
+
+**NovaJS (main 7b2c4337):** top-level order **matches** (case-insensitive
+`comparePluginNames`, `P/id_space_handler.ts:60`, last wins). Folders
+**differ**: NovaJS loads a folder as ONE plug-in (its own namespace) at
+its sorted position, its files sorted inside it, one level deep; a folder
+inside a folder was read as a FILE and logged the resource-fork "FAILED
+to load plug-in" banner. **Not changed to match** (a maintainer ruling:
+matching means dropping every folder plug-in, which today loads Matthew's
+`arpia`, `extra-outfits` and `singularity`); this branch documents the
+folder load as a NovaJS extension in the `resolvePluginEntries` comment,
+skips a nested folder with a plain warning (`:677`), and logs the clash
+Matthew hit at load: `spöb 516 "Gravit Station" (Planet Rico) replaced
+by "Wormhole" (singularity/Singularity1.plug)`
+(`getOverrideReport`, `:441`; NovaParse `pluginOverrideLog`). On the
+original's rules Planet Rico would win only because Singularity is never
+loaded; moving `Singularity1.plug` to top level would make it win there
+too (`singularity...` sorts after `Planet Rico`). Confidence: high (24
+probes in one run, all consistent; run b reproduces the real layout).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w58/`:
+`order_a/` (`01-map0.png`, `02-map_p1.png`, `03-map_m1.png`, `log.jsonl`
+with each install path), `order_b/` (`01-map0.png`, `02-map_p1.png`),
+`plugins/` (`specs/probes.json` the probe -> sÿst map), `pilotspecs/`,
+`scen/`, `tools/` (`gen.mjs`, `gen_b.mjs`; `rig.mjs` / `report.mjs` read a
+tree through NovaParse), `novajs_rig_a.txt` / `novajs_rig_b.txt` (the
+NovaJS column, with its override log), `recover.log`.
+
 ### Reliability notes (for anyone running the reference)
+
+- **Plug-ins in folders are inert on the original (wave 58):** a rig
+  must install every test plug-in at the TOP of Plug-ins; novaref's
+  `"as": "Folder/Name"` exists only to test folder behaviour. A star-map
+  name probe (rename stock sÿst near the start, read the map) answers
+  load-order questions in one run with no kit.
 
 - **A stock hypergate rig (wave 56):** stock gates refuse a fresh pilot
   (govt 183, MinStatus 32767; ränk 147 opens them), so override the one
