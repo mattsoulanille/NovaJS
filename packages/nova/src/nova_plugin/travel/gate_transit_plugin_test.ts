@@ -17,6 +17,9 @@ import {
     GateArrivalComponent, GateTransit, GateTransitEvent, GATE_EMERGENCE_DISTANCE,
 } from "./gate_transit_plugin.js";
 import { GateDestinationResolver } from "./gate_destination_resolver.js";
+import type {
+    SimulationGameDataInterface,
+} from "../../client/gamedata/simulation_game_data.js";
 import { gateMapDestinations } from "../../spaceport/hypergate_network.js";
 import { landable } from "../core/index.js";
 import { EscortCommandComponent } from "../player/index.js";
@@ -250,7 +253,7 @@ describe('gate transit', () => {
 
         // The far gate resolves to the right system...
         const resolver = new GateDestinationResolver(gameData);
-        const farSystem = await resolver.systemOf(FAR_GATE_SPOB);
+        const farSystem = await resolver.systemOf(FAR_GATE_SPOB, new Set());
         expect(FAR_GATE_SYSTEMS).toContain(farSystem!);
 
         // ...and arriving there puts the ship at that gate.
@@ -291,10 +294,12 @@ describe('gate transit', () => {
         // The destination spöb resolves to the system that contains it.
         // (On stock data this had to admit the NCB-stacked duplicate
         // systems; the scenario has exactly one system per gate.)
-        expect(await resolver.systemOf(GATE_B_SPOB)).toEqual(SYSTEM_B);
+        expect(await resolver.systemOf(GATE_B_SPOB, new Set()))
+            .toEqual(SYSTEM_B);
 
         // And the reverse link resolves back to system A.
-        expect(await resolver.systemOf(GATE_A_SPOB)).toEqual(SYSTEM_A);
+        expect(await resolver.systemOf(GATE_A_SPOB, new Set()))
+            .toEqual(SYSTEM_A);
     }, 30_000);
 });
 
@@ -392,7 +397,104 @@ describe('GateDestinationResolver random wormhole', () => {
         expect(exit0).not.toEqual(WORMHOLE_SPOB);
         expect(exit0).toEqual(WORMHOLE_TWIN);
         // The chosen exit is itself a resolvable wormhole in some system.
-        const exitSystem = await resolver.systemOf(exit0!);
+        const exitSystem = await resolver.systemOf(exit0!, new Set());
         expect(exitSystem).toEqual(SYSTEM_B);
     }, 30_000);
+});
+
+/**
+ * A gate listed by NCB-stacked copies of one system resolves to the copy
+ * the player can SEE. Playtest 2026-11-27 ("Speak With Polaris" never
+ * offered): HG-Aurora (nova:1414) is in both pre-coup Aurora nova:315
+ * ("!b323") and post-coup Aurora nova:603 ("b323"); the resolver took the
+ * first copy whatever the bits, so a pilot with b323 who travelled by
+ * hypergate always arrived in nova:315 — whose Aurora (nova:338) is not
+ * the Aurora (nova:439) mïsn 680 is offered at.
+ */
+describe('GateDestinationResolver stacked systems', () => {
+    /** A catalog of just these systems (no planets need loading). */
+    function catalog(systems: {
+        id: string, visibility: string, planets: string[],
+    }[]): SimulationGameDataInterface {
+        const byId = new Map(systems.map(s => [s.id, s]));
+        return {
+            ids: Promise.resolve({
+                System: systems.map(s => s.id), Planet: [],
+            }),
+            data: {
+                System: { get: async (id: string) => byId.get(id)! },
+                Planet: { get: async () => { throw new Error('unused'); } },
+            },
+        } as unknown as SimulationGameDataInterface;
+    }
+    const AURORA_COPIES = [
+        // Listed out of id order: the pick must not depend on it.
+        {
+            id: 'nova:603', visibility: 'b323',
+            planets: ['nova:439', 'nova:1414'],
+        },
+        {
+            id: 'nova:315', visibility: '!b323',
+            planets: ['nova:338', 'nova:1414'],
+        },
+        { id: 'nova:313', visibility: '', planets: ['nova:330'] },
+    ];
+
+    it('picks the copy whose Visibility the bits satisfy', async () => {
+        const resolver = new GateDestinationResolver(catalog(AURORA_COPIES));
+        expect(await resolver.systemOf('nova:1414', new Set()))
+            .toEqual('nova:315');
+        expect(await resolver.systemOf('nova:1414', new Set([229, 323])))
+            .toEqual('nova:603');
+        // A spöb in one system ignores the bits; an unplaced one is none.
+        expect(await resolver.systemOf('nova:330', new Set([323])))
+            .toEqual('nova:313');
+        expect(await resolver.systemOf('nova:999', new Set()))
+            .toBeUndefined();
+    });
+
+    it('falls back to a blank-Visibility copy, else the first by id, when '
+        + 'no copy is visible', async () => {
+        const resolver = new GateDestinationResolver(catalog([
+            { id: 'nova:700', visibility: 'b1', planets: ['nova:900'] },
+            { id: 'nova:701', visibility: '', planets: ['nova:900'] },
+            { id: 'nova:703', visibility: 'b3', planets: ['nova:901'] },
+            { id: 'nova:702', visibility: 'b2', planets: ['nova:901'] },
+        ]));
+        expect(await resolver.systemOf('nova:900', new Set()))
+            .toEqual('nova:701');
+        expect(await resolver.systemOf('nova:900', new Set([1])))
+            .toEqual('nova:700');
+        expect(await resolver.systemOf('nova:901', new Set()))
+            .toEqual('nova:702');
+        expect(await resolver.systemOf('nova:901', new Set([3])))
+            .toEqual('nova:703');
+    });
+
+    it('sends the stock HG-Aurora traveller to post-coup Aurora once b323 '
+        + 'is set (real data)', async () => {
+        const gameData = await getIntegrationGameData();
+        const resolver = new GateDestinationResolver(gameData);
+        // HG-Aurora's copies, as the stock data stacks them.
+        const pre = await gameData.data.System.get('nova:315');
+        const post = await gameData.data.System.get('nova:603');
+        expect(pre.planets).toContain('nova:1414');
+        expect(post.planets).toContain('nova:1414');
+        expect(pre.visibility).toBe('!b323');
+        expect(post.visibility).toBe('b323');
+        expect(post.planets).toContain('nova:439');
+        expect(pre.planets).not.toContain('nova:439');
+        expect(await resolver.systemOf('nova:1414', new Set()))
+            .toEqual('nova:315');
+        // The reporter's pilot: b229 and b323 (mïsn 679 "Duel with Moash
+        // Thurokiir" OnSuccess "b229 K142 b323 b8896").
+        expect(await resolver.systemOf('nova:1414', new Set([229, 323])))
+            .toEqual('nova:603');
+        // HG-Heraan's three copies: nova:344 "!((b90 | b323) | b3004)",
+        // nova:540 "b90 | b3004", nova:604 "b323".
+        expect(await resolver.systemOf('nova:1415', new Set()))
+            .toEqual('nova:344');
+        expect(await resolver.systemOf('nova:1415', new Set([323])))
+            .toEqual('nova:604');
+    }, 60_000);
 });

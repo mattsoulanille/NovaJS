@@ -25,6 +25,7 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import type { SimulationGameDataInterface } from './gamedata/simulation_game_data.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
 import { daysPerJump } from '../nova_plugin/player/index.js';
 import {
     GateArrivalComponent, planGateTransitRecovery,
@@ -215,6 +216,12 @@ export async function placeOnFirstStellar(entity: Entity, systemId: string,
     });
 }
 
+/** The travelling ship's control bits, for which NCB-stacked copy of a
+ * destination system it arrives in (GateDestinationResolver.systemOf). */
+function shipBits(ship: Entity): ReadonlySet<number> {
+    return ship.components.get(ControlBitsComponent) ?? new Set<number>();
+}
+
 /**
  * A wormhole (or a hypergate the simulation resolved itself) has carried
  * the local player's ship out of the system (GateTransitEvent). Reuses
@@ -276,7 +283,11 @@ export function leaveGateMap(runtime: ClientRuntime,
     // Tracked, recovery included (see followHyperspaceJump).
     void runtime.transitions.run(async () => {
         try {
-            const to = await runtime.gateDestinations.systemOf(destinationSpob);
+            // The copy of the destination system the player can SEE: a
+            // gate listed by NCB-stacked copies resolves under the docked
+            // ship's own bits, the ones the gate map drew it with.
+            const to = await runtime.gateDestinations.systemOf(
+                destinationSpob, shipBits(ship));
             if (!to) {
                 console.warn(`Hypergate destination ${destinationSpob} is `
                     + `not in any system; lifting off instead.`);
@@ -357,7 +368,8 @@ async function gateTransit(runtime: ClientRuntime, data: DepartingShip & {
             + `${data.fromSpob} had no resolvable destination.`, wire);
         return;
     }
-    const to = await runtime.gateDestinations.systemOf(destinationSpob);
+    const to = await runtime.gateDestinations.systemOf(destinationSpob,
+        shipBits(data.entity));
     if (!to) {
         await abortGateTransit(runtime, data, origin, `Gate destination spöb `
             + `${destinationSpob} is not in any system.`, wire);

@@ -445,6 +445,97 @@ describe('missions against real Nova data', () => {
         });
 
     /**
+     * Playtest report (2026-11-27, pilot "Shane Merrol"): "I don't seem to
+     * be offered 'Auroran 23 (680): Speak With Polaris'". Every gate passes
+     * on his pilot — b229 set and b230 clear, 241,541 kill points against
+     * AvailRating 10000, AvailRecord 0, AvailShipType 127 (out of every
+     * Bible range) — but AvailStel 439 is the POST-coup Aurora, which only
+     * exists in sÿst nova:603 ("b323"). His save had him in the pre-coup
+     * copy nova:315 ("!b323"), whose Aurora is nova:338: he had arrived by
+     * hypergate, and GateDestinationResolver took the first copy listing
+     * HG-Aurora whatever his bits (fixed there; see
+     * gate_transit_plugin_test's "stacked systems"). Pinned here: the offer
+     * at nova:439 with his state, and none at nova:338.
+     */
+    it('offers "Speak With Polaris" (nova:680) in the post-coup Aurora bar '
+        + '(nova:439) to the reporter\'s pilot, never at the pre-coup '
+        + 'Aurora (nova:338)', async () => {
+            const gameData = await getIntegrationGameData();
+            const universe = MissionUniverse.shared(gameData);
+            await universe.load();
+
+            const misn = await gameData.data.Mission.get('nova:680');
+            expect(misn.name).toContain('Speak With Polaris');
+            expect(misn.availStelId).toBe('nova:439');
+            expect(misn.availLoc).toBe(LOCATION_BAR);
+            expect(misn.availRecord).toBe(0);
+            expect(misn.availRating).toBe(10000);
+            expect(misn.availRandom).toBe(50);
+            expect(misn.availBits).toBe('(P0 & b229) & !b230');
+            expect(misn.availShipType).toBe(127);
+            expect(misn.require).toBe('0');
+            expect(misn.returnStelId).toBe('nova:254');
+            // Its predecessor sets both b229 and the b323 that swaps
+            // Aurora (and Heraan) for their post-coup copies.
+            const predecessor = await gameData.data.Mission.get('nova:679');
+            expect(predecessor.onSuccess).toBe('b229 K142 b323 b8896');
+            expect(predecessor.returnStelId).toBe('nova:338');
+            expect(universe.systemIdOfPlanet('nova:439', new Set([323])))
+                .toBe('nova:603');
+            expect(universe.systemIdOfPlanet('nova:338', new Set()))
+                .toBe('nova:315');
+
+            const start = await gameData.data.PlayerStart.get('nova:128');
+            const shipData = await gameData.data.Ship.get(start.ship);
+            // The stock part of his pilot's state.
+            const pilot = async (bits: number[], kills: number,
+                planetId = 'nova:439') => {
+                const entity = makeShip(shipData);
+                entity.components.set(GameDateComponent, { ...start.date });
+                entity.components.set(CreditsComponent, { credits: 0 });
+                entity.components.set(ControlBitsComponent, new Set(bits));
+                entity.components.set(CombatRatingComponent, { kills });
+                return MissionSession.create(
+                    entity, gameData, universe, planetId);
+            };
+            const HIS_BITS = [228, 229, 323];
+            const HIS_KILLS = 241541;
+
+            const mission = universe.getMission('nova:680')!;
+            const session = await pilot(HIS_BITS, HIS_KILLS);
+            const ctx = session.machinery.offerContext();
+            expect(missionMatchesLocation(mission, LOCATION_BAR, ctx))
+                .toBe(true);
+            expect(makeMissionOffer(mission, ctx)!.acceptable).toBe(true);
+            // Where the hypergate had been dropping him: no offer.
+            expect(missionMatchesLocation(mission, LOCATION_BAR,
+                (await pilot(HIS_BITS, HIS_KILLS, 'nova:338'))
+                    .machinery.offerContext())).toBe(false);
+            // The other gates, one at a time.
+            expect(missionMatchesLocation(mission, LOCATION_BAR,
+                (await pilot(HIS_BITS, 9999)).machinery.offerContext()))
+                .toBe(false);                      // AvailRating 10000
+            expect(missionMatchesLocation(mission, LOCATION_BAR,
+                (await pilot([...HIS_BITS, 230], HIS_KILLS))
+                    .machinery.offerContext())).toBe(false);   // !b230
+
+            // AvailRandom 50, drawn once per SYSTEM VISIT (OfferRolls):
+            // every bar entry in the visit sees the same answer, and a new
+            // visit draws again.
+            const random = spyOn(Math, 'random');
+            const visit = new Map<string, number>();
+            random.and.returnValue(0.49);
+            expect(rollOffers(session, universe, LOCATION_BAR, visit)
+                .some(o => o.data.id === 'nova:680')).toBe(true);
+            random.and.returnValue(0.99);
+            expect(rollOffers(session, universe, LOCATION_BAR, visit)
+                .some(o => o.data.id === 'nova:680')).toBe(true);
+            random.and.returnValue(0.50);
+            expect(rollOffers(session, universe, LOCATION_BAR, new Map())
+                .some(o => o.data.id === 'nova:680')).toBe(false);
+        });
+
+    /**
      * The <SN> wildcard against real data. mïsn nova:140 ("25000 Credit
      * Bounty") is the plain bounty-hunter exemplar: a përs-offered
      * bounty (AvailLoc 2, "offered from a ship") with one special ship
