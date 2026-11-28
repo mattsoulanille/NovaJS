@@ -16,7 +16,7 @@ import { mintRoomSeed, RollbackRelay } from "../communication/rollback_relay.js"
 import { RoomArchive } from "../communication/room_archive.js";
 import { DesyncRecorder, fingerprintGameData } from "../server/desync_recorder.js";
 import { PEER_LOCAL_COMPONENTS } from "./player/index.js";
-import { SimulationGameDataResource } from "./core/index.js";
+import { DEFAULT_ROOM_RULES, RoomRules, SimulationGameDataResource } from "./core/index.js";
 import { makeSystem } from './make_system.js';
 import { MultiRoomResource, SystemComponent } from "./nova_plugin.js";
 
@@ -41,6 +41,13 @@ const RemovedPeerEvent = new EcsEvent<string>('RemovedPeerEvent');
  * the fixed genesis population exactly as before the room seed existed.
  */
 export const RoomSeedResource = new Resource<() => number | undefined>('RoomSeed');
+
+/**
+ * The rules the server opens every room with (core/room_rules.ts):
+ * server.ts reads them from settings/server.json `roomRules` and the
+ * NOVA_ROOM_LIMITS override. Unset, rooms run DEFAULT_ROOM_RULES.
+ */
+export const RoomRulesResource = new Resource<RoomRules>('RoomRulesSetting');
 
 /**
  * NOVA_ROOM_SEED: unset = a fresh seed per room (the game); `off` =
@@ -121,6 +128,8 @@ export const ServerPlugin: Plugin = {
         // from a recent baseline plus the log tail rather than
         // replaying from genesis.
         const roomSeed = world.resources.get(RoomSeedResource) ?? mintRoomSeed;
+        const roomRules = world.resources.get(RoomRulesResource)
+            ?? DEFAULT_ROOM_RULES;
         const relays = new Map<string, RollbackRelay>();
         const archives = new Map<string, RoomArchive>();
         // The black-box recorder: every desync conviction becomes a
@@ -152,6 +161,9 @@ export const ServerPlugin: Plugin = {
                         // empties is closed above, and the next entrant
                         // gets a new seed.
                         roomSeed: roomSeed(),
+                        // Every room of this server runs the server's
+                        // rules, logged beside the seed.
+                        roomRules,
                         baseline: () => archives.get(systemId)?.latest,
                         // Resyncs reconstruct from a baseline captured
                         // now: the log tail shrinks from up-to-30s to

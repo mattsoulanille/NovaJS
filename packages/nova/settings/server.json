@@ -1,4 +1,7 @@
 {
   "port": 8000,
-  "relativeDataPath": "../Nova_Data"
+  "relativeDataPath": "../Nova_Data",
+  "roomRules": {
+    "limits": "novajs"
+  }
 }

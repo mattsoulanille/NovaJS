@@ -33,6 +33,8 @@ export * from './id_factory.js';
 export * from './landable.js';
 export * from './load_retry.js';
 export * from './return_to_queue_plugin.js';
+export * from './room_rules.js';
+export * from './engine_limits.js';
 export * from './sound_plugin.js';
 export * from './stat.js';
 export * from './system_id_resource.js';
@@ -50,10 +52,11 @@ import { AnimationPlugin } from './animation_plugin.js';
 import { ControlsPlugin } from './controls_plugin.js';
 import { CollisionsPlugin } from './collisions_plugin.js';
 import { SoundEventPlugin } from './sound_plugin.js';
+import { RoomRulesPlugin } from './room_rules.js';
 
 export const CoreDomain: Domain = {
     name: 'core',
     dependsOn: [],
-    plugins: [TimePlugin, CreateTimePlugin, ReturnToQueuePlugin, PlatformPlugin, DeltaPlugin, AnimationPlugin, ControlsPlugin, MovementPlugin, CollisionsPlugin, SoundEventPlugin],
+    plugins: [TimePlugin, CreateTimePlugin, ReturnToQueuePlugin, PlatformPlugin, DeltaPlugin, AnimationPlugin, ControlsPlugin, MovementPlugin, CollisionsPlugin, SoundEventPlugin, RoomRulesPlugin],
 };
 export const CoreDomainPlugin = domainPlugin(CoreDomain);

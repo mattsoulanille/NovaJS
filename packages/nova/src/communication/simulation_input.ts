@@ -8,7 +8,8 @@ import { World } from "nova_ecs/world";
 import { warnThrottled } from "../common/log_throttle.js";
 import { applyPeerDeparture } from "./peer_departure.js";
 import {
-    ControlEvent, ControlEventType, ControlsSubject, deriveEntityComponents,
+    applyRoomRules, ControlEvent, ControlEventType, ControlsSubject,
+    deriveEntityComponents, RoomRules, RoomRulesType,
     SimulationGameDataResource, stageEncodedComponentsGameData,
 } from '../nova_plugin/core/index.js';
 import {
@@ -159,7 +160,13 @@ export type SimulationInput =
      * rolled at the first entrant's tick under the entrant's bits
      * (applyRoomSeed).
      */
-    | { kind: 'roomSeed', seed: number };
+    | { kind: 'roomSeed', seed: number }
+    /**
+     * Server-authored, once, beside the room seed when the relay opens a
+     * room: the room's rules (nova_plugin/core/room_rules.ts), the
+     * simulation departures every peer of the room shares.
+     */
+    | { kind: 'roomRules', rules: RoomRules };
 
 /**
  * A peer's inputs for one simulation tick. The steady-state wire
@@ -240,6 +247,7 @@ export const SimulationInputType: t.Type<SimulationInput, unknown> = t.union([
     t.strict({ kind: t.literal('removePeer'), peerId: t.string }),
     // A 32-bit seed: a non-negative safe integer, an Avro long.
     t.strict({ kind: t.literal('roomSeed'), seed: WireTick }),
+    t.strict({ kind: t.literal('roomRules'), rules: RoomRulesType }),
 ]);
 
 export const InputRecordType: t.Type<InputRecord, unknown> = t.exact(t.intersection([
@@ -444,8 +452,9 @@ export async function loadInputRecordsGameData(
  *    takes the first match).
  *  - `removePeer` is server-authored (the relay writes it on
  *    disconnect); only a record stamped with a server's uuid may carry it.
- *    So is `roomSeed` (the relay writes it when it opens the room), which
- *    a record with no peerId — local play — may also carry.
+ *    So are `roomSeed` and `roomRules` (the relay writes them when it
+ *    opens the room), which a record with no peerId — local play — may
+ *    also carry.
  *  - The servers themselves are exempt: the relay's own records are the
  *    room's ground truth.
  *  - A record with NO peerId is local play before any connection exists
@@ -826,6 +835,17 @@ function applySimulationInput(world: World, input: SimulationInput,
                 break;
             }
             applyRoomSeed(world, input.seed);
+            break;
+        }
+        case 'roomRules': {
+            // Like the seed: the room's rules are the relay's to choose.
+            if (peerId !== undefined && !isServerPeer(world, peerId)) {
+                warnDrop(peerId, input.kind, () =>
+                    `Dropping roomRules input from ${peerId}: only the `
+                    + 'server sets a room\'s rules');
+                break;
+            }
+            applyRoomRules(world, input.rules);
             break;
         }
         case 'setJumpRoute': {

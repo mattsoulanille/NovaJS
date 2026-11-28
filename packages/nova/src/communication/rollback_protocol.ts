@@ -1215,6 +1215,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    wire schema fingerprint changes (3a6d49a035638325 ->
 //    5e883b17be46131c), and the join gate keeps older and newer builds
 //    apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
 //    schema-only changes): NPC hypergate traffic (reference "NPC hypergate
 //    traffic, wave 60"). NpcState gains the mode literal 'gate' (flying
 //    into a hypergate to leave by it) and the optional field
@@ -1227,6 +1228,28 @@ export const STATE_HASH_INTERVAL = 60;
 //    message kind changes. The derived wire schema fingerprint changes
 //    (5e883b17be46131c -> 5228b7f1a5a94f40), and the join gate keeps
 //    older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): room rules and the engine limits. The new
+//    server-authored `roomRules` input kind (`{rules: {limits:
+//    'original' | 'novajs'}}`, nova_plugin/core/room_rules.ts), logged by
+//    the relay in a room's first record beside `roomSeed` and dropped from
+//    any non-server peer like it; it sets the new serializer-registered
+//    RoomRules component on the 'room rules' entity. One more new
+//    serializer-registered component, ShotFamilyBudget (a number,
+//    core/engine_limits.ts), on submunitions under a rule with a family
+//    budget. Sim-rule changes alongside: the projectile, beam and system
+//    ship caps follow the room's `limits` rule (Original, measured in
+//    waves 58 and 60: 128 projectiles, 64 beams with a refused beam
+//    costing its reload, 55 ships besides the pilots' for NPCs and bay
+//    launches and 64 in all for planet defenders; NovaJS: a soft cap for
+//    submunitions, a hard cap for directly fired shots and beams, a
+//    per-shot family budget, and its own ship caps), and a full system
+//    refuses NPC arrivals (traffic through the edge or a hypergate,
+//    fleets, reinforcements, persons, listed persons), planet defenders
+//    and bay launches (the bay keeps its fighter). No message kind
+//    changes. The derived wire schema fingerprint changes
+//    (5228b7f1a5a94f40 -> NEWPRINT), and the join gate keeps older and
+//    newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

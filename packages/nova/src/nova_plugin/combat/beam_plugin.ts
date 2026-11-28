@@ -28,6 +28,7 @@ import { DamagedEvent } from '../ship/index.js';
 import { applyExitPoint, ExitPointData } from './exit_point.js';
 import { FireSubs, liveTargetMovement, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin.js';
 import { ShotEnd } from './submunition_rule.js';
+import { engineLimitsOf, spawnAllowed } from '../core/index.js';
 import { OwnerComponent, SourceComponent } from '../ship/index.js';
 import { disabledCancelsImmunity, FiringGroupComponent, firingImmune, victimFiringGroup } from '../ship/index.js';
 import { GovtComponent } from '../core/index.js';
@@ -135,6 +136,9 @@ export const BeamStateType: t.Type<BeamState> = t.exact(t.partial({
 
 const BeamSubsQuery = new Query([MovementStateComponent] as const);
 
+/** Every beam alive in the world (the beam caps count these). */
+const LiveBeams = new Query([BeamDataComponent] as const, 'LiveBeams');
+
 class BeamWeaponEntry extends WeaponEntry {
     declare data: BeamWeaponData;
     protected pointDefenseRangeSquared: number;
@@ -166,7 +170,13 @@ class BeamWeaponEntry extends WeaponEntry {
     fire(position: Position, angle: Angle, owner?: string, target?: string,
         source?: string, _sourceVelocity?: Vector,
         exitPointData?: ExitPointData, silent = false,
-        aimOffset = 0): Entity {
+        aimOffset = 0, submunition = false): Entity | undefined {
+        // The beam table is full for this kind of spawn: the new beam is
+        // refused (engine_limits.ts).
+        if (!spawnAllowed(this.runQuery(LiveBeams).length,
+            engineLimitsOf(this.entities).beams, submunition)) {
+            return undefined;
+        }
         const { width, length } = this.data.beamAnimation;
         const beamPoly = new SAT.Polygon(new SAT.Vector(0, 0), [
             new SAT.Vector(-width / 2, 0),

@@ -53,6 +53,7 @@ import { TargetComponent } from '../ship/index.js';
 import { WeaponsStateComponent } from '../ship/index.js';
 import { aimsTurretsAccurately } from '../player/index.js';
 import { ShotEnd, submunitionFires } from './submunition_rule.js';
+import { engineLimitsOf, ShotFamilyBudget, splitFamilyBudget } from '../core/index.js';
 
 // Re-exported so the ~40 existing importers of these three keep working.
 export { OwnerComponent, SourceComponent, VulnerableToPD };
@@ -382,11 +383,16 @@ export abstract class WeaponEntry {
      * error it left with (EVN Bible: inaccuracy is the error "as it
      * leaves the ship"), so BeamWeaponEntry stores it. Projectiles carry
      * their heading and ignore it.
+     *
+     * `submunition` says the shot is a child of another shot (fireSubs)
+     * rather than fired directly from a ship (fireFromEntity): under the
+     * NovaJS engine limits a submunition is refused at the lower, soft
+     * cap (engine_limits.ts). Returns undefined for a refused shot.
      */
     abstract fire(position: Position, angle: Angle, owner?: string,
         target?: string, source?: string, sourceVelocity?: Vector,
         exitPointData?: ExitPointData, silent?: boolean,
-        aimOffset?: number): Entity | undefined;
+        aimOffset?: number, submunition?: boolean): Entity | undefined;
 
     /**
      * Stamps a spawned weapon entity (projectile, beam, bay fighter,
@@ -690,6 +696,16 @@ export abstract class WeaponEntry {
             sourceEntity.components.set(SubCounts, subCounts);
         }
 
+        // The family budget (engine_limits.ts ShotFamilyBudget): the
+        // spawns this shot's descendants may still make. A directly fired
+        // shot carries none and has the room's whole budget; under a rule
+        // without one (Infinity) nothing is counted or stamped.
+        const familyBudget = engineLimitsOf(this.entities).familyBudget;
+        const budgeted = Number.isFinite(familyBudget);
+        let budget = budgeted
+            ? sourceEntity.components.get(ShotFamilyBudget) ?? familyBudget
+            : Infinity;
+
         const subs: Entity[] = [];
         for (const sub of this.data.submunitions) {
             // wëap SubLimit (EVN Bible ~:3280-3284): "If you have defined
@@ -741,13 +757,15 @@ export abstract class WeaponEntry {
             // a burst weapon firing N shots over N frames must still be
             // heard N times, and each of those is a separate fire call.
             let soundPlayed = false;
-            for (let i = 0; i < sub.count; i++) {
+            for (let i = 0; i < sub.count && budget > 0; i++) {
                 const angle = angles[i] || new Angle(0);
                 const subEntity = subWeapon.fire(position ?? movement.position,
                     movement.rotation.add(angle), owner.owner,
                     target?.target, source, undefined, undefined,
-                    /* silent */ soundPlayed);
+                    /* silent */ soundPlayed, undefined,
+                    /* submunition */ true);
                 if (subEntity) {
+                    budget--;
                     // Keyed off an actual spawn, so a first child that
                     // fails to spawn does not swallow the burst's sound.
                     soundPlayed = true;
@@ -758,6 +776,15 @@ export abstract class WeaponEntry {
                     newCounts.set(sub.id, newCounts.get(sub.id) + 1);
                     subEntity.components.set(SubCounts, newCounts);
                 }
+            }
+        }
+        if (budgeted) {
+            // What is left goes to the children, evenly. The source is
+            // left as it was: a shot subs once, as it dies (and a source
+            // that is not a shot, as in specs, is never budgeted).
+            const shares = splitFamilyBudget(budget, subs.length);
+            for (let i = 0; i < subs.length; i++) {
+                subs[i].components.set(ShotFamilyBudget, shares[i]);
             }
         }
         return subs;
@@ -790,6 +817,13 @@ export const FireWeaponPlugin: Plugin = {
         // detection, snapshotted for rollback, carried on the wire.
         deltaMaker.addComponent(FiringGroupComponent, {
             componentType: FiringGroup,
+        });
+
+        // A shot's share of its family's spawn budget (engine_limits.ts)
+        // decides whether its children appear: simulation state, so
+        // registered (hashed, snapshotted, on the wire) like the above.
+        deltaMaker.addComponent(ShotFamilyBudget, {
+            componentType: t.number,
         });
 
         // SourceComponent must be serializer-registered to reach the

@@ -10,13 +10,14 @@ import {
     CollisionVulnerabilityComponent, ControlState, CreateTime, DebrisComponent,
     decodeHull, encodeHull, GovtComponent, HitboxHullComponent,
     HurtboxHullComponent, IdFactoryResource, ProjectileBlastHull,
-    ProjectileComponent, ProjectileDataComponent, Stat,
+    ProjectileComponent, ProjectileDataComponent, ShotFamilyBudget, Stat,
     TumbleAnimationComponent,
 } from "./core/index.js";
 import {
     AsteroidDataComponent, BlastDoneComponent, DecoyTargetComponent,
     defaultWeaponLocalState, GuidanceComponent, JamDecisionComponent,
-    JammingComponent, SubCounts, TargetIndexComponent, WeaponsComponent,
+    JammingComponent, SubCounts, TargetIndexComponent,
+    WeaponsComponent,
 } from "./combat/index.js";
 import {
     ArmorComponent, BlastDamageComponent, BlastIgnoreComponent,
@@ -87,6 +88,8 @@ export function configureSnapshotPolicies(world: World) {
     // too: the 'time' resource policy below saves a shallow copy of the
     // flat Time object.
     policies.set(CreateTime, { policy: 'share' });
+    // A primitive number too, replaced (never mutated) by fireSubs.
+    policies.set(ShotFamilyBudget, { policy: 'share' });
 
     // Hulls carry per-step scratch state (position, frame), but it is
     // recomputed from movement every step before collisions use it.

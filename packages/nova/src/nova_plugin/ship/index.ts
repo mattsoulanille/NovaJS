@@ -31,6 +31,7 @@ export * from './make_ship.js';
 export * from './weapon_components.js';
 export * from './bay_fighter_component.js';
 export * from './stellar_defender.js';
+export * from './ship_cap.js';
 
 import { Domain, domainPlugin } from '../core/index.js';
 import { ShipPlugin } from './ship_plugin.js';

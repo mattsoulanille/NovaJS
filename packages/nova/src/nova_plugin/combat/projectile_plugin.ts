@@ -32,7 +32,7 @@ import { ExitPointData } from './exit_point.js';
 import { spatialBroadphase, ToroidalGrid } from '../core/index.js';
 import { FireSubs, FireSubsFunction, ShipPointDefenseVulnerabilitySystem, SubCounts, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin.js';
 import { ShotEnd } from './submunition_rule.js';
-import { shotSlotFree } from './shot_cap.js';
+import { engineLimitsOf, ShotFamilyBudget, spawnAllowed } from '../core/index.js';
 import { ActiveSecondaryProvider } from './weapon_plugin.js';
 import { BeamCollisionSystem, BeamDamageSystem } from './beam_plugin.js';
 import { KillCreditSystem } from '../reputation/index.js';
@@ -99,6 +99,8 @@ export function decayDamage(damage: WeaponDamage, decay: number,
     };
 }
 
+/** Every projectile alive in the world (the shot caps count these). */
+const LiveShots = new Query([ProjectileComponent] as const, 'LiveShots');
 
 class ProjectileWeaponEntry extends WeaponEntry {
     declare data: ProjectileWeaponData;
@@ -194,10 +196,12 @@ class ProjectileWeaponEntry extends WeaponEntry {
 
     fire(position: Position, angle: Angle, owner?: string, target?: string,
         source?: string, sourceVelocity?: Vector,
-        _exitPointData?: ExitPointData, silent = false): Entity | undefined {
-        // The original's 128-projectile table is full: the new shot is
-        // refused (shot_cap.ts).
-        if (!shotSlotFree(this.runQuery)) {
+        _exitPointData?: ExitPointData, silent = false, _aimOffset = 0,
+        submunition = false): Entity | undefined {
+        // The projectile table is full for this kind of spawn: the new
+        // shot is refused (engine_limits.ts).
+        if (!spawnAllowed(this.runQuery(LiveShots).length,
+            engineLimitsOf(this.entities).shots, submunition)) {
             return undefined;
         }
 
@@ -221,6 +225,7 @@ class ProjectileWeaponEntry extends WeaponEntry {
 
         projectile.components.delete(CreateTime);
         projectile.components.delete(SubCounts);
+        projectile.components.delete(ShotFamilyBudget);
 
         if (target) {
             projectile.components.set(TargetComponent, { target });

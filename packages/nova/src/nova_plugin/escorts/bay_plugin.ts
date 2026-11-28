@@ -34,7 +34,7 @@ import { DeathAIComponent } from '../npc/index.js';
 import { FormationComponent, FormationSystem, NpcAfterburnerSystem, NpcComponent, NpcSteeringSystem, nextFormationSlot } from '../npc/index.js';
 import { GravitySystem } from '../travel/index.js';
 import { EscortLandingComponent, PlayerEscortComponent } from '../player/index.js';
-import { ShipComponent } from '../ship/index.js';
+import { ShipComponent, shipSlotFree } from '../ship/index.js';
 import { SoundEvent } from '../core/index.js';
 import { TargetComponent } from '../ship/index.js';
 import { WeaponsStateComponent } from '../ship/index.js';
@@ -409,6 +409,13 @@ class BayWeaponEntry extends WeaponEntry {
     }
 
     fire(position: Position, angle: Angle, owner: string, target = undefined, source: string, sourceVelocity?: Vector, exitPointData?: ExitPointData, silent?: boolean): Entity | undefined {
+        // A full system (the room's ship cap, ship/ship_cap.ts) refuses
+        // the launch like a full table refuses a shot: nothing spawns, so
+        // the firing loop takes no fighter from the bay.
+        const [world] = this.runQuery(BayWorldQuery)[0];
+        if (!shipSlotFree(world)) {
+            return undefined;
+        }
         // In input-driven multiplayer every peer simulates every bay
         // deterministically; ownership tags along for identity only.
         const q = this.runQuery(BaySourceQuery, source)[0];
@@ -478,7 +485,7 @@ class BayWeaponEntry extends WeaponEntry {
         // derives them at once — so a world restored from a launch-tick
         // snapshot (a late joiner's baseline, a rollback) held a
         // fighter one tick ahead of the live one's, and forked (#134).
-        const [world] = this.runQuery(BayWorldQuery)[0];
+        // (`world` from the ship-cap check above.)
         deriveEntityComponents(world, ship);
         // A kick within the fighter's own top speed is braked off
         // (BAY_LAUNCH_BRAKE, reference E8 wave 41), at once by a weak

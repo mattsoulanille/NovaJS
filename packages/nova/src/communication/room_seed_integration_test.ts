@@ -25,7 +25,11 @@ import { RollbackRelay } from './rollback_relay.js';
 import { RoomArchive } from './room_archive.js';
 import { SimulationBridgeClient } from './simulation_bridge_client.js';
 import { SimulationBridgeHost } from './simulation_bridge_host.js';
-import { applyInputRecords } from './simulation_input.js';
+import { applyInputRecords, InputRecordType } from './simulation_input.js';
+import { isLeft, isRight } from 'fp-ts/lib/Either.js';
+import {
+    DEFAULT_ROOM_RULES, parseRoomRules, RoomRules, roomRulesOf,
+} from '../nova_plugin/core/index.js';
 import { getSyntheticGameData } from './simulation_test_fixture.js';
 
 /**
@@ -327,6 +331,53 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
                 }
             });
 
+        it("carries the room's rules beside the seed, the server's alone",
+            async () => {
+                const server = new MockCommunicator('server');
+                const relay = new RollbackRelay(server, { autoClock: false,
+                    roomSeed: 5, roomRules: { limits: 'original' } });
+                expect(relay.inputLog).toEqual([{ peerId: 'server', tick: 1,
+                    inputs: [{ kind: 'roomSeed', seed: 5 },
+                        { kind: 'roomRules', rules: { limits: 'original' } }],
+                }]);
+                relay.close();
+                // On the wire it is a strict record like any other.
+                const decoded = InputRecordType.decode(
+                    { tick: 1, inputs: [{ kind: 'roomRules',
+                        rules: { limits: 'novajs', extra: 1 } }] });
+                expect(isRight(decoded)).toBeTrue();
+                expect(isLeft(InputRecordType.decode({ tick: 1, inputs: [
+                    { kind: 'roomRules', rules: { limits: 'lots' } }] })))
+                    .toBeTrue();
+
+                const gameData = await getSyntheticGameData();
+                const world = await makeSystem(THESSALY, gameData, 'worker',
+                    { npcs: false });
+                world.resources.set(CommunicatorResource,
+                    new MockCommunicator('a'));
+                expect(roomRulesOf(world.entities)).toEqual(DEFAULT_ROOM_RULES);
+                applyInputRecords(world, [{ peerId: 'a', tick: 1,
+                    inputs: [{ kind: 'roomRules',
+                        rules: { limits: 'original' } }] }]);
+                expect(roomRulesOf(world.entities).limits).toBe('novajs');
+                applyInputRecords(world, [{ peerId: 'server', tick: 1,
+                    inputs: [{ kind: 'roomRules',
+                        rules: { limits: 'original' } }] }]);
+                expect(roomRulesOf(world.entities).limits).toBe('original');
+            }, 120_000);
+
+        it("reads the server's rules leniently, the override strictly",
+            () => {
+                expect(parseRoomRules(undefined)).toEqual(DEFAULT_ROOM_RULES);
+                expect(parseRoomRules({ limits: 'original' }).limits)
+                    .toBe('original');
+                expect(parseRoomRules({ limits: 'huge' })).toEqual(
+                    DEFAULT_ROOM_RULES);
+                expect(parseRoomRules({ limits: 'novajs' }, 'original').limits)
+                    .toBe('original');
+                expect(() => parseRoomRules({}, 'orignal')).toThrow();
+            });
+
         it('is fresh per room on the server unless NOVA_ROOM_SEED pins it',
             () => {
                 const fresh = parseRoomSeedSetting(undefined);
@@ -353,7 +404,8 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
         let gameData: SimulationGameDataInterface;
 
         async function openRoom(system: string, roomSeed: number,
-            data: Promise<SimulationGameDataInterface>) {
+            data: Promise<SimulationGameDataInterface>,
+            roomRules?: RoomRules) {
             systemId = system;
             gameData = await data;
             comms = new Map([['server', new MockCommunicator('server')]]);
@@ -365,6 +417,7 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             relay = new RollbackRelay(comms.get('server')!, {
                 autoClock: false,
                 roomSeed,
+                roomRules,
                 baseline: () => archive.latest,
                 referenceHash: tick => archive.hashAt(tick),
                 // Any disagreement with the archive is a conviction.
@@ -629,6 +682,32 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             expect(hash(a.world)).toBe(hash(b.world));
             expect(desyncs).toBe(0);
         }, 300_000);
+
+        it("runs the room's rules in every world: the peers, the archive "
+            + 'and a late joiner restored from a baseline', async () => {
+                // The original's limits (core/room_rules.ts), not the
+                // default, so a world that missed the record would show.
+                await openRoom(VAEL, 9, vaelData(), { limits: 'original' });
+                const a = await join('a');
+                await enter(a, [], [STORY_BIT]);
+                await run([a], 180);
+                expect(roomRulesOf(a.world.entities).limits)
+                    .toBe('original');
+                expect(archive.latest).toBeDefined();
+                if (frame(a.world) > relay.tick) {
+                    relay.advanceTicks(frame(a.world) - relay.tick);
+                    await archive.update();
+                }
+                expect(roomRulesOf(archive.archiveWorld!.entities).limits)
+                    .toBe('original');
+                const c = await join('c');
+                while (frame(a.world) < frame(c.world)) {
+                    a.host.step();
+                }
+                expect(roomRulesOf(c.world.entities).limits).toBe('original');
+                expect(hash(c.world)).toBe(hash(a.world));
+                expect(desyncs).toBe(0);
+            }, 300_000);
 
         it('restores a late joiner to the live world', async () => {
             await openRoom(VAEL, 9, vaelData());

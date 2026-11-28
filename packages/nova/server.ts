@@ -21,7 +21,8 @@ import { SimulationGameDataResource } from './src/nova_plugin/core/index.js';
 import { makeShip } from "./src/nova_plugin/ship/index.js";
 import { SIMULATION_STEP_MS } from "./src/nova_plugin/make_system.js";
 import { MultiRoomResource, NovaPlugin } from './src/nova_plugin/nova_plugin.js';
-import { parseRoomSeedSetting, RoomSeedResource, ServerPlugin } from "./src/nova_plugin/server_plugin.js";
+import { parseRoomSeedSetting, RoomRulesResource, RoomSeedResource, ServerPlugin } from "./src/nova_plugin/server_plugin.js";
+import { parseRoomRules } from "./src/nova_plugin/core/index.js";
 import { NovaRepl } from "./src/server/nova_repl.js";
 import { FilesystemData } from "./src/server/parsing/filesystem_data.js";
 import { GameDataAggregator } from "./src/server/parsing/game_data_aggregator.js";
@@ -36,6 +37,9 @@ import { BUILD_VERSION } from "./src/common/generated_build_version.js";
 const Settings = t.partial({
     port: t.number,
     relativeDataPath: t.string,
+    // The room rules (src/nova_plugin/core/room_rules.ts), parsed
+    // leniently by parseRoomRules.
+    roomRules: t.unknown,
 });
 type Settings = t.TypeOf<typeof Settings>;
 
@@ -182,6 +186,11 @@ async function startGame() {
     // NOVA_ROOM_SEED pins it ('off' = the fixed system-id genesis).
     world.resources.set(RoomSeedResource,
         parseRoomSeedSetting(process.env.NOVA_ROOM_SEED));
+    // The room rules every room of this server runs (room_rules.ts).
+    const roomRules = parseRoomRules(settings.roomRules,
+        process.env.NOVA_ROOM_LIMITS);
+    console.log(`room rules: ${JSON.stringify(roomRules)}`);
+    world.resources.set(RoomRulesResource, roomRules);
     await world.addPlugin(NovaPlugin);
 
     repl.repl.context.world = world;

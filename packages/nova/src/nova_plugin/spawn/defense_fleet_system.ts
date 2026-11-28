@@ -204,8 +204,9 @@ function launchDefender(world: World, planetUuid: string,
     ship.components.set(StellarDefenderComponent,
         { planet: planetUuid, player });
     ship.components.set(SystemHoldComponent, { reason: 'defense' });
-    insertNpc(world, gameData, ids.next('npc'), ship);
-    return true;
+    // A full system (ship/ship_cap.ts) refuses the defender: it does not
+    // launch, and the fleet tries again at its next launch.
+    return insertNpc(world, gameData, ids.next('npc'), ship);
 }
 
 /**

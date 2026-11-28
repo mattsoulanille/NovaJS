@@ -167,6 +167,8 @@ describe('the local input gate', () => {
         { name: 'removePeer, no peer', valid: false, input: { kind: 'removePeer' } },
         { name: 'roomSeed', valid: true, input: { kind: 'roomSeed', seed: 4294967295 } },
         { name: 'roomSeed, negative seed', valid: false, input: { kind: 'roomSeed', seed: -1 } },
+        { name: 'roomRules', valid: true, input: { kind: 'roomRules', rules: { limits: 'original' } } },
+        { name: 'roomRules, unknown limits', valid: false, input: { kind: 'roomRules', rules: { limits: 'huge' } } },
         { name: 'an unknown kind', valid: false, input: { kind: 'teleport' } },
         // Admitted in a normalised form: the wire sends an absent
         // required nullable as null, and the room applies null.
@@ -178,7 +180,7 @@ describe('the local input gate', () => {
         const members = (SimulationInputType as unknown as {
             types: { type: { props: { kind: { value: string } } } }[],
         }).types.map(member => member.type.props.kind.value).sort();
-        expect(members.length).toBe(21);
+        expect(members.length).toBe(22);
         const kindsOf = (valid: boolean) => [...new Set(cases
             .filter(c => c.valid === valid)
             .map(c => (c.input as { kind: string }).kind))]

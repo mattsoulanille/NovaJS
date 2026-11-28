@@ -5,7 +5,8 @@ import { warnThrottled } from "../common/log_throttle.js";
 import { SIMULATION_STEP_MS } from "../nova_plugin/make_system.js";
 import { ArchiveBaseline, canonicalDesyncHash, DesyncDump, InputRecord, PROTOCOL_VERSION, RoomSpeed, RoomSpeedState, STATE_HASH_INTERVAL, unwrapRollbackMessage, wrapRollbackMessage } from "./rollback_protocol.js";
 import { liveWireFingerprint } from "./wire_schemas.js";
-import type { InputRefusal } from "./simulation_input.js";
+import type { InputRefusal, SimulationInput } from "./simulation_input.js";
+import type { RoomRules } from "../nova_plugin/core/index.js";
 
 /** Everything the relay knows about a convicted desync, for the
  * incident recorder. */
@@ -227,7 +228,7 @@ export class RollbackRelay {
     constructor(private room: Communicator,
         { autoClock = true, stepMs = SIMULATION_STEP_MS, baseline,
             freshBaseline, referenceHash, onArchiveOutvoted, onDesync,
-            onDesyncDump, roomSeed,
+            onDesyncDump, roomSeed, roomRules,
             desyncThreshold = DEFAULT_DESYNC_THRESHOLD,
             speedVoteRefillMs = DEFAULT_SPEED_VOTE_REFILL_MS,
             now = () => performance.now() }: {
@@ -243,6 +244,15 @@ export class RollbackRelay {
                  * population (the fixed mode specs run in).
                  */
                 roomSeed?: number,
+                /**
+                 * This room's rules (nova_plugin/core/room_rules.ts; the
+                 * server passes its configured rules). Logged in the
+                 * room's first record beside the seed, a server-authored
+                 * `roomRules` input, for the same reason: every world of
+                 * the room applies the same rules at the same tick.
+                 * Omitted, the room's worlds run the defaults.
+                 */
+                roomRules?: RoomRules,
                 /** The newest archived baseline, when an archive runs. */
                 baseline?: () => ArchiveBaseline | undefined,
                 /** A baseline captured on demand from the archive's
@@ -282,14 +292,21 @@ export class RollbackRelay {
         this.onDesync = onDesync;
         this.onDesyncDump = onDesyncDump;
         this.totalVoters = this.roomPeers().size;
+        const opening: SimulationInput[] = [];
         if (roomSeed !== undefined) {
+            opening.push({ kind: 'roomSeed', seed: roomSeed >>> 0 });
+        }
+        if (roomRules !== undefined) {
+            opening.push({ kind: 'roomRules', rules: { ...roomRules } });
+        }
+        if (opening.length > 0) {
             // Before anyone has joined: the first entrant's catch-up
             // carries it like any other logged record. Not broadcast —
             // nobody has a timeline yet.
             this.log.push({
                 ...(room.uuid !== undefined ? { peerId: room.uuid } : {}),
                 tick: this.tick + 1,
-                inputs: [{ kind: 'roomSeed', seed: roomSeed >>> 0 }],
+                inputs: opening,
             });
         }
         this.subscription = room.messages.subscribe(({ source, message }) => {

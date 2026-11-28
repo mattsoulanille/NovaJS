@@ -23,7 +23,7 @@ import { World } from 'nova_ecs/world';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
 import { loadShipGameData, primeWeaponEntries } from './entity_data_loader.js';
 import { deriveEntityComponents } from '../core/index.js';
-import { DisabledComponent } from '../ship/index.js';
+import { DisabledComponent, shipSlotFree } from '../ship/index.js';
 import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
 import { ArmorComponent, ShieldComponent, shieldFloor } from '../ship/index.js';
@@ -964,7 +964,11 @@ function spawnPers(world: World,
         ship.components.set(SystemHoldComponent, { reason: 'shipOffer' });
     }
     // The 'npc' uuid prefix: a person IS an NPC (population counting,
-    // system-furniture checks); the PersComponent is the tag.
+    // system-furniture checks); the PersComponent is the tag. A full
+    // system refuses the person like any NPC (ship/ship_cap.ts).
+    if (!shipSlotFree(world)) {
+        return 0;
+    }
     world.entities.set(ids.next('npc'), ship);
     return 1;
 }
@@ -1283,8 +1287,8 @@ export function spawnNpc(world: World,
         if (throughGate) {
             leaveFromGate(ship, state.rotation);
         }
-        insert(ids.next('npc'), ship);
-        return spawnedPers + 1;
+        const inserted = insert(ids.next('npc'), ship);
+        return spawnedPers + (inserted ? 1 : 0);
     }
 
     if (!entry.fleet) {
@@ -1326,12 +1330,18 @@ export function spawnNpc(world: World,
  * Inserts an NPC built by makeNpcShip, fully formed (see spawnNpc), with
  * a derelict govt's ships disabled (gövt Flags1 0x0800). Exported for the
  * other in-sim spawners (a stellar's defence fleet, encounters/tribute.ts).
+ * Returns false, inserting nothing, when the system is full (the room's
+ * ship cap, ship/ship_cap.ts).
  */
 export function insertNpc(world: World, gameData: SimulationGameDataInterface,
-    uuid: string, entity: Entity): void {
+    uuid: string, entity: Entity): boolean {
+    if (!shipSlotFree(world)) {
+        return false;
+    }
     deriveEntityComponents(world, entity);
     applyStartsDisabled(entity, gameData);
     world.entities.set(uuid, entity);
+    return true;
 }
 
 /**
@@ -1357,7 +1367,11 @@ export function spawnFleet(world: World,
     // NPC and its escorts simply cannot hit each other, so a stray
     // escort shot must never turn the leader hostile to its own fleet.
     leadShip.components.set(FiringGroupComponent, { group: leadUuid });
-    insert(leadUuid, leadShip);
+    if (!insert(leadUuid, leadShip)) {
+        // A full system: no lead, so no fleet (escorts without their lead
+        // would fly formation on nothing).
+        return [];
+    }
     const spawned = [leadUuid];
     let slot = 0;
     // Every escort count is drawn first (the same draws, in the same order,
@@ -1402,8 +1416,9 @@ export function spawnFleet(world: World,
             escortEntity.components.set(FiringGroupComponent,
                 { group: leadUuid });
             const escortUuid = ids.next('npc');
-            insert(escortUuid, escortEntity);
-            spawned.push(escortUuid);
+            if (insert(escortUuid, escortEntity)) {
+                spawned.push(escortUuid);
+            }
             slot++;
         }
     }
