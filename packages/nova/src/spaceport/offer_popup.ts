@@ -228,6 +228,18 @@ export class OfferPopup {
             // (wave 16: the empty BBS's Okay takes the next Return). Plain
             // Return only, no repeat (MenuControls.pressDefaultButton).
             this.controls.defaultButton = () => this.choice.next('accept');
+            // `y` presses the accept button and `n` the refuse button,
+            // whatever the mïsn renamed them to; on a popup with no
+            // Refuse (a can't-refuse offer's Okay, a notice) `n` does
+            // nothing (MenuControls.pressAnswerKey).
+            this.controls.answerButtons = {
+                yes: () => this.choice.next('accept'),
+                no: () => {
+                    if (this.hasRefuse) {
+                        this.choice.next('refuse');
+                    }
+                },
+            };
         }
         // The wheel scrolls the text only with the "Scroll wheel in text"
         // enhancement on; the original's wheel does nothing here. Bound on

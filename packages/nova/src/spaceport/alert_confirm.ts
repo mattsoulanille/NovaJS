@@ -100,6 +100,12 @@ export class AlertConfirmDialog {
             this.confirmButton.container);
 
         this.controls = new MenuControls(controlEvents, {});
+        // `y` presses OK and `n` Cancel, through the key relay
+        // (MenuControls.pressAnswerKey), like any choice dialog's.
+        this.controls.answerButtons = {
+            yes: () => this.result.next(true),
+            no: () => this.result.next(false),
+        };
     }
 
     /** Whether the alert is up. */

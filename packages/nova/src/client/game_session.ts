@@ -614,6 +614,15 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
             event.preventDefault();
             return;
         }
+        // `y` / `n` answer the choice dialog that holds the keyboard (a
+        // mission offer, the jettison confirm, a hail price;
+        // MenuControls.answerButtons). Elsewhere they stay game keys:
+        // `y` hails in flight and opens Your Ships in the shipyard.
+        if (event.type === 'keydown'
+            && MenuControls.pressAnswerKey(event)) {
+            event.preventDefault();
+            return;
+        }
         // A key-up releases what its press pressed, whatever the
         // modifiers are now (Alt let go before C: key_actions.ts).
         const actions = keyActions.resolve(controls, event);

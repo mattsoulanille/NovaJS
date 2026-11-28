@@ -38,7 +38,8 @@ export type EnhancementKey =
     | 'enhSmoothMapZoom'
     | 'enhShipStorage'
     | 'enhAccurateTurretAim'
-    | 'enhHailDCloses';
+    | 'enhHailDCloses'
+    | 'enhYesNoKeys';
 
 /** One row of the NovaJS Enhancements dialog. */
 export interface EnhancementSpec {
@@ -156,6 +157,20 @@ export const ENHANCEMENTS: readonly EnhancementSpec[] = [
             + 'tribute.',
         original: 'd demands tribute at a planet and does nothing on a '
             + 'ship.',
+    },
+    {
+        // spaceport/menu_controls.ts answerButtons / pressAnswerKey.
+        // Matthew 2026-11-28: "`y` and `n` should apply to choice dialog
+        // boxes (including when choices are renamed)". Whether the
+        // original's offer dialog takes them is not yet measured
+        // (docs/reference_experiments.md, "y / n in a mission offer").
+        key: 'enhYesNoKeys',
+        label: 'y and n answer dialogs',
+        novajs: 'y presses a mission offer\'s accept button and n its '
+            + 'refuse button, however they are named; also OK / Cancel on '
+            + 'the jettison confirm and a hail price.',
+        original: 'y and n do nothing in a dialog: click a button, or '
+            + 'press Return for the default one.',
     },
 ];
 

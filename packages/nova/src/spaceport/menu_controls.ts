@@ -1,6 +1,7 @@
 import { Observable, Subscription } from "rxjs";
 import { isReturnPress, isTextEntryActive } from '../input_focus.js';
 import { ControlAction, ControlEvent } from '../nova_plugin/core/index.js';
+import { enhancementEnabled } from '../enhancements.js';
 
 /**
  * Key handling for one landed-UI surface (a menu or dialog).
@@ -65,6 +66,21 @@ export class MenuControls {
      */
     cancelButton?: () => void;
 
+    /**
+     * What `y` and `n` press on this surface when it is a choice dialog:
+     * `yes` the accept / affirmative button, `no` the refuse / negative
+     * one, whatever their captions read (a mission offer's renamed "Go
+     * after them" / "Let it go" too). A surface that sets it takes both
+     * letters off their game controls while it is focused, even when one
+     * side is missing: a can't-refuse offer's lone Okay answers `y` and
+     * `n` does nothing. Like {@link defaultButton} it is not a
+     * ControlAction: the relay hands the raw key to {@link pressAnswerKey}
+     * first. A surface without it (the shipyard's `y` Your Ships, the
+     * hail dialog's main page, where the original's `y` does nothing)
+     * keeps the letters as ordinary control keys.
+     */
+    answerButtons?: { yes?: () => void, no?: () => void };
+
     private controlsSubscription: Subscription | undefined;
     /** Set by {@link release}: this surface is dead and must never take
      * the keyboard again. */
@@ -113,6 +129,40 @@ export class MenuControls {
             return false;
         }
         press();
+        return true;
+    }
+
+    /**
+     * `y` / `n` on a choice dialog: presses the focused surface's
+     * {@link answerButtons} yes / no. Matches the letter the key types
+     * (event.key, either case), so it follows the keyboard layout; never
+     * with Command, Control or Option held, never a key repeat (a held `y`
+     * that accepts one offer must not answer the next one too), never
+     * while a text field owns the keyboard. Returns whether the key was
+     * the surface's to take, so the relay can consume it: true for both
+     * letters whenever the focused surface has answer buttons, even when
+     * the one asked for is absent or the key is a repeat.
+     *
+     * A NovaJS enhancement (enhYesNoKeys, default on): with it off the
+     * letters are ordinary control keys on every surface, as before.
+     */
+    static pressAnswerKey(event: {
+        key: string, repeat?: boolean, altKey?: boolean, ctrlKey?: boolean,
+        metaKey?: boolean,
+    }): boolean {
+        const letter = event.key.toLowerCase();
+        if ((letter !== 'y' && letter !== 'n') || event.altKey
+            || event.ctrlKey || event.metaKey || isTextEntryActive()
+            || !enhancementEnabled('enhYesNoKeys')) {
+            return false;
+        }
+        const answers = MenuControls.focused?.answerButtons;
+        if (!answers) {
+            return false;
+        }
+        if (!event.repeat) {
+            (letter === 'y' ? answers.yes : answers.no)?.();
+        }
         return true;
     }
 

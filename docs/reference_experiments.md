@@ -27762,6 +27762,40 @@ offers and `25-bbs.png`, `runs/20261128-015140-bw_rest` run 4 with P1
 `01-c00-a.png`, M2 `03-c01-a.png` and B1 `17-bbs-row4.png`; `plugins/`,
 `scen/`, `pilotspecs/`).
 
+### y / n in a mission offer (K11): NOT MEASURED, the rig is ready (2026-11-28)
+
+**Question (FEATURE_YN_KEYS).** Matthew: "`y` and `n` should apply to
+choice dialog boxes (including when choices are renamed)". Do `y` / `n`
+already answer the original's mission-offer dialog, with its default No /
+Yes and with renamed buttons? Yes would make NovaJS's keys fidelity; no, a
+departure.
+
+**Rig.** A run-only plug-in, installed WITHOUT the shared kit:
+`~/.local/share/novaref/evidence/20261128-ynkeys/ynkeys_kit.mjs`, four
+AvailLoc 3 offers at the stock Snowmelt (spöb 164, where `novaref-base`
+starts), no bits: mïsn 919 / 921 with the default buttons, 920 / 922
+renamed "Go after them" / "Let it go" (dësc 4791-4794 as their texts;
+none of these ids is stock). Scenario `ynkeys.json` beside it: land, then
+`n`, `y`, `n`, `y`, `shift+n`, `shift+y`, a window shot after each, with
+a recording. Run it with `--pilot ~/.local/share/novaref/pilots/novaref-base`.
+
+**Result: no measurement.** Attempt 1 hit the `open_pilot` flake ("panel
+still open"). Attempt 2 started alongside another agent's run: novaref's
+lock (`scripts/novaref/lock.mjs` acquireLock) creates the file with
+`wx` and writes the record in a second call, and a contender polling in
+between read the empty file as `{"unreadable": ""}`, judged it stale and
+took the lock over. Both runs then drove the Mac at once; this run's game
+exited, its retry found the other run's plug-ins installed and its
+cleanup moved them out. Not retried. **Fix wanted in the harness:** write
+the record to a temp file and `link` / rename it into place (or treat an
+unreadable record as held, not stale).
+
+**NovaJS (applied):** `y` / `n` answer every choice dialog through
+`MenuControls.answerButtons` (`N/spaceport/menu_controls.ts`, called from
+the key relay in `N/client/game_session.ts`), behind the default-on
+enhancement `enhYesNoKeys` until this is measured: if the original takes
+the keys, the toggle can go.
+
 ### Reliability notes (for anyone running the reference)
 
 - **A map purchase is read from the pilot, not the screen (2026-11-28):**
@@ -29373,6 +29407,7 @@ cosmetic or rare.
 | K7 | Escort command keys (escortCmd 0-3 = f/d/v/c, escort menu e), from the prefs | escort commands | **answered (wave 2, E-view)** | M |
 | K8 | Radar centre arrow range and hypergate ring vs dot (#358) | `N/display/status_bar_radar.ts:209-225,646-668` | VID flying out from a kit stellar. **Answered (wave 22)**: every station (spöb Flags 0x0010, the working hypergates too) is a 2 x 2 dot; a planet rings from 89-96 px. **Applied in 4c6a58ab** (threshold 96; wormholes rings, unmeasured). **Wave 23**: a wormhole is a 2 x 2 dot; applied 2026-11-24 by the wormhole flag (not 0x0020: Jupiter is a ring; see "K8 wormhole on the radar, wave 23"). Centre arrow range not asked **Wave 43** ("The radar's centre arrow (K8), wave 43"): drawn whenever the system CENTRE is off the radar (onset at about 84 of 88 radar px, about 2,750 px), whatever stellars are on the radar (a port 4,000 px from an empty centre: the arrow from the start); NovaJS gates on "no stellar on the radar": mismatch, proposed gate on the centre's offset **Wave 44** ("The centre arrow's onset (K8 leftover), wave 44"): the gate is the centre's DISTANCE, a circle of 2,404-2,650 px, not per axis (NovaJS after a5bb1c25: per axis at 2,864 px: mismatch) **Applied 2026-11-27 (a2256069)**: `centerArrowShown` = the centre's distance (squared) > `CENTER_ARROW_RADIUS` 2,500 px (GUESS inside 2,404-2,650), a fixed world radius, not a share of the radar's span (GUESS: only the stock status bar measured); `CENTER_ARROW_ONSET` and the unused `RadarPane.range` removed **Wave 45** ("The centre arrow's onset radius (K8 leftover), wave 45"): no arrow at 2,450-2,600 px: the radius is 2,601-2,650 (main's 2,500 is low; proposed 2,625). **Applied 2026-11-27 (716dc346)**: `CENTER_ARROW_RADIUS` 2,500 -> 2,625 (GUESS, the middle of 2,601-2,650); the hypot gate kept | L |
 | K10 | Target bracket corners: distance from the centre, shape, what sets them | `N/display/target_corners_plugin.ts:98-117,180`, `N/display/planet_corners_plugin.ts:36` | **answered (wave 9)**: base frame + 15 px per side, square from max(w, h), fixed glyphs, additive fly-in. **Mismatch** (NovaJS: +-0.354 x the largest layer, inside the sprite); fix applied in c43cddcc | L |
+| K11 | Do `y` / `n` answer a mission offer (default and renamed buttons)? | `N/spaceport/menu_controls.ts` answerButtons | **open**: rig ready, not run ("y / n in a mission offer (K11)"); NovaJS applies them behind `enhYesNoKeys` | L |
 | DT | dësc conditional blocks beyond the Bible: `{oXXX ...}` (Extra Outfits' Inertial Damper), other letters, compound and malformed blocks | `N/nova_plugin/ncb/desc_text.ts` (every dësc reader) | **answered (wave 54, "dësc test operators, wave 54")**: one b / g / p term, reached by skipping ANY other characters (across the text; none left: the text ends at the "{"), sticky `!`, measured string rules. **Mismatch** (NovaJS printed such blocks raw, and the landing text ignored the bits); fix applied on this branch | M |
 
 ### Edge cases

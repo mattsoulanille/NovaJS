@@ -1317,6 +1317,10 @@ export class HailDialog {
         this.content.removeChildren().forEach(child => child.destroy());
         this.keyedButtons = {};
         this.defaultPress = undefined;
+        // `y` / `n` answer only the price popup (renderHaggle). On the
+        // comm page the original's `y` does nothing (K5, wave 39), and
+        // `n` has no button there either.
+        this.controls.answerButtons = undefined;
         const context = this.context;
         if (!context) {
             return;
@@ -1779,12 +1783,19 @@ export class HailDialog {
             });
             this.content.addChild(accept.container);
             this.defaultPress = () => accept.activate();
+            // `y` accepts the price. `n` presses nothing: Lower Price is
+            // a counter-offer, not a refusal, and this popup has no
+            // button that declines (MenuControls.answerButtons).
+            this.controls.answerButtons = {
+                yes: () => accept.activate(),
+            };
             return;
         }
 
         // NovaJS's own two rows for what the original's popup was never
         // captured on: a price the pilot cannot pay (Never Mind backs out)
         // and a help price ('assist', which pays here).
+        let payButton: Button | undefined;
         if (bribe && bribe.canAfford) {
             const pay = this.placeButton(
                 `Pay ${bribe.amount.toLocaleString()} cr`, frame,
@@ -1799,6 +1810,7 @@ export class HailDialog {
             });
             this.content.addChild(pay.container);
             this.defaultPress = () => pay.activate();
+            payButton = pay;
         }
         const cancel =
             this.placeButton('Never Mind', frame, originX, originY, 1);
@@ -1808,5 +1820,10 @@ export class HailDialog {
         });
         this.content.addChild(cancel.container);
         this.defaultPress ??= () => cancel.activate();
+        // `y` pays (when the pilot can), `n` is Never Mind.
+        this.controls.answerButtons = {
+            yes: payButton ? () => payButton.activate() : undefined,
+            no: () => cancel.activate(),
+        };
     }
 }
