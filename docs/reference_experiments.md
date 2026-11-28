@@ -26391,6 +26391,115 @@ specs, `sheet.sh`, the queues), `pilotspecs/`, `scen/`, `recover.log`.
   STR# carries a block); a b number past 9999; whether a mission
   briefing's text is expanded before or after its wildcards.
 
+### Tab on the hypergate map, wave 56: Tab picks the current gate's HyperLink destinations in SLOT order (not id, distance or angle), the unexplored one and a destroyed gate included, wrapping with no empty step; each pick is a click's pick (white lane, "Hypergate Destination:" column) and Return / Done transits to it; on the star map Tab cycles every visible neighbour with a multi-jump route plotted, the route's first hop included, and keeps the route (2026-11-27)
+
+**Question** (the hub's brief, Matthew: "pressing tab on the map (normal
+map or hypergate map) I think cycles available routes. We implement it
+for the normal map but not the hypergate map yet"). On the gate map, what
+does Tab cycle, in which order, does it skip unavailable gates, does it
+wrap, does Enter / Done use the pick? And does the star map's Tab (M7)
+skip anything while a multi-jump route is plotted?
+
+**Rig** (no kit; stock data plus a one-resource run-only plug-in). Stock
+gates are govt 183 / MinStatus 32767 (usable only with ränk 147), so the
+plug-in overrides HG-Tichel (spöb 1405) with govt -1 and MinStatus -32767;
+the destination gates stay stock (MinStatus 32767). Pilots on HG-Tichel
+(stellar 1405) in a Leviathan (shïp 131), every system explored. Enter
+Ship, `l` (cleared), `l` (the map). Stock HG-Tichel links [1404 HG-Kania,
+1406 HG-Alphara, 1407 HG-Primus]: slot order equals id order, and
+distance order is Alphara (67 units), Kania (78), Primus (136).
+- `gate_a2`: stock links. Tab x5, Return; then in the arrival system the
+  star map, shift-clicks Vemap and Heraan Cov (a route), Tab x3.
+- `gate_b`: the plug-in also reorders the links to [1407 Primus, 1404
+  Kania, **130 HG-Aldebaran**, 1406 Alphara] (HG-Aldebaran is one of the
+  16 destroyed gates: can-land clear, no links), and Alphara (sÿst 131) is
+  unexplored. Tab x7, then a click on Done.
+- (`gate_a`, the first try: a Shuttle on stock HG-Alphara was "Ship
+  destroyed." within 9 s of Enter Ship, before any key; nothing measured.)
+
+| run | gate map on opening | Tab 1 | 2 | 3 | 4 | 5 | 6 / 7 | Return / Done |
+|---|---|---|---|---|---|---|---|---|
+| a2 (stock) | arrows to Kania, Alphara, Primus, nothing picked, "- Please select a hypergate destination -" | Kania | Alphara | Primus | Kania | Alphara | | Return with Alphara picked: transit, the map then reads "Current System: Alphara" |
+| b (reordered) | FOUR arrows, one to Aldebaran (the destroyed gate) and one to the unexplored Alphara's ring | Primus | Kania | **Aldebaran** | Alphara ("Hypergate Destination: <Unknown>", Ports / Hazards <Unknown>) | Primus | Kania / Aldebaran | Done with Aldebaran picked: "Exiting hypergate in the Aldebaran system on June 23rd, 1177 NC.", the map then reads "Current System: Aldebaran" |
+
+Each Tab pick is exactly a click's pick: the lane turns white, the green
+brackets move to it and the column reads "Hypergate Destination: <name>"
+with its Ports / Navigation Hazards rows. So:
+1. **Order:** the gate's HyperLink SLOT order (run b: Primus, Kania,
+   Aldebaran, Alphara, against id order Kania, Alphara, Primus and
+   distance order Alphara, Kania, Primus), as the star map's Tab follows
+   the sÿst link slots (M7).
+2. **Nothing linked is skipped:** neither the unexplored destination nor
+   the destroyed gate (whose system's Ports line leaves it out). Neither
+   is "available" in any other sense, so the gate map's Tab is "the next
+   linked gate", whatever its state. The destination gates' own MinStatus
+   32767 did not stop a transit either. (Not tested: a gate in a system
+   the player's bits hide; stock has none.)
+3. **Wraps** from the last link to the first with no "nothing picked"
+   step.
+4. **Return and Done transit to the pick**, the destroyed gate included
+   (the ship emerged in Aldebaran).
+
+**The star map with a route plotted** (`gate_a2` shots 12-19, at
+Alphara, stock links [137 Vega, 336 Vemap, 144 Spica, 130 Sol, 531 Sol's
+NCB copy, hidden from this pilot]). Before the route, Tab x3 picked Vega,
+Vemap, Spica. Then two shift-clicks plotted Alphara > Vemap > Heraan Cov
+(thick green, "Destination System: Heraan Cov"; the Spica pick's thin line
+stayed). Tab x3 then picked **Sol, Vega, Vemap**: it went on from the
+last pick, skipped only the hidden copy 531, did NOT skip the route's own
+first hop (Vemap), and the route stayed drawn under each thin single-jump
+line, the column reading "Destination System: <the Tab pick>".
+
+**NovaJS (main 14dd27b9, before this wave's change).** The gate map had no
+Tab: `N/spaceport/gate_map.ts:467-470` bound only `depart` / `map`, and
+`N/spaceport/system_graph.ts:564-567` (`cycleSingleRoute`) returned at
+once in picker mode: **mismatch**. The star map's Tab
+(`system_graph.ts:564-575`, `route.ts:281` `cycleSingle` over the visible
+adjacency) already matches the route case: it cycles every visible
+neighbour, the route's first hop included, goes on from the last pick,
+keeps the pinned route and leaves the hidden copy out (`buildAdjacency`
+over the visible systems).
+
+**Applied 2026-11-27 (this branch):** `N/spaceport/hypergate_network.ts`
+`gateCycleOrder` (the gate's links in slot order; under the transitivity
+room rule, the gates further out follow breadth first, each gate's links
+in slot order); `N/spaceport/gate_map.ts` `computeGateMapView` returns
+`cycle` (one visible system per destination, in that order), handed to
+the graph as `selectableOrder`, and binds Tab (`nextTarget`) to
+`cycleSingleRoute`; `N/spaceport/system_graph.ts` `cycleSingleRoute` in
+picker mode runs the star map's own `cycleSingle` over that order and
+picks the result exactly as a click does. Return / Done already transit
+to the pick. Specs: `hypergate_network_test.ts` "gateCycleOrder",
+`gate_map_test.ts` "Tab on the gate map (wave 56)" (the run-b order,
+<Unknown>, wrap, Return) and the stacked-copy cycle,
+`starmap_tab_cycle_test.ts` (the route case). **Left as is (a NovaJS
+choice, plug-in data only):** NovaJS still leaves a DESTROYED gate off the
+gate map entirely (no arrow, not offered, not in the cycle; `landable()`
+false, `computeGateMapView`), where the original draws, cycles and
+transits to one a working gate links to. No stock gate links to a
+destroyed one, so this only shows with a plug-in like run b's.
+Confidence: high (both orders read off every shot; the transits read off
+the map afterwards).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-w56/`: `gate_a2/*/`
+(`03-l2.png` the map, `04-tab1.png` .. `08-tab5.png`, `10-ret2.png`,
+`11-map.png` after the transit, `12-route.png` .. `19-r2tab3.png` the
+star map), `gate_b/*/` (`03-l2.png`, `04-tab1.png` .. `10-tab7.png`,
+`11-done1.png` / `12-done2.png` the exit line, `13-map.png`), `gate_a/*/`
+(the destroyed Shuttle), the sheets `sheet_a_tab1-4.png`,
+`sheet_a_tab5_ret.png`, `sheet_a_route_tab.png`,
+`sheet_a_route2_tab.png`, `sheet_b_tab1-6.png`, `sheet_b_done.png`,
+`tools/` (plug-in specs, `build.sh`, `send.sh`), `pilotspecs/`, `scen/`,
+`recover.log`.
+
+### Not reached in wave 56 (2026-11-27)
+
+- Tab on the gate map with a destination in a system the player's bits
+  hide (stock has none); shift+Tab; whether the original's star-map jump
+  follows the Tab pick or the plotted route after a Tab over a route.
+- Why the Shuttle on stock HG-Alphara was destroyed within 9 s of Enter
+  Ship (the recording started after it).
+
 ### Escort upgrade gates, wave 57: only the target hull's Availability gates an escort's Upgrade ("This ship class cannot be upgraded.", the button greyed); Require, AppearOn and TechLevel do not, and the ungated upgrades settle at the next shipyard (2026-11-27)
 
 **Question** (the hub's brief, from Matthew's playtest): his captured
@@ -26458,6 +26567,18 @@ Confidence: high (each a single unambiguous comm box, both controls).
 (`w57_valk291.mjs`, `run.sh`, `send.sh`), `recover.json`.
 
 ### Reliability notes (for anyone running the reference)
+
+- **A stock hypergate rig (wave 56):** stock gates refuse a fresh pilot
+  (govt 183, MinStatus 32767; ränk 147 opens them), so override the one
+  gate the pilot starts on with govt -1 / MinStatus -32767 in a run-only
+  plug-in; its links and the destinations can stay stock, and a transit
+  to a stock (refusing) gate works. Start ON the gate and press `l` at
+  once (`l`, wait 1.5 s, `l` opens the map) in a sturdy hull: a Shuttle
+  on HG-Alphara was destroyed within 9 s. The gate map is a dialog at
+  window (118..718, 48..560): Done at (648, 541). On the star map, plot a
+  route by shift-clicking each hop in turn (README "route"): the first
+  lone shift-click on Heraan Cov, two jumps out, registered nothing at
+  all (not even a selection; an unexplained miss, not a rule).
 
 - **A dësc probe needs no kit (wave 54):** override the stock dëscs of
   Snowmelt's outfitter items (oütf 184-188 and 433 -> dësc 3056-3060 and
