@@ -37,6 +37,9 @@ import { MissionUniverse } from './mission_universe.js';
 import { commitPendingEscorts } from './pending_escorts.js';
 import { buildChangedShip } from './shipyard_rules.js';
 import { warmChangeShipTargets } from './change_ship_targets.js';
+import {
+    cloneDeparture, LandedDeparture,
+} from './landed_departure.js';
 
 /**
  * ============================================================================
@@ -215,6 +218,8 @@ interface Snapshot {
     cargoCapacity: number;
     outfits: Map<string, number>;
     hired: string[];
+    /** The Qxxx / Mxxx / Nxxx requests at the time. */
+    departure: LandedDeparture;
     /** The leased holds' working cargo at the time, by hold. */
     holds: { hold: FleetHold, cargo: Map<string, number> }[];
 }
@@ -321,7 +326,41 @@ export class LandedTransaction {
         const transaction =
             new LandedTransaction(session, gameData, universe, planetId);
         await transaction.wireShipChanges();
+        transaction.wireDeparture();
         return transaction;
+    }
+
+    /**
+     * Wires the `Qxxx` (leave the stellar) and `Mxxx` / `Nxxx` (move to a
+     * system) operators of every set string the landing's session runs to
+     * the session's departure record (landed_departure.ts has the rules).
+     * The spaceport acts on it: after the current dialog for a Q, at the
+     * Leave for a move. The sÿst number arrives resolved stock-first
+     * (mission_set_strings.ts).
+     */
+    private wireDeparture(): void {
+        const session = this.session;
+        session.machinery.leaveStellar = (stringId, prefix) => {
+            session.departure.leave = true;
+            session.departure.quotes.push({ stringId, prefix });
+        };
+        session.machinery.moveToSystem = (systemId, keepCoordinates) => {
+            session.departure.move = { systemId, keepCoordinates };
+        };
+    }
+
+    /**
+     * What the visit's set strings asked of the departure so far (a
+     * savepoint rollback takes a request back with the rest of the venue).
+     * Read-only for callers.
+     */
+    get departure(): Readonly<LandedDeparture> {
+        return this.session.departure;
+    }
+
+    /** Whether a `Qxxx` has asked the spaceport to leave. */
+    get mustLeave(): boolean {
+        return this.session.departure.leave;
     }
 
     /**
@@ -596,6 +635,7 @@ export class LandedTransaction {
             cargoCapacity: state.cargoCapacity,
             outfits: new Map(this.session.outfits),
             hired: [...this.hired],
+            departure: cloneDeparture(this.session.departure),
             holds: this.leasedHolds.map(hold =>
                 ({ hold, cargo: new Map(hold.cargo) })),
         };
@@ -628,6 +668,7 @@ export class LandedTransaction {
         replaceMap(this.session.outfits, snapshot.outfits);
         this.hired.length = 0;
         this.hired.push(...snapshot.hired);
+        this.session.departure = cloneDeparture(snapshot.departure);
         for (const { hold, cargo } of snapshot.holds) {
             replaceMap(hold.cargo, cargo);
         }

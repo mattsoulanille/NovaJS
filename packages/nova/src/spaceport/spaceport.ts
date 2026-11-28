@@ -43,6 +43,10 @@ import {
 } from './escort_deals.js';
 import { escortWageReport } from './escort_wages.js';
 import { LandedTransaction } from './landed_transaction.js';
+import {
+    departureRequested, PendingDeparture, PendingDepartureComponent,
+} from './landed_departure.js';
+import { statusQuoteLine } from './status_quote.js';
 import { Menu } from './menu.js';
 import { MenuControls } from './menu_controls.js';
 import { MissionBoard } from './mission_board.js';
@@ -191,6 +195,12 @@ export class Spaceport extends Menu<Entity> {
     /** Whether a Leave is already in progress (see leave). */
     private leaving = false;
     /**
+     * What the departing hull carries to the client's lift-off (the visit's
+     * `Qxxx` messages and `Mxxx` / `Nxxx` move — landed_departure.ts),
+     * built by {@link leave} and put on the committed hull by {@link done}.
+     */
+    private liftOffDeparture?: PendingDeparture;
+    /**
      * The venues, as the set the transaction is attached to per landing
      * and the set a teardown dismisses.
      */
@@ -323,6 +333,7 @@ export class Spaceport extends Menu<Entity> {
             // affects the Refuel button.
             this.refreshRefuelButton();
             this.rebindControls();
+            this.departIfAsked();
         };
         this.onMainScreenClick(buttons.outfitter, showOutfitter);
 
@@ -358,6 +369,7 @@ export class Spaceport extends Menu<Entity> {
             await this.shipBuild;
             this.refreshRefuelButton();
             this.rebindControls();
+            this.departIfAsked();
         };
         this.onMainScreenClick(buttons.missions, showMissionComputer);
 
@@ -378,6 +390,7 @@ export class Spaceport extends Menu<Entity> {
             await this.shipBuild;
             this.refreshRefuelButton();
             this.rebindControls();
+            this.departIfAsked();
         };
         this.onMainScreenClick(buttons.bar, showBar);
 
@@ -397,6 +410,7 @@ export class Spaceport extends Menu<Entity> {
             this.setLiveStatus(undefined);
             this.refreshRefuelButton();
             this.rebindControls();
+            this.departIfAsked();
         };
         this.onMainScreenClick(buttons.tradeCenter, showTradeCenter);
 
@@ -423,6 +437,7 @@ export class Spaceport extends Menu<Entity> {
             // button has to be re-judged against the ship now docked.
             this.refreshRefuelButton();
             this.rebindControls();
+            this.departIfAsked();
         };
         this.onMainScreenClick(buttons.shipyard, showShipyard);
         this.addButtons(buttons);
@@ -708,7 +723,29 @@ export class Spaceport extends Menu<Entity> {
         } catch (e) {
             console.warn('Spaceport landing popups failed:', e);
         }
+        // A completion's `Qxxx` — the main strings' finales, `M472 Q25048`
+        // (mïsn nova:686 and its siblings) — or a landing offer's: the
+        // popups were the dialog it ran under, and the player leaves now.
+        this.departIfAsked();
         return result;
+    }
+
+    /**
+     * A set string run this visit asked the player to leave the stellar
+     * (`Qxxx`, landed_departure.ts): once the dialog it ran under is
+     * closed, the spaceport departs through its ordinary Leave — the
+     * escort settlements, the commit, the same lift-off and checkpoint.
+     * Called wherever the spaceport gets the keyboard back (after the
+     * landing popups, after every venue); a no-op otherwise, and while a
+     * Leave is already under way.
+     */
+    private departIfAsked(): void {
+        const transaction = this.transaction;
+        if (!transaction?.mustLeave || transaction.isClosed || this.leaving
+            || !this.stillDocked()) {
+            return;
+        }
+        void this.leave();
     }
 
     /**
@@ -918,7 +955,9 @@ export class Spaceport extends Menu<Entity> {
         // mission — released below, so it is on the entity before any
         // venue opens.
         const transaction = this.transaction;
-        if (!transaction) {
+        // A completion's `Qxxx` (landed_departure.ts): the player leaves
+        // after its text, and nothing further is put to them.
+        if (!transaction || transaction.mustLeave) {
             return;
         }
         const session = transaction.session;
@@ -1012,6 +1051,14 @@ export class Spaceport extends Menu<Entity> {
         subscription.unsubscribe();
         const presented = await this.presentVenueOffers(location,
             shown ? venue : undefined);
+        if (this.transaction?.mustLeave) {
+            // An entry offer's `Qxxx`: the venue closes behind its dialog
+            // and the spaceport departs (departIfAsked, in the caller).
+            if (shown && venue.container.visible) {
+                venue.dismiss();
+            }
+            return visit;
+        }
         if (presented && shown && this.stillDocked()
             && venue.container.visible) {
             venue.dismiss();
@@ -1522,6 +1569,13 @@ export class Spaceport extends Menu<Entity> {
             }
         } catch (e) {
             console.warn('Escort settlement failed at lift-off:', e);
+        }
+        try {
+            this.liftOffDeparture = await this.buildLiftOffDeparture();
+        } catch (e) {
+            console.warn('The visit\'s departure request failed to build; '
+                + 'lifting off here:', e);
+            this.liftOffDeparture = undefined;
         } finally {
             this.popupBlocker.unbind();
             this.leaving = false;
@@ -1544,6 +1598,42 @@ export class Spaceport extends Menu<Entity> {
             }
         }
         this.done();
+    }
+
+    /**
+     * What this visit's set strings asked of the lift-off
+     * (landed_departure.ts), in the form the client acts on: the move,
+     * and each `Qxxx`'s message picked from its STR# and expanded. The
+     * Bible: the message "is parsed for mission text tags (e.g. <PSN> and
+     * <PRK>) but not text-selection tags like those above (e.g. {G "he"
+     * "she"})" — so the identity tags are expanded and no dësc
+     * conditional is resolved. Undefined when nothing was asked.
+     */
+    private async buildLiftOffDeparture(): Promise<PendingDeparture | undefined> {
+        const transaction = this.transaction;
+        if (!transaction || transaction.isClosed
+            || !departureRequested(transaction.departure)) {
+            return undefined;
+        }
+        const { move, quotes } = transaction.departure;
+        const statusMessages: string[] = [];
+        if (quotes.length > 0) {
+            const ship = transaction.ship;
+            const identity = await playerIdentitySubs(this.universe,
+                ship.components.get(ShipComponent)?.id, undefined,
+                this.playerComponent(ActiveRanksComponent),
+                ship.components.get(PlayerNamesComponent));
+            for (const { stringId, prefix } of quotes) {
+                const line = await statusQuoteLine(this.displayAssets,
+                    stringId, prefix);
+                const text = line === undefined ? ''
+                    : expandMissionText(line, identity).trim();
+                if (text) {
+                    statusMessages.push(text);
+                }
+            }
+        }
+        return { ...(move ? { move: { ...move } } : {}), statusMessages };
     }
 
     /**
@@ -1634,6 +1724,13 @@ export class Spaceport extends Menu<Entity> {
     protected override done() {
         if (this.transaction) {
             this.input = this.transaction.commit();
+        }
+        const departure = this.liftOffDeparture;
+        this.liftOffDeparture = undefined;
+        if (departure) {
+            this.input.components.set(PendingDepartureComponent, departure);
+        } else {
+            this.input.components.delete(PendingDepartureComponent);
         }
         if (this.data) {
             const movement = this.input.components.get(MovementStateComponent);

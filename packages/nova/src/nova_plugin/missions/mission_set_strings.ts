@@ -58,14 +58,16 @@ export function makeMissionSetHooks(machinery: MissionMachineryContext,
             id, runningMissionPrefix, machinery.shipExists), mode);
     }
     // Mxxx/Nxxx, likewise only where the caller can move the player (the
-    // in-flight accept / refusal). The sÿst number resolves stock-first.
+    // in-flight accept / refusal, the landing's transaction). The sÿst
+    // number resolves stock-first.
     if (moveToSystem) {
         hooks.moveToSystem = (id, keepCoordinates) => moveToSystem(
             resolveNumberedResource(id, runningMissionPrefix,
                 machinery.systemExists), keepCoordinates);
     }
-    // Qxxx, only where the caller can show its message (the in-flight
-    // accept); see MissionMachineryContext.leaveStellar.
+    // Qxxx, only where the caller can act on it (the in-flight accept's
+    // status line, the landing's departure); see
+    // MissionMachineryContext.leaveStellar.
     const { leaveStellar } = machinery;
     if (leaveStellar) {
         hooks.leaveStellar = id => leaveStellar(id, runningMissionPrefix);

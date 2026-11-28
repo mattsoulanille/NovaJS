@@ -25,6 +25,7 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import type { SimulationGameDataInterface } from './gamedata/simulation_game_data.js';
+import { showDepartureMessages } from '../display/status_message_plugin.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
 import { daysPerJump } from '../nova_plugin/player/index.js';
 import {
@@ -177,6 +178,87 @@ export function followMissionSystemMove(runtime: ClientRuntime,
             await abortHyperspaceJump(runtime, data, origin,
                 `Mission move to ${data.systemId} failed.`, wire);
         }
+    }).catch(e => {
+        if (!isSessionEnded(e)) {
+            console.error('Mission move follow-through failed:', e);
+        }
+    });
+}
+
+/**
+ * The spaceport's Leave carried a landed `Mxxx` / `Nxxx`
+ * (spaceport/landed_departure.ts): instead of lifting off into the system
+ * the stellar is in, the ship is carried to the named one — the Auroran
+ * finale's `M472 Q25048` (mïsn nova:686), "A mysterious force transports
+ * you to an unknown location...", into S7evyn.
+ *
+ * The same follow-through as the in-flight move
+ * ({@link followMissionSystemMove}), from the dock instead of from space:
+ *
+ *   - Placement as the Bible says: M on top of the destination's first
+ *     stellar, at rest; N at the x/y the ship had, which for a docked ship
+ *     is the stellar it lifted off from (Spaceport.done parks it there).
+ *   - No date passes and no fuel is spent (the move is instantaneous).
+ *   - THE FLEET LIFTS OFF WITH THE PLAYER, as from any spaceport: the
+ *     landed roster is restocked (escorts that put down at the port get
+ *     the port's service, FleetLedger.takeLandedEscortsRestocked) and put
+ *     back on the landed roster, which the transit's jumpTo carries to
+ *     the destination along with any lost escorts; the bar's hires ride
+ *     the player's PendingEscortsComponent into the destination's
+ *     insertion (enterSystem); the mission ships are the destination's.
+ *   - The departure checkpoint ("Departed <stellar>") is recorded once the
+ *     ship is in the destination, where the save's system is the one it
+ *     names, and the `Qxxx` messages go up on the destination's status
+ *     line in place of the arrival line.
+ *
+ * A failed follow-through re-enters the origin, as a failed jump does.
+ * The pump is idle meanwhile: the state stays `landed` with nothing to
+ * launch until the transit takes the system out of the state.
+ */
+export function followSpaceportSystemMove(runtime: ClientRuntime,
+    data: DepartingShip, departure: {
+        systemId: string, keepCoordinates: boolean,
+        statusMessages: readonly string[], checkpointLabel: string,
+    }, wire: WorldWiring): void {
+    const origin = activeSystemId(runtime.state.state);
+    const { fleet, gameData, saves } = runtime;
+    void runtime.transitions.run(async () => {
+        try {
+            fleet.landed.push(
+                ...await fleet.takeLandedEscortsRestocked(data.uuid, gameData));
+        } catch (e) {
+            // takeLandedEscortsRestocked has put the batch back; the
+            // escorts ride un-restocked rather than not at all.
+            console.warn('Escort restock failed on a mission move from the '
+                + 'spaceport:', e);
+        }
+        if (!departure.keepCoordinates) {
+            await placeOnFirstStellar(data.entity, departure.systemId,
+                gameData);
+        }
+        try {
+            await jumpTo(runtime, {
+                kind: 'move', from: origin, to: departure.systemId,
+                uuid: data.uuid, entity: data.entity,
+            }, wire);
+        } catch (e) {
+            if (isSessionEnded(e)) {
+                return; // See followHyperspaceJump.
+            }
+            console.warn('Mission move from the spaceport failed:', e);
+            await abortHyperspaceJump(runtime, data, origin,
+                `Mission move to ${departure.systemId} failed.`, wire);
+            return;
+        }
+        const arrived = runtime.state.state;
+        if (arrived.kind === 'inSpace') {
+            showDepartureMessages(arrived.system.world,
+                departure.statusMessages, true);
+        }
+        saves.recordCheckpointNow({
+            label: departure.checkpointLabel, kind: 'depart',
+            entity: data.entity,
+        });
     }).catch(e => {
         if (!isSessionEnded(e)) {
             console.error('Mission move follow-through failed:', e);

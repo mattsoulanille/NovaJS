@@ -210,6 +210,13 @@ export class Bar extends Menu<Entity> {
             console.warn('Bar entry sequence failed:', e);
         }
         this.popupBlocker.unbind();
+        // An offer's `Qxxx` (ARPIA's OnAccept Q25089, stock nova:469 /
+        // 735) leaves the stellar after its dialog: the bar closes behind
+        // it and the spaceport departs (landed_departure.ts).
+        if (this.transaction?.mustLeave && this.container.visible) {
+            this.done();
+            return result;
+        }
         this.rebindControls();
         return result;
     }

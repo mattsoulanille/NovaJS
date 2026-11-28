@@ -738,6 +738,12 @@ export async function presentOffers(popup: OfferPopup,
         }
     };
     for (const offer of offers) {
+        // A prior accept's or refusal's `Qxxx` has the player leaving the
+        // stellar after the dialog it ran under (landed_departure.ts):
+        // nothing further is put to them.
+        if (session.departure.leave) {
+            return;
+        }
         // A prior accept (or refuse) in this sequence may have made the
         // mission active, or falsified its availability — two mutually
         // exclusive offers must not both be put to the player

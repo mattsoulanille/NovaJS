@@ -28,6 +28,7 @@ import type { World } from 'nova_ecs/world';
 import { v4 } from 'uuid';
 import { OpenGateMapEvent } from '../display/gate_map_plugin.js';
 import { OpenSpaceportEvent } from '../display/spaceport_plugin.js';
+import { showDepartureMessages } from '../display/status_message_plugin.js';
 import {
     DISCOVERY_LANDED, markDiscovered, PlayerShipSelector,
 } from '../nova_plugin/player/index.js';
@@ -35,6 +36,9 @@ import { displayNameOf } from '../nova_plugin/core/index.js';
 import { PlanetTargetComponent } from '../nova_plugin/travel/index.js';
 import { TargetComponent } from '../nova_plugin/ship/index.js';
 import { PendingEscortsComponent } from '../spaceport/pending_escorts.js';
+import {
+    PendingDeparture, PendingDepartureComponent,
+} from '../spaceport/landed_departure.js';
 import {
     dock, dockAtGate, gateLaunched, land, landAtGate, launched, LiveSystem,
     requestLaunch, swapDockedShip,
@@ -120,10 +124,15 @@ export function onLand(runtime: ClientRuntime, world: World,
  * is closed — so by the time this fires the roster already lacks the
  * escorts that were sold and the ledger already holds the money).
  */
-export function onLeaveSpaceport(runtime: ClientRuntime, launching: Entity):
-    void {
+export function onLeaveSpaceport(runtime: ClientRuntime, launching: Entity,
+    statusMessages: readonly string[] = []): void {
     const { state, gameData, saves } = runtime;
     const current = state.state;
+    // A landed `Qxxx`'s message (spaceport/landed_departure.ts), on the
+    // status line of the world the ship is lifting off into — this one.
+    if (current.kind === 'landed') {
+        showDepartureMessages(current.system.world, statusMessages, false);
+    }
     // The docked handle names the stellar; read it before the state moves
     // (the launch is still one frame away, and the handle survives it).
     const planetId = current.kind === 'landed' ? current.ship.planetId : undefined;
@@ -138,6 +147,18 @@ export function onLeaveSpaceport(runtime: ClientRuntime, launching: Entity):
         entity: launching,
         ...(planetId ? { stellar: planetId } : {}),
     });
+}
+
+/**
+ * Takes the landed departure (spaceport/landed_departure.ts) off the hull
+ * the spaceport's Leave committed: display-side bookkeeping that must not
+ * ride into any insertion record. Undefined when the visit asked nothing.
+ */
+export function takePendingDeparture(launching: Entity):
+    PendingDeparture | undefined {
+    const departure = launching.components.get(PendingDepartureComponent);
+    launching.components.delete(PendingDepartureComponent);
+    return departure;
 }
 
 /** The fleet-insertion dependencies, as the standing flushes build them. */

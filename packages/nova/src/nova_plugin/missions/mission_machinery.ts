@@ -168,22 +168,28 @@ export interface MissionMachineryContext {
     changeShip?(globalShipId: string, mode: ShipChangeMode): void;
     /**
      * `Mxxx` / `Nxxx` (move the player to system xxx: on top of its first
-     * stellar, or keeping the x/y coordinates). Supplied only by the
-     * in-flight accept / refusal (spaceport/ship_mission_accept.ts), which
-     * records it on the record the simulation applies
-     * (MissionSystemMoveSystem); everywhere else it is reported as an
-     * unimplemented hook. `globalSystemId` is already resolved stock-first
-     * through `systemExists`.
+     * stellar, or keeping the x/y coordinates). Supplied by the in-flight
+     * accept / refusal (spaceport/ship_mission_accept.ts), which records it
+     * on the record the simulation applies (MissionSystemMoveSystem), and
+     * by the landing's transaction (spaceport/landed_transaction.ts
+     * wireDeparture), where it names the system the departure goes to
+     * (spaceport/landed_departure.ts); everywhere else it is reported as
+     * an unimplemented hook. `globalSystemId` is already resolved
+     * stock-first through `systemExists`.
      */
     moveToSystem?(globalSystemId: string, keepCoordinates: boolean): void;
     /**
      * `Qxxx` (leave the stellar the player is landed on, with a message at
-     * the bottom of the screen picked from STR# xxx). Supplied only by the
+     * the bottom of the screen picked from STR# xxx). Supplied by the
      * in-flight accept (spaceport/ship_mission_accept.ts), where there is
      * no stellar to leave and only the message is shown: the stock Refuel
      * Trader's OnAccept "Q25057", "<OSN>: Ready for docking, <PSN>."
-     * (reference "The Refuel Trader rescue", 2026-11-27). Everywhere else it is
-     * reported as an unimplemented hook. `prefix` is the running
+     * (reference "The Refuel Trader rescue", 2026-11-27); and by the
+     * landing's transaction (spaceport/landed_transaction.ts
+     * wireDeparture), where the spaceport leaves after the current dialog
+     * and the message is shown once the ship is in space
+     * (spaceport/landed_departure.ts). Everywhere else it is reported as
+     * an unimplemented hook. `prefix` is the running
      * expression's plug-in, for resolving the bare STR# number.
      */
     leaveStellar?(stringId: number, prefix: string): void;

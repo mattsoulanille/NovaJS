@@ -152,6 +152,31 @@ export function setArrivalRoute(world: World, route: ArrivalRoute) {
     }
 }
 
+/**
+ * A landed `Qxxx`'s message(s) on the status line as the ship is back in
+ * space (spaceport/landed_departure.ts): "show a message at the bottom of
+ * the screen" (EVN Bible, Qxxx). In a world the player has just been MOVED
+ * into (`Mxxx` / `Nxxx`) the message takes the arrival line's place, so
+ * the "Jumping into the ..." line — there was no jump — does not replace
+ * it on the world's first step. Several messages are posted in order; the
+ * last one stands. A no-op with none, or on a world without the plugin.
+ */
+export function showDepartureMessages(world: World,
+    messages: readonly string[], replacesArrival: boolean) {
+    if (messages.length === 0) {
+        return;
+    }
+    if (replacesArrival) {
+        const arrival = world.resources.get(ArrivalShownResource);
+        if (arrival) {
+            arrival.shown = true;
+        }
+    }
+    for (const message of messages) {
+        showStatusMessage(world, message);
+    }
+}
+
 const StatusLineResize = new System({
     name: 'StatusLineResize',
     events: [ResizeEvent],

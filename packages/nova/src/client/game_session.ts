@@ -46,7 +46,8 @@ import { EscortPanelResource } from '../display/escort_panel_plugin.js';
 import { AddEnemyEvent, DebugActionEvent } from '../display/status_bar.js';
 import { isTextEntryActive } from '../input_focus.js';
 import {
-    ControlEvent, EcsControlEvent, Controls, SimulationGameDataResource,
+    ControlEvent, displayNameOf, EcsControlEvent, Controls,
+    SimulationGameDataResource,
 } from '../nova_plugin/core/index.js';
 import { GateTransitEvent, FinishJumpEvent, LandEvent } from '../nova_plugin/travel/index.js';
 import type { AcceptedMission } from '../nova_plugin/missions/index.js';
@@ -69,7 +70,7 @@ import {
 } from './client_state.js';
 import { ControlRouter } from './control_routing.js';
 import { KeyActions } from './key_actions.js';
-import { onLand, onLeaveSpaceport } from './docking.js';
+import { onLand, onLeaveSpaceport, takePendingDeparture } from './docking.js';
 import {
     localPlayerShipUuid, spawnHiredEscorts,
 } from './fleet_ledger.js';
@@ -87,7 +88,7 @@ import { enhancementEnabled, onEnhancementsChanged } from '../enhancements.js';
 import { jumpTo, teardownLiveSystem, WorldWiring } from './system_entry.js';
 import {
     followGateTransit, followHyperspaceJump, followMissionSystemMove,
-    leaveGateMap,
+    followSpaceportSystemMove, leaveGateMap,
 } from './transit.js';
 
 /** What the session needs from the page beyond the runtime. */
@@ -138,7 +139,24 @@ function wireWorld(runtime: ClientRuntime, pump: FramePump): WorldWiring {
         bridge: AsyncSimulationBridgeClient) => {
         const { gameData, fleet } = runtime;
         world.events.get(LeaveSpaceportEvent).subscribe(({ data }) => {
-            onLeaveSpaceport(runtime, data);
+            // A landed `Mxxx` / `Nxxx` (spaceport/landed_departure.ts)
+            // sends the departure to another system instead of back into
+            // this one; a `Qxxx`'s message rides either way.
+            const departure = takePendingDeparture(data);
+            const docked = runtime.state.state;
+            if (departure?.move && docked.kind === 'landed') {
+                const planetName = displayNameOf(gameData.data.Planet
+                    .getCached(docked.ship.planetId)?.name);
+                followSpaceportSystemMove(runtime,
+                    { entity: data, uuid: docked.ship.uuid }, {
+                        ...departure.move,
+                        statusMessages: departure.statusMessages,
+                        checkpointLabel:
+                            `Departed ${planetName || 'the spaceport'}`,
+                    }, wire);
+                return;
+            }
+            onLeaveSpaceport(runtime, data, departure?.statusMessages);
         });
         world.events.get(AddEnemyEvent).subscribe(({ data }) => {
             const { shipId } = data;

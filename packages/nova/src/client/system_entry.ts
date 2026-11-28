@@ -57,6 +57,7 @@ import {
     takeEscortsForTransition,
 } from '../spaceport/landed_escorts.js';
 import { takeMissingAmmoStock } from '../spaceport/escort_restock.js';
+import { PendingEscortsComponent } from '../spaceport/pending_escorts.js';
 import { resetOfferRolls } from '../spaceport/mission_offers.js';
 import { claimActiveSystem } from './active_system_claim.js';
 import {
@@ -454,13 +455,22 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
     // out of the roster (same player uuid), and flushCarriedJumpEscorts
     // puts it down once the chain ends / the gate exit is known.
     const arrivingEscorts = holdBatch ? [] : jumpEscorts;
+    // The bar's hires of a spaceport the player was MOVED out of (a landed
+    // `Mxxx` / `Nxxx`, transit.ts followSpaceportSystemMove): the lift-off
+    // that would have spawned them never ran, so they come in here, after
+    // the carried escorts, exactly as the launch inserts them. Popped
+    // before the player is encoded (display-side bookkeeping), and put
+    // back if the player's own insertion rejects (fleet_insertion.ts's
+    // failure policy). Every other transit finds none: a launch pops them.
+    const hires = entity.components.get(PendingEscortsComponent) ?? [];
+    entity.components.delete(PendingEscortsComponent);
     // Mission ships whose spawn system this is (or that follow the
     // player) jump in with the player. Prepared before the player entity
     // is encoded into its insertion record. Unconditional on purpose:
     // every transit carries the LOCAL PLAYER'S ship, and an entity with
     // no MissionsComponent builds nothing anyway.
     const missionShips = await prepareMissionShips(gameData, entity, uuid,
-        to, arrivingEscorts.length);
+        to, arrivingEscorts.length + hires.length);
     scope.check();
     // A gate/wormhole arrival reconciles the pinned route with where the
     // player actually is (a hyperspace arrival's route is already right —
@@ -473,13 +483,21 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
     // THE ONE INSERTION SEQUENCE (client/fleet_insertion.ts): player,
     // carried escorts, mission ships. A fresh world has a fresh slot run
     // (the floor was reset above), so stations start at 0.
-    fleet.noteSlotsUsed(uuid, arrivingEscorts.length);
-    const inserted = await insertPlayerAndFleet({
-        bridge, playerUuid: uuid, player: entity,
-        escorts: arrivingEscorts, missionShips,
-        ownerUuid: communicator.uuid ?? undefined, baseSlot: 0,
-        mintUuid: v4, getShip: id => gameData.data.Ship.get(id),
-    });
+    fleet.noteSlotsUsed(uuid, arrivingEscorts.length + hires.length);
+    let inserted: Awaited<ReturnType<typeof insertPlayerAndFleet>>;
+    try {
+        inserted = await insertPlayerAndFleet({
+            bridge, playerUuid: uuid, player: entity,
+            escorts: arrivingEscorts, hires, missionShips,
+            ownerUuid: communicator.uuid ?? undefined, baseSlot: 0,
+            mintUuid: v4, getShip: id => gameData.data.Ship.get(id),
+        });
+    } catch (e) {
+        if (hires.length > 0) {
+            entity.components.set(PendingEscortsComponent, hires);
+        }
+        throw e;
+    }
     window.myShip = entity;
     if (holdBatch) {
         // Held for the gate arrival: they come out of the arrival gate

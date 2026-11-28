@@ -32,6 +32,7 @@ import { PendingEscortsComponent } from './pending_escorts.js';
 import { missionEventLabel, requestCheckpoint } from './checkpoint_requests.js';
 import { takeShipDoneTextShown } from './ship_done_shown.js';
 import { loadOrSkip } from './skip_failed_loads.js';
+import { emptyDeparture, LandedDeparture } from './landed_departure.js';
 
 /**
  * The per-hull facts a session derives from the entity and the game data
@@ -73,6 +74,13 @@ export class MissionSession {
     readonly machinery: MissionMachineryContext;
     currentDay: number;
     shipId: string;
+    /**
+     * The Qxxx / Mxxx / Nxxx a landed set string asked for
+     * (landed_departure.ts). Written only by the hooks the landing's
+     * transaction wires (LandedTransaction.open), which also snapshots it
+     * with its savepoints; every other session leaves it empty.
+     */
+    departure: LandedDeparture = emptyDeparture();
     private shipGovt: string | null;
     private shipInherentAI: number | undefined;
     private playerContribute: bigint;

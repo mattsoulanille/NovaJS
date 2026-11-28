@@ -609,7 +609,10 @@ export class MissionBoard extends Menu<Entity> {
         this.text.status.text = `Accepted: ${expandMissionText(
             missionDisplayName(row.offer.data.name), subs, ctx)}.`;
         this.buildRows();
-        if (this.offers.length === 0) {
+        // So does an accept whose OnAccept ran a `Qxxx`: the player leaves
+        // the stellar after the briefing (landed_departure.ts; ARPIA's
+        // OnAccept Q25089 missions, stock nova:469 / 735).
+        if (this.offers.length === 0 || this.session.departure.leave) {
             // An accept that leaves nothing listed closes the board at once
             // (reference "#324 mission BBS after an accept, wave 21",
             // finding 3, and wave 10's one-job board); one that leaves a
