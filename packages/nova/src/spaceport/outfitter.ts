@@ -1282,7 +1282,7 @@ export class Outfitter extends Menu<Entity> {
     private setFreeMassText() {
         const context = this.makeContext();
         if (context) {
-            this.text.freeMass.text = formatMass(freeMass(context));
+            this.text.freeMass.text = formatAvailableMass(freeMass(context));
         }
     }
 
@@ -1398,3 +1398,16 @@ export class Outfitter extends Menu<Entity> {
 export function formatMass(m: number) {
     return `${m.toLocaleString()} ${m === 1 ? 'ton' : 'tons'}`;
 };
+
+/**
+ * The "Available:" line: the hull's free mass, FLOORED AT 0. A shipyard
+ * purchase carries every persistent outfit across whatever it weighs, so a
+ * hull can be left over-full; the original then reads "Available: 0 tons"
+ * (a Starbridge's 15 t Fed Cloaking Device carried onto an 8 t Shuttle, and
+ * still 0 after selling 3 t: docs/reference_experiments.md, "Persistent
+ * heavy outfits across a ship purchase"). Buying stays refused against the
+ * real, negative figure (outfitter_rules canBuy).
+ */
+export function formatAvailableMass(free: number) {
+    return formatMass(Math.max(0, free));
+}

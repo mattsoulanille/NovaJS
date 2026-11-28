@@ -144,6 +144,14 @@ export interface ShipPurchaseContext {
  *    items when the player trades into a hull with fewer hardpoints.
  *    The outfitter's own caps still prevent BUYING past a limit
  *    (outfitter_rules.ts); a granted item is allowed to exceed it.
+ *    MEASURED for free mass (docs/reference_experiments.md, "Persistent
+ *    heavy outfits across a ship purchase"): the original carried a
+ *    Starbridge's 15 t Fed Cloaking Device onto an 8 t Shuttle and then a
+ *    12 t Heavy Shuttle, no warning, no refusal, nothing dropped, leaving
+ *    free mass negative (its outfitter reads "Available: 0 tons",
+ *    outfitter.ts formatAvailableMass). Ship STORAGE swaps are different:
+ *    there a persistent outfit with Mass stays on its hull (ship_storage.ts,
+ *    the mass rule), since that hull is kept, not traded in.
  *
  * 7. An UNKNOWN outfit id (game data not loaded) is valued at 0 and
  *    treated as non-persistent. Valuing it would invent credits, and

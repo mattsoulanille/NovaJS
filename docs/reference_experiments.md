@@ -26699,6 +26699,65 @@ the board loop lost over the planet), `status_board_zoom.png`,
 `pilotspecs/`, `scen/`, `tools/` (`rescue.mjs`, `board3.mjs`,
 `statusall.mjs`), `recover.json`.
 
+### Persistent heavy outfits across a ship purchase (2026-11-27): the purchase goes through, every persistent outfit comes along, and free mass goes NEGATIVE (the outfitter shows "Available: 0 tons")
+
+**Why.** Ship storage (a NovaJS addition, `docs/ship_storage.md`) now leaves
+a persistent outfit with Mass on its hull (Matthew, 2026-11-27: the mass
+rule). The shipyard purchase was to stay as the original does; this checks
+what that is when the persistent outfits outweigh the new hull's room.
+
+**Rig.** Stock data plus a run-only plug-in (`shuttle_always.mjs`: stock shïp
+128 Shuttle with BuyRandom 100 instead of 35, nothing else). Pilot `pm_a`: a
+stock Starbridge (shïp 133) at Earth whose only outfit is the stock Fed
+Cloaking Device (oütf 211, Mass 15, Flags 0x000C: persistent + can't sell,
+not mass-scaled), 1,000,000 credits. Hand-driven: outfitter, shipyard, buy
+the Shuttle (8 t free with its stock 3 t Light Blaster), outfitter, sell the
+blaster, buy a Heavy Shuttle (12 t free), outfitter, take off, `u`, pull.
+
+| step | reading |
+|---|---|
+| Starbridge + cloak, outfitter | Available 51 tons |
+| Shuttle: Ship Price / Trade-In / Final | 10,000 / 150,000 / 0; the name prompt, **no warning** |
+| after OK | the spaceport, **no dialog** |
+| outfitter on the Shuttle | Carbon Fiber (1 t): **Available 0 tons**, "Can't hold any of this item!" |
+| sell the Light Blaster (3 t) | still **Available 0 tons**, "Can't hold any of this item!" |
+| Heavy Shuttle: Trade-In / Final | 2,500 (hull only; the cloak counts for nothing) / 15,000; no warning, no dialog |
+| outfitter on the Heavy Shuttle | **Available 0 tons**, "Can't hold any of this item!" |
+| in space | the hull flies; `u` cloaks it (the shield bar empties, the ship turns translucent) |
+| pulled pilot | shïp 129, oütf 211 x1 (+ the stock Light Blaster) |
+
+**Finding.**
+1. A purchase **carries every persistent outfit onto the new hull whatever
+   its free mass**: no refusal, no message, nothing dropped (two purchases
+   in a row, 15 t onto 8 t and onto 12 t).
+2. The free mass is then **negative** (-7 t on the Shuttle, -4 t after
+   selling the 3 t blaster, -3 t on the Heavy Shuttle), and the outfitter
+   shows it **floored at "Available: 0 tons"**: selling 3 t still left 0
+   and a 1 t item refused.
+3. The overloaded ship flies and the carried cloak works.
+
+**NovaJS.** 1 matches already (`N/spaceport/shipyard_rules.ts` judgment
+call 6: persistent outfits move past the new hull's limits, no refusal);
+pinned by `N/spaceport/ship_storage_mass_rule_stock_test.ts` on the stock
+Starbridge, cloak and Shuttle. 2 did not: the "Available:" line printed the
+negative figure; it is now floored at 0 (`N/spaceport/outfitter.ts`
+`formatAvailableMass`), while buying is still judged against the real
+figure. Ship storage's swaps follow the mass rule instead (the hull is kept,
+not traded in), so a swap never leaves a hull over-full.
+
+Not measured: whether the original lets a weightless item (a licence) be
+bought while free mass is negative (NovaJS refuses it: `outfitter_rules.ts`
+compares 0 t with the negative free mass); speed or acceleration effects of
+the overload.
+
+Confidence: high for 1 and 3 (two purchases, the pulled pilot); medium-high
+for 2 (inferred from the 3 t sale leaving 0).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261127-persist-mass/a/20261127-213217-persist_mass/`
+(`06-shuttle-sel.png`, `07-buy-confirm.png`, `08-bought.png`,
+`09-outfitter2-cf.png`, `12-sold-blaster.png`, `16-outfitter3-cf.png`,
+`19-cloak-u.png`, `20-thrust.png`, `pilot-after-hs/`).
+
 ### Reliability notes (for anyone running the reference)
 
 - **A stock hypergate rig (wave 56):** stock gates refuse a fresh pilot

@@ -5,7 +5,7 @@ import { OutfitData } from 'novadatainterface/outfit_data';
 import {
     CAPTION_LINE_HEIGHT, captionLineTops, CAPTION_TOP, captionSegments,
 } from './item_grid.js';
-import { formatMass } from './outfitter.js';
+import { formatAvailableMass, formatMass } from './outfitter.js';
 import { infoDialogName } from './ship_info.js';
 
 /**
@@ -157,6 +157,18 @@ describe('outfitter tonnage readout', () => {
 
     it('groups thousands', () => {
         expect(formatMass(1500)).toBe('1,500 tons');
+    });
+
+    it('floors an over-full hull\'s "Available:" at 0 tons, as the '
+        + 'original does after a purchase carries heavy persistent outfits',
+    () => {
+        // reference_experiments "Persistent heavy outfits across a ship
+        // purchase": a 15 t cloak on an 8 t Shuttle read "Available: 0
+        // tons", and still 0 after selling a 3 t blaster.
+        expect(formatAvailableMass(-7)).toBe('0 tons');
+        expect(formatAvailableMass(-4)).toBe('0 tons');
+        expect(formatAvailableMass(0)).toBe('0 tons');
+        expect(formatAvailableMass(51)).toBe('51 tons');
     });
 });
 
