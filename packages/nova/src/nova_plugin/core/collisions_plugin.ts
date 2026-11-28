@@ -290,21 +290,11 @@ export const HitboxHullProvider = ProvideFromCache({
     factory: hullFromAnimation,
 });
 
-enum RBushEntryType {
-    hurtbox,
-    hitbox,
-}
-
-type RBushEntry = BBox & {
+export type RBushEntry = BBox & {
     uuid: string,
     hull: Hull,
-} & ({
-    type: RBushEntryType.hurtbox,
-    hitter: CollisionHitter,
-} | {
-    type: RBushEntryType.hitbox,
     vulnerability: CollisionVulnerability,
-});
+};
 
 export const RBushResource = new Resource<RBush<RBushEntry>>("RBushResource");
 
@@ -343,21 +333,24 @@ function translateAabb(bbox: BBox, { x, y }: { x: number, y: number }): BBox {
 }
 
 function rotateAabb(bbox: BBox, angle: number | Angle): BBox {
-    const points = [
-        new Vector(bbox.minX, bbox.minY).rotate(angle),
-        new Vector(bbox.minX, bbox.maxY).rotate(angle),
-        new Vector(bbox.maxX, bbox.minY).rotate(angle),
-        new Vector(bbox.maxX, bbox.maxY).rotate(angle),
-    ];
-
-    const x = points.map(v => v.x);
-    const y = points.map(v => v.y);
+    const radians = angle instanceof Angle ? angle.angle : angle;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    const { minX, minY, maxX, maxY } = bbox;
+    const x0 = cos * minX - sin * minY;
+    const y0 = sin * minX + cos * minY;
+    const x1 = cos * minX - sin * maxY;
+    const y1 = sin * minX + cos * maxY;
+    const x2 = cos * maxX - sin * minY;
+    const y2 = sin * maxX + cos * minY;
+    const x3 = cos * maxX - sin * maxY;
+    const y3 = sin * maxX + cos * maxY;
 
     return {
-        maxX: Math.max(...x),
-        maxY: Math.max(...y),
-        minX: Math.min(...x),
-        minY: Math.min(...y),
+        maxX: Math.max(x0, x1, x2, x3),
+        maxY: Math.max(y0, y1, y2, y3),
+        minX: Math.min(x0, x1, x2, x3),
+        minY: Math.min(y0, y1, y2, y3),
     };
 }
 
@@ -399,6 +392,96 @@ export const UpdateHurtboxHullSystem = new System({
     after: [MovementSystem],
 });
 
+/**
+ * The tick's collisions, one per unordered pair, in canonical order
+ * (initiator, then receiver, by uuid).
+ *
+ * Only hitboxes go into the R-tree and only hurtboxes query it: a hurtbox
+ * can only hit a hitbox, so this is the same candidate set the old
+ * both-kinds-in-one-tree sweep found (it discovered every hurtbox->hitbox
+ * overlap from both ends), with half the tree and half the searches.
+ *
+ * Pairs are COLLECTED first and returned in canonical (uuid-sorted)
+ * order: discovery order follows query-cache/rbush iteration order, which
+ * differs between a live world and a wire-restored one (rebuilt caches
+ * iterate in entity-map order). Without canonicalization, two missiles
+ * striking the same ship on the same tick have their collision events —
+ * and thus their blasts' allocated ids — ordered differently on the two
+ * worlds, a lockstep divergence the wire-snapshot test caught.
+ *
+ * An entity never collides with itself. The old sweep could pair an
+ * entity's own hurtbox with its own hitbox (a returning nested-bay
+ * fighter: its hurtbox aliases its hitbox, and its 'return_escorts'
+ * hitter meets the 'return_escorts' vulnerability its own docking
+ * fighters give it), but every CollisionEvent handler ignored such an
+ * event (the collector docks only with its home, the scoop only with
+ * debris), so dropping it changes nothing observable.
+ */
+export function findCollisions(rbush: RBush<RBushEntry>,
+    hitboxColliders: readonly (readonly [Hull, string, CollisionVulnerability])[],
+    hurtboxColliders: readonly (readonly [Hull, string, CollisionHitter])[]):
+    { initiator: string, receiver: string }[] {
+    rbush.clear();
+    if (hitboxColliders.length === 0 || hurtboxColliders.length === 0) {
+        return [];
+    }
+    const hitboxEntries = new Array<RBushEntry>(hitboxColliders.length);
+    for (let i = 0; i < hitboxColliders.length; i++) {
+        const [hull, uuid, vulnerability] = hitboxColliders[i];
+        const bbox = hull.bbox;
+        hitboxEntries[i] = {
+            minX: bbox.minX,
+            minY: bbox.minY,
+            maxX: bbox.maxX,
+            maxY: bbox.maxY,
+            uuid,
+            hull,
+            vulnerability,
+        };
+    }
+    rbush.load(hitboxEntries);
+
+    const chosen = new Map<string, { initiator: string, receiver: string }>();
+    for (let i = 0; i < hurtboxColliders.length; i++) {
+        const [hurtHull, initiator, hitter] = hurtboxColliders[i];
+        const maybeCollisions = rbush.search(hurtHull.bbox);
+        for (let j = 0; j < maybeCollisions.length; j++) {
+            const other = maybeCollisions[j];
+            const receiver = other.uuid;
+            if (receiver === initiator) {
+                continue;
+            }
+            const collisionPair = initiator < receiver
+                ? `${initiator},${receiver}` : `${receiver},${initiator}`;
+            const existing = chosen.get(collisionPair);
+            // One collision per unordered pair per tick. When both
+            // orientations overlap (mutual hurtbox/hitbox pairs), prefer
+            // the lexicographically smaller initiator — a canonical
+            // stand-in for the old first-discovered-wins rule.
+            //
+            // The initiator of a collision must have its hurtbox overlap
+            // the other collider's hitbox. If the inverse were allowed, a
+            // missile's prox radius overlapping a point defense weapon
+            // could be a collision initiated by the point defense weapon,
+            // meaning point defense could hit the missile by hitting its
+            // prox radius (bad).
+            if (existing && existing.initiator <= initiator) {
+                continue;
+            }
+            if (aHitsB(hitter, other.vulnerability)
+                && hurtHull.collides(other.hull)) {
+                chosen.set(collisionPair, { initiator, receiver });
+            }
+        }
+    }
+    if (chosen.size === 0) {
+        return [];
+    }
+    return [...chosen.values()].sort((p, q) =>
+        p.initiator < q.initiator ? -1 : p.initiator > q.initiator ? 1 :
+            p.receiver < q.receiver ? -1 : p.receiver > q.receiver ? 1 : 0);
+}
+
 export const CollisionSystem = new System({
     name: "CollisionSystem",
     // After BOTH hull updaters (#113): the hurtbox edge used to hold
@@ -411,91 +494,8 @@ export const CollisionSystem = new System({
         new Query([HurtboxHullComponent, UUID, CollisionHitterComponent] as const),
         EmitNow, SingletonComponent] as const,
     step(rbush, hitboxColliders, hurtboxColliders, emit) {
-        rbush.clear();
-
-        function makeRbushEntry(type: RBushEntryType, [hull, uuid, interaction]:
-            readonly [Hull, string, CollisionHitter | CollisionVulnerability]): RBushEntry {
-            const entry = hull.bbox as RBushEntry;
-            entry.uuid = uuid;
-            if ('vulnerableTo' in interaction) {
-                (entry as { vulnerability: CollisionVulnerability })
-                    .vulnerability = interaction;
-            } else {
-                (entry as { hitter: CollisionHitter }).hitter = interaction;
-            }
-            entry.hull = hull;
-            entry.type = type;
-            return entry;
-        }
-
-        const entries = [
-            ...hitboxColliders.map(data => makeRbushEntry(RBushEntryType.hitbox, data)),
-            ...hurtboxColliders.map(data => makeRbushEntry(RBushEntryType.hurtbox, data)),
-        ];
-
-        rbush.load(entries);
-
-        // Check for collisions. Pairs are COLLECTED first and emitted
-        // in canonical (uuid-sorted) order below: discovery order here
-        // follows query-cache/rbush iteration order, which differs
-        // between a live world and a wire-restored one (rebuilt caches
-        // iterate in entity-map order). Without canonicalization, two
-        // missiles striking the same ship on the same tick have their
-        // collision events — and thus their blasts' allocated ids —
-        // ordered differently on the two worlds, a lockstep divergence
-        // the wire-snapshot test caught.
-        const chosen = new Map<string, { initiator: string, receiver: string }>();
-
-        for (const entry of entries) {
-            const maybeCollisions = rbush.search(entry)
-                .filter(found => found !== entry);
-
-            for (const other of maybeCollisions) {
-                if (entry.type === other.type) {
-                    continue; // Hurtboxes can only hit hitboxes.
-                }
-                const collisionPair = [entry.uuid, other.uuid].sort().join();
-                // The initiator of a collision must have its hurtbox overlap the other
-                // collier's hitbox. If the inverse is allowed, then a missile's prox radius
-                // overlapping a point defense weapon can be considered a collision initiated
-                // by the point defense weapon, meaning the point defense weapon can hit the
-                // missile by hitting its prox radius (bad).
-                let entryInitiates: boolean;
-                let hitter: CollisionHitter;
-                let vulnerability: CollisionVulnerability;
-                if (entry.type === RBushEntryType.hurtbox) {
-                    entryInitiates = true;
-                    hitter = entry.hitter;
-                    vulnerability = (other as
-                        { vulnerability: CollisionVulnerability }).vulnerability;
-                } else {
-                    entryInitiates = false;
-                    vulnerability = entry.vulnerability;
-                    hitter = (other as { hitter: CollisionHitter }).hitter;
-                }
-                const initiator = entryInitiates ? entry.uuid : other.uuid;
-                const receiver = entryInitiates ? other.uuid : entry.uuid;
-                const existing = chosen.get(collisionPair);
-                // One collision per unordered pair per tick (as before).
-                // Every valid orientation is discovered from both sides
-                // during the sweep, so the SET of candidates is
-                // iteration-order independent; when both orientations
-                // overlap (mutual hurtbox/hitbox pairs), prefer the
-                // lexicographically smaller initiator — a canonical
-                // stand-in for the old first-discovered-wins rule.
-                if (existing && existing.initiator <= initiator) {
-                    continue;
-                }
-                if (aHitsB(hitter, vulnerability)
-                    && entry.hull.collides(other.hull)) {
-                    chosen.set(collisionPair, { initiator, receiver });
-                }
-            }
-        }
-
-        const collisions = [...chosen.values()].sort((p, q) =>
-            p.initiator < q.initiator ? -1 : p.initiator > q.initiator ? 1 :
-                p.receiver < q.receiver ? -1 : p.receiver > q.receiver ? 1 : 0);
+        const collisions = findCollisions(rbush, hitboxColliders,
+            hurtboxColliders);
         for (const { initiator, receiver } of collisions) {
             emit(CollisionEvent, {
                 other: receiver,

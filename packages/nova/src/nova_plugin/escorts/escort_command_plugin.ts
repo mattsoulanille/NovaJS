@@ -14,6 +14,7 @@ import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
+import { SingletonComponent } from 'nova_ecs/world';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
 import { BayFighterComponent, OrphanedBayFighterSystem, ReturnComponent, ReturnWhenTargetRemovedComponent, startReturnHome } from './bay_plugin.js';
 import { ChooseTargetSystem } from '../combat/index.js';
@@ -286,33 +287,58 @@ export function carrierEngaged(command: EscortCommandState,
  * (the player ship has no EscortCommandComponent): they keep formation
  * until ordered home (reference R6).
  */
+const EscortCommandEntitiesQuery = new Query(
+    [UUID, GetEntity, EscortCommandComponent] as const,
+    'EscortCommandEntities');
+
 const EscortCommandPropagationSystem = new System({
     name: 'EscortCommandPropagation',
-    args: [EscortCommandComponent, UUID, GetEntity, Entities] as const,
-    step(command, uuid, entity, entities) {
-        const engaged = carrierEngaged(command, entities);
-        // Only escorts that CARRY fighters propagate; walk this
-        // entity's one-hop followers.
-        for (const [, other] of entities) {
-            const otherCommand = other.components.get(EscortCommandComponent);
-            if (!otherCommand || other === entity) {
+    args: [EscortCommandEntitiesQuery, Entities, SingletonComponent] as const,
+    step(escorts, entities) {
+        if (escorts.length < 2) {
+            return;
+        }
+        // Group escort followers by one-hop parent in a single O(escorts) pass
+        // instead of scanning all world entities once per escort (O(E * N)).
+        let followersByParent: Map<string, [Entity, EscortCommandState][]> | undefined;
+        for (const [uuid, entity, command] of escorts) {
+            const parent = escortParent(entity);
+            if (!parent || parent === uuid) {
                 continue;
             }
-            if (escortParent(other) !== uuid) {
+            if (!followersByParent) {
+                followersByParent = new Map();
+            }
+            let list = followersByParent.get(parent);
+            if (!list) {
+                list = [];
+                followersByParent.set(parent, list);
+            }
+            list.push([entity, command]);
+        }
+        if (!followersByParent) {
+            return;
+        }
+        for (const [uuid, , command] of escorts) {
+            const followers = followersByParent.get(uuid);
+            if (!followers) {
                 continue;
             }
-            const bayWing = other.components.has(BayFighterComponent)
-                && other.components.has(ReturnWhenTargetRemovedComponent);
-            if (bayWing && other.components.has(ReturnComponent)) {
-                // Already flying home to dock: a recall is final.
-                continue;
-            }
-            const desired: EscortCommandState = bayWing && !engaged
-                ? { command: 'returnToBay' } : command;
-            if (otherCommand.command !== desired.command
-                || otherCommand.target !== desired.target) {
-                other.components.set(EscortCommandComponent,
-                    { ...desired });
+            const engaged = carrierEngaged(command, entities);
+            for (const [other, otherCommand] of followers) {
+                const bayWing = other.components.has(BayFighterComponent)
+                    && other.components.has(ReturnWhenTargetRemovedComponent);
+                if (bayWing && other.components.has(ReturnComponent)) {
+                    // Already flying home to dock: a recall is final.
+                    continue;
+                }
+                const desired: EscortCommandState = bayWing && !engaged
+                    ? { command: 'returnToBay' } : command;
+                if (otherCommand.command !== desired.command
+                    || otherCommand.target !== desired.target) {
+                    other.components.set(EscortCommandComponent,
+                        { ...desired });
+                }
             }
         }
     },
@@ -375,56 +401,50 @@ const EscortCommandPropagationSystem = new System({
  * which is stamped whenever the escort chain tops out at a player and
  * is never cleared.
  */
+const NpcBayWingsQuery = new Query(
+    [UUID, GetEntity, EscortCommandComponent, BayFighterComponent] as const,
+    'NpcBayWings');
+
 const NpcWingCommandSystem = new System({
     name: 'NpcWingCommand',
-    args: [NpcComponent, TargetComponent, UUID, Entities,
-        Optional(EscortCommandComponent)] as const,
-    step(npc, target, uuid, entities, escortCommand) {
-        if (escortCommand) {
-            // A carrier that is itself a player escort: its wings mirror
-            // ITS command (EscortCommandPropagationSystem), not the NPC
-            // AI's opinion.
-            return;
-        }
-        // Only a live victim counts: a stale uuid would leave the wings
-        // chasing a ship that no longer exists. Between victims (still in
-        // 'attack', the next one not yet picked) the wings hold formation;
-        // once the carrier has moved on to something else (patrol,
-        // travel, flee, depart...) they go home to the hangar. A carrier
-        // with no mode yet (its brain has not thought) recalls nobody.
-        const victim = npc.mode === 'attack' && target.target !== undefined
-            && entities.has(target.target) ? target.target : undefined;
-        const desired: EscortCommandState = victim !== undefined
-            ? { command: 'attack', target: victim }
-            : npc.mode === undefined || npc.mode === 'attack'
-                ? { command: 'formation' }
-                : { command: 'returnToBay' };
-
-        for (const [otherUuid, other] of entities) {
-            if (otherUuid === uuid) {
+    args: [NpcBayWingsQuery, Entities, SingletonComponent] as const,
+    step(bayWings, entities) {
+        // Invert the O(NPCs * all_entities) scan: walk only launched bay
+        // wings and look up each wing's one-hop carrier in O(1).
+        for (const [wingUuid, wing, wingCommand] of bayWings) {
+            if (wing.components.has(PlayerEscortComponent)
+                || wing.components.has(ReturnComponent)) {
                 continue;
             }
-            const otherCommand = other.components.get(EscortCommandComponent);
-            // Bay-launched wings of THIS carrier only. Fleet escorts
-            // holding formation on an NPC carrier have no escort command
-            // and run their own NPC AI; they are deliberately left alone.
-            if (!otherCommand
-                || !other.components.has(BayFighterComponent)
-                || other.components.has(PlayerEscortComponent)
-                || escortParent(other) !== uuid) {
+            const carrierUuid = escortParent(wing);
+            if (!carrierUuid || carrierUuid === wingUuid) {
                 continue;
             }
-            if (other.components.has(ReturnComponent)) {
-                // Already flying home to dock: a recall is final. If the
-                // carrier turns back to the fight, it launches again
-                // (one per reload) rather than turning a docking fighter
-                // around, which would leave ReturnAI and the attack
-                // steering fighting over one ship.
+            const carrier = entities.get(carrierUuid);
+            if (!carrier || carrier.components.has(EscortCommandComponent)) {
                 continue;
             }
-            if (otherCommand.command !== desired.command
-                || otherCommand.target !== desired.target) {
-                other.components.set(EscortCommandComponent, { ...desired });
+            const npc = carrier.components.get(NpcComponent);
+            const target = carrier.components.get(TargetComponent);
+            if (!npc || !target) {
+                continue;
+            }
+            // Only a live victim counts: a stale uuid would leave the wings
+            // chasing a ship that no longer exists. Between victims (still in
+            // 'attack', the next one not yet picked) the wings hold formation;
+            // once the carrier has moved on to something else (patrol,
+            // travel, flee, depart...) they go home to the hangar. A carrier
+            // with no mode yet (its brain has not thought) recalls nobody.
+            const victim = npc.mode === 'attack' && target.target !== undefined
+                && entities.has(target.target) ? target.target : undefined;
+            const desired: EscortCommandState = victim !== undefined
+                ? { command: 'attack', target: victim }
+                : npc.mode === undefined || npc.mode === 'attack'
+                    ? { command: 'formation' }
+                    : { command: 'returnToBay' };
+            if (wingCommand.command !== desired.command
+                || wingCommand.target !== desired.target) {
+                wing.components.set(EscortCommandComponent, { ...desired });
             }
         }
     },

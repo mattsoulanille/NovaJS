@@ -198,45 +198,51 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
         this.resultValid = false;
     }
 
-    getResultForEntity(entity: Entity,
-        event?: readonly [EcsEvent<unknown>, unknown]): Either<undefined, ArgsToData<Args>> {
-
-        const isStep = event ? event[0] === StepEvent : true;
-        if (isStep && this.entityResults.has(entity)) {
-            // Update referenced queries
-            for (const arg of this.query.queries) {
-                const cached = this.queryCache.get(arg);
-                cached.getResult();
-            }
-            // Return from cache
-            return right(this.entityResults.get(entity)!);
-        } else {
-            // Create cache entry / result for entity.
-            try {
-                const results = this.query.args.map(arg => this.getArg(arg, entity, event));
-                const rightResults: unknown[] = [];
-                for (const result of results) {
-                    if (isLeft(result)) {
-                        return left(undefined);
+    private getTupleForEntity(entity: Entity, isStep: boolean,
+        refreshNestedQueries: boolean,
+        event?: readonly [EcsEvent<unknown>, unknown]): ArgsToData<Args> | undefined {
+        if (isStep) {
+            const cached = this.entityResults.get(entity);
+            if (cached !== undefined) {
+                if (refreshNestedQueries) {
+                    for (const arg of this.query.queries) {
+                        this.queryCache.get(arg).getResult();
                     }
-                    rightResults.push(result.right);
                 }
-
-                const result = rightResults as unknown as ArgsToData<Args>;
-
-                if (isStep) {
-                    this.entityResults.set(entity, result);
-                }
-                return right(result);
-            } catch (e) {
-                if (!(e instanceof Error)) {
-                    throw e;
-                } else {
-                    e.message = `${e.message} at query ${this.query.name}`;
-                    throw e;
-                }
+                return cached;
             }
         }
+        try {
+            const args = this.query.args;
+            const len = args.length;
+            const rightResults = new Array<unknown>(len);
+            for (let i = 0; i < len; i++) {
+                const res = this.getArg(args[i], entity, event);
+                if (isLeft(res)) {
+                    return undefined;
+                }
+                rightResults[i] = res.right;
+            }
+            const result = rightResults as unknown as ArgsToData<Args>;
+            if (isStep) {
+                this.entityResults.set(entity, result);
+            }
+            return result;
+        } catch (e) {
+            if (!(e instanceof Error)) {
+                throw e;
+            } else {
+                e.message = `${e.message} at query ${this.query.name}`;
+                throw e;
+            }
+        }
+    }
+
+    getResultForEntity(entity: Entity,
+        event?: readonly [EcsEvent<unknown>, unknown]): Either<undefined, ArgsToData<Args>> {
+        const isStep = event ? event[0] === StepEvent : true;
+        const tuple = this.getTupleForEntity(entity, isStep, true, event);
+        return tuple === undefined ? left(undefined) : right(tuple);
     }
 
     getResult({ entities, event }: {
@@ -252,42 +258,66 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
             return this.wrappedResult;
         }
 
-        let supportedEntities: Iterable<Entity>;
+        // Nested queries are refreshed per CACHED entity, exactly as
+        // getResultForEntity always did (an uncached entity's getArg
+        // refreshes them itself): a ProvideArg factory run for one entity
+        // can invalidate a nested query mid-refill, and the tuples of the
+        // entities after it must see it refreshed. A valid nested query's
+        // getResult is an early return, so this costs a call, not a rebuild.
+        const refreshNested = this.query.queries.length > 0;
+
         if (entities || event?.[0] === DeleteEvent) {
-            supportedEntities = [...entities ?? this.members()].filter(entity => {
+            const source = entities ?? this.members();
+            const queryResults: QueryResults<Query<Args>> = [];
+            for (const entity of source) {
                 // Don't rely on the cached query when checking if the entity is supported
                 // because the entity (and its entry in the cached query) may have already
                 // been removed (e.g. in the case of DeleteEvent).
-                return this.entities.has(entity.uuid) || this.query.supportsEntity(entity);
-            });
-        } else {
-            supportedEntities = this.members();
-        }
-
-        const queryResults: QueryResults<Query<Args>> = [];
-        for (const entity of supportedEntities) {
-            const result = this.getResultForEntity(entity, event);
-            if (isLeft(result)) {
-                continue;
+                if (!this.entities.has(entity.uuid) && !this.query.supportsEntity(entity)) {
+                    continue;
+                }
+                const tuple = this.getTupleForEntity(entity, isStep, refreshNested, event);
+                if (tuple !== undefined) {
+                    queryResults.push(tuple);
+                }
             }
-            queryResults.push(result.right);
+            if (!isStep || entities) {
+                return queryResults;
+            }
+            this.wrappedResult.length = 0;
+            for (let i = 0; i < queryResults.length; i++) {
+                this.wrappedResult[i] = queryResults[i];
+            }
+            this.resultValid = true;
+            return this.wrappedResult;
         }
 
-        // Don't cache events other than Step
-        if (!isStep || entities) {
+        const members = this.members();
+        if (!isStep) {
+            const queryResults: QueryResults<Query<Args>> = [];
+            for (const entity of members) {
+                const tuple = this.getTupleForEntity(entity, false, false, event);
+                if (tuple !== undefined) {
+                    queryResults.push(tuple);
+                }
+            }
             return queryResults;
         }
 
         // We use the same wrappedResult instead of reassigning it because
         // otherwise, we'd have to update the references of all queries
         // that depend on this query.
-        this.wrappedResult.length = 0;
-        for (let i = 0; i < queryResults.length; i++) {
-            this.wrappedResult[i] = queryResults[i];
+        const out = this.wrappedResult;
+        out.length = 0;
+        for (const entity of members) {
+            const tuple = this.getTupleForEntity(entity, true, refreshNested, event);
+            if (tuple !== undefined) {
+                out.push(tuple);
+            }
         }
 
         this.resultValid = true;
-        return this.wrappedResult;
+        return out;
     }
 
     get valid() {
