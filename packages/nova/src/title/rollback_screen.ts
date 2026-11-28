@@ -27,6 +27,7 @@ import { Button } from '../spaceport/button.js';
 import { wrapIndex } from '../spaceport/list_selection.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
+import { ScrollTextPane } from '../spaceport/scroll_text_pane.js';
 import { SystemGraph } from '../spaceport/system_graph.js';
 import { CheckpointKind, checkpointState, PilotHistory } from './pilot_history.js';
 import {
@@ -134,6 +135,10 @@ export class RollbackScreen {
     private highlight = new PIXI.Graphics();
     private detailText = new PIXI.Text('', DETAIL_FONT);
     private eventsText = new PIXI.Text('', EVENTS_FONT);
+    /** The two detail panes: clipped, and scrolling under the wheel or
+     * their bars (a big loadout, a long mission list, the control bits). */
+    private detailPane!: ScrollTextPane;
+    private eventsPane!: ScrollTextPane;
     private buttons: {
         rewind: Button, exportCopy: Button, bits: Button, cancel: Button,
     };
@@ -171,10 +176,10 @@ export class RollbackScreen {
             .drawRect(DETAIL.x - 1, DETAIL.y - 1, DETAIL.width + 2, DETAIL.height + 2);
         this.container.addChild(detailFrame);
         this.detailText.position.set(DETAIL.x + 4, DETAIL.y + 4);
-        const detailMask = new PIXI.Graphics().beginFill(0xffffff)
-            .drawRect(DETAIL.x, DETAIL.y, DETAIL.width, DETAIL.height).endFill();
-        this.detailText.mask = detailMask;
-        this.container.addChild(detailMask, this.detailText);
+        this.detailPane = new ScrollTextPane(this.detailText, {
+            frame: DETAIL, name: 'RollbackDetail',
+        });
+        this.container.addChild(this.detailPane.container);
 
         const listHeader = new PIXI.Text('Date', LABEL_FONT);
         listHeader.position.set(LIST.x + 14, LIST.y - 14);
@@ -212,10 +217,10 @@ export class RollbackScreen {
             .drawRect(EVENTS.x - 1, EVENTS.y - 1, EVENTS.width + 2, EVENTS.height + 2);
         this.container.addChild(eventsFrame);
         this.eventsText.position.set(EVENTS.x + 4, EVENTS.y + 4);
-        const eventsMask = new PIXI.Graphics().beginFill(0xffffff)
-            .drawRect(EVENTS.x, EVENTS.y, EVENTS.width, EVENTS.height).endFill();
-        this.eventsText.mask = eventsMask;
-        this.container.addChild(eventsMask, this.eventsText);
+        this.eventsPane = new ScrollTextPane(this.eventsText, {
+            frame: EVENTS, name: 'RollbackEvents',
+        });
+        this.container.addChild(this.eventsPane.container);
 
         this.buttons = {
             rewind: new Button(displayAssets, 'Rewind', 90,
@@ -452,13 +457,13 @@ export class RollbackScreen {
     private refreshDetails() {
         const row = this.rows[this.selectedRow];
         if (!row || !this.input) {
-            this.detailText.text = '';
-            this.eventsText.text = '';
+            this.detailPane.setText('');
+            this.eventsPane.setText('');
             return;
         }
         const details = checkpointDetails(this.input.history, row.index,
             this.names());
-        this.detailText.text = detailLines(details).join('\n');
+        this.detailPane.setText(detailLines(details).join('\n'));
         const events = details.missionEvents.length > 0
             ? `Mission events here:\n${details.missionEvents.map(e => `  ${e}`).join('\n')}`
             : 'Mission events here: none';
@@ -466,10 +471,10 @@ export class RollbackScreen {
             ? `Active missions (${details.missions.length}):\n`
             + details.missions.map(m => `  ${m}`).join('\n')
             : 'Active missions: none';
-        this.eventsText.text = [
+        this.eventsPane.setText([
             events, '', missions,
             ...(this.bitsShown ? ['', controlBitsText(details)] : []),
-        ].join('\n');
+        ].join('\n'));
     }
 
     /**
