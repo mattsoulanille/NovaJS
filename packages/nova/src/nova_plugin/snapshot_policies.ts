@@ -20,9 +20,10 @@ import {
 } from "./combat/index.js";
 import {
     ArmorComponent, BlastDamageComponent, BlastIgnoreComponent,
-    CloakComponent, CloakScannerComponent, ExplodingComponent,
-    FiringGroupComponent, FuelComponent, IonizationColorComponent,
-    IonizationComponent, IsIonizedComponent, OwnerComponent, RepairComponent,
+    Cargo, CargoComponent, CloakComponent, CloakScannerComponent,
+    ExplodingComponent, FiringGroupComponent, FuelComponent,
+    IonizationColorComponent, IonizationComponent, IsIonizedComponent,
+    OutfitsState, OutfitsStateComponent, OwnerComponent, RepairComponent,
     ShieldComponent, ShipComponent, ShipDataComponent, ShipExplosionComponent,
     ShipPhysicsComponent, SourceComponent, TargetComponent,
     VulnerableToPD, WeaponsState, WeaponsStateComponent,
@@ -37,7 +38,7 @@ import {
 import { BayFighterComponent, ReturnWhenTargetRemovedComponent } from "./escorts/index.js";
 import {
     ChooseRandomTargetComponent, DeathAIComponent, FollowComponent,
-    FormationComponent, ShootAllWeaponsComponent,
+    FormationComponent, NpcComponent, ShootAllWeaponsComponent,
 } from "./npc/index.js";
 import { ReturnToQueueComponent } from "./core/index.js";
 import { SingletonComponent } from "nova_ecs/world";
@@ -215,14 +216,16 @@ export function configureSnapshotPolicies(world: World) {
     policies.set(VulnerableToPD, { policy: 'share' });
     policies.set(IsIonizedComponent, { policy: 'share' });
     policies.set(IonizationColorComponent, shallowClone);
-    policies.set(TumbleAnimationComponent, shallowClone);
+    // Immutable after creation (never mutated in place): sharing avoids
+    // both rollback clone churn and DeltaFrameEncoder re-encoding/diffing.
+    policies.set(TumbleAnimationComponent, { policy: 'share' });
+    policies.set(ProjectileComponent, { policy: 'share' });
+    policies.set(FiringGroupComponent, { policy: 'share' });
+    policies.set(OwnerComponent, { policy: 'share' });
     policies.set(AsteroidComponent, shallowClone);
     policies.set(DebrisComponent, shallowClone);
     policies.set(TargetComponent, shallowClone);
     policies.set(PlanetTargetComponent, shallowClone);
-    policies.set(ProjectileComponent, shallowClone);
-    policies.set(FiringGroupComponent, shallowClone);
-    policies.set(OwnerComponent, shallowClone);
     policies.set(JamDecisionComponent, shallowClone);
     policies.set(JammingComponent, {
         policy: 'clone',
@@ -234,6 +237,26 @@ export function configureSnapshotPolicies(world: World) {
     policies.set(MultiplayerData, shallowClone);
     policies.set(EscortCommandComponent, shallowClone);
     policies.set(FormationComponent, shallowClone);
+    policies.set(NpcComponent, {
+        policy: 'clone',
+        clone: npc => npc.waypoint !== undefined
+            ? { ...npc, waypoint: [npc.waypoint[0], npc.waypoint[1]] as [number, number] }
+            : { ...npc },
+    });
+    policies.set(OutfitsStateComponent, {
+        policy: 'clone',
+        clone: map => {
+            const copy: OutfitsState = new Map();
+            for (const [id, state] of map) {
+                copy.set(id, { ...state });
+            }
+            return copy;
+        },
+    });
+    policies.set(CargoComponent, {
+        policy: 'clone',
+        clone: map => new Map(map) as Cargo,
+    });
     policies.set(WeaponsStateComponent, {
         policy: 'clone',
         clone: map => {

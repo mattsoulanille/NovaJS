@@ -240,6 +240,52 @@ describe('SimulationBridge', () => {
         expect(client.snapshot().changed.length).toBe(1);
     });
 
+    it('skips re-encoding unchanged share-policy and primitive components, yet detects replacement', async () => {
+        const StaticData = new Component<{ id: string }>('StaticData');
+        const serializer = world.resources.get(SerializerResource)!;
+        let encodeCalls = 0;
+        const countingCodec = new t.Type<{ id: string }, { id: string }, unknown>(
+            'StaticData',
+            (u): u is { id: string } => typeof u === 'object' && u !== null && 'id' in u,
+            (u, c) => t.type({ id: t.string }).validate(u, c),
+            (a) => {
+                encodeCalls++;
+                return { id: a.id };
+            },
+        );
+        serializer.addComponent(StaticData, countingCodec);
+        const policies = world.resources.get(SnapshotPoliciesResource)!;
+        policies.set(StaticData, { policy: 'share' });
+
+        const sharedObj = { id: 'ship-a' };
+        const entity = new Entity('s')
+            .addComponent(StaticData, sharedObj)
+            .addComponent(PlayerShipSelector, undefined);
+        world.entities.set('s-uuid', entity);
+
+        // Initial snapshot encodes once.
+        const first = client.snapshot();
+        expect(first.added.length).toBe(1);
+        expect(encodeCalls).toBe(1);
+
+        // Unchanged share-policy reference skips encodeComponent completely.
+        expect(client.snapshot().changed).toEqual([]);
+        expect(encodeCalls).toBe(1);
+
+        // Replacing with a new object carrying identical content re-encodes
+        // once and emits no delta.
+        entity.components.set(StaticData, { id: 'ship-a' });
+        expect(client.snapshot().changed).toEqual([]);
+        expect(encodeCalls).toBe(2);
+
+        // Replacing with a different value emits a delta.
+        entity.components.set(StaticData, { id: 'ship-b' });
+        expect(client.snapshot().changed).toEqual([
+            ['s-uuid', { changed: [['StaticData', { id: 'ship-b' }]], removed: [] }],
+        ]);
+        expect(encodeCalls).toBe(3);
+    });
+
     it('steps the world through bridge commands', () => {
         const initialFrame = client.snapshot();
 

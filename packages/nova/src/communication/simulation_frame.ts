@@ -1,5 +1,8 @@
+import { current, isDraft } from 'immer';
 import * as t from 'io-ts';
+import { UnknownComponent } from "nova_ecs/component";
 import { EncodedComponentList, EncodedEntity, Serializer } from "nova_ecs/plugins/serializer_plugin";
+import { cloneEncoded, SnapshotPoliciesResource } from "nova_ecs/plugins/snapshot_plugin";
 import { Time } from "nova_ecs/plugins/time_plugin";
 import { World } from "nova_ecs/world";
 import { EncodedSimulationBridgeEvent, EncodedSimulationBridgeEventType } from "./simulation_bridge_events.js";
@@ -148,10 +151,215 @@ export const SimulationFrameType: t.Type<SimulationFrame> = t.intersection([
     }),
 ]);
 
+interface SentComponentEntry {
+    /** Per-entity component epoch when last seen (avoids Map/Set churn). */
+    epoch: number;
+    /** Codec object used on the last encode (guards against codec re-registration). */
+    codec: unknown;
+    /**
+     * When true, `raw` holds an immutable live value (primitive or
+     * 'share'-policy component). If the live value is Object.is-identical
+     * under the same codec on the next encode, the encoded output is
+     * guaranteed unchanged without calling encodeComponent or diffing.
+     */
+    hasImmutableRaw: boolean;
+    raw: unknown;
+    /** Detached copy of the last sent encoded value for structural diffing. */
+    encoded: unknown;
+    /** Fallback JSON string for values with toJSON() or exotic object types. */
+    jsonFallback?: string;
+}
+
 interface SentEntityRecord {
+    /** Encoder epoch when this entity was last seen. */
+    epoch: number;
+    /** Incremented per visit to detect removed components without allocations. */
+    componentEpoch: number;
     name: string | undefined;
-    /** Component name -> JSON of the component's encoded form as last sent. */
-    components: Map<string, string>;
+    components: Map<UnknownComponent, SentComponentEntry>;
+}
+
+const objectProto = Object.prototype;
+const hasOwn = Object.prototype.hasOwnProperty;
+const objectToString = Object.prototype.toString;
+/**
+ * Prototypes already confirmed to be ordinary user classes with no custom
+ * toJSON or Symbol.toStringTag (e.g. Position, Vector, Angle). Avoids slow
+ * Object.prototype.toString calls on hot value objects every frame.
+ */
+const ordinaryPlainProtos = new WeakSet<object>();
+
+function isPlainObjectOrClass(value: object): boolean {
+    const proto = Object.getPrototypeOf(value);
+    if (proto === objectProto || proto === null) {
+        return typeof (value as { toJSON?: unknown }).toJSON !== 'function';
+    }
+    if (ordinaryPlainProtos.has(proto)) {
+        return !hasOwn.call(value, 'toJSON')
+            && !hasOwn.call(value, Symbol.toStringTag);
+    }
+    if (typeof (value as { toJSON?: unknown }).toJSON === 'function') {
+        return false;
+    }
+    if (objectToString.call(value) !== '[object Object]') {
+        return false;
+    }
+    if (!(Symbol.toStringTag in proto) && !('toJSON' in proto)) {
+        ordinaryPlainProtos.add(proto);
+    }
+    return true;
+}
+
+function isImmutableRaw(data: unknown, policy: string | undefined): boolean {
+    return typeof data !== 'object' || data === null || policy === 'share';
+}
+
+function snapshotSentValue(encoded: unknown, isImmutable: boolean): {
+    encoded: unknown, jsonFallback?: string,
+} {
+    if (typeof encoded !== 'object' || encoded === null) {
+        return { encoded };
+    }
+    if (!Array.isArray(encoded) && !isPlainObjectOrClass(encoded)) {
+        return { encoded: undefined, jsonFallback: JSON.stringify(encoded) ?? 'undefined' };
+    }
+    return { encoded: isImmutable ? encoded : cloneEncoded(encoded) };
+}
+
+/**
+ * Updates a private detached plain-object copy `dst` in place to match `src`
+ * (avoiding per-frame allocations for hot mutable records such as
+ * MovementState). Returns false if `dst`/`src` cannot be updated in place
+ * (e.g. non-plain objects, arrays, deep nesting/cycles, or toJSON objects).
+ */
+function tryCopyPlainInPlace(dst: unknown, src: unknown, depth: number): boolean {
+    if (depth > 4) {
+        return false;
+    }
+    if (typeof dst !== 'object' || dst === null || Array.isArray(dst)
+        || typeof src !== 'object' || src === null || Array.isArray(src)) {
+        return false;
+    }
+    if (!isPlainObjectOrClass(src)) {
+        return false;
+    }
+    const dstObj = dst as Record<string, unknown>;
+    const srcObj = src as Record<string, unknown>;
+    for (const key in dstObj) {
+        if (hasOwn.call(dstObj, key) && !hasOwn.call(srcObj, key)) {
+            delete dstObj[key];
+        }
+    }
+    for (const key in srcObj) {
+        if (!hasOwn.call(srcObj, key)) {
+            continue;
+        }
+        const val = srcObj[key];
+        if (typeof val !== 'object' || val === null) {
+            dstObj[key] = val;
+        } else if (!tryCopyPlainInPlace(dstObj[key], val, depth + 1)) {
+            const stored = snapshotSentValue(val, false);
+            if (stored.jsonFallback !== undefined) {
+                return false;
+            }
+            dstObj[key] = stored.encoded;
+        }
+    }
+    return true;
+}
+
+function encodeWithCodec(codec: { encode(a: unknown): unknown }, data: unknown): unknown {
+    return codec.encode(
+        typeof data === 'object' && data !== null && isDraft(data)
+            ? current(data) : data);
+}
+
+/**
+ * Compares a detached previously-sent value `a` against a newly encoded
+ * value `b` with JSON.stringify equivalence:
+ * - NaN / ±Infinity / null are equivalent (JSON emits "null").
+ * - -0 and +0 are equivalent (===).
+ * - Own object keys whose value is `undefined` are ignored (JSON omits them).
+ * - Inside arrays, `undefined` is equivalent to `null` (JSON emits "null").
+ * - Objects with toJSON() or non-plain built-ins return undefined so the
+ *   caller falls back to JSON.stringify.
+ */
+function jsonEquivalent(a: unknown, b: unknown, inArray: boolean): boolean | undefined {
+    if (inArray) {
+        if (a === undefined) a = null;
+        if (b === undefined) b = null;
+    }
+    if (a === b) {
+        return true;
+    }
+    if (typeof a === 'number') {
+        if (!Number.isFinite(a)) {
+            return b === null || (typeof b === 'number' && !Number.isFinite(b));
+        }
+        return false;
+    }
+    if (a === null) {
+        return typeof b === 'number' && !Number.isFinite(b);
+    }
+    if (typeof a !== 'object' || typeof b !== 'object' || b === null) {
+        return false;
+    }
+    const aIsArr = Array.isArray(a);
+    if (aIsArr !== Array.isArray(b)) {
+        return false;
+    }
+    if (aIsArr) {
+        const arrA = a as unknown[];
+        const arrB = b as unknown[];
+        const len = arrA.length;
+        if (len !== arrB.length) {
+            return false;
+        }
+        for (let i = 0; i < len; i++) {
+            const eq = jsonEquivalent(arrA[i], arrB[i], true);
+            if (eq !== true) {
+                return eq;
+            }
+        }
+        return true;
+    }
+    if (!isPlainObjectOrClass(a) || !isPlainObjectOrClass(b)) {
+        return undefined;
+    }
+    const objA = a as Record<string, unknown>;
+    const objB = b as Record<string, unknown>;
+    let countA = 0;
+    for (const key in objA) {
+        if (!hasOwn.call(objA, key)) {
+            continue;
+        }
+        const valA = objA[key];
+        if (valA === undefined) {
+            continue;
+        }
+        countA++;
+        if (!hasOwn.call(objB, key)) {
+            return false;
+        }
+        const valB = objB[key];
+        if (valB === undefined) {
+            return false;
+        }
+        const eq = jsonEquivalent(valA, valB, false);
+        if (eq !== true) {
+            return eq;
+        }
+    }
+    let countB = 0;
+    for (const key in objB) {
+        if (!hasOwn.call(objB, key)) {
+            continue;
+        }
+        if (objB[key] !== undefined) {
+            countB++;
+        }
+    }
+    return countA === countB;
 }
 
 /**
@@ -162,66 +370,160 @@ interface SentEntityRecord {
  */
 export class DeltaFrameEncoder {
     private lastSent = new Map<string, SentEntityRecord>();
+    private epoch = 0;
 
     encode(world: World, serializer: Serializer): EntityFrame {
+        const policies = world.resources.get(SnapshotPoliciesResource)?.components;
+        const componentTypes = serializer.componentTypes;
         const added: [string, EncodedEntity][] = [];
         const changed: [string, EntityDelta][] = [];
-        const seen = new Set<string>();
+        const epoch = ++this.epoch;
 
         for (const [uuid, entity] of world.entities) {
             if (uuid === "singleton") {
                 continue;
             }
-            seen.add(uuid);
             const previous = this.lastSent.get(uuid);
 
-            const encodedComponents: [string, unknown][] = [];
-            const record: SentEntityRecord = {
-                name: entity.name,
-                components: new Map(),
-            };
-            for (const [component, data] of entity.components) {
-                if (!serializer.hasComponent(component)) {
-                    continue;
-                }
-                const encoded = serializer.encodeComponent(component, data);
-                encodedComponents.push([component.name, encoded]);
-                record.components.set(component.name,
-                    JSON.stringify(encoded) ?? 'undefined');
-            }
-
             if (!previous) {
+                const encodedComponents: [string, unknown][] = [];
+                const components = new Map<UnknownComponent, SentComponentEntry>();
+                for (const [component, data] of entity.components) {
+                    const codec = componentTypes.get(component);
+                    if (!codec) {
+                        continue;
+                    }
+                    const encoded = encodeWithCodec(codec, data);
+                    encodedComponents.push([component.name, encoded]);
+                    const isImmutable = isImmutableRaw(data, policies?.get(component)?.policy);
+                    const stored = snapshotSentValue(encoded, isImmutable);
+                    components.set(component, {
+                        epoch: 1,
+                        codec,
+                        hasImmutableRaw: isImmutable,
+                        raw: isImmutable ? data : undefined,
+                        encoded: stored.encoded,
+                        jsonFallback: stored.jsonFallback,
+                    });
+                }
+                this.lastSent.set(uuid, {
+                    epoch,
+                    componentEpoch: 1,
+                    name: entity.name,
+                    components,
+                });
                 added.push([uuid, {
                     name: entity.name,
                     components: encodedComponents,
                 }]);
-            } else {
-                const delta: EntityDelta = { changed: [], removed: [] };
-                if (previous.name !== entity.name) {
-                    delta.name = entity.name;
+                continue;
+            }
+
+            previous.epoch = epoch;
+            const compEpoch = ++previous.componentEpoch;
+            let delta: EntityDelta | undefined;
+            if (previous.name !== entity.name) {
+                previous.name = entity.name;
+                delta = { name: entity.name, changed: [], removed: [] };
+            }
+
+            const prevComponents = previous.components;
+            let seenComponents = 0;
+            for (const [component, data] of entity.components) {
+                const codec = componentTypes.get(component);
+                if (!codec) {
+                    continue;
                 }
-                for (const [componentName, encoded] of encodedComponents) {
-                    if (previous.components.get(componentName)
-                        !== record.components.get(componentName)) {
-                        delta.changed.push([componentName, encoded]);
+                seenComponents++;
+                const prevEntry = prevComponents.get(component);
+
+                if (prevEntry) {
+                    prevEntry.epoch = compEpoch;
+                    const isImmutable = isImmutableRaw(data, policies?.get(component)?.policy);
+                    if (isImmutable && prevEntry.hasImmutableRaw
+                        && prevEntry.codec === codec
+                        && Object.is(prevEntry.raw, data)) {
+                        continue;
                     }
-                }
-                for (const componentName of previous.components.keys()) {
-                    if (!record.components.has(componentName)) {
-                        delta.removed.push(componentName);
+                    const encoded = encodeWithCodec(codec, data);
+                    let equal: boolean;
+                    if (prevEntry.jsonFallback !== undefined) {
+                        const nextJson = JSON.stringify(encoded) ?? 'undefined';
+                        equal = prevEntry.jsonFallback === nextJson;
+                        if (!equal) {
+                            prevEntry.jsonFallback = nextJson;
+                            prevEntry.encoded = undefined;
+                        }
+                    } else {
+                        const eq = jsonEquivalent(prevEntry.encoded, encoded, false);
+                        if (eq === undefined) {
+                            const prevJson = JSON.stringify(prevEntry.encoded) ?? 'undefined';
+                            const nextJson = JSON.stringify(encoded) ?? 'undefined';
+                            equal = prevJson === nextJson;
+                            prevEntry.jsonFallback = nextJson;
+                            prevEntry.encoded = undefined;
+                        } else {
+                            equal = eq;
+                            if (!equal) {
+                                if (!prevEntry.hasImmutableRaw && !isImmutable
+                                    && tryCopyPlainInPlace(prevEntry.encoded, encoded, 0)) {
+                                    prevEntry.jsonFallback = undefined;
+                                } else {
+                                    const stored = snapshotSentValue(encoded, isImmutable);
+                                    prevEntry.encoded = stored.encoded;
+                                    prevEntry.jsonFallback = stored.jsonFallback;
+                                }
+                            }
+                        }
                     }
-                }
-                if (delta.name !== undefined || delta.changed.length > 0
-                    || delta.removed.length > 0) {
-                    changed.push([uuid, delta]);
+                    prevEntry.codec = codec;
+                    prevEntry.hasImmutableRaw = isImmutable;
+                    prevEntry.raw = isImmutable ? data : undefined;
+                    if (!equal) {
+                        if (!delta) {
+                            delta = { changed: [], removed: [] };
+                        }
+                        delta.changed.push([component.name, encoded]);
+                    }
+                } else {
+                    const isImmutable = isImmutableRaw(data, policies?.get(component)?.policy);
+                    const encoded = encodeWithCodec(codec, data);
+                    const stored = snapshotSentValue(encoded, isImmutable);
+                    prevComponents.set(component, {
+                        epoch: compEpoch,
+                        codec,
+                        hasImmutableRaw: isImmutable,
+                        raw: isImmutable ? data : undefined,
+                        encoded: stored.encoded,
+                        jsonFallback: stored.jsonFallback,
+                    });
+                    if (!delta) {
+                        delta = { changed: [], removed: [] };
+                    }
+                    delta.changed.push([component.name, encoded]);
                 }
             }
-            this.lastSent.set(uuid, record);
+
+            if (seenComponents !== prevComponents.size) {
+                for (const [component, entry] of prevComponents) {
+                    if (entry.epoch !== compEpoch) {
+                        prevComponents.delete(component);
+                        if (!delta) {
+                            delta = { changed: [], removed: [] };
+                        }
+                        delta.removed.push(component.name);
+                    }
+                }
+            }
+
+            if (delta) {
+                changed.push([uuid, delta]);
+            }
         }
 
         const removed: string[] = [];
-        for (const uuid of this.lastSent.keys()) {
-            if (!seen.has(uuid)) {
+        for (const [uuid, record] of this.lastSent) {
+            if (record.epoch !== epoch) {
                 removed.push(uuid);
                 this.lastSent.delete(uuid);
             }

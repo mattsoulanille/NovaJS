@@ -85,6 +85,43 @@ export const SnapshotPoliciesResource =
 type StoredComponent = [UnknownComponent, unknown, 'value' | 'encoded'];
 
 const objectProto = Object.prototype;
+const hasOwn = Object.prototype.hasOwnProperty;
+const objectToString = Object.prototype.toString;
+/**
+ * Prototypes already confirmed to be ordinary user classes (no custom
+ * Symbol.toStringTag, not a built-in exotic like Map/Set/Date/RegExp)
+ * without a prototype-level toStringTag. Avoids slow Object.prototype.toString
+ * calls on hot value classes like Position, Vector, and Angle.
+ */
+const ordinaryClassProtos = new WeakSet<object>();
+
+/**
+ * Module-level reusable cycle-tracking Map for top-level cloneEncoded calls.
+ * Cleared in a finally block before returning; a re-entrant call (e.g. from a
+ * getter) falls back to allocating a fresh Map.
+ */
+const reusableSeen = new Map<object, unknown>();
+let reusableSeenInUse = false;
+
+/**
+ * True for instances of user-defined classes, which structured clone
+ * serializes as ordinary objects. Everything with its own class tag
+ * (Map, Set, Date, RegExp, errors, buffers and views, boxed primitives,
+ * platform objects, anything with a Symbol.toStringTag) is left to
+ * structuredClone.
+ */
+function isOrdinaryClassInstance(value: object, proto: object): boolean {
+    if (ordinaryClassProtos.has(proto)) {
+        return !hasOwn.call(value, Symbol.toStringTag);
+    }
+    if (objectToString.call(value) !== '[object Object]') {
+        return false;
+    }
+    if (!(Symbol.toStringTag in proto)) {
+        ordinaryClassProtos.add(proto);
+    }
+    return true;
+}
 
 /**
  * Deep-copies serializer-encoded component data with structuredClone's
@@ -109,8 +146,6 @@ export function cloneEncoded<T>(value: T,
      * two places in the input is shared between the same two places in
      * the copy (and a cycle terminates) — exactly structuredClone's graph
      * semantics, which the fast path must not weaken (review r12 M-1).
-     * Lazily allocated on the first nested object so primitives and flat
-     * records avoid per-call Map allocations.
      */
     seen?: Map<object, unknown>): T {
     if (typeof value !== 'object' || value === null) {
@@ -120,10 +155,30 @@ export function cloneEncoded<T>(value: T,
         return value;
     }
     if (seen !== undefined) {
-        const already = seen.get(value);
-        if (already !== undefined) {
-            return already as T;
+        return cloneEncodedInner(value, seen);
+    }
+    if (!reusableSeenInUse) {
+        reusableSeenInUse = true;
+        try {
+            return cloneEncodedInner(value, reusableSeen);
+        } finally {
+            reusableSeen.clear();
+            reusableSeenInUse = false;
         }
+    }
+    return cloneEncodedInner(value, new Map());
+}
+
+function cloneEncodedInner<T>(value: T, seen: Map<object, unknown>): T {
+    if (typeof value !== 'object' || value === null) {
+        if (typeof value === 'function' || typeof value === 'symbol') {
+            return structuredClone(value);
+        }
+        return value;
+    }
+    const already = seen.get(value);
+    if (already !== undefined) {
+        return already as T;
     }
     if (Array.isArray(value)) {
         const length = value.length;
@@ -132,7 +187,7 @@ export function cloneEncoded<T>(value: T,
         // checking for holes directly.
         let keyCount = 0;
         for (const key in value) {
-            if (Object.prototype.hasOwnProperty.call(value, key)) {
+            if (hasOwn.call(value, key)) {
                 keyCount++;
             }
         }
@@ -145,17 +200,11 @@ export function cloneEncoded<T>(value: T,
             }
         }
         const copy = new Array(length);
-        if (seen !== undefined) {
-            seen.set(value, copy);
-        }
+        seen.set(value, copy);
         for (let i = 0; i < length; i++) {
             const item = value[i];
             if (typeof item === 'object' && item !== null) {
-                if (seen === undefined) {
-                    seen = new Map();
-                    seen.set(value, copy);
-                }
-                copy[i] = cloneEncoded(item, seen);
+                copy[i] = cloneEncodedInner(item, seen);
             } else if (typeof item === 'function' || typeof item === 'symbol') {
                 return structuredClone(value);
             } else {
@@ -165,23 +214,17 @@ export function cloneEncoded<T>(value: T,
         return copy as T;
     }
     const proto = Object.getPrototypeOf(value);
-    if (proto !== objectProto && proto !== null && !isOrdinaryClassInstance(value)) {
+    if (proto !== objectProto && proto !== null && !isOrdinaryClassInstance(value, proto)) {
         return structuredClone(value);
     }
     const copy: Record<string, unknown> = {};
-    if (seen !== undefined) {
-        seen.set(value, copy);
-    }
+    seen.set(value, copy);
     const record = value as Record<string, unknown>;
     for (const key in record) {
-        if (Object.prototype.hasOwnProperty.call(record, key)) {
+        if (hasOwn.call(record, key)) {
             const prop = record[key];
             if (typeof prop === 'object' && prop !== null) {
-                if (seen === undefined) {
-                    seen = new Map();
-                    seen.set(value, copy);
-                }
-                copy[key] = cloneEncoded(prop, seen);
+                copy[key] = cloneEncodedInner(prop, seen);
             } else if (typeof prop === 'function' || typeof prop === 'symbol') {
                 return structuredClone(value);
             } else {
@@ -190,19 +233,6 @@ export function cloneEncoded<T>(value: T,
         }
     }
     return copy as T;
-}
-
-const objectToString = Object.prototype.toString;
-
-/**
- * True for instances of user-defined classes, which structured clone
- * serializes as ordinary objects. Everything with its own class tag
- * (Map, Set, Date, RegExp, errors, buffers and views, boxed primitives,
- * platform objects, anything with a Symbol.toStringTag) is left to
- * structuredClone.
- */
-function isOrdinaryClassInstance(value: object): boolean {
-    return objectToString.call(value) === '[object Object]';
 }
 
 interface SnapshotEntity {
