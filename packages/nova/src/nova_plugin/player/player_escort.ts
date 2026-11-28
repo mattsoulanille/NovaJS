@@ -1,6 +1,7 @@
 import * as t from 'io-ts';
 import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
+import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 
 /**
  * ============================================================================
@@ -215,6 +216,65 @@ export type EscortProvenance = 'hired' | 'captured';
  */
 export const PlayerEscortComponent =
     new Component<PlayerEscort>('PlayerEscort');
+
+/**
+ * ============================================================================
+ * ESCORT IDENTITY: one escort, at most one live copy
+ * ============================================================================
+ *
+ * An escort's uuid is NOT its identity. Every time the client puts a
+ * carried escort back into a world — a lift-off, a system entry, a flush
+ * of a held or failed batch, the retry of a LOST escort (client/
+ * fleet_ledger.ts) — it mints a fresh uuid (fleet_insertion.ts). So two
+ * live entities with different uuids can be the same escort, and nothing
+ * keyed by uuid can see it: the playtest double of 2026-11-27 (an escort
+ * appeared twice; no repro).
+ *
+ * This is the key that can. `id` is the uuid the escort had the first
+ * tick the simulation saw it as a player escort, stamped by
+ * EscortIdentitySystem (escorts/player_escort_plugin.ts) and never
+ * rewritten after: the component is serializer-registered, so it rides
+ * the entity through every carry event, roster, re-insertion record and
+ * save exactly as the marker does, and the copy that comes back under a
+ * fresh uuid still carries it. The same system enforces the invariant: a
+ * second live copy of one identity in a world, under the same owning peer
+ * (escortCopyKey), is DROPPED, on every peer on the same tick (a pure
+ * function of the synced escort set).
+ *
+ * A separate component rather than a PlayerEscort field: the marker is
+ * rebuilt at every re-parenting (MarkPlayerEscortsSystem, the carry
+ * sweeps, the re-stamps in spaceport/), and the identity must survive all
+ * of them untouched. Player ships are never stamped (they are not
+ * escorts, even when they still wear an old marker after a hull swap).
+ */
+export const EscortIdentityType = t.type({ id: t.string });
+export type EscortIdentity = t.TypeOf<typeof EscortIdentityType>;
+export const EscortIdentityComponent =
+    new Component<EscortIdentity>('EscortIdentity');
+
+/** The escort identity `entity` carries, if it has been stamped. */
+export function escortIdentityOf(entity: Entity): string | undefined {
+    return entity.components.get(EscortIdentityComponent)?.id;
+}
+
+/**
+ * What makes two live entities COPIES of one escort: the same identity
+ * under the same owning peer (MultiplayerData.owner). The owner is part of
+ * the key because a departed connection's fleet lingers in a room until
+ * the relay's removePeer lands (seconds, for a page reload; a keepalive
+ * for a half-open socket), and the next session — a new peer id — puts the
+ * same escorts back from its save meanwhile. Those are not duplicates to
+ * drop: the old copy is about to go with its peer, and dropping the new
+ * one in its favour would lose the escort outright. Copies inserted by
+ * one connection always agree (every insertion path stamps the current
+ * id; a reconnect re-stamps what the client holds, client/identity.ts).
+ * Undefined for an escort not yet stamped.
+ */
+export function escortCopyKey(entity: Entity): string | undefined {
+    const identity = escortIdentityOf(entity);
+    return identity === undefined ? undefined
+        : `${entity.components.get(MultiplayerData)?.owner ?? ''} ${identity}`;
+}
 
 /**
  * An escort's provenance, with the documented default for escorts that

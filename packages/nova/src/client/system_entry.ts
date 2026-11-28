@@ -115,7 +115,8 @@ export async function jumpTo(runtime: ClientRuntime, plan: TransitPlan,
     // uuids and formation stations and all, exactly as a carried escort
     // does. Destroyed ones were never recorded (FleetLedger.lost).
     const lostEscorts = fleet.takeLost(plan.uuid,
-        jumpEscorts.map(escort => escort.uuid));
+        jumpEscorts.map(escort => escort.uuid),
+        jumpEscorts.map(escort => escort.entity));
     if (lostEscorts.length > 0) {
         console.info(`Respawning ${lostEscorts.length} escort(s) that were `
             + 'lost without being destroyed.');

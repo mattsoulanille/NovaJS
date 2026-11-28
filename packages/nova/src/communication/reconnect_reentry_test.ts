@@ -26,7 +26,8 @@ import { connectUrlWithVersion } from '../common/version_handshake.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
 import { DeathAIComponent, FormationComponent } from '../nova_plugin/npc/index.js';
 import {
-    ControlledByComponent, MissionShipComponent, NO_DEAL, PlayerEscortComponent,
+    ControlledByComponent, EscortIdentityComponent, MissionShipComponent, NO_DEAL,
+    PlayerEscortComponent,
 } from '../nova_plugin/player/index.js';
 import { DeathEvent, makeShip } from '../nova_plugin/ship/index.js';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
@@ -580,11 +581,11 @@ describe('a socket reconnect mid-game (#354)', () => {
                 }
             }
             applySimulationFrame(frame, serializer, display, {
-                onRemove: (uuid, entity) =>
-                    fleet.noteRemoved(uuid, entity, peer.shipUuid, serializer),
+                onRemove: (uuid, entity) => fleet.noteRemoved(uuid, entity,
+                    peer.shipUuid, serializer, display.entities),
             });
             for (const [uuid] of frame.added) {
-                fleet.escortReturned(uuid);
+                fleet.escortReturned(uuid, display.entities.get(uuid));
             }
         });
         return { display, fleet };
@@ -1085,6 +1086,143 @@ describe('a socket reconnect mid-game (#354)', () => {
         expect(deaths.has('escort 1')).toBeFalse();
         expect(deaths.has('escort 2')).toBeFalse();
     }, SPEC_MS);
+
+    /**
+     * THE ESCORT DOUBLE (playtest, 2026-11-27: "I saw one of my escorts
+     * double", right after "Escort … left the world without dying" and a
+     * reconnect). Every way a reconnect can leave one escort as two live
+     * entities, driven through the real socket stack, with the client's
+     * display mirror and fleet ledger fed as the frame pump feeds them.
+     */
+    describe('one escort, one live copy, across a reconnect', () => {
+        /** Live copies of escort identity `id` in `world`. */
+        function copies(world: World | undefined, id: string): string[] {
+            return [...world?.entities ?? []].filter(([, entity]) =>
+                !entity.components.has(ControlledByComponent)
+                && entity.components.get(EscortIdentityComponent)?.id === id)
+                .map(([uuid]) => uuid).sort();
+        }
+
+        function expectOneCopy(peers: Peer[], id: string,
+            display?: World) {
+            for (const [where, world] of [['archive', archive.archiveWorld],
+                ...peers.map(peer => [peer.name, peer.world] as const)] as const) {
+                expect(copies(world, id).length)
+                    .withContext(`${id} on ${where}`).toBe(1);
+            }
+            if (display) {
+                expect(copies(display, id).length)
+                    .withContext(`${id} on the display`).toBe(1);
+            }
+        }
+
+        it('in flight, through a clean close: back once, nothing lost', async () => {
+            const a = await makePeer('a', 100);
+            await addEscort(a, 'escort a', 150);
+            const b = await makePeer('b', -100);
+            const { display, fleet } = mirror(a);
+            await step(240);
+            expect(copies(a.world, 'escort a')).toEqual(['escort a']);
+
+            await reconnect(a);
+            const rejoinedAt = relay.tick;
+            await step(600);
+            await archive.update();
+
+            expectInLockstep(a, rejoinedAt);
+            expectOneCopy([a, b], 'escort a', display);
+            expect(fleet.lost).toEqual([]);
+        }, SPEC_MS);
+
+        it('in flight, into a RESTARTED server: back once, nothing lost',
+            async () => {
+                const a = await makePeer('a', 100);
+                await addEscort(a, 'escort a', 150);
+                const { display, fleet } = mirror(a);
+                await step(240);
+
+                await stopServer();
+                desyncs = [];
+                reports = [];
+                await startServer(port);
+                await reconnect(a);
+                await step(600);
+                await archive.update();
+
+                expectInLockstep(a, 0);
+                expectOneCopy([a], 'escort a', display);
+                expect(fleet.lost).toEqual([]);
+            }, SPEC_MS);
+
+        it('docked with an escort left in space, lifting off while the '
+            + 're-entry is still putting it back: the lost retry and the '
+            + 're-insertion meet, and one copy is dropped everywhere',
+            async () => {
+                const a = await makePeer('a', 100);
+                await addEscort(a, 'escort a', 150);
+                const b = await makePeer('b', -100);
+                const { display, fleet } = mirror(a);
+                await step(240);
+                // Landing: the player's hull leaves the simulation and the
+                // client holds it; the escort (left behind — disabled, or
+                // under a hold order) stays in space, still owned.
+                const serializer = a.world.resources.get(SerializerResource)!;
+                const decoded = serializer.decode(structuredClone(
+                    serializer.encode(a.world.entities.get(a.shipUuid)!)));
+                if (isLeft(decoded)) {
+                    throw new Error('Failed to decode the docked hull');
+                }
+                const hull: Entity = decoded.right;
+                a.client.removeEntity(a.shipUuid);
+                await step(60);
+                expect(copies(a.world, 'escort a')).toEqual(['escort a']);
+
+                const { before, after } = await reconnect(a);
+                const landed = {
+                    kind: 'landed', system: {} as LiveSystem,
+                    ship: { uuid: a.shipUuid, entity: hull, planetId: SYNTHETIC.planets.port },
+                } as ClientState;
+                restampHeldFleet(landed, fleet, before, after);
+                // The rebuilt world drops the escort (the old connection's
+                // removePeer took it); the ledger books it LOST before the
+                // re-entry's re-insertion puts it back.
+                for (let i = 0; i < 1200 && fleet.lost.length === 0; i++) {
+                    await step(1);
+                }
+                expect(fleet.lost.map(row => row.uuid)).withContext(
+                    'the escort booked lost').toEqual(['escort a']);
+                const warn = spyOn(console, 'warn').and.callThrough();
+                // The lift-off, in that window: docking.ts's take and the
+                // one insertion sequence.
+                const lostRows = fleet.takeLost(a.shipUuid, [],
+                    display.entities.values());
+                expect(lostRows.map(row => row.uuid)).toEqual(['escort a']);
+                const gameData = await getSyntheticGameData();
+                await insertPlayerAndFleet({
+                    bridge: {
+                        addEntity: async (uuid, entity) => a.client.addEntity(uuid, entity),
+                    },
+                    playerUuid: a.shipUuid, player: hull, escorts: lostRows,
+                    ownerUuid: a.communicator.uuid,
+                    baseSlot: 0, mintUuid: v4, getShip: id => gameData.data.Ship.get(id),
+                });
+                const liftedAt = relay.tick;
+                await step(600);
+                await archive.update();
+
+                expectInLockstep(a, liftedAt);
+                expectInLockstep(b, liftedAt);
+                expectOneCopy([a, b], 'escort a', display);
+                // The drop is not a loss to respawn.
+                expect(fleet.lost).toEqual([]);
+                // Whether the double happened depends on the race; if it
+                // did, the simulation said so.
+                const dropped = warn.calls.allArgs().filter(([message]) =>
+                    String(message).includes('second live copy'));
+                console.info(`escort double ${dropped.length > 0
+                    ? 'REPRODUCED and dropped' : 'not reached'} this run`);
+            }, SPEC_MS);
+    });
 
     describe('the reconnect token', () => {
         interface Connection {

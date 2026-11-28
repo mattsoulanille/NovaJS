@@ -1191,6 +1191,17 @@ export const STATE_HASH_INTERVAL = 60;
 //    the derived wire schema fingerprint changes (012d2e220f2f71b8 ->
 //    67ff6c826e092635), and the join gate keeps older and newer builds
 //    apart.
+//    schema-only changes): one escort, one live copy (the escort double of
+//    2026-11-27). One new serializer-registered component, EscortIdentity
+//    (`{id}`, player/player_escort.ts: the uuid a player escort had the
+//    first tick it was marked), stamped on every player escort by the new
+//    EscortIdentitySystem (escorts/player_escort_plugin.ts) and carried
+//    with the entity through every carry, roster, re-insertion record and
+//    save. Sim-rule change alongside: a second LIVE copy of one identity
+//    under the same owning peer (MultiplayerData.owner) is deleted on the
+//    tick it appears (the original kept, else the lowest uuid). No input or message kind changes. The derived wire schema
+//    fingerprint changes (67ff6c826e092635 -> NEWFP), and the
+//    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

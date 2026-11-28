@@ -14,7 +14,9 @@ import { SimulationFrame } from '../communication/simulation_frame.js';
 import { SourceComponent } from '../nova_plugin/combat/index.js';
 import { BayFighterComponent, FighterRefund } from '../nova_plugin/escorts/index.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
-import { MissionShipComponent, PlayerEscortComponent, NO_DEAL } from '../nova_plugin/player/index.js';
+import {
+    EscortIdentityComponent, MissionShipComponent, PlayerEscortComponent, NO_DEAL,
+} from '../nova_plugin/player/index.js';
 import { makeShip } from '../nova_plugin/ship/index.js';
 import { completeEntity } from '../nova_plugin/spawn/index.js';
 import { FleetLedger, refundLostFighters } from './fleet_ledger.js';
@@ -201,6 +203,100 @@ describe('the fleet ledger\'s lost roster (ruling #148)', () => {
             fleet.reset();
             expect(fleet.lost).toEqual([]);
         });
+
+    /**
+     * ONE ESCORT, ONE LIVE COPY (player_escort.ts ESCORT IDENTITY; the
+     * playtest double of 2026-11-27). The ledger's half of the invariant:
+     * the simulation drops a second live copy of an escort, and nothing on
+     * the client may turn that drop — or any other stale record of an
+     * escort that is flying — into a respawn.
+     */
+    describe('by escort identity', () => {
+        const identified = (id: string) => (ship: Entity) =>
+            ship.components.set(EscortIdentityComponent, { id });
+
+        it('does NOT record a copy removed while another copy of the same '
+            + 'escort stays in the world (the simulation dropped a duplicate)',
+            async () => {
+                const { fleet, display, escort, serializer, frame } = await bench();
+                await escort('original', PLAYER, identified('original'));
+                await escort('copy', PLAYER, identified('original'));
+                applySimulationFrame(frame({ removed: ['copy'] }), serializer,
+                    display, {
+                    onRemove: (uuid, entity) => fleet.noteRemoved(uuid, entity,
+                        PLAYER, serializer, display.entities),
+                });
+                expect(fleet.lost).toEqual([]);
+            });
+
+        it('records the LAST copy of an escort when every copy goes at once',
+            async () => {
+                const { fleet, display, escort, serializer, frame } = await bench();
+                spyOn(console, 'warn');
+                await escort('original', PLAYER, identified('original'));
+                await escort('copy', PLAYER, identified('original'));
+                applySimulationFrame(frame({ removed: ['original', 'copy'] }),
+                    serializer, display, {
+                    onRemove: (uuid, entity) => fleet.noteRemoved(uuid, entity,
+                        PLAYER, serializer, display.entities),
+                });
+                expect(fleet.lost.map(row => row.uuid)).toEqual(['copy']);
+            });
+
+        it('takes a carry-roster row off when the world re-adds that uuid '
+            + '(a correction undid the landing)', async () => {
+                const { fleet, escort } = await bench();
+                const ship = await escort('lander', PLAYER, identified('lander'));
+                fleet.pushCarried(fleet.landed,
+                    { player: PLAYER, uuid: 'lander', entity: ship });
+                fleet.pushCarried(fleet.jumping,
+                    { player: PLAYER, uuid: 'lander', entity: ship });
+                fleet.escortReturned('lander', ship);
+                expect(fleet.landed).toEqual([]);
+                expect(fleet.jumping).toEqual([]);
+            });
+
+        it('takes every row of an escort off when a copy of it comes back '
+            + 'under ANOTHER uuid', async () => {
+                const { fleet, escort, remove } = await bench();
+                spyOn(console, 'warn');
+                await escort('first', PLAYER, identified('first'));
+                remove('first');
+                expect(fleet.lost.map(row => row.uuid)).toEqual(['first']);
+                const back = await escort('reinserted', PLAYER,
+                    identified('first'));
+                const other = await escort('other', PLAYER, identified('other'));
+                fleet.pushCarried(fleet.landed,
+                    { player: PLAYER, uuid: 'other', entity: other });
+                fleet.escortReturned('reinserted', back);
+                expect(fleet.lost).toEqual([]);
+                expect(fleet.landed.map(row => row.uuid)).toEqual(['other']);
+            });
+
+        it('does not retry a lost escort whose identity is live beside the '
+            + 'retry (in the batch, or still flying at a lift-off)', async () => {
+                const { fleet, escort, remove } = await bench();
+                spyOn(console, 'warn');
+                await escort('stale', PLAYER, identified('stale'));
+                await escort('really-lost', PLAYER, identified('really-lost'));
+                remove('stale', 'really-lost');
+                const flying = await escort('flying', PLAYER, identified('stale'));
+                const taken = fleet.takeLost(PLAYER, [], [flying]);
+                expect(taken.map(row => row.uuid)).toEqual(['really-lost']);
+                expect(fleet.lost).toEqual([]);
+            });
+
+        it('writes one escort once into the save, the live copy over a stale '
+            + 'row', async () => {
+                const { fleet, escort, remove, display } = await bench();
+                spyOn(console, 'warn');
+                await escort('gone', PLAYER, identified('gone'));
+                remove('gone');
+                await escort('back', PLAYER, identified('gone'));
+                expect(fleet.escortsToSave(PLAYER, display).map(e => e.uuid))
+                    .toEqual(['back']);
+            });
+    });
 });
 
 /**

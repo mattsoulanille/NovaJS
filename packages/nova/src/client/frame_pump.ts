@@ -805,7 +805,7 @@ export class FramePump {
         applySimulationFrame(frame, serializer, displayWorld, {
             emitEvents: true,
             onRemove: (uuid, entity) => runtime.fleet.noteRemoved(
-                uuid, entity, localPlayer, serializer),
+                uuid, entity, localPlayer, serializer, displayWorld.entities),
         });
         // For the presentation clock: what instant this snapshot
         // represents, and what the pump knew about it.
@@ -813,7 +813,8 @@ export class FramePump {
             simTimeMs: frame.time.time, ...clock,
         } : undefined;
         for (const [uuid] of frame.added) {
-            runtime.fleet.escortReturned(uuid);
+            runtime.fleet.escortReturned(uuid,
+                displayWorld.entities.get(uuid));
         }
         this.pacing = frame.pacing;
         const speedHolder = displayWorld.resources.get(RoomSpeedResource);

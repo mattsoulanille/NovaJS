@@ -44,7 +44,9 @@ import {
 } from '../npc/index.js';
 import { LandEvent, PlanetDataComponent } from '../travel/index.js';
 import {
-    carriedEscortFields, EscortLanding, EscortLandingComponent,
+    carriedEscortFields, escortCopyKey, EscortIdentityComponent,
+    escortIdentityOf, EscortIdentityType,
+    EscortLanding, EscortLandingComponent,
     EscortPayrollComponent, escortProvenance, PlayerEscort,
     PlayerEscortComponent,
 } from '../player/index.js';
@@ -914,6 +916,77 @@ export const EscortReattachSystem = new System({
 });
 
 /**
+ * ============================================================================
+ * One escort, one live copy (player_escort.ts, ESCORT IDENTITY)
+ * ============================================================================
+ *
+ * Stamps every player escort that has no EscortIdentity yet with the uuid
+ * it has now (the first tick it is seen as a player escort), and enforces
+ * the invariant the identity exists for: two LIVE entities carrying the
+ * same identity under the same owning peer (escortCopyKey: a departed
+ * connection's lingering copy is not one of them) are the same escort
+ * twice, and every copy but one is deleted.
+ *
+ * Which copy stays: the ORIGINAL if it is one of them (the copy whose uuid
+ * is the identity, never re-inserted), else the lowest uuid. A pure
+ * function of the synced escort set, so every peer and the archive drop
+ * the same copy on the same tick whatever the entity map's iteration
+ * order. The drop is a plain deletion with no event: the client's fleet
+ * ledger sees the identity still live in its display world and does not
+ * book the dropped copy as LOST (FleetLedger.noteRemoved), which would
+ * only respawn it at the next system entry to be dropped again.
+ *
+ * A dropped copy means an escort was inserted twice somewhere upstream, so
+ * it is logged; this is the backstop, not the mechanism.
+ *
+ * Player ships are skipped: a ship that is or was the player's can wear an
+ * old marker (a hull swap), and is never an escort to drop.
+ */
+export const EscortIdentitySystem = new System({
+    name: 'EscortIdentity',
+    args: [PlayerEscortsQuery, Entities, SingletonComponent] as const,
+    step(escorts, entities) {
+        const copies = new Map<string, string[]>();
+        for (const [uuid, entity] of escorts) {
+            if (entity.components.has(ControlledByComponent)) {
+                continue;
+            }
+            if (!entity.components.has(EscortIdentityComponent)) {
+                entity.components.set(EscortIdentityComponent, { id: uuid });
+            }
+            const key = escortCopyKey(entity)!;
+            const live = copies.get(key);
+            if (live) {
+                live.push(uuid);
+            } else {
+                copies.set(key, [uuid]);
+            }
+        }
+        for (const uuids of copies.values()) {
+            if (uuids.length < 2) {
+                continue;
+            }
+            const id = escortIdentityOf(entities.get(uuids[0])!)!;
+            const keep = uuids.includes(id) ? id
+                : uuids.reduce((a, b) => a < b ? a : b);
+            for (const uuid of uuids) {
+                if (uuid === keep) {
+                    continue;
+                }
+                console.warn(`Escort ${id} had a second live copy ${uuid} `
+                    + `(kept ${keep}); dropped it.`);
+                entities.delete(uuid);
+            }
+        }
+    },
+    // After the marking, so an escort is stamped on the tick it is first
+    // marked (and the payroll, #237: both read every escort); before the
+    // re-attach hands a duplicate a formation slot of its own.
+    after: [MarkPlayerEscortsSystem, EscortPayrollSystem],
+    before: [EscortReattachSystem],
+});
+
+/**
  * Hands `escort` to the owning client: strips the state that must not ride
  * to the destination, removes it from the simulation, and emits its carry
  * event. The single exit both jump sweeps use, so the early warp-out and
@@ -1005,7 +1078,9 @@ export const EscortFollowJumpBeginSystem = new System({
     // that same tick.
     before: [JumpSequenceSystem, EscortReattachSystem],
     // #237 pins (shared: *): PlayerEscortPlugin's registration order.
-    after: [EscortPayrollSystem],
+    // After the identity pass, so a dropped duplicate never starts a
+    // follow sequence.
+    after: [EscortPayrollSystem, EscortIdentitySystem],
 });
 
 /**
@@ -1238,6 +1313,7 @@ export const PlayerEscortPlugin: Plugin = {
         // baselines).
         serializer?.addComponent(PlayerEscortComponent, PlayerEscort);
         serializer?.addComponent(EscortLandingComponent, EscortLanding);
+        serializer?.addComponent(EscortIdentityComponent, EscortIdentityType);
         // The payroll mirror rides the PLAYER's entity out of the world at
         // a landing or a jump, which is exactly when it gets charged.
         serializer?.addComponent(EscortPayrollComponent, t.array(t.string));
@@ -1256,5 +1332,6 @@ export const PlayerEscortPlugin: Plugin = {
         world.addSystem(EscortFollowJumpSystem);
         world.addSystem(EscortFollowGateSystem);
         world.addSystem(EscortReattachSystem);
+        world.addSystem(EscortIdentitySystem);
     },
 };

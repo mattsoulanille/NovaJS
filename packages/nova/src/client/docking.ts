@@ -240,7 +240,9 @@ export async function runDockingFrame(runtime: ClientRuntime,
         // it came from — a lost escort returned to `landed` would be
         // restocked by the retry.
         const lostEscorts = fleet.takeLost(docked.uuid,
-            returningEscorts.map(escort => escort.uuid));
+            returningEscorts.map(escort => escort.uuid),
+            [...returningEscorts.map(escort => escort.entity),
+                ...world.entities.values()]);
         if (lostEscorts.length > 0) {
             console.info(`Respawning ${lostEscorts.length} escort(s) that `
                 + 'were lost without being destroyed.');
@@ -347,7 +349,9 @@ export async function runDockingFrame(runtime: ClientRuntime,
         // into the world it docked from, which is the same-system
         // land-and-lift-off the ruling names. Un-restocked, like there.
         const gateLost = fleet.takeLost(docked.uuid,
-            gateEscorts.map(escort => escort.uuid));
+            gateEscorts.map(escort => escort.uuid),
+            [...gateEscorts.map(escort => escort.entity),
+                ...world.entities.values()]);
         if (gateLost.length > 0) {
             console.info(`Respawning ${gateLost.length} escort(s) that `
                 + 'were lost without being destroyed.');

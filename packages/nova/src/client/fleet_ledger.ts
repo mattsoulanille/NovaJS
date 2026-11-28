@@ -39,7 +39,10 @@ import {
     buildMissionShipSpawns, liveMissionShips,
 } from '../nova_plugin/missions/index.js';
 import { FormationComponent } from '../nova_plugin/npc/index.js';
-import { PlayerEscortComponent, PlayerShipSelector } from '../nova_plugin/player/index.js';
+import {
+    ControlledByComponent, escortCopyKey, PlayerEscortComponent,
+    PlayerShipSelector,
+} from '../nova_plugin/player/index.js';
 import {
     collectEscortsToSave, EscortToSave, SavedEscort,
 } from '../nova_plugin/pilot/index.js';
@@ -268,7 +271,8 @@ export class FleetLedger {
      * than dropped.
      */
     noteRemoved(uuid: string, entity: Entity, player: string | undefined,
-        serializer: Serializer): boolean {
+        serializer: Serializer,
+        displayEntities?: ReadonlyMap<string, Entity>): boolean {
         const marker = entity.components.get(PlayerEscortComponent);
         if (!marker || (player !== undefined && marker.player !== player)) {
             return false;
@@ -277,6 +281,15 @@ export class FleetLedger {
             return false;
         }
         if (this.rosters.some(roster => roster.some(row => row.uuid === uuid))) {
+            return false;
+        }
+        // A SECOND COPY of an escort that is still in the world under
+        // another uuid (the simulation's EscortIdentitySystem dropped the
+        // duplicate, or this copy was the stale one): the escort is not
+        // lost, and recording it would respawn the duplicate.
+        const identity = escortCopyKey(entity);
+        if (identity !== undefined && displayEntities
+            && liveCopyOf(identity, displayEntities, uuid)) {
             return false;
         }
         const bay = entity.components.get(BayFighterComponent);
@@ -319,11 +332,27 @@ export class FleetLedger {
      * no longer explains anything, and a later removal that nothing
      * explains must count as a loss again, not as that old destruction.
      */
-    escortReturned(uuid: string): void {
+    escortReturned(uuid: string, entity?: Entity): void {
         this.recentDeaths.delete(uuid);
-        const index = this.lost.findIndex(row => row.uuid === uuid);
-        if (index >= 0) {
-            this.lost.splice(index, 1);
+        // Whatever roster row names this escort is stale now that it is in
+        // the world: by uuid (the same entity back — on `lost`, or on a
+        // carry roster whose event a correction undid, an escort that
+        // "landed" in a prediction and is flying again), or by identity
+        // (the same escort under another uuid). A row left behind would be
+        // inserted again at the next lift-off or system entry: a second
+        // copy of a ship that is already flying.
+        const identity = entity
+            && !entity.components.has(ControlledByComponent)
+            ? escortCopyKey(entity) : undefined;
+        const stale = (row: CarriedEscort) => row.uuid === uuid
+            || (identity !== undefined
+                && escortCopyKey(row.entity) === identity);
+        for (const roster of this.rosters) {
+            for (let i = roster.length - 1; i >= 0; i--) {
+                if (stale(roster[i])) {
+                    roster.splice(i, 1);
+                }
+            }
         }
         const fighter = this.lostFighters.findIndex(row => row.uuid === uuid);
         if (fighter >= 0) {
@@ -351,10 +380,29 @@ export class FleetLedger {
      * under the same uuid (an escort carried by a jump AND recorded lost
      * by a correction in between must not be doubled).
      */
-    takeLost(player: string, carried: Iterable<string> = []): CarriedEscort[] {
+    takeLost(player: string, carried: Iterable<string> = [],
+        live: Iterable<Entity> = []): CarriedEscort[] {
         const already = new Set(carried);
+        // By IDENTITY too (player_escort.ts ESCORT IDENTITY): `live` is
+        // every entity the caller is about to have in the world beside the
+        // retry — its own batch, and for a same-system lift-off the escorts
+        // still flying there. A lost row whose escort is among them is a
+        // stale record of a ship that came back some other way, and
+        // respawning it would put a second copy in the world.
+        const liveIdentities = new Set<string>();
+        for (const entity of live) {
+            const identity = escortCopyKey(entity);
+            if (identity !== undefined
+                && !entity.components.has(ControlledByComponent)) {
+                liveIdentities.add(identity);
+            }
+        }
         const taken = takeCarriedEscorts(this.lost, player)
-            .filter(row => !already.has(row.uuid));
+            .filter(row => !already.has(row.uuid))
+            .filter(row => {
+                const identity = escortCopyKey(row.entity);
+                return identity === undefined || !liveIdentities.has(identity);
+            });
         this.lost.length = 0;
         return taken;
     }
@@ -517,6 +565,22 @@ export class FleetLedger {
 
 /** How many death uuids the ledger remembers (see FleetLedger.noteDeath). */
 const RECENT_DEATHS = 256;
+
+/**
+ * Whether `entities` holds an entity other than `except` that is a copy of
+ * the same escort (`identity`: an escortCopyKey, player_escort.ts ESCORT
+ * IDENTITY). Player ships are not escorts, whatever they still wear.
+ */
+function liveCopyOf(identity: string, entities: ReadonlyMap<string, Entity>,
+    except: string): boolean {
+    for (const [uuid, entity] of entities) {
+        if (uuid !== except && !entity.components.has(ControlledByComponent)
+            && escortCopyKey(entity) === identity) {
+            return true;
+        }
+    }
+    return false;
+}
 
 /** The local player's ship uuid in a display world, if it is in flight. */
 export function localPlayerShipUuid(displayWorld: World): string | undefined {

@@ -27,9 +27,11 @@ import { makeSystem } from '../make_system.js';
 import { MissionShipComponent } from './mission_ship_component.js';
 import { FormationComponent } from '../npc/index.js';
 import { LandEvent, PlanetComponent, PlanetDataComponent } from '../travel/index.js';
+import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
+import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import {
     ammoStockOf, durableEscortFields, EscortDeal, escortDeal,
-    EscortLandingComponent,
+    EscortIdentityComponent, EscortLandingComponent,
     EscortPayrollComponent, NO_DEAL, PlayerEscort, PlayerEscortComponent,
     withEscortDeal, withoutAmmoStock,
 } from './player_escort.js';
@@ -1123,4 +1125,120 @@ describe('EscortDeal on the PlayerEscort marker', () => {
         expect(withoutAmmoStock({ ...base, ammoStock: [['a', 1]] }))
             .toEqual(base);
     });
+});
+
+/**
+ * ONE ESCORT, ONE LIVE COPY (player_escort.ts ESCORT IDENTITY): an escort
+ * re-inserted under a fresh uuid while its other copy is still flying —
+ * the playtest double of 2026-11-27 — must not stay doubled. The
+ * simulation stamps each escort's identity once and drops every second
+ * live copy of it, the same copy on every peer.
+ */
+describe('escort identity', () => {
+    /** A second copy of `original`, as a re-insertion would put it in:
+     * the same synced components (identity included), a new uuid. */
+    async function copyOf(world: World, original: Entity, uuid: string) {
+        const serializer = world.resources.get(SerializerResource)!;
+        const decoded = serializer.decode(structuredClone(
+            serializer.encode(original)));
+        if (!isRight(decoded)) {
+            throw new Error('copy did not decode');
+        }
+        await completeEntity(world, decoded.right);
+        world.entities.set(uuid, decoded.right);
+        return decoded.right;
+    }
+
+    it('stamps an escort with the uuid it first had, and never the player',
+        async () => {
+            const { world, addEscort, player } = await makeWorld();
+            const escort = await addEscort('escort');
+            world.step();
+            expect(escort.components.get(EscortIdentityComponent))
+                .toEqual({ id: 'escort' });
+            expect(player.components.has(EscortIdentityComponent)).toBeFalse();
+            // A re-insertion under a fresh uuid keeps it.
+            world.entities.delete('escort');
+            const back = await copyOf(world, escort, 'escort-again');
+            world.step();
+            expect(back.components.get(EscortIdentityComponent))
+                .toEqual({ id: 'escort' });
+            expect(world.entities.has('escort-again')).toBeTrue();
+        });
+
+    it('drops a second live copy of an escort, keeping the original',
+        async () => {
+            const { world, addEscort } = await makeWorld();
+            const escort = await addEscort('zz-original');
+            world.step();
+            spyOn(console, 'warn');
+            // The copy's uuid sorts FIRST: the original wins anyway.
+            await copyOf(world, escort, 'aa-copy');
+            world.step();
+            expect(world.entities.has('zz-original')).toBeTrue();
+            expect(world.entities.has('aa-copy')).toBeFalse();
+            expect(console.warn).toHaveBeenCalledTimes(1);
+        });
+
+    it('keeps the lowest uuid when neither copy is the original, whatever '
+        + 'order they were inserted in', async () => {
+            spyOn(console, 'warn');
+            for (const order of [['m-copy', 'b-copy'], ['b-copy', 'm-copy']]) {
+                const { world, addEscort } = await makeWorld();
+                const escort = await addEscort('original');
+                world.step();
+                world.entities.delete('original');
+                for (const uuid of order) {
+                    await copyOf(world, escort, uuid);
+                }
+                world.step();
+                expect(world.entities.has('b-copy')).withContext(order.join())
+                    .toBeTrue();
+                expect(world.entities.has('m-copy')).withContext(order.join())
+                    .toBeFalse();
+            }
+        });
+
+    it('leaves a departed connection\'s lingering copy to its removePeer: '
+        + 'copies under different owners are not duplicates', async () => {
+            // A page reload: the old session's fleet is still in the room
+            // under the old peer id when the new session puts the saved
+            // escort back. Dropping the new copy would lose the escort
+            // when removePeer takes the old one a moment later.
+            const { world, addEscort } = await makeWorld();
+            const escort = await addEscort('old-session', 0, 200, ship =>
+                ship.components.set(MultiplayerData, { owner: 'old peer' }));
+            world.step();
+            const back = await copyOf(world, escort, 'new-session');
+            back.components.set(MultiplayerData, { owner: 'new peer' });
+            world.step();
+            expect(world.entities.has('old-session')).toBeTrue();
+            expect(world.entities.has('new-session')).toBeTrue();
+        });
+
+    it('leaves distinct escorts alone', async () => {
+        const { world, addEscort } = await makeWorld();
+        await addEscort('one', 0, 200);
+        await addEscort('two', 0, 300);
+        for (let i = 0; i < 5; i++) {
+            world.step();
+        }
+        expect(world.entities.has('one')).toBeTrue();
+        expect(world.entities.has('two')).toBeTrue();
+    });
+
+    it('rides a jump\'s carry event, so the arrival is the same escort',
+        async () => {
+            const { world, addEscort } = await makeWorld();
+            await addEscort('escort');
+            const jumps: EscortJump[] = [];
+            world.events.get(EscortJumpEvent).subscribe(
+                ({ data }) => jumps.push(data));
+            world.step();
+            world.emit(InitiateJumpEvent, { to: 'test:destination' }, [PLAYER]);
+            world.step();
+            expect(jumps.length).toEqual(1);
+            expect(jumps[0].entity.components.get(EscortIdentityComponent))
+                .toEqual({ id: 'escort' });
+        });
 });

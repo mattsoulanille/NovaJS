@@ -42,7 +42,7 @@ import {
     StoredShipsComponent,
     StoredShipsType,
 } from '../player/index.js';
-import { PlayerEscortComponent } from '../player/index.js';
+import { escortIdentityOf, PlayerEscortComponent } from '../player/index.js';
 import { CombatRatingComponent, LegalGeography, LegalRecordsComponent, systemRecordsFromGovtRecords } from '../reputation/index.js';
 import { ShipComponent } from '../ship/index.js';
 import { OwnerComponent, SourceComponent } from '../ship/index.js';
@@ -782,19 +782,41 @@ export interface RosterEscort extends EscortToSave {
  * neither entity-map iteration order nor which roster an escort was in.
  * Entries for other players are ignored: in multiplayer the rosters hold
  * peers' escorts too, and those are not this pilot's to save.
+ *
+ * Unioned by ESCORT IDENTITY too (player_escort.ts): a roster row that is
+ * a stale record of an escort live in the world under another uuid (or
+ * of one already on an earlier roster) is the same ship, and writing both
+ * would load as two. The live copy wins over a row, the first row over a
+ * later one.
  */
 export function collectEscortsToSave(player: string,
     inWorld: Iterable<[string, Entity]>,
     rosters: Iterable<readonly RosterEscort[]>): EscortToSave[] {
     const found = new Map<string, Entity>();
-    for (const [uuid, entity] of inWorld) {
-        if (entity.components.get(PlayerEscortComponent)?.player === player) {
+    const identities = new Map<string, string>();
+    const seen = (uuid: string, entity: Entity) => {
+        const identity = escortIdentityOf(entity);
+        if (identity === undefined) {
+            return false;
+        }
+        const holder = identities.get(identity);
+        if (holder !== undefined && holder !== uuid) {
+            return true;
+        }
+        identities.set(identity, uuid);
+        return false;
+    };
+    const live = [...inWorld].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+    for (const [uuid, entity] of live) {
+        if (entity.components.get(PlayerEscortComponent)?.player === player
+            && !seen(uuid, entity)) {
             found.set(uuid, entity);
         }
     }
     for (const roster of rosters) {
         for (const carried of roster) {
-            if (carried.player === player) {
+            if (carried.player === player
+                && !seen(carried.uuid, carried.entity)) {
                 found.set(carried.uuid, carried.entity);
             }
         }
