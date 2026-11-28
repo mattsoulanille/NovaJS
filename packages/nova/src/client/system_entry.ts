@@ -140,7 +140,10 @@ export async function jumpTo(runtime: ClientRuntime, plan: TransitPlan,
         // the jump), and a batch pushed onto them from here would be
         // dealt into the NEXT session's first system.
         if (!isSessionEnded(e)) {
-            const back = restoreFailedTransitionBatch(jumpEscorts, fromLanded);
+            // Less what enterSystem already put back itself before it
+            // failed (a held batch, a rejected insertion): see `held`.
+            const back = restoreFailedTransitionBatch(jumpEscorts, fromLanded,
+                [...fleet.jumping, ...fleet.landed]);
             fleet.landed.push(...back.landed);
             fleet.jumping.push(...back.jumping);
         }

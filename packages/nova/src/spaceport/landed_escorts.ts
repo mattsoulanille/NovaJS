@@ -257,14 +257,27 @@ export function takeEscortsForTransition(jumpRoster: CarriedEscort[],
  * jump half. That deliberately includes escorts the failed transition
  * PUSHED onto the batch on its way (a save's restored escorts enter
  * exactly this way), which have no landed context to preserve.
+ *
+ * `held` is what the rosters ALREADY hold: a transition that fails late
+ * has put some of the batch back itself — the whole batch when it was
+ * held for a gate arrival, and each escort whose own insertion rejected
+ * (re-keyed to the uuid it was minted, but the same entity object). Those
+ * are already back exactly once, so they are left out here (matched by
+ * entity): handing them back again put two rows of one escort on a roster,
+ * and the next insertion put both into the world.
  */
 export function restoreFailedTransitionBatch(batch: readonly CarriedEscort[],
-    fromLanded: readonly CarriedEscort[]):
+    fromLanded: readonly CarriedEscort[],
+    held: Iterable<CarriedEscort> = []):
     { landed: CarriedEscort[], jumping: CarriedEscort[] } {
     const landedSet = new Set(fromLanded);
+    const heldEntities = new Set([...held].map(row => row.entity));
     const landed: CarriedEscort[] = [];
     const jumping: CarriedEscort[] = [];
     for (const escort of batch) {
+        if (heldEntities.has(escort.entity)) {
+            continue;
+        }
         (landedSet.has(escort) ? landed : jumping).push(escort);
     }
     return { landed, jumping };

@@ -709,4 +709,29 @@ describe('the roster drain a system transition performs', () => {
         expect(back.landed).toEqual([]);
         expect(back.jumping.map(({ uuid }) => uuid)).toEqual(['j1', 'j2']);
     });
+
+    it('does not hand back a second time what the failed transition '
+        + 'already put back itself (the escort double, 2026-11-27)', () => {
+            // enterSystem, failing AFTER its insertions: a HELD gate batch
+            // was pushed onto the jump roster whole, and an escort whose
+            // insertion rejected was pushed re-keyed to its minted uuid.
+            const jumping = [entry('held'), entry('rejected'), entry('fine')];
+            const landed = [entry('l1')];
+            const { batch, fromLanded } =
+                takeEscortsForTransition(jumping, landed, PLAYER);
+            const rosterNow = [
+                batch[0],
+                { ...batch[1], uuid: 'minted-for-rejected' },
+            ];
+
+            const back = restoreFailedTransitionBatch(batch, fromLanded,
+                rosterNow);
+            expect(back.jumping.map(({ uuid }) => uuid)).toEqual(['fine']);
+            expect(back.landed.map(({ uuid }) => uuid)).toEqual(['l1']);
+            // Every escort is on a roster exactly once.
+            const entities = [...rosterNow, ...back.jumping, ...back.landed]
+                .map(row => row.entity);
+            expect(new Set(entities).size).toEqual(batch.length);
+            expect(entities.length).toEqual(batch.length);
+        });
 });
